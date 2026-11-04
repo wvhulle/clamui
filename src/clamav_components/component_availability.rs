@@ -1,4 +1,8 @@
-use std::{path::Path, process::Stdio, time::Duration};
+use std::{
+    path::Path,
+    process::{Output, Stdio},
+    time::Duration,
+};
 
 use tokio::{process::Command, time::timeout};
 
@@ -47,6 +51,25 @@ pub enum ProgramProbe {
     ProbeFailed { failure_text: String },
 }
 
+fn program_probe_from_output(version_output: &Output) -> ProgramProbe {
+    if version_output.status.success() {
+        ProgramProbe::VersionReported {
+            version_text: String::from_utf8_lossy(&version_output.stdout)
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_owned(),
+        }
+    } else {
+        ProgramProbe::ProbeFailed {
+            failure_text: String::from_utf8_lossy(&version_output.stderr)
+                .trim()
+                .to_owned(),
+        }
+    }
+}
+
 pub async fn probe_program_version(program_path: &Path) -> ProgramProbe {
     let mut version_command = Command::new(program_path);
     version_command
@@ -54,21 +77,7 @@ pub async fn probe_program_version(program_path: &Path) -> ProgramProbe {
         .stdin(Stdio::null())
         .kill_on_drop(true);
     match timeout(PROGRAM_PROBE_TIMEOUT, version_command.output()).await {
-        Ok(Ok(version_output)) if version_output.status.success() => {
-            ProgramProbe::VersionReported {
-                version_text: String::from_utf8_lossy(&version_output.stdout)
-                    .lines()
-                    .next()
-                    .unwrap_or_default()
-                    .trim()
-                    .to_owned(),
-            }
-        }
-        Ok(Ok(version_output)) => ProgramProbe::ProbeFailed {
-            failure_text: String::from_utf8_lossy(&version_output.stderr)
-                .trim()
-                .to_owned(),
-        },
+        Ok(Ok(version_output)) => program_probe_from_output(&version_output),
         Ok(Err(spawn_failure)) if spawn_failure.kind() == std::io::ErrorKind::NotFound => {
             ProgramProbe::NotFoundOnPath
         }
@@ -118,43 +127,40 @@ pub async fn probe_component_availability(component: ClamavComponent) -> Compone
 
 #[cfg(test)]
 mod component_availability_tests {
-    use super::*;
-    use crate::executable_test_fixtures::write_executable_fixture;
+    use std::os::unix::process::ExitStatusExt;
 
-    fn executable_fixture(fixture_directory: &Path, fixture_script: &str) -> std::path::PathBuf {
-        let fixture_path = fixture_directory.join("fixture-program");
-        write_executable_fixture(&fixture_path, fixture_script);
-        fixture_path
+    use super::*;
+
+    fn finished_output(exit_code: i32, stdout_text: &str, stderr_text: &str) -> Output {
+        Output {
+            status: std::process::ExitStatus::from_raw(exit_code << 8),
+            stdout: stdout_text.as_bytes().to_vec(),
+            stderr: stderr_text.as_bytes().to_vec(),
+        }
     }
 
-    #[tokio::test]
-    async fn version_probe_reports_the_first_output_line() {
-        let temporary_root = tempfile::tempdir().expect("temporary root");
-        let fixture_path = executable_fixture(
-            temporary_root.path(),
-            "#!/bin/sh\nprintf 'ClamAV 1.5.4/28173\\nextra\\n'\n",
-        );
+    #[test]
+    fn version_probe_reports_the_first_output_line() {
         assert_eq!(
-            probe_program_version(&fixture_path).await,
+            program_probe_from_output(&finished_output(0, "ClamAV 1.5.4/28173\nextra\n", "")),
             ProgramProbe::VersionReported {
                 version_text: "ClamAV 1.5.4/28173".to_owned(),
             }
         );
     }
 
-    #[tokio::test]
-    async fn version_probe_distinguishes_missing_from_failing_programs() {
-        let temporary_root = tempfile::tempdir().expect("temporary root");
-        let fixture_path = executable_fixture(
-            temporary_root.path(),
-            "#!/bin/sh\nprintf 'broken install\\n' >&2\nexit 3\n",
-        );
+    #[test]
+    fn failing_programs_report_their_diagnostics() {
         assert_eq!(
-            probe_program_version(&fixture_path).await,
+            program_probe_from_output(&finished_output(3, "", "broken install\n")),
             ProgramProbe::ProbeFailed {
                 failure_text: "broken install".to_owned(),
             }
         );
+    }
+
+    #[tokio::test]
+    async fn missing_programs_are_distinguished_from_failing_ones() {
         assert_eq!(
             probe_program_version(Path::new("/nonexistent/clamscan")).await,
             ProgramProbe::NotFoundOnPath

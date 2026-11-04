@@ -28,5 +28,6 @@ tokio-stream = { version = "0.1", features = ["io-util"] }
 turso = { version = "=0.8.3", default-features = false }
 
 [dev-dependencies]
+libc = "0.2"
 rusqlite = { version = "0.41", features = ["bundled"] }
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread"] }
