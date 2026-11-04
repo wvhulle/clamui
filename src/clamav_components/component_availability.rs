@@ -118,15 +118,12 @@ pub async fn probe_component_availability(component: ClamavComponent) -> Compone
 
 #[cfg(test)]
 mod component_availability_tests {
-    use std::{fs, os::unix::fs::PermissionsExt};
-
     use super::*;
+    use crate::executable_test_fixtures::write_executable_fixture;
 
     fn executable_fixture(fixture_directory: &Path, fixture_script: &str) -> std::path::PathBuf {
         let fixture_path = fixture_directory.join("fixture-program");
-        fs::write(&fixture_path, fixture_script).expect("fixture script");
-        fs::set_permissions(&fixture_path, fs::Permissions::from_mode(0o700))
-            .expect("fixture mode");
+        write_executable_fixture(&fixture_path, fixture_script);
         fixture_path
     }
 

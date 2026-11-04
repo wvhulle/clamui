@@ -1,5 +1,7 @@
 mod application_window_shell;
 mod clamav_components;
+#[cfg(test)]
+mod executable_test_fixtures;
 mod file_quarantine;
 #[cfg(test)]
 mod host_verification_tests;
