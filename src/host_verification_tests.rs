@@ -136,48 +136,67 @@ async fn host_clamscan_detects_quarantines_and_restores_outside_on_access_paths(
     verify_detection_quarantine_and_restore(ScannerBackend::StandaloneClamscan).await;
 }
 
-#[tokio::test]
-#[ignore = "needs a real ClamAV host with OnAccessPrevention; records behaviour without asserting \
-            it"]
-async fn host_records_behaviour_inside_on_access_prevention_path() {
+async fn verify_blocked_file_flow(scanner_backend: ScannerBackend, quarantine_directory: &Path) {
     let downloads_directory =
         PathBuf::from(std::env::var_os("HOME").expect("home directory")).join("Downloads");
-    let eicar_path = downloads_directory.join(format!("clamui-eicar-{}.txt", std::process::id()));
-    let write_outcome = fs::write(&eicar_path, eicar_test_bytes());
-    println!("write into Downloads: {write_outcome:?}");
+    let eicar_path = downloads_directory.join(format!(
+        "clamui-eicar-{}-{scanner_backend:?}.txt",
+        std::process::id()
+    ));
+    fs::write(&eicar_path, eicar_test_bytes()).expect("write into Downloads");
     tokio::time::sleep(Duration::from_secs(3)).await;
+    let read_outcome = fs::read(&eicar_path);
     println!(
-        "read as user: {:?}",
-        fs::read(&eicar_path).map(|file_bytes| file_bytes.len())
+        "{scanner_backend:?} read as user: {:?}",
+        read_outcome.as_ref().map(Vec::len)
+    );
+    assert_eq!(
+        read_outcome
+            .err()
+            .and_then(|read_failure| read_failure.raw_os_error()),
+        Some(rustix::io::Errno::PERM.raw_os_error()),
+        "on-access prevention must be blocking this file"
     );
 
-    let verification_root = tempfile::tempdir().expect("verification root");
-    let clamd_outcome = complete_scan(host_scan_request(
+    let verification_root = tempfile::tempdir_in(quarantine_directory).expect("verification root");
+    let scan_outcome = complete_scan(host_scan_request(
         vec![eicar_path.clone()],
-        ScannerBackend::ClamdDaemon,
+        scanner_backend,
         verification_root.path(),
     ))
     .await;
-    println!("clamd scan: {clamd_outcome:#?}");
-    let clamscan_outcome = complete_scan(host_scan_request(
-        vec![eicar_path.clone()],
-        ScannerBackend::StandaloneClamscan,
-        verification_root.path(),
-    ))
-    .await;
-    println!("clamscan scan: {clamscan_outcome:#?}");
+    println!("{scanner_backend:?} scan: {scan_outcome:#?}");
+    assert!(scan_outcome.threats_were_found(), "blocked file reported");
+    assert_eq!(scan_outcome.detected_threats[0].file_path, eicar_path);
 
     let quarantine_vault = open_host_vault(&verification_root.path().join("vault")).await;
-    let move_outcome = quarantine_vault
-        .move_file_into_quarantine(&eicar_path, "Eicar-Test-Signature")
-        .await;
-    println!("quarantine move: {move_outcome:#?}");
-    println!(
-        "listed entries: {:#?}",
-        quarantine_vault.list_quarantine_entries().await
+    let moved_record = quarantine_vault
+        .move_file_into_quarantine(&eicar_path, &scan_outcome.detected_threats[0].threat_name)
+        .await
+        .expect("blocked file quarantined");
+    println!("{scanner_backend:?} quarantined: {moved_record:#?}");
+    assert!(!eicar_path.exists(), "source moved out of Downloads");
+    assert_eq!(
+        fs::read(&moved_record.quarantine_path).expect("payload readable"),
+        eicar_test_bytes()
     );
-    println!("file still present: {}", eicar_path.exists());
-    println!("remove leftover: {:?}", fs::remove_file(&eicar_path));
+
+    quarantine_vault
+        .restore_quarantined_file(moved_record.entry_id)
+        .await
+        .expect("restored");
+    assert!(eicar_path.exists(), "restored to Downloads");
+    println!("{scanner_backend:?} restored; removing test file");
+    fs::remove_file(&eicar_path).expect("remove test file");
+}
+
+#[tokio::test]
+#[ignore = "needs a real ClamAV host with OnAccessPrevention on ~/Downloads"]
+async fn host_blocked_file_is_detected_quarantined_and_restored() {
+    let vault_parent =
+        PathBuf::from(std::env::var_os("HOME").expect("home directory")).join(".local/share");
+    verify_blocked_file_flow(ScannerBackend::ClamdDaemon, &vault_parent).await;
+    verify_blocked_file_flow(ScannerBackend::StandaloneClamscan, &vault_parent).await;
 }
 
 async fn verify_cancel_stops_scanner(scanner_backend: ScannerBackend, scan_target: PathBuf) {

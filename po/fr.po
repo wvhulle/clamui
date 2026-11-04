@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 21:03+0100\n"
+"POT-Creation-Date: 2026-11-04 21:12+0100\n"
 "PO-Revision-Date: 2026-06-30 13:00+0200\n"
 "Last-Translator: Robin GUY <contact@robinguy.fr>\n"
 "Language-Team: French\n"
@@ -56,8 +56,8 @@ msgid "Components"
 msgstr "Composants"
 
 #: src/application_window_shell.rs:224
-#: src/file_quarantine/quarantine_entries_page.rs:111
-#: src/malware_scan/detected_threat_row.rs:82
+#: src/file_quarantine/quarantine_entries_page.rs:115
+#: src/malware_scan/detected_threat_row.rs:84
 msgid "Quarantine"
 msgstr "Quarantaine"
 
@@ -157,11 +157,17 @@ msgstr ""
 "L’empreinte du fichier ne correspond pas — le fichier est peut-être corrompu"
 
 #: src/file_quarantine/quarantine_entries_page.rs:22
+msgid ""
+"On-access scanning blocks this file and it is on another filesystem, so it "
+"cannot be moved to quarantine. You can delete it instead."
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:26
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr "Entrée dans la quarantaine introuvable : {id}"
 
-#: src/file_quarantine/quarantine_entries_page.rs:25
+#: src/file_quarantine/quarantine_entries_page.rs:29
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
@@ -169,7 +175,7 @@ msgstr ""
 "Impossible d'enregistrer l'entrée de quarantaine dans la base de données. Le "
 "fichier a été restauré à son emplacement d'origine."
 
-#: src/file_quarantine/quarantine_entries_page.rs:33
+#: src/file_quarantine/quarantine_entries_page.rs:37
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
@@ -179,32 +185,32 @@ msgstr ""
 "restauration a également échoué : {error}. Le fichier peut être orphelin à : "
 "{path}"
 
-#: src/file_quarantine/quarantine_entries_page.rs:42
+#: src/file_quarantine/quarantine_entries_page.rs:46
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:82
+#: src/file_quarantine/quarantine_entries_page.rs:86
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:83
+#: src/file_quarantine/quarantine_entries_page.rs:87
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:85
+#: src/file_quarantine/quarantine_entries_page.rs:89
 #: src/malware_scan/scan_progress_page.rs:382
 #: src/virus_database/database_update_page.rs:466
 msgid "Cancel"
 msgstr "Annuler"
 
-#: src/file_quarantine/quarantine_entries_page.rs:86
+#: src/file_quarantine/quarantine_entries_page.rs:90
 #: src/file_quarantine/quarantine_entry_row.rs:54
 msgid "Delete"
 msgstr "Supprimer"
 
-#: src/file_quarantine/quarantine_entries_page.rs:127
+#: src/file_quarantine/quarantine_entries_page.rs:131
 msgid "Quarantine is empty"
 msgstr ""
 
@@ -212,7 +218,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Restaurer"
 
-#: src/malware_scan/detected_threat_row.rs:43
+#: src/malware_scan/detected_threat_row.rs:45
 #, rust-format
 msgid "Moved to quarantine: {path}"
 msgstr ""
@@ -353,6 +359,10 @@ msgstr ""
 
 #: src/malware_scan/scan_progress_page.rs:481
 msgid "Choose a Folder to Scan"
+msgstr ""
+
+#: src/malware_scan/scanner_output_parser.rs:256
+msgid "Blocked by on-access scanning"
 msgstr ""
 
 #: src/virus_database/database_update_page.rs:87

@@ -11,7 +11,7 @@ use std::{
 };
 
 use rustix::{
-    fs::{AtFlags, Mode, OFlags},
+    fs::{AtFlags, Mode, OFlags, RenameFlags},
     io::Errno,
 };
 use sha2::{Digest, Sha256};
@@ -21,6 +21,9 @@ const QUARANTINE_DIRECTORY_MODE: u32 = 0o700;
 const QUARANTINE_FILE_MODE: u32 = 0o400;
 const COPY_BUFFER_SIZE: usize = 64 * 1024;
 const FREE_SPACE_RESERVE: u64 = 10 * 1024 * 1024;
+const MAXIMUM_FILE_NAME_LENGTH: usize = 255;
+const QUARANTINE_NAME_PREFIX_LENGTH: usize = 17;
+pub const UNKNOWN_PAYLOAD_HASH: &str = "";
 const PROTECTED_RESTORE_ROOTS: &[&str] = &[
     "/etc", "/var", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot", "/root", "/sys", "/proc",
 ];
@@ -45,6 +48,12 @@ pub enum QuarantineMoveFailure {
     DatabasePathNotUtf8,
     #[error("the quarantine database is not a regular file")]
     DatabaseNotRegularFile,
+    #[error("on-access scanning blocks reading the source file")]
+    SourceBlockedByOnAccess,
+    #[error("the blocked file is on another filesystem, so it cannot be moved without reading it")]
+    BlockedFileOnOtherFilesystem,
+    #[error("the blocked file is still unreadable after moving it to quarantine")]
+    MovedPayloadStillBlocked,
     #[error("the source is not a regular file")]
     SourceNotRegularFile,
     #[error("the quarantined path is not a regular file")]
@@ -253,7 +262,15 @@ fn unique_quarantine_name(source_path: &Path) -> Vec<u8> {
         .file_name()
         .unwrap_or_else(|| OsStr::new("payload"))
         .as_bytes();
-    [hex::encode(random_prefix).as_bytes(), b"_", source_name].concat()
+    let retained_length = source_name
+        .len()
+        .min(MAXIMUM_FILE_NAME_LENGTH - QUARANTINE_NAME_PREFIX_LENGTH);
+    [
+        hex::encode(random_prefix).as_bytes(),
+        b"_",
+        &source_name[..retained_length],
+    ]
+    .concat()
 }
 
 fn available_disk_space(directory_path: &Path) -> Result<u64, QuarantineMoveFailure> {
@@ -317,7 +334,13 @@ pub fn copy_file_into_quarantine(
         &source_parent.entry_name,
         OFlags::RDONLY | OFlags::NOFOLLOW,
         0,
-    )?;
+    )
+    .map_err(|open_failure| match open_failure {
+        QuarantineMoveFailure::SystemCallFailed(Errno::PERM) => {
+            QuarantineMoveFailure::SourceBlockedByOnAccess
+        }
+        other_failure => other_failure,
+    })?;
     let source_metadata = source_file.metadata()?;
     if !source_metadata.is_file() {
         return Err(QuarantineMoveFailure::SourceNotRegularFile);
@@ -361,6 +384,119 @@ pub fn copy_file_into_quarantine(
         source_metadata,
         destination_parent,
     })
+}
+
+pub struct PlannedBlockedRename {
+    pub source_path: PathBuf,
+    pub destination_path: PathBuf,
+    pub file_size: u64,
+    pub original_permissions: u32,
+    source_parent: PinnedParentDirectory,
+    source_metadata: fs::Metadata,
+    destination_parent: PinnedParentDirectory,
+}
+
+pub fn plan_blocked_file_rename(
+    quarantine_directory: &Path,
+    source_path: &Path,
+) -> Result<PlannedBlockedRename, QuarantineMoveFailure> {
+    ensure_quarantine_directory(quarantine_directory)?;
+    let source_parent = pin_parent_directory(source_path)?;
+    let source_handle = open_relative_entry(
+        &source_parent.parent_directory,
+        &source_parent.entry_name,
+        OFlags::PATH | OFlags::NOFOLLOW,
+        0,
+    )?;
+    let source_metadata = source_handle.metadata()?;
+    if !source_metadata.is_file() {
+        return Err(QuarantineMoveFailure::SourceNotRegularFile);
+    }
+    if fs::metadata(quarantine_directory)?.dev() != source_metadata.dev() {
+        return Err(QuarantineMoveFailure::BlockedFileOnOtherFilesystem);
+    }
+    let destination_path =
+        quarantine_directory.join(OsString::from_vec(unique_quarantine_name(source_path)));
+    let destination_parent = pin_parent_directory(&destination_path)?;
+    Ok(PlannedBlockedRename {
+        source_path: source_path.to_path_buf(),
+        destination_path,
+        file_size: source_metadata.len(),
+        original_permissions: source_metadata.mode() & 0o777,
+        source_parent,
+        source_metadata,
+        destination_parent,
+    })
+}
+
+fn rename_without_replacing(
+    from_parent: &PinnedParentDirectory,
+    to_parent: &PinnedParentDirectory,
+) -> Result<(), QuarantineMoveFailure> {
+    rustix::fs::renameat_with(
+        &from_parent.parent_directory,
+        from_parent.entry_name.as_c_str(),
+        &to_parent.parent_directory,
+        to_parent.entry_name.as_c_str(),
+        RenameFlags::NOREPLACE,
+    )
+    .map_err(|rename_failure| match rename_failure {
+        Errno::XDEV => QuarantineMoveFailure::BlockedFileOnOtherFilesystem,
+        other_errno => QuarantineMoveFailure::SystemCallFailed(other_errno),
+    })
+}
+
+fn hash_and_secure_renamed_payload(
+    planned_rename: &PlannedBlockedRename,
+) -> Result<String, QuarantineMoveFailure> {
+    let destination_parent = &planned_rename.destination_parent;
+    ensure_entry_identity(destination_parent, &planned_rename.source_metadata)?;
+    let mut payload_file = open_relative_entry(
+        &destination_parent.parent_directory,
+        &destination_parent.entry_name,
+        OFlags::RDONLY | OFlags::NOFOLLOW,
+        0,
+    )
+    .map_err(|open_failure| match open_failure {
+        QuarantineMoveFailure::SystemCallFailed(Errno::PERM) => {
+            QuarantineMoveFailure::MovedPayloadStillBlocked
+        }
+        other_failure => other_failure,
+    })?;
+    let mut content_hash = Sha256::new();
+    io::copy(&mut payload_file, &mut content_hash)?;
+    change_file_mode(&payload_file, QUARANTINE_FILE_MODE)?;
+    Ok(format!("{:x}", content_hash.finalize()))
+}
+
+pub fn rename_blocked_file_into_quarantine(
+    planned_rename: &PlannedBlockedRename,
+) -> Result<String, QuarantineMoveFailure> {
+    ensure_entry_identity(
+        &planned_rename.source_parent,
+        &planned_rename.source_metadata,
+    )?;
+    rename_without_replacing(
+        &planned_rename.source_parent,
+        &planned_rename.destination_parent,
+    )?;
+    match hash_and_secure_renamed_payload(planned_rename) {
+        Ok(file_hash) => {
+            planned_rename
+                .destination_parent
+                .parent_directory
+                .sync_all()?;
+            planned_rename.source_parent.parent_directory.sync_all()?;
+            Ok(file_hash)
+        }
+        Err(payload_failure) => {
+            let _rollback_outcome = rename_without_replacing(
+                &planned_rename.destination_parent,
+                &planned_rename.source_parent,
+            );
+            Err(payload_failure)
+        }
+    }
 }
 
 pub fn discard_copied_payload(copied_payload: &CopiedQuarantinePayload) {
@@ -559,17 +695,15 @@ pub fn delete_payload_file(
     Ok(())
 }
 
-pub fn payload_hash_matches(
-    payload_path: &Path,
-    expected_hash: &str,
-) -> Result<bool, QuarantineMoveFailure> {
+pub fn payload_content_hash(payload_path: &Path) -> Result<String, QuarantineMoveFailure> {
     let mut payload_file = open_absolute_path(payload_path, OFlags::RDONLY | OFlags::NOFOLLOW, 0)?;
     if !payload_file.metadata()?.is_file() {
         return Err(QuarantineMoveFailure::PayloadNotRegularFile);
     }
     let mut content_hash = Sha256::new();
     io::copy(&mut payload_file, &mut content_hash)?;
-    Ok(format!("{:x}", content_hash.finalize()) == expected_hash)
+    change_file_mode(&payload_file, QUARANTINE_FILE_MODE)?;
+    Ok(format!("{:x}", content_hash.finalize()))
 }
 
 #[cfg(test)]
@@ -630,6 +764,64 @@ mod quarantine_file_moves_tests {
         assert_eq!(
             fs::read(&source_path).expect("source bytes"),
             b"replacement"
+        );
+    }
+
+    #[test]
+    fn maximum_length_filenames_can_be_quarantined() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        let source_path = temporary_root
+            .path()
+            .join("a".repeat(MAXIMUM_FILE_NAME_LENGTH));
+        fs::write(&source_path, b"long name").expect("source");
+        let copied_payload =
+            copy_file_into_quarantine(&quarantine_directory, &source_path).expect("copied");
+        assert_eq!(
+            fs::read(&copied_payload.destination_path).expect("payload"),
+            b"long name"
+        );
+    }
+
+    #[test]
+    fn blocked_rename_refuses_symlinks_and_replaced_files() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        let target_path = temporary_root.path().join("target.bin");
+        let link_path = temporary_root.path().join("link.bin");
+        fs::write(&target_path, b"target").expect("target");
+        symlink(&target_path, &link_path).expect("symlink");
+        assert!(plan_blocked_file_rename(&quarantine_directory, &link_path).is_err());
+
+        let planned_rename =
+            plan_blocked_file_rename(&quarantine_directory, &target_path).expect("planned");
+        fs::remove_file(&target_path).expect("remove target");
+        fs::write(&target_path, b"replacement").expect("replacement");
+        assert!(matches!(
+            rename_blocked_file_into_quarantine(&planned_rename),
+            Err(QuarantineMoveFailure::FileReplacedDuringOperation)
+        ));
+        assert_eq!(fs::read(&target_path).expect("target"), b"replacement");
+        assert!(!planned_rename.destination_path.exists());
+    }
+
+    #[test]
+    fn blocked_rename_never_replaces_an_existing_payload() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        let source_path = temporary_root.path().join("blocked.bin");
+        fs::write(&source_path, b"blocked").expect("source");
+        let planned_rename =
+            plan_blocked_file_rename(&quarantine_directory, &source_path).expect("planned");
+        fs::write(&planned_rename.destination_path, b"existing").expect("existing payload");
+        assert!(matches!(
+            rename_blocked_file_into_quarantine(&planned_rename),
+            Err(QuarantineMoveFailure::SystemCallFailed(Errno::EXIST))
+        ));
+        assert_eq!(fs::read(&source_path).expect("source"), b"blocked");
+        assert_eq!(
+            fs::read(&planned_rename.destination_path).expect("payload"),
+            b"existing"
         );
     }
 

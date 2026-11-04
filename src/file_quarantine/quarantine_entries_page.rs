@@ -18,6 +18,10 @@ pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> Stri
         QuarantineMoveFailure::FileHashMismatch => {
             gettext("File hash mismatch — file may be corrupted")
         }
+        QuarantineMoveFailure::BlockedFileOnOtherFilesystem => gettext(
+            "On-access scanning blocks this file and it is on another filesystem, so it cannot be \
+             moved to quarantine. You can delete it instead.",
+        ),
         QuarantineMoveFailure::EntryNotFound { entry_id } => {
             gettext("Quarantine entry not found: {id}").replace("{id}", &entry_id.to_string())
         }

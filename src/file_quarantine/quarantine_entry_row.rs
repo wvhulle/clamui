@@ -9,7 +9,7 @@ use relm4::{
 
 use crate::{
     file_quarantine::quarantine_entry_database::QuarantineEntryRecord,
-    malware_scan::scanner_output_parser::sanitize_scanner_line,
+    malware_scan::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
 };
 
 pub struct QuarantineEntryRow {
@@ -33,7 +33,7 @@ impl FactoryComponent for QuarantineEntryRow {
     view! {
         adw::ActionRow {
             set_use_markup: false,
-            set_title: &sanitize_scanner_line(&self.entry_record.threat_name),
+            set_title: &displayed_threat_name(&self.entry_record.threat_name),
             set_subtitle: &format!(
                 "{}\n{} · {}",
                 sanitize_scanner_line(&self.entry_record.original_path.to_string_lossy()),
