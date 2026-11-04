@@ -59,6 +59,7 @@ fn vault_unavailable_page(vault_failure: &QuarantineMoveFailure) -> adw::StatusP
 struct NavigationPage<'page> {
     page_name: &'static str,
     page_title: String,
+    page_icon: &'static str,
     page_widget: &'page gtk::Widget,
     keyboard_accelerator: &'static str,
 }
@@ -79,6 +80,48 @@ fn navigation_stack(navigation_pages: &[NavigationPage<'_>]) -> gtk::Stack {
         );
     });
     page_stack
+}
+
+fn navigation_row(navigation_page: &NavigationPage<'_>) -> gtk::ListBoxRow {
+    let row_content = gtk::Box::builder().spacing(12).build();
+    row_content.append(&gtk::Image::from_icon_name(navigation_page.page_icon));
+    row_content.append(&gtk::Label::new(Some(&navigation_page.page_title)));
+    let navigation_row = gtk::ListBoxRow::builder().child(&row_content).build();
+    navigation_row.set_widget_name(navigation_page.page_name);
+    navigation_row
+}
+
+fn navigation_sidebar(
+    navigation_pages: &[NavigationPage<'_>],
+    page_stack: &gtk::Stack,
+) -> gtk::ListBox {
+    let sidebar_list = gtk::ListBox::builder()
+        .selection_mode(gtk::SelectionMode::Single)
+        .css_classes(["navigation-sidebar"])
+        .build();
+    let navigation_rows = navigation_pages
+        .iter()
+        .map(navigation_row)
+        .collect::<Vec<_>>();
+    navigation_rows
+        .iter()
+        .for_each(|navigation_row| sidebar_list.append(navigation_row));
+    let activated_stack = page_stack.clone();
+    sidebar_list.connect_row_activated(move |_sidebar_list, activated_row| {
+        activated_stack.set_visible_child_name(&activated_row.widget_name());
+    });
+    let selection_list = sidebar_list.clone();
+    let select_visible_page = move |changed_stack: &gtk::Stack| {
+        let visible_page = changed_stack.visible_child_name().unwrap_or_default();
+        selection_list.select_row(
+            navigation_rows
+                .iter()
+                .find(|navigation_row| navigation_row.widget_name() == visible_page),
+        );
+    };
+    select_visible_page(page_stack);
+    page_stack.connect_visible_child_name_notify(select_visible_page);
+    sidebar_list
 }
 
 fn primary_menu_button() -> gtk::MenuButton {
@@ -131,6 +174,7 @@ fn register_application_actions(window_root: &adw::ApplicationWindow, page_stack
 }
 
 fn adaptive_navigation_layout(
+    sidebar_list: &gtk::ListBox,
     page_stack: &gtk::Stack,
     window_root: &adw::ApplicationWindow,
 ) -> adw::OverlaySplitView {
@@ -141,13 +185,22 @@ fn adaptive_navigation_layout(
     let sidebar_view = adw::ToolbarView::new();
     sidebar_view.add_top_bar(&sidebar_header);
     sidebar_view.set_content(Some(
-        &gtk::StackSidebar::builder().stack(page_stack).build(),
+        &gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .child(sidebar_list)
+            .build(),
     ));
 
     let split_view = adw::OverlaySplitView::builder()
         .sidebar(&sidebar_view)
         .sidebar_width_fraction(0.22)
         .build();
+    let activated_split_view = split_view.clone();
+    sidebar_list.connect_row_activated(move |_sidebar_list, _activated_row| {
+        if activated_split_view.is_collapsed() {
+            activated_split_view.set_show_sidebar(false);
+        }
+    });
     let sidebar_toggle = gtk::ToggleButton::builder()
         .icon_name("sidebar-show-symbolic")
         .tooltip_text(gettext("Toggle sidebar"))
@@ -202,40 +255,50 @@ fn application_pages(
     let database_page = DatabaseUpdatePage::builder().launch(()).detach();
     let component_page = ComponentStatusPage::builder().launch(()).detach();
 
-    let page_stack = navigation_stack(&[
+    let navigation_pages = [
         NavigationPage {
             page_name: "scan",
             page_title: gettext("Scan"),
+            page_icon: "system-search-symbolic",
             page_widget: scan_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>1",
         },
         NavigationPage {
             page_name: "database",
             page_title: gettext("Database"),
+            page_icon: "drive-harddisk-symbolic",
             page_widget: database_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>2",
         },
         NavigationPage {
             page_name: "components",
             page_title: gettext("Components"),
+            page_icon: "emblem-system-symbolic",
             page_widget: component_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>4",
         },
         NavigationPage {
             page_name: "quarantine",
             page_title: gettext("Quarantine"),
+            page_icon: "security-high-symbolic",
             page_widget: quarantine_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>5",
         },
-    ]);
+    ];
+    let page_stack = navigation_stack(&navigation_pages);
     page_stack.set_visible_child_name(&startup_request.startup_page);
+    let sidebar_list = navigation_sidebar(&navigation_pages, &page_stack);
     if !startup_request.scan_targets.is_empty() {
         scan_page.emit(ScanProgressPageInput::ScanTargetsChosen(
             startup_request.scan_targets,
         ));
     }
     register_application_actions(window_root, &page_stack);
-    window_root.set_content(Some(&adaptive_navigation_layout(&page_stack, window_root)));
+    window_root.set_content(Some(&adaptive_navigation_layout(
+        &sidebar_list,
+        &page_stack,
+        window_root,
+    )));
     ShellContent::VaultReady {
         _scan_page: scan_page,
         _quarantine_page: quarantine_page,

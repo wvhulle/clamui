@@ -4,7 +4,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Shell
 
-- [ ] Sidebar icons. `gtk::StackSidebar` cannot show them; use a `gtk::ListBox` with the `navigation-sidebar` style.
+- [x] Sidebar icons, using a `gtk::ListBox` with the `navigation-sidebar` style.
 - [ ] Pages: Logs, Statistics, Audit, Network.
 - [ ] Empty states with `adw::StatusPage`.
 
@@ -42,7 +42,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 ## Components
 
 - [x] Status, version and install commands per component.
-- [ ] Per-component icons.
+- [x] Per-component icons.
 
 ## Database
 

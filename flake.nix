@@ -83,6 +83,14 @@
               pkgs.wrapGAppsHook4
             ];
             buildInputs = commonArgs.buildInputs ++ [ pkgs.adwaita-icon-theme ];
+            preFixup = ''
+              gappsWrapperArgs+=(--prefix XDG_DATA_DIRS : "${
+                lib.makeSearchPath "share" [
+                  pkgs.adwaita-icon-theme
+                  pkgs.hicolor-icon-theme
+                ]
+              }")
+            '';
             postInstall = ''
               make install-data \
                 TRANSLATION_BUILD_DIRECTORY="$TMPDIR/locale" DESTDIR="$out" PREFIX=

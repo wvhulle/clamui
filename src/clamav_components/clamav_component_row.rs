@@ -46,6 +46,15 @@ fn component_title(component: ClamavComponent) -> String {
     }
 }
 
+fn component_icon(component: ClamavComponent) -> &'static str {
+    match component {
+        ClamavComponent::ClamscanScanner => "system-search-symbolic",
+        ClamavComponent::FreshclamUpdater => "software-update-available-symbolic",
+        ClamavComponent::ClamdscanClient => "utilities-terminal-symbolic",
+        ClamavComponent::ClamdDaemon => "emblem-system-symbolic",
+    }
+}
+
 fn component_description(component: ClamavComponent) -> String {
     match component {
         ClamavComponent::ClamscanScanner => gettext("clamscan performs on-demand virus scans."),
@@ -153,6 +162,10 @@ impl FactoryComponent for ClamavComponentRow {
             set_title: &component_title(self.clamav_component),
             #[watch]
             set_subtitle: &self.row_subtitle(),
+
+            add_prefix = &gtk::Image {
+                set_icon_name: Some(component_icon(self.clamav_component)),
+            },
 
             #[name = "availability_status_label"]
             add_suffix = &gtk::Label {
