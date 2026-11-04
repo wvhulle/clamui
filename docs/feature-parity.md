@@ -10,11 +10,11 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Scan
 
-- [ ] Target list: add, remove and review targets before starting, with an explicit Start Scan.
-- [ ] Drag and drop with `gtk::DropTarget`.
+- [x] Target list: add, remove and review targets before starting, with an explicit Start Scan.
+- [x] Drag and drop with `gtk::DropTarget`.
 - [ ] Profile selector with `adw::ComboRow`, and a Manage Profiles dialog.
-- [ ] EICAR test button.
-- [ ] Active backend label.
+- [x] EICAR test button.
+- [x] Active backend label.
 - [x] Scan paths passed on the command line.
 
 ## Scan results

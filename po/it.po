@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 21:28+0100\n"
+"POT-Creation-Date: 2026-11-04 22:06+0100\n"
 "PO-Revision-Date: 2026-04-03 19:20+0200\n"
 "Last-Translator: Albano Battistella\n"
 "Language-Team: Italian\n"
@@ -21,40 +21,41 @@ msgstr ""
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:86
+#: src/application_window_shell.rs:129
 msgid "About ClamUI"
 msgstr "Informazioni su ClamUI"
 
-#: src/application_window_shell.rs:87
+#: src/application_window_shell.rs:130
 msgid "Quit"
 msgstr "Esci"
 
-#: src/application_window_shell.rs:90
+#: src/application_window_shell.rs:133
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:109
+#: src/application_window_shell.rs:152
 msgid "translator-credits"
 msgstr "Albano Battistella <albanobattistella@gmail.com>"
 
-#: src/application_window_shell.rs:153
+#: src/application_window_shell.rs:206
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:208
+#: src/application_window_shell.rs:261
+#: src/malware_scan/scan_progress_page.rs:291
 msgid "Scan"
 msgstr "Scansione"
 
-#: src/application_window_shell.rs:214
+#: src/application_window_shell.rs:268
 #: src/virus_database/database_update_page.rs:408
 msgid "Database"
 msgstr "Database"
 
-#: src/application_window_shell.rs:220
+#: src/application_window_shell.rs:275
 msgid "Components"
 msgstr "Componenti"
 
-#: src/application_window_shell.rs:226
+#: src/application_window_shell.rs:282
 #: src/file_quarantine/quarantine_entries_page.rs:115
 #: src/malware_scan/detected_threat_row.rs:84
 msgid "Quarantine"
@@ -76,55 +77,56 @@ msgstr "Client dello scanner del demone"
 msgid "Scanner Daemon"
 msgstr "Demone dello scanner"
 
-#: src/clamav_components/clamav_component_row.rs:51
+#: src/clamav_components/clamav_component_row.rs:60
 msgid "clamscan performs on-demand virus scans."
 msgstr "clamscan esegue scansioni antivirus su richiesta."
 
-#: src/clamav_components/clamav_component_row.rs:53
+#: src/clamav_components/clamav_component_row.rs:62
 msgid "freshclam downloads current virus definitions."
 msgstr "freshclam scarica le definizioni antivirus aggiornate."
 
-#: src/clamav_components/clamav_component_row.rs:56
+#: src/clamav_components/clamav_component_row.rs:65
 msgid "clamdscan uses the clamd daemon for faster scanning."
 msgstr "clamdscan usa il demone clamd per scansioni più rapide."
 
-#: src/clamav_components/clamav_component_row.rs:58
+#: src/clamav_components/clamav_component_row.rs:67
 msgid "clamd is the ClamAV daemon for faster scans."
 msgstr "clamd è il demone ClamAV per scansioni più rapide."
 
-#: src/clamav_components/clamav_component_row.rs:64
+#: src/clamav_components/clamav_component_row.rs:73
+#: src/malware_scan/scan_progress_page.rs:253
 #: src/virus_database/database_update_page.rs:273
 #: src/virus_database/database_update_page.rs:280
 msgid "Checking…"
 msgstr "Controllo in corso…"
 
-#: src/clamav_components/clamav_component_row.rs:65
+#: src/clamav_components/clamav_component_row.rs:74
 msgid "Installed"
 msgstr "Installato"
 
-#: src/clamav_components/clamav_component_row.rs:66
+#: src/clamav_components/clamav_component_row.rs:75
 msgid "Running"
 msgstr "In esecuzione"
 
-#: src/clamav_components/clamav_component_row.rs:67
+#: src/clamav_components/clamav_component_row.rs:76
 msgid "Stopped"
 msgstr "Fermato"
 
-#: src/clamav_components/clamav_component_row.rs:68
+#: src/clamav_components/clamav_component_row.rs:77
 #: src/virus_database/database_update_page.rs:266
 msgid "Not installed"
 msgstr "Non installato"
 
-#: src/clamav_components/clamav_component_row.rs:69
+#: src/clamav_components/clamav_component_row.rs:78
 msgid "Unknown"
 msgstr "Sconosciuto"
 
-#: src/clamav_components/clamav_component_row.rs:110
+#: src/clamav_components/clamav_component_row.rs:119
 #, rust-format
 msgid "{distribution} (this system)"
 msgstr ""
 
-#: src/clamav_components/clamav_component_row.rs:117
+#: src/clamav_components/clamav_component_row.rs:126
 msgid "Copy"
 msgstr "Copia"
 
@@ -197,7 +199,7 @@ msgid "The file will be permanently deleted."
 msgstr ""
 
 #: src/file_quarantine/quarantine_entries_page.rs:89
-#: src/malware_scan/scan_progress_page.rs:382
+#: src/malware_scan/scan_progress_page.rs:499
 #: src/virus_database/database_update_page.rs:466
 msgid "Cancel"
 msgstr "Annulla"
@@ -220,65 +222,65 @@ msgstr "Ripristina"
 msgid "Moved to quarantine: {path}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:92
+#: src/malware_scan/scan_progress_page.rs:109
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:95
+#: src/malware_scan/scan_progress_page.rs:112
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:99
+#: src/malware_scan/scan_progress_page.rs:116
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:103
+#: src/malware_scan/scan_progress_page.rs:120
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:108
+#: src/malware_scan/scan_progress_page.rs:125
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:120
+#: src/malware_scan/scan_progress_page.rs:137
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr ""
 "La destinazione della scansione non esiste o contiene un byte NUL non valido"
 
-#: src/malware_scan/scan_progress_page.rs:123
+#: src/malware_scan/scan_progress_page.rs:140
 msgid "Scan target is not a regular file or directory"
 msgstr "La destinazione della scansione non è un file o una directory regolare"
 
-#: src/malware_scan/scan_progress_page.rs:128
+#: src/malware_scan/scan_progress_page.rs:145
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:135
+#: src/malware_scan/scan_progress_page.rs:152
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:139
+#: src/malware_scan/scan_progress_page.rs:156
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
 #
-#: src/malware_scan/scan_progress_page.rs:147
+#: src/malware_scan/scan_progress_page.rs:164
 msgid "No files could be scanned"
 msgstr "Non è stato possibile analizzare alcun file"
 
-#: src/malware_scan/scan_progress_page.rs:153
+#: src/malware_scan/scan_progress_page.rs:170
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
 #
 #
-#: src/malware_scan/scan_progress_page.rs:165
+#: src/malware_scan/scan_progress_page.rs:182
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
@@ -287,7 +289,7 @@ msgstr[1] "Impossibile accedere a {count} file"
 
 #
 #
-#: src/malware_scan/scan_progress_page.rs:171
+#: src/malware_scan/scan_progress_page.rs:188
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
@@ -295,7 +297,7 @@ msgstr[0] "Impossibile leggere {count} file"
 msgstr[1] "Impossibile leggere {count} file"
 
 #
-#: src/malware_scan/scan_progress_page.rs:177
+#: src/malware_scan/scan_progress_page.rs:194
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -310,60 +312,93 @@ msgstr[1] ""
 "{count} avvisi non fatali durante la scansione; alcuni file potrebbero "
 "essere stati sottoposti solo a una scansione parziale"
 
-#: src/malware_scan/scan_progress_page.rs:215
-msgid "Choose what to scan"
+#: src/malware_scan/scan_progress_page.rs:255
+msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:216
+#: src/malware_scan/scan_progress_page.rs:258
+msgid "Backend: clamscan (standalone)"
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:273
+#, rust-format
+msgid "Could not create the EICAR test file: {error}"
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:292
 msgid "Scanning…"
 msgstr "Scansione in corso…"
 
-#: src/malware_scan/scan_progress_page.rs:217
+#: src/malware_scan/scan_progress_page.rs:293
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:218
+#: src/malware_scan/scan_progress_page.rs:294
 msgid "Scan cancelled by user"
 msgstr "Scansione annullata dall'utente"
 
-#: src/malware_scan/scan_progress_page.rs:220
+#: src/malware_scan/scan_progress_page.rs:296
 msgid "Threats found"
 msgstr "Minacce trovate"
 
-#: src/malware_scan/scan_progress_page.rs:223
+#: src/malware_scan/scan_progress_page.rs:299
 msgid "The scan did not finish cleanly"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:225
+#: src/malware_scan/scan_progress_page.rs:301
 msgid "No threats found"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:231
+#: src/malware_scan/scan_progress_page.rs:307
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "{count} file analizzato"
 msgstr[1] "{count} file analizzati"
 
-#: src/malware_scan/scan_progress_page.rs:253
+#: src/malware_scan/scan_progress_page.rs:329
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:367
-msgid "Scan Files…"
+#: src/malware_scan/scan_progress_page.rs:441
+msgid "Scan Targets"
+msgstr "Target di scansione"
+
+#: src/malware_scan/scan_progress_page.rs:442
+msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:375
-msgid "Scan Folder…"
+#: src/malware_scan/scan_progress_page.rs:450
+msgid "Add Files"
+msgstr "Aggiungi file"
+
+#: src/malware_scan/scan_progress_page.rs:457
+msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:466
+#: src/malware_scan/scan_progress_page.rs:469
+msgid "No targets added"
+msgstr "Nessun target aggiunto"
+
+#: src/malware_scan/scan_progress_page.rs:482
+msgid "Start Scan"
+msgstr "Avvia scansione"
+
+#: src/malware_scan/scan_progress_page.rs:492
+msgid "EICAR Test"
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:626
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:481
+#: src/malware_scan/scan_progress_page.rs:641
 msgid "Choose a Folder to Scan"
 msgstr ""
+
+#: src/malware_scan/scan_target_row.rs:46
+msgid "Remove"
+msgstr "Rimuovi"
 
 #: src/malware_scan/scanner_output_parser.rs:256
 msgid "Blocked by on-access scanning"

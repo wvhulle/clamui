@@ -11,20 +11,11 @@ use futures::{StreamExt, future::ready, stream};
 use crate::{
     file_quarantine::quarantine_entry_database::QuarantineVault,
     malware_scan::{
+        eicar_test_file::eicar_test_bytes,
         scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
         scanner_command_builder::{ScannerBackend, ScannerProgramPaths, probe_clamd_availability},
     },
 };
-
-fn eicar_test_bytes() -> Vec<u8> {
-    [
-        "X5O!P%@AP[4\\PZX54(P^)7CC)7}$",
-        "EICAR-STANDARD-ANTIVIRUS-",
-        "TEST-FILE!$H+H*",
-    ]
-    .concat()
-    .into_bytes()
-}
 
 fn host_scan_request(
     scan_targets: Vec<PathBuf>,
