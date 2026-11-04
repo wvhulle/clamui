@@ -41,6 +41,7 @@
             ./.rustfmt.toml
             ./AUTHORS
             ./Makefile
+            ./xtask/assets
             ./po
             ./data
           ];
@@ -89,6 +90,41 @@
           }
         );
 
+        xtaskArgs = {
+          inherit src;
+          pname = "xtask";
+          version = "0.1.0";
+          cargoExtraArgs = "--locked --package xtask";
+          strictDeps = true;
+          meta.mainProgram = "xtask";
+        };
+
+        xtaskArtifacts = craneLib.buildDepsOnly xtaskArgs;
+
+        xtaskPackage = craneLib.buildPackage (
+          xtaskArgs
+          // {
+            cargoArtifacts = xtaskArtifacts;
+            doCheck = false;
+          }
+        );
+
+        xtaskTests = craneLib.cargoTest (xtaskArgs // { cargoArtifacts = xtaskArtifacts; });
+
+        xtaskClippy = craneLib.cargoClippy (
+          xtaskArgs
+          // {
+            cargoArtifacts = xtaskArtifacts;
+            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          }
+        );
+
+        screenshotRendering = import ./nix/screenshots.nix {
+          inherit pkgs;
+          clamui = clamuiPackage;
+          xtask = xtaskPackage;
+        };
+
         tests = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
 
         clippy = craneLib.cargoClippy (
@@ -103,6 +139,7 @@
           inherit src;
           pname = "clamui";
           inherit (commonArgs) version;
+          cargoExtraArgs = "--all";
         };
 
         treefmtWrapper = pkgs.writeShellApplication {
@@ -122,6 +159,9 @@
           default = clamuiPackage;
           clamui = clamuiPackage;
           deps = cargoArtifacts;
+          xtask = xtaskPackage;
+          render-screenshots = screenshotRendering.renderScreenshots;
+          inherit (screenshotRendering) screenshots;
         };
 
         checks = {
@@ -130,12 +170,21 @@
             tests
             clippy
             fmt
+            xtaskTests
+            xtaskClippy
             ;
+          inherit (screenshotRendering) screenshots;
         };
 
-        apps.default = {
-          type = "app";
-          program = lib.getExe self.packages.${system}.default;
+        apps = {
+          default = {
+            type = "app";
+            program = lib.getExe self.packages.${system}.default;
+          };
+          render-screenshots = {
+            type = "app";
+            program = lib.getExe screenshotRendering.renderScreenshots;
+          };
         };
 
         formatter = treefmtWrapper;

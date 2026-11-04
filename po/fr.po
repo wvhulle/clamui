@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 21:12+0100\n"
+"POT-Creation-Date: 2026-11-04 21:28+0100\n"
 "PO-Revision-Date: 2026-06-30 13:00+0200\n"
 "Last-Translator: Robin GUY <contact@robinguy.fr>\n"
 "Language-Team: French\n"
@@ -18,44 +18,44 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 "X-Generator: Poedit 3.9\n"
 
-#: src/application_window_shell.rs:51
+#: src/application_window_shell.rs:52
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:85
+#: src/application_window_shell.rs:86
 msgid "About ClamUI"
 msgstr "À propos de ClamUI"
 
-#: src/application_window_shell.rs:86
+#: src/application_window_shell.rs:87
 msgid "Quit"
 msgstr "Quitter"
 
-#: src/application_window_shell.rs:89
+#: src/application_window_shell.rs:90
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:108
+#: src/application_window_shell.rs:109
 msgid "translator-credits"
 msgstr "Robin GUY"
 
-#: src/application_window_shell.rs:152
+#: src/application_window_shell.rs:153
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:206
+#: src/application_window_shell.rs:208
 msgid "Scan"
 msgstr "Analyse"
 
-#: src/application_window_shell.rs:212
+#: src/application_window_shell.rs:214
 #: src/virus_database/database_update_page.rs:408
 msgid "Database"
 msgstr "Base virale"
 
-#: src/application_window_shell.rs:218
+#: src/application_window_shell.rs:220
 msgid "Components"
 msgstr "Composants"
 
-#: src/application_window_shell.rs:224
+#: src/application_window_shell.rs:226
 #: src/file_quarantine/quarantine_entries_page.rs:115
 #: src/malware_scan/detected_threat_row.rs:84
 msgid "Quarantine"

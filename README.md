@@ -11,6 +11,8 @@ nix develop path:.
 cargo test
 nix flake check path:.
 nix run path:.
+nix build path:.#screenshots
+nix run path:.#render-screenshots -- dist/screenshots
 ```
 
 ## License

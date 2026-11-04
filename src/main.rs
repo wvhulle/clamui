@@ -7,12 +7,15 @@ mod file_quarantine;
 mod host_verification_tests;
 mod malware_scan;
 mod shared_page_widget_templates;
+mod startup_arguments;
 mod virus_database;
 
 use gettextrs::{LocaleCategory, bind_textdomain_codeset, bindtextdomain, setlocale, textdomain};
 use relm4::adw;
 
-use crate::application_window_shell::ApplicationWindowShell;
+use crate::{
+    application_window_shell::ApplicationWindowShell, startup_arguments::parse_startup_arguments,
+};
 
 pub(crate) const APPLICATION_ID: &str = "io.github.wvhulle.ClamUI";
 const TRANSLATION_DOMAIN: &str = "clamui";
@@ -35,5 +38,8 @@ fn main() {
     let application = adw::Application::builder()
         .application_id(APPLICATION_ID)
         .build();
-    relm4::RelmApp::from_app(application).run_async::<ApplicationWindowShell>(());
+    let startup_request = parse_startup_arguments(std::env::args());
+    relm4::RelmApp::from_app(application)
+        .with_args(Vec::new())
+        .run_async::<ApplicationWindowShell>(startup_request);
 }

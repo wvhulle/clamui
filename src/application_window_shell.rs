@@ -20,8 +20,9 @@ use crate::{
         quarantine_file_moves::QuarantineMoveFailure,
     },
     malware_scan::scan_progress_page::{
-        ScanProgressPage, ScanProgressPageInit, ScanProgressPageOutput,
+        ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
+    startup_arguments::StartupRequest,
     virus_database::database_update_page::DatabaseUpdatePage,
 };
 
@@ -179,6 +180,7 @@ fn application_pages(
     quarantine_vault: QuarantineVault,
     data_directory: PathBuf,
     window_root: &adw::ApplicationWindow,
+    startup_request: StartupRequest,
 ) -> ShellContent {
     let quarantine_page = QuarantineEntriesPage::builder()
         .launch(quarantine_vault.clone())
@@ -226,6 +228,12 @@ fn application_pages(
             keyboard_accelerator: "<Control>5",
         },
     ]);
+    page_stack.set_visible_child_name(&startup_request.startup_page);
+    if !startup_request.scan_targets.is_empty() {
+        scan_page.emit(ScanProgressPageInput::ScanTargetsChosen(
+            startup_request.scan_targets,
+        ));
+    }
     register_application_actions(window_root, &page_stack);
     window_root.set_content(Some(&adaptive_navigation_layout(&page_stack, window_root)));
     ShellContent::VaultReady {
@@ -237,7 +245,7 @@ fn application_pages(
 }
 
 impl AsyncComponent for ApplicationWindowShell {
-    type Init = ();
+    type Init = StartupRequest;
     type Input = ();
     type Output = ();
     type CommandOutput = ();
@@ -249,13 +257,13 @@ impl AsyncComponent for ApplicationWindowShell {
             .title("ClamUI")
             .width_request(360)
             .height_request(500)
-            .default_width(800)
-            .default_height(640)
+            .default_width(900)
+            .default_height(700)
             .build()
     }
 
     async fn init(
-        _shell_init: Self::Init,
+        startup_request: Self::Init,
         root: Self::Root,
         _sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
@@ -266,7 +274,9 @@ impl AsyncComponent for ApplicationWindowShell {
         )
         .await;
         let shell_content = match opened_vault {
-            Ok(quarantine_vault) => application_pages(quarantine_vault, data_directory, &root),
+            Ok(quarantine_vault) => {
+                application_pages(quarantine_vault, data_directory, &root, startup_request)
+            }
             Err(vault_failure) => {
                 let unavailable_page = vault_unavailable_page(&vault_failure);
                 let toolbar_view = adw::ToolbarView::new();
