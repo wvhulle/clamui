@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 20:42+0100\n"
+"POT-Creation-Date: 2026-11-04 21:03+0100\n"
 "PO-Revision-Date: 2026-07-22 21:29+0800\n"
 "Last-Translator: Markson Hosben <marksonhosben@proton.me>\n"
 "Language-Team: Chinese <>\n"
@@ -17,19 +17,136 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Lokalize 23.08.5\n"
 
-#: src/application_window_shell.rs:45
+#: src/application_window_shell.rs:51
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:79
+#: src/application_window_shell.rs:85
+msgid "About ClamUI"
+msgstr "关于 ClamUI"
+
+#: src/application_window_shell.rs:86
+msgid "Quit"
+msgstr "退出"
+
+#: src/application_window_shell.rs:89
+msgid "Menu"
+msgstr "菜单"
+
+#: src/application_window_shell.rs:108
+msgid "translator-credits"
+msgstr "Markson Hosben <marksonhosben@proton.me>"
+
+#: src/application_window_shell.rs:152
+msgid "Toggle sidebar"
+msgstr ""
+
+#: src/application_window_shell.rs:206
 msgid "Scan"
 msgstr "扫描"
 
-#: src/application_window_shell.rs:85
+#: src/application_window_shell.rs:212
+#: src/virus_database/database_update_page.rs:408
+msgid "Database"
+msgstr "数据库"
+
+#: src/application_window_shell.rs:218
+msgid "Components"
+msgstr "组件"
+
+#: src/application_window_shell.rs:224
 #: src/file_quarantine/quarantine_entries_page.rs:111
 #: src/malware_scan/detected_threat_row.rs:82
 msgid "Quarantine"
 msgstr "隔离区"
+
+#: src/clamav_components/clamav_component_row.rs:42
+msgid "Virus Scanner"
+msgstr "病毒扫描器"
+
+#: src/clamav_components/clamav_component_row.rs:43
+msgid "Database Updater"
+msgstr "病毒库更新器"
+
+#: src/clamav_components/clamav_component_row.rs:44
+msgid "Daemon Scanner Client"
+msgstr "扫描守护进程客户端"
+
+#: src/clamav_components/clamav_component_row.rs:45
+msgid "Scanner Daemon"
+msgstr "扫描守护进程"
+
+#: src/clamav_components/clamav_component_row.rs:51
+msgid "clamscan performs on-demand virus scans."
+msgstr "clamscan 可按需执行病毒扫描。"
+
+#: src/clamav_components/clamav_component_row.rs:53
+msgid "freshclam downloads current virus definitions."
+msgstr "freshclam 用于下载最新的病毒库。"
+
+#: src/clamav_components/clamav_component_row.rs:56
+msgid "clamdscan uses the clamd daemon for faster scanning."
+msgstr "clamdscan 使用 clamd 守护进程加快扫描速度。"
+
+#: src/clamav_components/clamav_component_row.rs:58
+msgid "clamd is the ClamAV daemon for faster scans."
+msgstr "clamd 是 ClamAV 的守护进程，可加快扫描速度。"
+
+#: src/clamav_components/clamav_component_row.rs:64
+#: src/virus_database/database_update_page.rs:273
+#: src/virus_database/database_update_page.rs:280
+msgid "Checking…"
+msgstr "正在检查…"
+
+#: src/clamav_components/clamav_component_row.rs:65
+msgid "Installed"
+msgstr "已安装"
+
+#: src/clamav_components/clamav_component_row.rs:66
+msgid "Running"
+msgstr "正在运行"
+
+#: src/clamav_components/clamav_component_row.rs:67
+msgid "Stopped"
+msgstr "已停止"
+
+#: src/clamav_components/clamav_component_row.rs:68
+#: src/virus_database/database_update_page.rs:266
+msgid "Not installed"
+msgstr "未安装"
+
+#: src/clamav_components/clamav_component_row.rs:69
+msgid "Unknown"
+msgstr "未知"
+
+#: src/clamav_components/clamav_component_row.rs:110
+#, rust-format
+msgid "{distribution} (this system)"
+msgstr ""
+
+#: src/clamav_components/clamav_component_row.rs:117
+msgid "Copy"
+msgstr "复制"
+
+#: src/clamav_components/component_status_page.rs:64
+#: src/clamav_components/component_status_page.rs:67
+msgid "ClamAV components"
+msgstr "ClamAV 组件"
+
+#: src/clamav_components/component_status_page.rs:68
+msgid ""
+"Setup instructions are copy-only. ClamUI never installs packages or starts "
+"services for you."
+msgstr "配置说明仅供复制。ClamUI 不会为您安装软件包或启动服务。"
+
+#: src/clamav_components/component_status_page.rs:72
+#: src/virus_database/database_update_page.rs:415
+msgid "Refresh status"
+msgstr "刷新状态"
+
+#: src/clamav_components/component_status_page.rs:128
+msgid "Command copied to clipboard"
+msgstr "命令已复制到剪贴板"
 
 #: src/file_quarantine/quarantine_entries_page.rs:19
 msgid "File hash mismatch — file may be corrupted"
@@ -71,6 +188,7 @@ msgstr ""
 
 #: src/file_quarantine/quarantine_entries_page.rs:85
 #: src/malware_scan/scan_progress_page.rs:382
+#: src/virus_database/database_update_page.rs:466
 msgid "Cancel"
 msgstr "取消"
 
@@ -221,3 +339,159 @@ msgstr ""
 #: src/malware_scan/scan_progress_page.rs:481
 msgid "Choose a Folder to Scan"
 msgstr ""
+
+#: src/virus_database/database_update_page.rs:87
+msgid "Active"
+msgstr "运行中"
+
+#: src/virus_database/database_update_page.rs:88
+msgid "Scheduled by a systemd timer"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:89
+msgid "Installed but stopped"
+msgstr "已安装但未运行"
+
+#: src/virus_database/database_update_page.rs:91
+msgid "No freshclam service detected; updates run manually"
+msgstr "未检测到 freshclam 服务；需手动更新"
+
+#: src/virus_database/database_update_page.rs:102
+#, rust-format
+msgid "{count} day old"
+msgid_plural "{count} days old"
+msgstr[0] "距今 {count} 天"
+
+#: src/virus_database/database_update_page.rs:108
+msgid "No readable virus database was found"
+msgstr "未找到可读取的病毒数据库"
+
+#: src/virus_database/database_update_page.rs:127
+msgid ""
+"Authentication cancelled. Database update requires administrator privileges."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:130
+msgid "Authorization failed. Please try again and enter your password."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:133
+msgid "Update rate limited by mirror. Please wait a few minutes and try again."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:136
+msgid ""
+"Update blocked by CDN. This may be due to rate limiting. Please wait and try "
+"again later."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:140
+msgid "ClamAV mirror is currently unavailable. Please try again later."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:143
+msgid "SSL/TLS certificate error. The mirror may have configuration issues."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:146
+msgid "Connection timed out. Please check your network connection."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:149
+msgid "Database is locked. Another freshclam instance may be running."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:152
+msgid ""
+"Permission denied. You may need elevated privileges to update the database."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:155
+msgid "Connection error. Please check your network connection."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:158
+msgid "DNS resolution failed. Please check your network settings."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:164
+#: src/virus_database/database_update_page.rs:391
+msgid "Update failed with an unknown error. Check the logs for details."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:171
+#, rust-format
+msgid "Updated: {databases}"
+msgstr "已更新：{databases}"
+
+#: src/virus_database/database_update_page.rs:175
+#, rust-format
+msgid "Already current: {databases}"
+msgstr "已是最新：{databases}"
+
+#: src/virus_database/database_update_page.rs:184
+#, rust-format
+msgid "Rate limited: {database}"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:187
+#, rust-format
+msgid "Rate limited: {database} until {cooldown}"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:204
+msgid "Database update completed"
+msgstr "数据库更新已完成"
+
+#: src/virus_database/database_update_page.rs:207
+msgid "Database is already up to date"
+msgstr "数据库已是最新"
+
+#: src/virus_database/database_update_page.rs:224
+msgid "Install freshclam before requesting database updates."
+msgstr "请先安装 freshclam，再请求更新病毒库。"
+
+#: src/virus_database/database_update_page.rs:262
+msgid "Checking freshclam…"
+msgstr "正在检查 freshclam…"
+
+#: src/virus_database/database_update_page.rs:372
+msgid "Database update cancelled"
+msgstr "数据库更新已取消"
+
+#: src/virus_database/database_update_page.rs:384
+msgid ""
+"The service accepted the signal; it performs the update asynchronously. "
+"Check its logs for completion."
+msgstr "服务已接受信号，将异步执行更新。请查看服务日志以确认更新是否完成。"
+
+#: src/virus_database/database_update_page.rs:411
+msgid "Virus definitions"
+msgstr "病毒定义"
+
+#: src/virus_database/database_update_page.rs:432
+msgid "Update service"
+msgstr "更新服务"
+
+#: src/virus_database/database_update_page.rs:440
+msgid "Database freshness"
+msgstr "病毒库时效性"
+
+#: src/virus_database/database_update_page.rs:450
+#: src/virus_database/database_update_page.rs:459
+msgid "Update database"
+msgstr "更新病毒库"
+
+#: src/virus_database/database_update_page.rs:451
+msgid ""
+"Updates run through the freshclam system service when one exists, so your "
+"system may ask for authorization."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:459
+msgid "Updating…"
+msgstr "正在更新…"
+
+#: src/virus_database/database_update_page.rs:487
+msgid "Update log"
+msgstr "更新日志"

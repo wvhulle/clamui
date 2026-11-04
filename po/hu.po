@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 20:42+0100\n"
+"POT-Creation-Date: 2026-11-04 21:03+0100\n"
 "PO-Revision-Date: 2026-09-13 09:59+0200\n"
 "Last-Translator: Kálmán „KAMI” Szalai <kami911@gmail.com>\n"
 "Language-Team: Hungarian\n"
@@ -17,19 +17,138 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.4.2\n"
 
-#: src/application_window_shell.rs:45
+#: src/application_window_shell.rs:51
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:79
+#: src/application_window_shell.rs:85
+msgid "About ClamUI"
+msgstr "A ClamUI névjegye"
+
+#: src/application_window_shell.rs:86
+msgid "Quit"
+msgstr "Kilépés"
+
+#: src/application_window_shell.rs:89
+msgid "Menu"
+msgstr "Menü"
+
+#: src/application_window_shell.rs:108
+msgid "translator-credits"
+msgstr "Kálmán „KAMI” Szalai"
+
+#: src/application_window_shell.rs:152
+msgid "Toggle sidebar"
+msgstr ""
+
+#: src/application_window_shell.rs:206
 msgid "Scan"
 msgstr "Vizsgálat"
 
-#: src/application_window_shell.rs:85
+#: src/application_window_shell.rs:212
+#: src/virus_database/database_update_page.rs:408
+msgid "Database"
+msgstr "Adatbázis"
+
+#: src/application_window_shell.rs:218
+msgid "Components"
+msgstr "Összetevők"
+
+#: src/application_window_shell.rs:224
 #: src/file_quarantine/quarantine_entries_page.rs:111
 #: src/malware_scan/detected_threat_row.rs:82
 msgid "Quarantine"
 msgstr "Karanténba helyezés"
+
+#: src/clamav_components/clamav_component_row.rs:42
+msgid "Virus Scanner"
+msgstr "Víruskereső"
+
+#: src/clamav_components/clamav_component_row.rs:43
+msgid "Database Updater"
+msgstr "Adatbázis-frissítő"
+
+#: src/clamav_components/clamav_component_row.rs:44
+msgid "Daemon Scanner Client"
+msgstr "Démonkereső kliens"
+
+#: src/clamav_components/clamav_component_row.rs:45
+msgid "Scanner Daemon"
+msgstr "Keresődémon"
+
+#: src/clamav_components/clamav_component_row.rs:51
+msgid "clamscan performs on-demand virus scans."
+msgstr "A clamscan igény szerinti vírusvizsgálatokat végez."
+
+#: src/clamav_components/clamav_component_row.rs:53
+msgid "freshclam downloads current virus definitions."
+msgstr "A freshclam letölti az aktuális vírusdefiníciókat."
+
+#: src/clamav_components/clamav_component_row.rs:56
+msgid "clamdscan uses the clamd daemon for faster scanning."
+msgstr "A clamdscan a gyorsabb vizsgálathoz a clamd démont használja."
+
+#: src/clamav_components/clamav_component_row.rs:58
+msgid "clamd is the ClamAV daemon for faster scans."
+msgstr "A clamd a ClamAV démona a gyorsabb vizsgálatokhoz."
+
+#: src/clamav_components/clamav_component_row.rs:64
+#: src/virus_database/database_update_page.rs:273
+#: src/virus_database/database_update_page.rs:280
+msgid "Checking…"
+msgstr "Ellenőrzés…"
+
+#: src/clamav_components/clamav_component_row.rs:65
+msgid "Installed"
+msgstr "Telepítve"
+
+#: src/clamav_components/clamav_component_row.rs:66
+msgid "Running"
+msgstr "Fut"
+
+#: src/clamav_components/clamav_component_row.rs:67
+msgid "Stopped"
+msgstr "Leállítva"
+
+#: src/clamav_components/clamav_component_row.rs:68
+#: src/virus_database/database_update_page.rs:266
+msgid "Not installed"
+msgstr "Nincs telepítve"
+
+#: src/clamav_components/clamav_component_row.rs:69
+msgid "Unknown"
+msgstr "Ismeretlen"
+
+#: src/clamav_components/clamav_component_row.rs:110
+#, rust-format
+msgid "{distribution} (this system)"
+msgstr ""
+
+#: src/clamav_components/clamav_component_row.rs:117
+msgid "Copy"
+msgstr "Másolás"
+
+#: src/clamav_components/component_status_page.rs:64
+#: src/clamav_components/component_status_page.rs:67
+msgid "ClamAV components"
+msgstr "ClamAV-összetevők"
+
+#: src/clamav_components/component_status_page.rs:68
+msgid ""
+"Setup instructions are copy-only. ClamUI never installs packages or starts "
+"services for you."
+msgstr ""
+"A beállítási utasítások csak másolhatók. A ClamUI soha nem telepít "
+"csomagokat és nem indít szolgáltatásokat az Ön nevében."
+
+#: src/clamav_components/component_status_page.rs:72
+#: src/virus_database/database_update_page.rs:415
+msgid "Refresh status"
+msgstr "Állapot frissítése"
+
+#: src/clamav_components/component_status_page.rs:128
+msgid "Command copied to clipboard"
+msgstr "A parancs a vágólapra másolva"
 
 #: src/file_quarantine/quarantine_entries_page.rs:19
 msgid "File hash mismatch — file may be corrupted"
@@ -74,6 +193,7 @@ msgstr ""
 
 #: src/file_quarantine/quarantine_entries_page.rs:85
 #: src/malware_scan/scan_progress_page.rs:382
+#: src/virus_database/database_update_page.rs:466
 msgid "Cancel"
 msgstr "Mégse"
 
@@ -232,3 +352,162 @@ msgstr ""
 #: src/malware_scan/scan_progress_page.rs:481
 msgid "Choose a Folder to Scan"
 msgstr ""
+
+#: src/virus_database/database_update_page.rs:87
+msgid "Active"
+msgstr "Aktív"
+
+#: src/virus_database/database_update_page.rs:88
+msgid "Scheduled by a systemd timer"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:89
+msgid "Installed but stopped"
+msgstr "Telepítve, de leállítva"
+
+#: src/virus_database/database_update_page.rs:91
+msgid "No freshclam service detected; updates run manually"
+msgstr "Nem található freshclam szolgáltatás; a frissítések kézzel futnak"
+
+#: src/virus_database/database_update_page.rs:102
+#, rust-format
+msgid "{count} day old"
+msgid_plural "{count} days old"
+msgstr[0] "{count} napos"
+msgstr[1] "{count} napos"
+
+#: src/virus_database/database_update_page.rs:108
+msgid "No readable virus database was found"
+msgstr "Nem található olvasható vírusadatbázis"
+
+#: src/virus_database/database_update_page.rs:127
+msgid ""
+"Authentication cancelled. Database update requires administrator privileges."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:130
+msgid "Authorization failed. Please try again and enter your password."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:133
+msgid "Update rate limited by mirror. Please wait a few minutes and try again."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:136
+msgid ""
+"Update blocked by CDN. This may be due to rate limiting. Please wait and try "
+"again later."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:140
+msgid "ClamAV mirror is currently unavailable. Please try again later."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:143
+msgid "SSL/TLS certificate error. The mirror may have configuration issues."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:146
+msgid "Connection timed out. Please check your network connection."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:149
+msgid "Database is locked. Another freshclam instance may be running."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:152
+msgid ""
+"Permission denied. You may need elevated privileges to update the database."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:155
+msgid "Connection error. Please check your network connection."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:158
+msgid "DNS resolution failed. Please check your network settings."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:164
+#: src/virus_database/database_update_page.rs:391
+msgid "Update failed with an unknown error. Check the logs for details."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:171
+#, rust-format
+msgid "Updated: {databases}"
+msgstr "Frissítve: {databases}"
+
+#: src/virus_database/database_update_page.rs:175
+#, rust-format
+msgid "Already current: {databases}"
+msgstr "Már naprakész: {databases}"
+
+#: src/virus_database/database_update_page.rs:184
+#, rust-format
+msgid "Rate limited: {database}"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:187
+#, rust-format
+msgid "Rate limited: {database} until {cooldown}"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:204
+msgid "Database update completed"
+msgstr "Az adatbázis frissítése befejeződött"
+
+#: src/virus_database/database_update_page.rs:207
+msgid "Database is already up to date"
+msgstr "Az adatbázis már naprakész"
+
+#: src/virus_database/database_update_page.rs:224
+msgid "Install freshclam before requesting database updates."
+msgstr "Az adatbázis-frissítés kérése előtt telepítse a freshclam programot."
+
+#: src/virus_database/database_update_page.rs:262
+msgid "Checking freshclam…"
+msgstr "freshclam ellenőrzése…"
+
+#: src/virus_database/database_update_page.rs:372
+msgid "Database update cancelled"
+msgstr "Az adatbázis-frissítés megszakítva"
+
+#: src/virus_database/database_update_page.rs:384
+msgid ""
+"The service accepted the signal; it performs the update asynchronously. "
+"Check its logs for completion."
+msgstr ""
+"A szolgáltatás elfogadta a jelzést; a frissítést aszinkron módon végzi. A "
+"befejezést a naplókban ellenőrizheti."
+
+#: src/virus_database/database_update_page.rs:411
+msgid "Virus definitions"
+msgstr "Vírusdefiníciók"
+
+#: src/virus_database/database_update_page.rs:432
+msgid "Update service"
+msgstr "Frissítési szolgáltatás"
+
+#: src/virus_database/database_update_page.rs:440
+msgid "Database freshness"
+msgstr "Adatbázis frissessége"
+
+#: src/virus_database/database_update_page.rs:450
+#: src/virus_database/database_update_page.rs:459
+msgid "Update database"
+msgstr "Adatbázis frissítése"
+
+#: src/virus_database/database_update_page.rs:451
+msgid ""
+"Updates run through the freshclam system service when one exists, so your "
+"system may ask for authorization."
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:459
+msgid "Updating…"
+msgstr "Frissítés…"
+
+#: src/virus_database/database_update_page.rs:487
+msgid "Update log"
+msgstr "Frissítési napló"

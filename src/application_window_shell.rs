@@ -4,11 +4,14 @@ use gettextrs::gettext;
 use relm4::{
     AsyncComponentSender, Component, ComponentController, Controller, adw,
     adw::prelude::*,
-    gtk::glib,
+    gtk,
+    gtk::{gio, glib},
     prelude::{AsyncComponent, AsyncComponentParts},
 };
 
 use crate::{
+    APPLICATION_ID,
+    clamav_components::component_status_page::ComponentStatusPage,
     file_quarantine::{
         quarantine_entries_page::{
             QuarantineEntriesPage, QuarantineEntriesPageInput, describe_quarantine_failure,
@@ -19,6 +22,7 @@ use crate::{
     malware_scan::scan_progress_page::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageOutput,
     },
+    virus_database::database_update_page::DatabaseUpdatePage,
 };
 
 const APPLICATION_DATA_NAME: &str = "clamui";
@@ -27,6 +31,8 @@ enum ShellContent {
     VaultReady {
         _scan_page: Controller<ScanProgressPage>,
         _quarantine_page: Controller<QuarantineEntriesPage>,
+        _database_page: Controller<DatabaseUpdatePage>,
+        _component_page: Controller<ComponentStatusPage>,
     },
     VaultUnavailable,
 }
@@ -47,6 +53,126 @@ fn vault_unavailable_page(vault_failure: &QuarantineMoveFailure) -> adw::StatusP
             vault_failure,
         )))
         .build()
+}
+
+struct NavigationPage<'page> {
+    page_name: &'static str,
+    page_title: String,
+    page_widget: &'page gtk::Widget,
+    keyboard_accelerator: &'static str,
+}
+
+fn navigation_stack(navigation_pages: &[NavigationPage<'_>]) -> gtk::Stack {
+    let page_stack = gtk::Stack::builder()
+        .transition_type(gtk::StackTransitionType::Crossfade)
+        .build();
+    navigation_pages.iter().for_each(|navigation_page| {
+        page_stack.add_titled(
+            navigation_page.page_widget,
+            Some(navigation_page.page_name),
+            &navigation_page.page_title,
+        );
+        relm4::main_application().set_accels_for_action(
+            &format!("win.show-page::{}", navigation_page.page_name),
+            &[navigation_page.keyboard_accelerator],
+        );
+    });
+    page_stack
+}
+
+fn primary_menu_button() -> gtk::MenuButton {
+    let primary_menu = gio::Menu::new();
+    primary_menu.append(Some(&gettext("About ClamUI")), Some("app.about"));
+    primary_menu.append(Some(&gettext("Quit")), Some("app.quit"));
+    gtk::MenuButton::builder()
+        .icon_name("open-menu-symbolic")
+        .tooltip_text(gettext("Menu"))
+        .menu_model(&primary_menu)
+        .primary(true)
+        .build()
+}
+
+fn present_about_dialog() {
+    adw::AboutDialog::builder()
+        .application_name("ClamUI")
+        .application_icon(APPLICATION_ID)
+        .version(env!("CARGO_PKG_VERSION"))
+        .license_type(gtk::License::MitX11)
+        .website("https://github.com/linx-systems/clamui")
+        .developers(
+            include_str!("../AUTHORS")
+                .lines()
+                .filter(|author_line| !author_line.starts_with('#'))
+                .collect::<Vec<_>>(),
+        )
+        .translator_credits(gettext("translator-credits"))
+        .build()
+        .present(relm4::main_application().active_window().as_ref());
+}
+
+fn register_application_actions(window_root: &adw::ApplicationWindow, page_stack: &gtk::Stack) {
+    window_root.add_action(&gio::PropertyAction::new(
+        "show-page",
+        page_stack,
+        "visible-child-name",
+    ));
+    let main_application = relm4::main_application();
+    let about_action = gio::SimpleAction::new("about", None);
+    about_action.connect_activate(|_activated_action, _parameter| present_about_dialog());
+    main_application.add_action(&about_action);
+    let quit_action = gio::SimpleAction::new("quit", None);
+    quit_action.connect_activate(|_activated_action, _parameter| {
+        relm4::main_application().quit();
+    });
+    main_application.add_action(&quit_action);
+    main_application.set_accels_for_action("app.quit", &["<Control>q"]);
+    main_application.set_accels_for_action("window.close", &["<Control>w"]);
+}
+
+fn adaptive_navigation_layout(
+    page_stack: &gtk::Stack,
+    window_root: &adw::ApplicationWindow,
+) -> adw::OverlaySplitView {
+    let sidebar_header = adw::HeaderBar::builder()
+        .title_widget(&adw::WindowTitle::new("ClamUI", ""))
+        .build();
+    sidebar_header.pack_end(&primary_menu_button());
+    let sidebar_view = adw::ToolbarView::new();
+    sidebar_view.add_top_bar(&sidebar_header);
+    sidebar_view.set_content(Some(
+        &gtk::StackSidebar::builder().stack(page_stack).build(),
+    ));
+
+    let split_view = adw::OverlaySplitView::builder()
+        .sidebar(&sidebar_view)
+        .sidebar_width_fraction(0.22)
+        .build();
+    let sidebar_toggle = gtk::ToggleButton::builder()
+        .icon_name("sidebar-show-symbolic")
+        .tooltip_text(gettext("Toggle sidebar"))
+        .build();
+    split_view
+        .bind_property("show-sidebar", &sidebar_toggle, "active")
+        .bidirectional()
+        .sync_create()
+        .build();
+    split_view
+        .bind_property("collapsed", &sidebar_toggle, "visible")
+        .sync_create()
+        .build();
+    let content_header = adw::HeaderBar::builder().show_title(false).build();
+    content_header.pack_start(&sidebar_toggle);
+    let content_view = adw::ToolbarView::new();
+    content_view.add_top_bar(&content_header);
+    content_view.set_content(Some(page_stack));
+    split_view.set_content(Some(&content_view));
+
+    if let Ok(narrow_condition) = adw::BreakpointCondition::parse("max-width: 640sp") {
+        let narrow_breakpoint = adw::Breakpoint::new(narrow_condition);
+        narrow_breakpoint.add_setter(&split_view, "collapsed", Some(&true.to_value()));
+        window_root.add_breakpoint(narrow_breakpoint);
+    }
+    split_view
 }
 
 fn application_pages(
@@ -71,35 +197,42 @@ fn application_pages(
                 }
             },
         );
+    let database_page = DatabaseUpdatePage::builder().launch(()).detach();
+    let component_page = ComponentStatusPage::builder().launch(()).detach();
 
-    let page_stack = adw::ViewStack::new();
-    page_stack.add_titled_with_icon(
-        &**scan_page.widget(),
-        Some("scan"),
-        &gettext("Scan"),
-        "system-search-symbolic",
-    );
-    page_stack.add_titled_with_icon(
-        &**quarantine_page.widget(),
-        Some("quarantine"),
-        &gettext("Quarantine"),
-        "security-high-symbolic",
-    );
-    let header_bar = adw::HeaderBar::builder()
-        .title_widget(
-            &adw::ViewSwitcher::builder()
-                .stack(&page_stack)
-                .policy(adw::ViewSwitcherPolicy::Wide)
-                .build(),
-        )
-        .build();
-    let toolbar_view = adw::ToolbarView::new();
-    toolbar_view.add_top_bar(&header_bar);
-    toolbar_view.set_content(Some(&page_stack));
-    window_root.set_content(Some(&toolbar_view));
+    let page_stack = navigation_stack(&[
+        NavigationPage {
+            page_name: "scan",
+            page_title: gettext("Scan"),
+            page_widget: scan_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>1",
+        },
+        NavigationPage {
+            page_name: "database",
+            page_title: gettext("Database"),
+            page_widget: database_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>2",
+        },
+        NavigationPage {
+            page_name: "components",
+            page_title: gettext("Components"),
+            page_widget: component_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>4",
+        },
+        NavigationPage {
+            page_name: "quarantine",
+            page_title: gettext("Quarantine"),
+            page_widget: quarantine_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>5",
+        },
+    ]);
+    register_application_actions(window_root, &page_stack);
+    window_root.set_content(Some(&adaptive_navigation_layout(&page_stack, window_root)));
     ShellContent::VaultReady {
         _scan_page: scan_page,
         _quarantine_page: quarantine_page,
+        _database_page: database_page,
+        _component_page: component_page,
     }
 }
 

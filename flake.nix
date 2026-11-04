@@ -39,6 +39,7 @@
           fileset = lib.fileset.unions [
             (craneLib.fileset.commonCargoSources ./.)
             ./.rustfmt.toml
+            ./AUTHORS
             ./Makefile
             ./po
             ./data

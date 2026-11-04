@@ -259,3 +259,33 @@ async fn host_cancel_stops_clamscan_scan() {
     let scan_target = PathBuf::from(std::env::var_os("HOST_LARGE_SCAN_TARGET").expect("target"));
     verify_cancel_stops_scanner(ScannerBackend::StandaloneClamscan, scan_target).await;
 }
+
+#[tokio::test]
+#[ignore = "needs a real ClamAV host"]
+async fn host_status_probes_read_the_real_system() {
+    let component_availabilities = futures::future::join_all(
+        crate::clamav_components::component_availability::ALL_CLAMAV_COMPONENTS
+            .map(crate::clamav_components::component_availability::probe_component_availability),
+    )
+    .await;
+    println!("components: {component_availabilities:#?}");
+    let service_state =
+        crate::virus_database::database_directory_status::detect_freshclam_service().await;
+    println!("freshclam service: {service_state:?}");
+    let database_directory =
+        crate::virus_database::database_directory_status::configured_database_directory();
+    let directory_status =
+        crate::virus_database::database_directory_status::inspect_database_directory(
+            &database_directory,
+            std::time::SystemTime::now(),
+        );
+    println!("database directory: {directory_status:#?}");
+    println!(
+        "update plan: {:?}",
+        crate::virus_database::database_update_events::plan_database_update(service_state)
+    );
+    println!(
+        "distribution: {:?}",
+        crate::clamav_components::distribution_install_guides::detect_distribution_family()
+    );
+}

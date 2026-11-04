@@ -1,16 +1,18 @@
 mod application_window_shell;
+mod clamav_components;
 mod file_quarantine;
 #[cfg(test)]
 mod host_verification_tests;
 mod malware_scan;
 mod shared_page_widget_templates;
+mod virus_database;
 
 use gettextrs::{LocaleCategory, bind_textdomain_codeset, bindtextdomain, setlocale, textdomain};
 use relm4::adw;
 
 use crate::application_window_shell::ApplicationWindowShell;
 
-const APPLICATION_ID: &str = "io.github.wvhulle.ClamUI";
+pub(crate) const APPLICATION_ID: &str = "io.github.wvhulle.ClamUI";
 const TRANSLATION_DOMAIN: &str = "clamui";
 const INSTALLED_LOCALE_DIRECTORY: &str = match option_env!("CLAMUI_LOCALE_DIRECTORY") {
     Some(locale_directory) => locale_directory,
