@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ClamUI
+Comment=Scan files and manage quarantine with ClamAV
+Exec=clamui
+Icon=io.github.wvhulle.ClamUI
+Categories=System;Security;
+StartupNotify=true
+Terminal=false

@@ -1,40 +1,29 @@
-[workspace]
-members = ["crates/clamui-core", "desktop/src-tauri"]
-resolver = "2"
-
-[workspace.package]
-version = "0.5.1"
-edition = "2021"
+[package]
+name = "clamui"
+version = "0.1.0"
+edition = "2024"
 license = "MIT"
-authors = ["ClamUI Contributors"]
-repository = "https://github.com/linx-systems/clamui"
+publish = false
 
-[workspace.dependencies]
-base64 = "0.23"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4", features = ["derive"] }
-signal-hook = "0.3"
-csv = "1"
-fs2 = "0.4"
-gio = "0.18"
-glib = "0.22"
-globset = "0.4"
+[[bin]]
+name = "clamui"
+path = "src/main.rs"
+
+[dependencies]
+bytesize = "2"
+futures = "0.3.34"
+gettext-rs = { version = "0.8", features = ["gettext-system"] }
 hex = "0.4"
-icu_casemap = "=2.3.0"
-icu_locale_core = "=2.3.0"
-libc = "0.2"
-log = "0.4"
-percent-encoding = "2"
-regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
-rusqlite = { version = "0.41", features = ["bundled"] }
-semver = "1"
-serde = { version = "1", features = ["derive"] }
-secret-service = { version = "5", default-features = false, features = ["rt-async-io-crypto-rust"] }
-serde_json = "1"
+humantime = "2.4"
+relm4 = { version = "0.11", features = ["libadwaita", "gnome_47"] }
+rustix = { version = "1", features = ["fs", "process"] }
 sha2 = "0.10"
 tempfile = "3"
-url = "2"
-uuid = { version = "1", features = ["v4", "serde"] }
-walkdir = "2"
-zip = { version = "9.0.0", default-features = false, features = ["deflate"] }
+thiserror = "2"
+tokio = { version = "1.54", features = ["io-util", "process", "rt", "time"] }
+tokio-stream = { version = "0.1", features = ["io-util"] }
+turso = { version = "=0.8.3", default-features = false }
+
+[dev-dependencies]
+rusqlite = { version = "0.41", features = ["bundled"] }
+tokio = { version = "1.54", features = ["macros", "rt-multi-thread"] }

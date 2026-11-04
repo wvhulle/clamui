@@ -1,7 +1,0 @@
-node_modules/
-dist/
-.astro/
-.DS_Store
-public/screenshots/
-public/favicon.svg
-public/og-image.png
