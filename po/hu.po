@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:03+0100\n"
+"POT-Creation-Date: 2026-11-05 09:11+0100\n"
 "PO-Revision-Date: 2026-09-13 09:59+0200\n"
 "Last-Translator: Kálmán „KAMI” Szalai <kami911@gmail.com>\n"
 "Language-Team: Hungarian\n"
@@ -53,19 +53,19 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/activity_history/activity_export_formats.rs:28
-#: src/malware_scan/scan_progress_page.rs:318
+#: src/malware_scan/scan_progress_page.rs:347
 #: src/malware_scan/scan_results_dialog.rs:54
 msgid "No threats found"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:29
-#: src/malware_scan/scan_progress_page.rs:316
+#: src/malware_scan/scan_progress_page.rs:345
 #: src/malware_scan/scan_results_dialog.rs:55
 msgid "The scan did not finish cleanly"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:30
-#: src/malware_scan/scan_progress_page.rs:311
+#: src/malware_scan/scan_progress_page.rs:340
 #: src/malware_scan/scan_results_dialog.rs:56
 msgid "Scan cancelled by user"
 msgstr "A felhasználó megszakította a vizsgálatot"
@@ -142,8 +142,9 @@ msgstr ""
 #: src/activity_history/activity_logs_page.rs:152
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
-#: src/malware_scan/scan_progress_page.rs:588
+#: src/malware_scan/scan_progress_page.rs:703
 #: src/malware_scan/scan_results_dialog.rs:198
+#: src/scan_profiles/profile_manager_dialog.rs:116
 #: src/virus_database/database_update_page.rs:529
 msgid "Cancel"
 msgstr "Mégse"
@@ -211,7 +212,7 @@ msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:425
 #: src/clamav_components/clamav_component_row.rs:73
-#: src/malware_scan/scan_progress_page.rs:270
+#: src/malware_scan/scan_progress_page.rs:299
 #: src/virus_database/database_update_page.rs:285
 #: src/virus_database/database_update_page.rs:292
 msgid "Checking…"
@@ -418,6 +419,7 @@ msgid "Quick Actions"
 msgstr "Gyorsműveletek"
 
 #: src/activity_history/scan_statistics_page.rs:366
+#: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr "Gyors vizsgálat"
 
@@ -454,155 +456,157 @@ msgstr "Teljes időszak"
 msgid "Failed to load statistics: {error}"
 msgstr "Nem sikerült betölteni a statisztikákat: {error}"
 
-#: src/application_settings/preferences_dialog.rs:117
+#: src/application_settings/preferences_dialog.rs:113
 msgid "Node.js dependencies"
 msgstr "Node.js-függőségek"
 
-#: src/application_settings/preferences_dialog.rs:118
+#: src/application_settings/preferences_dialog.rs:114
 msgid "Git repository data"
 msgstr "Git-tároló adatai"
 
-#: src/application_settings/preferences_dialog.rs:119
+#: src/application_settings/preferences_dialog.rs:115
 msgid "Python virtual environment"
 msgstr "Python virtuális környezet"
 
-#: src/application_settings/preferences_dialog.rs:120
+#: src/application_settings/preferences_dialog.rs:116
 msgid "Build output directory"
 msgstr "Build kimeneti könyvtár"
 
-#: src/application_settings/preferences_dialog.rs:121
+#: src/application_settings/preferences_dialog.rs:117
 msgid "Distribution output directory"
 msgstr "Terjesztési kimeneti könyvtár"
 
-#: src/application_settings/preferences_dialog.rs:122
+#: src/application_settings/preferences_dialog.rs:118
 msgid "Python bytecode cache"
 msgstr "Python bájtkódgyorsítótár"
 
-#: src/application_settings/preferences_dialog.rs:129
+#: src/application_settings/preferences_dialog.rs:125
 msgid "Behavior"
 msgstr "Működés"
 
-#: src/application_settings/preferences_dialog.rs:133
+#: src/application_settings/preferences_dialog.rs:129
 msgid "Scan Behavior"
 msgstr "Vizsgálat viselkedése"
 
-#: src/application_settings/preferences_dialog.rs:134
+#: src/application_settings/preferences_dialog.rs:130
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:137
+#: src/application_settings/preferences_dialog.rs:133
 msgid "Show Live Scan Progress"
 msgstr "Élő vizsgálati előrehaladás megjelenítése"
 
-#: src/application_settings/preferences_dialog.rs:138
+#: src/application_settings/preferences_dialog.rs:134
 msgid "Display files being scanned in real time."
 msgstr "A vizsgált fájlok valós idejű megjelenítése."
 
-#: src/application_settings/preferences_dialog.rs:145
+#: src/application_settings/preferences_dialog.rs:141
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:146
+#: src/application_settings/preferences_dialog.rs:142
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:147
+#: src/application_settings/preferences_dialog.rs:143
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:150
+#: src/application_settings/preferences_dialog.rs:146
 msgid "Scan Backend"
 msgstr "Vizsgálati háttérprogram"
 
-#: src/application_settings/preferences_dialog.rs:152
+#: src/application_settings/preferences_dialog.rs:148
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:212
+#: src/application_settings/preferences_dialog.rs:208
 #: src/malware_scan/scan_target_row.rs:46
+#: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "Eltávolítás"
 
-#: src/application_settings/preferences_dialog.rs:245
+#: src/application_settings/preferences_dialog.rs:241
+#: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "Kizárások"
 
-#: src/application_settings/preferences_dialog.rs:257
+#: src/application_settings/preferences_dialog.rs:253
 msgid "Preset Exclusions"
 msgstr "Előre beállított kizárások"
 
-#: src/application_settings/preferences_dialog.rs:259
+#: src/application_settings/preferences_dialog.rs:255
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 "A vizsgálatból kizárandó gyakori könyvtárak. A módosítások azonnal mentődnek."
 
-#: src/application_settings/preferences_dialog.rs:264
+#: src/application_settings/preferences_dialog.rs:260
 msgid "Custom Exclusions"
 msgstr "Egyéni kizárások"
 
-#: src/application_settings/preferences_dialog.rs:266
+#: src/application_settings/preferences_dialog.rs:262
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:270
+#: src/application_settings/preferences_dialog.rs:266
 msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude vagy *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:311
-#: src/application_window_shell.rs:142
+#: src/application_settings/preferences_dialog.rs:307
+#: src/application_window_shell.rs:143
 msgid "Preferences"
 msgstr "Beállítások"
 
-#: src/application_window_shell.rs:65
+#: src/application_window_shell.rs:66
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:143
+#: src/application_window_shell.rs:144
 msgid "About ClamUI"
 msgstr "A ClamUI névjegye"
 
-#: src/application_window_shell.rs:144
+#: src/application_window_shell.rs:145
 msgid "Quit"
 msgstr "Kilépés"
 
-#: src/application_window_shell.rs:147
+#: src/application_window_shell.rs:148
 msgid "Menu"
 msgstr "Menü"
 
-#: src/application_window_shell.rs:166
+#: src/application_window_shell.rs:167
 msgid "translator-credits"
 msgstr "Kálmán „KAMI” Szalai"
 
-#: src/application_window_shell.rs:225
+#: src/application_window_shell.rs:226
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:302
-#: src/malware_scan/scan_progress_page.rs:308
+#: src/application_window_shell.rs:312
+#: src/malware_scan/scan_progress_page.rs:337
 msgid "Scan"
 msgstr "Vizsgálat"
 
-#: src/application_window_shell.rs:309
+#: src/application_window_shell.rs:319
 #: src/virus_database/database_update_page.rs:471
 msgid "Database"
 msgstr "Adatbázis"
 
-#: src/application_window_shell.rs:316
+#: src/application_window_shell.rs:326
 msgid "Logs"
 msgstr "Naplók"
 
-#: src/application_window_shell.rs:323
+#: src/application_window_shell.rs:333
 msgid "Components"
 msgstr "Összetevők"
 
-#: src/application_window_shell.rs:330
+#: src/application_window_shell.rs:340
 #: src/malware_scan/detected_threat_row.rs:110
 #: src/malware_scan/scan_results_dialog.rs:199
 msgid "Quarantine"
 msgstr "Karanténba helyezés"
 
-#: src/application_window_shell.rs:337
+#: src/application_window_shell.rs:347
 #: src/malware_scan/scan_results_dialog.rs:324
 msgid "Statistics"
 msgstr "Statisztikák"
@@ -749,6 +753,8 @@ msgstr[1] ""
 #: src/file_quarantine/quarantine_entries_page.rs:174
 #: src/file_quarantine/quarantine_entries_page.rs:190
 #: src/file_quarantine/quarantine_entry_row.rs:54
+#: src/scan_profiles/profile_manager_dialog.rs:303
+#: src/scan_profiles/scan_profile_row.rs:80
 msgid "Delete"
 msgstr "Törlés"
 
@@ -800,7 +806,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Visszaállítás"
 
-#: src/main.rs:48
+#: src/main.rs:49
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -835,75 +841,75 @@ msgstr "Kizárás"
 msgid "Copy Path"
 msgstr "Elérési út másolása"
 
-#: src/malware_scan/scan_progress_page.rs:126
+#: src/malware_scan/scan_progress_page.rs:155
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:129
+#: src/malware_scan/scan_progress_page.rs:158
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:133
+#: src/malware_scan/scan_progress_page.rs:162
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:137
+#: src/malware_scan/scan_progress_page.rs:166
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:142
+#: src/malware_scan/scan_progress_page.rs:171
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:154
+#: src/malware_scan/scan_progress_page.rs:183
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr "A vizsgálati cél nem létezik, vagy érvénytelen NUL bájtot tartalmaz"
 
-#: src/malware_scan/scan_progress_page.rs:157
+#: src/malware_scan/scan_progress_page.rs:186
 msgid "Scan target is not a regular file or directory"
 msgstr "A vizsgálati cél nem szabályos fájl vagy könyvtár"
 
-#: src/malware_scan/scan_progress_page.rs:162
+#: src/malware_scan/scan_progress_page.rs:191
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:169
+#: src/malware_scan/scan_progress_page.rs:198
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:173
+#: src/malware_scan/scan_progress_page.rs:202
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:181
+#: src/malware_scan/scan_progress_page.rs:210
 msgid "No files could be scanned"
 msgstr "Egyetlen fájl sem volt megvizsgálható"
 
-#: src/malware_scan/scan_progress_page.rs:187
+#: src/malware_scan/scan_progress_page.rs:216
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:199
+#: src/malware_scan/scan_progress_page.rs:228
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] "{count} fájl nem volt elérhető"
 msgstr[1] "{count} fájl nem volt elérhető"
 
-#: src/malware_scan/scan_progress_page.rs:205
+#: src/malware_scan/scan_progress_page.rs:234
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] "{count} fájl nem volt olvasható"
 msgstr[1] "{count} fájl nem volt olvasható"
 
-#: src/malware_scan/scan_progress_page.rs:211
+#: src/malware_scan/scan_progress_page.rs:240
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -918,34 +924,34 @@ msgstr[1] ""
 "{count} nem végzetes figyelmeztetés történt a vizsgálat során; egyes fájlok "
 "csak részben lettek megvizsgálva"
 
-#: src/malware_scan/scan_progress_page.rs:272
+#: src/malware_scan/scan_progress_page.rs:301
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:275
+#: src/malware_scan/scan_progress_page.rs:304
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:290
+#: src/malware_scan/scan_progress_page.rs:319
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:309
+#: src/malware_scan/scan_progress_page.rs:338
 msgid "Scanning…"
 msgstr "Vizsgálat folyamatban…"
 
-#: src/malware_scan/scan_progress_page.rs:310
+#: src/malware_scan/scan_progress_page.rs:339
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:313
+#: src/malware_scan/scan_progress_page.rs:342
 #: src/malware_scan/scan_results_dialog.rs:94
 #: src/malware_scan/scan_results_dialog.rs:350
 msgid "Threats found"
 msgstr "Talált fenyegetések"
 
-#: src/malware_scan/scan_progress_page.rs:326
+#: src/malware_scan/scan_progress_page.rs:355
 #: src/malware_scan/scan_results_dialog.rs:72
 #, rust-format
 msgid "{count} threat found"
@@ -953,58 +959,77 @@ msgid_plural "{count} threats found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:333
+#: src/malware_scan/scan_progress_page.rs:362
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "{count} fájl ellenőrizve"
 msgstr[1] "{count} fájl ellenőrizve"
 
-#: src/malware_scan/scan_progress_page.rs:352
+#: src/malware_scan/scan_progress_page.rs:381
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:530
+#: src/malware_scan/scan_progress_page.rs:432
+msgid "No Profile (Manual)"
+msgstr "Nincs profil (kézi)"
+
+#: src/malware_scan/scan_progress_page.rs:623
+msgid "Scan Profile"
+msgstr "Vizsgálati profil"
+
+#: src/malware_scan/scan_progress_page.rs:626
+msgid "Profile"
+msgstr "Profil"
+
+#: src/malware_scan/scan_progress_page.rs:636
+#: src/scan_profiles/profile_manager_dialog.rs:139
+msgid "Manage Profiles"
+msgstr "Profilok kezelése"
+
+#: src/malware_scan/scan_progress_page.rs:645
 msgid "Scan Targets"
 msgstr "Vizsgálati célok"
 
-#: src/malware_scan/scan_progress_page.rs:531
+#: src/malware_scan/scan_progress_page.rs:646
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:539
+#: src/malware_scan/scan_progress_page.rs:654
 msgid "Add Files"
 msgstr "Fájlok hozzáadása"
 
-#: src/malware_scan/scan_progress_page.rs:546
+#: src/malware_scan/scan_progress_page.rs:661
+#: src/scan_profiles/profile_editor_dialog.rs:170
+#: src/scan_profiles/profile_editor_dialog.rs:269
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:558
+#: src/malware_scan/scan_progress_page.rs:673
 msgid "No targets added"
 msgstr "Nincs hozzáadott cél"
 
-#: src/malware_scan/scan_progress_page.rs:571
+#: src/malware_scan/scan_progress_page.rs:686
 msgid "Start Scan"
 msgstr "Vizsgálat indítása"
 
-#: src/malware_scan/scan_progress_page.rs:581
+#: src/malware_scan/scan_progress_page.rs:696
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:643
+#: src/malware_scan/scan_progress_page.rs:758
 msgid "View Results"
 msgstr "Eredmények megtekintése"
 
-#: src/malware_scan/scan_progress_page.rs:717
+#: src/malware_scan/scan_progress_page.rs:838
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:732
+#: src/malware_scan/scan_progress_page.rs:853
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:818
+#: src/malware_scan/scan_progress_page.rs:958
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
@@ -1098,14 +1123,162 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
+#: src/scan_profiles/profile_editor_dialog.rs:118
+msgid "Profile name is required"
+msgstr "A profilnév megadása kötelező"
+
+#: src/scan_profiles/profile_editor_dialog.rs:119
+msgid "Name must be 50 characters or less"
+msgstr "A név legfeljebb 50 karakterből állhat"
+
+#: src/scan_profiles/profile_editor_dialog.rs:120
+msgid "Another profile already uses this name"
+msgstr ""
+
+#: src/scan_profiles/profile_editor_dialog.rs:121
+msgid "Add at least one target"
+msgstr ""
+
+#: src/scan_profiles/profile_editor_dialog.rs:135
+msgid "Edit Profile"
+msgstr "Profil szerkesztése"
+
+#: src/scan_profiles/profile_editor_dialog.rs:143
+msgid "Save"
+msgstr "Mentés"
+
+#: src/scan_profiles/profile_editor_dialog.rs:154
+msgid "Name"
+msgstr "Név"
+
+#: src/scan_profiles/profile_editor_dialog.rs:160
+msgid "Description"
+msgstr "Leírás"
+
+#: src/scan_profiles/profile_editor_dialog.rs:166
+msgid "Targets"
+msgstr "Célok"
+
+#: src/scan_profiles/profile_editor_dialog.rs:180
+msgid "Add Path"
+msgstr "Elérési út hozzáadása"
+
+#: src/scan_profiles/profile_editor_dialog.rs:193
+msgid "Added to the exclusions from Preferences while this profile runs."
+msgstr ""
+
+#: src/scan_profiles/profile_editor_dialog.rs:198
+msgid "Add Pattern"
+msgstr "Minta hozzáadása"
+
+#: src/scan_profiles/profile_manager_dialog.rs:151
+#: src/scan_profiles/profile_manager_dialog.rs:267
+msgid "Restore Defaults"
+msgstr "Alapértékek visszaállítása"
+
+#: src/scan_profiles/profile_manager_dialog.rs:157
+msgid "New Profile"
+msgstr "Új profil"
+
+#: src/scan_profiles/profile_manager_dialog.rs:164
+#: src/scan_profiles/profile_manager_dialog.rs:239
+msgid "Import"
+msgstr "Importálás"
+
+#: src/scan_profiles/profile_manager_dialog.rs:172
+msgid "Scan Profiles"
+msgstr "Vizsgálati profilok"
+
+#: src/scan_profiles/profile_manager_dialog.rs:173
+msgid "Select a profile to edit or use for scanning"
+msgstr ""
+
+#: src/scan_profiles/profile_manager_dialog.rs:262
+msgid "Restore Default Profiles"
+msgstr "Alapértelmezett profilok visszaállítása"
+
+#: src/scan_profiles/profile_manager_dialog.rs:264
+msgid ""
+"Restore the built-in default profiles? Any customizations to default "
+"profiles will be reset; custom profiles are preserved."
+msgstr ""
+"Visszaállítja a beépített alapértelmezett profilokat? Az alapértelmezett "
+"profilok minden módosítása vissza lesz állítva; az egyéni profilok "
+"megmaradnak."
+
+#: src/scan_profiles/profile_manager_dialog.rs:277
+msgid "Default profiles restored"
+msgstr "Alapértelmezett profilok visszaállítva"
+
+#: src/scan_profiles/profile_manager_dialog.rs:300
+msgid "Delete Profile"
+msgstr "Profil törlése"
+
+#: src/scan_profiles/profile_manager_dialog.rs:301
+#, rust-format
+msgid "Delete the profile '{name}'?"
+msgstr ""
+
+#: src/scan_profiles/profile_manager_dialog.rs:317
+msgid "Profile deleted"
+msgstr "Profil törölve"
+
+#: src/scan_profiles/profile_manager_dialog.rs:367
+msgid "Profile imported"
+msgstr "Profil importálva"
+
+#: src/scan_profiles/profile_manager_dialog.rs:381
+msgid "Profile exported"
+msgstr "Profil exportálva"
+
+#: src/scan_profiles/scan_profile_row.rs:29
+#, rust-format
+msgid "{count} target"
+msgid_plural "{count} targets"
+msgstr[0] "{count} cél"
+msgstr[1] "{count} cél"
+
+#: src/scan_profiles/scan_profile_row.rs:34
+msgid "Default profile"
+msgstr ""
+
+#: src/scan_profiles/scan_profile_row.rs:60
+msgid "Run"
+msgstr ""
+
+#: src/scan_profiles/scan_profile_row.rs:70
+msgid "Edit"
+msgstr "Szerkesztés"
+
+#: src/scan_profiles/scan_profile_row.rs:91 src/text_export_dialog.rs:32
+msgid "Export"
+msgstr "Exportálás"
+
+#: src/scan_profiles/scan_profile_store.rs:57
+msgid "Full Scan"
+msgstr "Teljes vizsgálat"
+
+#: src/scan_profiles/scan_profile_store.rs:58
+msgid "Home Folder"
+msgstr "Saját mappa"
+
+#: src/scan_profiles/scan_profile_store.rs:66
+msgid "Fast scan of the Downloads folder for quick threat detection"
+msgstr ""
+"A Letöltések mappa gyors vizsgálata a fenyegetések gyors felismeréséhez"
+
+#: src/scan_profiles/scan_profile_store.rs:69
+msgid "Comprehensive system-wide scan of all accessible directories"
+msgstr "Az összes elérhető könyvtár átfogó, rendszerszintű vizsgálata"
+
+#: src/scan_profiles/scan_profile_store.rs:72
+msgid "Scan of the user's home directory and personal files"
+msgstr "A felhasználó saját könyvtárának és személyes fájljainak vizsgálata"
+
 #: src/text_export_dialog.rs:20
 #, rust-format
 msgid "Could not save the file: {error}"
 msgstr ""
-
-#: src/text_export_dialog.rs:32
-msgid "Export"
-msgstr "Exportálás"
 
 #: src/virus_database/database_update_page.rs:99
 msgid "Active"

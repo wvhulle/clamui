@@ -9,7 +9,7 @@ use relm4::{
 use crate::{
     APPLICATION_ID,
     application_settings::scan_exclusion_rules::{
-        ExclusionEntry, ExclusionKind, PRESET_DIRECTORY_NAMES, ScanExclusions,
+        ExclusionEntry, ExclusionKind, PRESET_DIRECTORY_NAMES,
     },
     malware_scan::{
         scanner_command_builder::ScannerBackendPreference,
@@ -94,10 +94,6 @@ fn remove_exclusion_entry(settings: &gio::Settings, removed_pattern: &str) {
         .filter(|exclusion_entry| exclusion_entry.exclusion_pattern != removed_pattern)
         .collect::<Vec<_>>();
     write_exclusion_entries(settings, &exclusion_entries);
-}
-
-pub fn scan_exclusions_from_settings(settings: &gio::Settings) -> ScanExclusions {
-    ScanExclusions::from_entries(&read_exclusion_entries(settings), &glib::home_dir())
 }
 
 pub fn scanner_backend_preference(settings: &gio::Settings) -> ScannerBackendPreference {

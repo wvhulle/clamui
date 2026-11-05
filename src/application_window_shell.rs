@@ -28,6 +28,7 @@ use crate::{
     malware_scan::scan_progress_page::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
+    scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
     virus_database::database_update_page::{DatabaseUpdatePage, DatabaseUpdatePageOutput},
 };
@@ -276,6 +277,15 @@ fn application_pages(
         .launch(ScanProgressPageInit {
             quarantine_vault,
             activity_history: activity_history.clone(),
+            profile_store: ScanProfileStore::at_path(
+                glib::user_config_dir()
+                    .join(APPLICATION_DATA_NAME)
+                    .join("profiles.json"),
+                glib::user_special_dir(glib::UserDirectory::Downloads)
+                    .unwrap_or_else(|| glib::home_dir().join("Downloads"))
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
             file_list_directory: data_directory,
         })
         .connect_receiver(

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:03+0100\n"
+"POT-Creation-Date: 2026-11-05 09:11+0100\n"
 "PO-Revision-Date: 2026-07-22 21:29+0800\n"
 "Last-Translator: Markson Hosben <marksonhosben@proton.me>\n"
 "Language-Team: Chinese <>\n"
@@ -52,19 +52,19 @@ msgid_plural "Found {count} threats"
 msgstr[0] ""
 
 #: src/activity_history/activity_export_formats.rs:28
-#: src/malware_scan/scan_progress_page.rs:318
+#: src/malware_scan/scan_progress_page.rs:347
 #: src/malware_scan/scan_results_dialog.rs:54
 msgid "No threats found"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:29
-#: src/malware_scan/scan_progress_page.rs:316
+#: src/malware_scan/scan_progress_page.rs:345
 #: src/malware_scan/scan_results_dialog.rs:55
 msgid "The scan did not finish cleanly"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:30
-#: src/malware_scan/scan_progress_page.rs:311
+#: src/malware_scan/scan_progress_page.rs:340
 #: src/malware_scan/scan_results_dialog.rs:56
 msgid "Scan cancelled by user"
 msgstr "用户已取消扫描"
@@ -139,8 +139,9 @@ msgstr "这将永久删除所有历史日志。此操作无法撤销。"
 #: src/activity_history/activity_logs_page.rs:152
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
-#: src/malware_scan/scan_progress_page.rs:588
+#: src/malware_scan/scan_progress_page.rs:703
 #: src/malware_scan/scan_results_dialog.rs:198
+#: src/scan_profiles/profile_manager_dialog.rs:116
 #: src/virus_database/database_update_page.rs:529
 msgid "Cancel"
 msgstr "取消"
@@ -208,7 +209,7 @@ msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:425
 #: src/clamav_components/clamav_component_row.rs:73
-#: src/malware_scan/scan_progress_page.rs:270
+#: src/malware_scan/scan_progress_page.rs:299
 #: src/virus_database/database_update_page.rs:285
 #: src/virus_database/database_update_page.rs:292
 msgid "Checking…"
@@ -411,6 +412,7 @@ msgid "Quick Actions"
 msgstr "快捷操作"
 
 #: src/activity_history/scan_statistics_page.rs:366
+#: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr "快速扫描"
 
@@ -447,154 +449,156 @@ msgstr "全部时间"
 msgid "Failed to load statistics: {error}"
 msgstr "加载统计数据失败：{error}"
 
-#: src/application_settings/preferences_dialog.rs:117
+#: src/application_settings/preferences_dialog.rs:113
 msgid "Node.js dependencies"
 msgstr "Node.js 依赖项"
 
-#: src/application_settings/preferences_dialog.rs:118
+#: src/application_settings/preferences_dialog.rs:114
 msgid "Git repository data"
 msgstr "Git 仓库数据"
 
-#: src/application_settings/preferences_dialog.rs:119
+#: src/application_settings/preferences_dialog.rs:115
 msgid "Python virtual environment"
 msgstr "Python 虚拟环境"
 
-#: src/application_settings/preferences_dialog.rs:120
+#: src/application_settings/preferences_dialog.rs:116
 msgid "Build output directory"
 msgstr "构建输出目录"
 
-#: src/application_settings/preferences_dialog.rs:121
+#: src/application_settings/preferences_dialog.rs:117
 msgid "Distribution output directory"
 msgstr "分发输出目录"
 
-#: src/application_settings/preferences_dialog.rs:122
+#: src/application_settings/preferences_dialog.rs:118
 msgid "Python bytecode cache"
 msgstr "Python 字节码缓存"
 
-#: src/application_settings/preferences_dialog.rs:129
+#: src/application_settings/preferences_dialog.rs:125
 msgid "Behavior"
 msgstr "行为"
 
-#: src/application_settings/preferences_dialog.rs:133
+#: src/application_settings/preferences_dialog.rs:129
 msgid "Scan Behavior"
 msgstr "扫描行为"
 
-#: src/application_settings/preferences_dialog.rs:134
+#: src/application_settings/preferences_dialog.rs:130
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:137
+#: src/application_settings/preferences_dialog.rs:133
 msgid "Show Live Scan Progress"
 msgstr "显示实时扫描进度"
 
-#: src/application_settings/preferences_dialog.rs:138
+#: src/application_settings/preferences_dialog.rs:134
 msgid "Display files being scanned in real time."
 msgstr "实时显示正在扫描的文件。"
 
-#: src/application_settings/preferences_dialog.rs:145
+#: src/application_settings/preferences_dialog.rs:141
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:146
+#: src/application_settings/preferences_dialog.rs:142
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:147
+#: src/application_settings/preferences_dialog.rs:143
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:150
+#: src/application_settings/preferences_dialog.rs:146
 msgid "Scan Backend"
 msgstr "扫描后端"
 
-#: src/application_settings/preferences_dialog.rs:152
+#: src/application_settings/preferences_dialog.rs:148
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:212
+#: src/application_settings/preferences_dialog.rs:208
 #: src/malware_scan/scan_target_row.rs:46
+#: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "移除"
 
-#: src/application_settings/preferences_dialog.rs:245
+#: src/application_settings/preferences_dialog.rs:241
+#: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "排除项"
 
-#: src/application_settings/preferences_dialog.rs:257
+#: src/application_settings/preferences_dialog.rs:253
 msgid "Preset Exclusions"
 msgstr "预设排除项"
 
-#: src/application_settings/preferences_dialog.rs:259
+#: src/application_settings/preferences_dialog.rs:255
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr "可从扫描中排除的常见目录。更改会立即保存。"
 
-#: src/application_settings/preferences_dialog.rs:264
+#: src/application_settings/preferences_dialog.rs:260
 msgid "Custom Exclusions"
 msgstr "自定义排除项"
 
-#: src/application_settings/preferences_dialog.rs:266
+#: src/application_settings/preferences_dialog.rs:262
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:270
+#: src/application_settings/preferences_dialog.rs:266
 msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude 或 *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:311
-#: src/application_window_shell.rs:142
+#: src/application_settings/preferences_dialog.rs:307
+#: src/application_window_shell.rs:143
 msgid "Preferences"
 msgstr "首选项"
 
-#: src/application_window_shell.rs:65
+#: src/application_window_shell.rs:66
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:143
+#: src/application_window_shell.rs:144
 msgid "About ClamUI"
 msgstr "关于 ClamUI"
 
-#: src/application_window_shell.rs:144
+#: src/application_window_shell.rs:145
 msgid "Quit"
 msgstr "退出"
 
-#: src/application_window_shell.rs:147
+#: src/application_window_shell.rs:148
 msgid "Menu"
 msgstr "菜单"
 
-#: src/application_window_shell.rs:166
+#: src/application_window_shell.rs:167
 msgid "translator-credits"
 msgstr "Markson Hosben <marksonhosben@proton.me>"
 
-#: src/application_window_shell.rs:225
+#: src/application_window_shell.rs:226
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:302
-#: src/malware_scan/scan_progress_page.rs:308
+#: src/application_window_shell.rs:312
+#: src/malware_scan/scan_progress_page.rs:337
 msgid "Scan"
 msgstr "扫描"
 
-#: src/application_window_shell.rs:309
+#: src/application_window_shell.rs:319
 #: src/virus_database/database_update_page.rs:471
 msgid "Database"
 msgstr "数据库"
 
-#: src/application_window_shell.rs:316
+#: src/application_window_shell.rs:326
 msgid "Logs"
 msgstr "日志"
 
-#: src/application_window_shell.rs:323
+#: src/application_window_shell.rs:333
 msgid "Components"
 msgstr "组件"
 
-#: src/application_window_shell.rs:330
+#: src/application_window_shell.rs:340
 #: src/malware_scan/detected_threat_row.rs:110
 #: src/malware_scan/scan_results_dialog.rs:199
 msgid "Quarantine"
 msgstr "隔离区"
 
-#: src/application_window_shell.rs:337
+#: src/application_window_shell.rs:347
 #: src/malware_scan/scan_results_dialog.rs:324
 msgid "Statistics"
 msgstr "统计信息"
@@ -734,6 +738,8 @@ msgstr[0] ""
 #: src/file_quarantine/quarantine_entries_page.rs:174
 #: src/file_quarantine/quarantine_entries_page.rs:190
 #: src/file_quarantine/quarantine_entry_row.rs:54
+#: src/scan_profiles/profile_manager_dialog.rs:303
+#: src/scan_profiles/scan_profile_row.rs:80
 msgid "Delete"
 msgstr "删除"
 
@@ -785,7 +791,7 @@ msgstr ""
 msgid "Restore"
 msgstr "还原"
 
-#: src/main.rs:48
+#: src/main.rs:49
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -820,73 +826,73 @@ msgstr "排除"
 msgid "Copy Path"
 msgstr "复制路径"
 
-#: src/malware_scan/scan_progress_page.rs:126
+#: src/malware_scan/scan_progress_page.rs:155
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:129
+#: src/malware_scan/scan_progress_page.rs:158
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:133
+#: src/malware_scan/scan_progress_page.rs:162
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:137
+#: src/malware_scan/scan_progress_page.rs:166
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:142
+#: src/malware_scan/scan_progress_page.rs:171
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:154
+#: src/malware_scan/scan_progress_page.rs:183
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr "扫描目标不存在或包含无效的 NUL 字节"
 
-#: src/malware_scan/scan_progress_page.rs:157
+#: src/malware_scan/scan_progress_page.rs:186
 msgid "Scan target is not a regular file or directory"
 msgstr "扫描目标不是普通文件或目录"
 
-#: src/malware_scan/scan_progress_page.rs:162
+#: src/malware_scan/scan_progress_page.rs:191
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:169
+#: src/malware_scan/scan_progress_page.rs:198
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:173
+#: src/malware_scan/scan_progress_page.rs:202
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:181
+#: src/malware_scan/scan_progress_page.rs:210
 msgid "No files could be scanned"
 msgstr "未能扫描任何文件"
 
-#: src/malware_scan/scan_progress_page.rs:187
+#: src/malware_scan/scan_progress_page.rs:216
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:199
+#: src/malware_scan/scan_progress_page.rs:228
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] "无法访问 {count} 个文件"
 
-#: src/malware_scan/scan_progress_page.rs:205
+#: src/malware_scan/scan_progress_page.rs:234
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] "无法读取 {count} 个文件"
 
-#: src/malware_scan/scan_progress_page.rs:211
+#: src/malware_scan/scan_progress_page.rs:240
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -896,91 +902,110 @@ msgid_plural ""
 "partially scanned"
 msgstr[0] "扫描期间出现 {count} 条非致命警告；部分文件可能未被完整扫描"
 
-#: src/malware_scan/scan_progress_page.rs:272
+#: src/malware_scan/scan_progress_page.rs:301
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:275
+#: src/malware_scan/scan_progress_page.rs:304
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:290
+#: src/malware_scan/scan_progress_page.rs:319
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:309
+#: src/malware_scan/scan_progress_page.rs:338
 msgid "Scanning…"
 msgstr "正在扫描…"
 
-#: src/malware_scan/scan_progress_page.rs:310
+#: src/malware_scan/scan_progress_page.rs:339
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:313
+#: src/malware_scan/scan_progress_page.rs:342
 #: src/malware_scan/scan_results_dialog.rs:94
 #: src/malware_scan/scan_results_dialog.rs:350
 msgid "Threats found"
 msgstr "发现的威胁"
 
-#: src/malware_scan/scan_progress_page.rs:326
+#: src/malware_scan/scan_progress_page.rs:355
 #: src/malware_scan/scan_results_dialog.rs:72
 #, rust-format
 msgid "{count} threat found"
 msgid_plural "{count} threats found"
 msgstr[0] ""
 
-#: src/malware_scan/scan_progress_page.rs:333
+#: src/malware_scan/scan_progress_page.rs:362
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "已扫描 {count} 个文件"
 
-#: src/malware_scan/scan_progress_page.rs:352
+#: src/malware_scan/scan_progress_page.rs:381
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:530
+#: src/malware_scan/scan_progress_page.rs:432
+msgid "No Profile (Manual)"
+msgstr "无配置文件（手动）"
+
+#: src/malware_scan/scan_progress_page.rs:623
+msgid "Scan Profile"
+msgstr "扫描配置方案"
+
+#: src/malware_scan/scan_progress_page.rs:626
+msgid "Profile"
+msgstr "配置文件"
+
+#: src/malware_scan/scan_progress_page.rs:636
+#: src/scan_profiles/profile_manager_dialog.rs:139
+msgid "Manage Profiles"
+msgstr "管理配置文件"
+
+#: src/malware_scan/scan_progress_page.rs:645
 msgid "Scan Targets"
 msgstr "扫描目标"
 
-#: src/malware_scan/scan_progress_page.rs:531
+#: src/malware_scan/scan_progress_page.rs:646
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:539
+#: src/malware_scan/scan_progress_page.rs:654
 msgid "Add Files"
 msgstr "添加文件"
 
-#: src/malware_scan/scan_progress_page.rs:546
+#: src/malware_scan/scan_progress_page.rs:661
+#: src/scan_profiles/profile_editor_dialog.rs:170
+#: src/scan_profiles/profile_editor_dialog.rs:269
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:558
+#: src/malware_scan/scan_progress_page.rs:673
 msgid "No targets added"
 msgstr "未添加目标"
 
-#: src/malware_scan/scan_progress_page.rs:571
+#: src/malware_scan/scan_progress_page.rs:686
 msgid "Start Scan"
 msgstr "开始扫描"
 
-#: src/malware_scan/scan_progress_page.rs:581
+#: src/malware_scan/scan_progress_page.rs:696
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:643
+#: src/malware_scan/scan_progress_page.rs:758
 msgid "View Results"
 msgstr "查看结果"
 
-#: src/malware_scan/scan_progress_page.rs:717
+#: src/malware_scan/scan_progress_page.rs:838
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:732
+#: src/malware_scan/scan_progress_page.rs:853
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:818
+#: src/malware_scan/scan_progress_page.rs:958
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
@@ -1072,14 +1097,159 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
+#: src/scan_profiles/profile_editor_dialog.rs:118
+msgid "Profile name is required"
+msgstr "配置文件名称不能为空"
+
+#: src/scan_profiles/profile_editor_dialog.rs:119
+msgid "Name must be 50 characters or less"
+msgstr "名称不得超过 50 个字符"
+
+#: src/scan_profiles/profile_editor_dialog.rs:120
+msgid "Another profile already uses this name"
+msgstr ""
+
+#: src/scan_profiles/profile_editor_dialog.rs:121
+msgid "Add at least one target"
+msgstr ""
+
+#: src/scan_profiles/profile_editor_dialog.rs:135
+msgid "Edit Profile"
+msgstr "编辑配置文件"
+
+#: src/scan_profiles/profile_editor_dialog.rs:143
+msgid "Save"
+msgstr "保存"
+
+#: src/scan_profiles/profile_editor_dialog.rs:154
+msgid "Name"
+msgstr "名称"
+
+#: src/scan_profiles/profile_editor_dialog.rs:160
+msgid "Description"
+msgstr "描述"
+
+#: src/scan_profiles/profile_editor_dialog.rs:166
+msgid "Targets"
+msgstr "目标"
+
+#: src/scan_profiles/profile_editor_dialog.rs:180
+msgid "Add Path"
+msgstr "添加路径"
+
+#: src/scan_profiles/profile_editor_dialog.rs:193
+msgid "Added to the exclusions from Preferences while this profile runs."
+msgstr ""
+
+#: src/scan_profiles/profile_editor_dialog.rs:198
+msgid "Add Pattern"
+msgstr "添加匹配模式"
+
+#: src/scan_profiles/profile_manager_dialog.rs:151
+#: src/scan_profiles/profile_manager_dialog.rs:267
+msgid "Restore Defaults"
+msgstr "恢复默认配置方案"
+
+#: src/scan_profiles/profile_manager_dialog.rs:157
+msgid "New Profile"
+msgstr "新建配置文件"
+
+#: src/scan_profiles/profile_manager_dialog.rs:164
+#: src/scan_profiles/profile_manager_dialog.rs:239
+msgid "Import"
+msgstr "导入"
+
+#: src/scan_profiles/profile_manager_dialog.rs:172
+msgid "Scan Profiles"
+msgstr "扫描配置方案"
+
+#: src/scan_profiles/profile_manager_dialog.rs:173
+msgid "Select a profile to edit or use for scanning"
+msgstr ""
+
+#: src/scan_profiles/profile_manager_dialog.rs:262
+msgid "Restore Default Profiles"
+msgstr "恢复默认配置方案"
+
+#: src/scan_profiles/profile_manager_dialog.rs:264
+msgid ""
+"Restore the built-in default profiles? Any customizations to default "
+"profiles will be reset; custom profiles are preserved."
+msgstr ""
+"要恢复内置的默认配置方案吗？对默认配置方案所做的所有自定义修改都将重置；自定"
+"义配置方案将保留。"
+
+#: src/scan_profiles/profile_manager_dialog.rs:277
+msgid "Default profiles restored"
+msgstr "默认配置方案已恢复"
+
+#: src/scan_profiles/profile_manager_dialog.rs:300
+msgid "Delete Profile"
+msgstr "删除配置方案"
+
+#: src/scan_profiles/profile_manager_dialog.rs:301
+#, rust-format
+msgid "Delete the profile '{name}'?"
+msgstr ""
+
+#: src/scan_profiles/profile_manager_dialog.rs:317
+msgid "Profile deleted"
+msgstr "配置方案已删除"
+
+#: src/scan_profiles/profile_manager_dialog.rs:367
+msgid "Profile imported"
+msgstr "配置方案已导入"
+
+#: src/scan_profiles/profile_manager_dialog.rs:381
+msgid "Profile exported"
+msgstr "配置方案已导出"
+
+#: src/scan_profiles/scan_profile_row.rs:29
+#, rust-format
+msgid "{count} target"
+msgid_plural "{count} targets"
+msgstr[0] "{count} 个目标"
+
+#: src/scan_profiles/scan_profile_row.rs:34
+msgid "Default profile"
+msgstr ""
+
+#: src/scan_profiles/scan_profile_row.rs:60
+msgid "Run"
+msgstr ""
+
+#: src/scan_profiles/scan_profile_row.rs:70
+msgid "Edit"
+msgstr "编辑"
+
+#: src/scan_profiles/scan_profile_row.rs:91 src/text_export_dialog.rs:32
+msgid "Export"
+msgstr "导出"
+
+#: src/scan_profiles/scan_profile_store.rs:57
+msgid "Full Scan"
+msgstr "全盘扫描"
+
+#: src/scan_profiles/scan_profile_store.rs:58
+msgid "Home Folder"
+msgstr "主文件夹"
+
+#: src/scan_profiles/scan_profile_store.rs:66
+msgid "Fast scan of the Downloads folder for quick threat detection"
+msgstr "快速扫描“下载”文件夹，迅速检测威胁"
+
+#: src/scan_profiles/scan_profile_store.rs:69
+msgid "Comprehensive system-wide scan of all accessible directories"
+msgstr "对系统中所有可访问的目录进行全面扫描"
+
+#: src/scan_profiles/scan_profile_store.rs:72
+msgid "Scan of the user's home directory and personal files"
+msgstr "扫描用户主目录和个人文件"
+
 #: src/text_export_dialog.rs:20
 #, rust-format
 msgid "Could not save the file: {error}"
 msgstr ""
-
-#: src/text_export_dialog.rs:32
-msgid "Export"
-msgstr "导出"
 
 #: src/virus_database/database_update_page.rs:99
 msgid "Active"

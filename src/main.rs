@@ -6,6 +6,7 @@ mod file_quarantine;
 #[cfg(test)]
 mod host_verification_tests;
 mod malware_scan;
+mod scan_profiles;
 mod shared_page_widget_templates;
 mod startup_arguments;
 mod text_export_dialog;

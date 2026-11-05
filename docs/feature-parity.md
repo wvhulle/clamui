@@ -13,7 +13,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 - [x] Target list: add, remove and review targets before starting, with an explicit Start Scan.
 - [x] Drag and drop with `gtk::DropTarget`.
-- [ ] Profile selector with `adw::ComboRow`, and a Manage Profiles dialog.
+- [x] Profile selector with `adw::ComboRow`, and a Manage Profiles dialog.
 - [x] EICAR test button.
 - [x] Active backend label.
 - [x] Scan paths passed on the command line.
@@ -71,8 +71,8 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 
 ## Profiles
 
-- [ ] Default and custom profiles: run, edit, delete.
-- [ ] Create, import, export and restore defaults.
+- [x] Default and custom profiles: run, edit, delete.
+- [x] Create, import, export and restore defaults.
 
 ## Preferences
 
