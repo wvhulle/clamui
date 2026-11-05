@@ -154,6 +154,10 @@ let
     }
   );
 
+  vmTests = import ../vm-tests {
+    clamuiModule = self.nixosModules.default;
+  };
+
   moduleChecks = import ./module-checks.nix {
     inherit self nixpkgs pkgs;
   };
@@ -204,19 +208,22 @@ in
     inherit (screenshotRendering) screenshots;
   };
 
-  checks = moduleChecks // {
-    inherit
-      clamuiPackage
-      tests
-      clippy
-      fmt
-      xtaskTests
-      xtaskClippy
-      settingsHelperTests
-      settingsHelperClippy
-      ;
-    inherit (screenshotRendering) screenshots;
-  };
+  checks =
+    moduleChecks
+    // vmTests.checksFor pkgs
+    // {
+      inherit
+        clamuiPackage
+        tests
+        clippy
+        fmt
+        xtaskTests
+        xtaskClippy
+        settingsHelperTests
+        settingsHelperClippy
+        ;
+      inherit (screenshotRendering) screenshots;
+    };
 
   apps = {
     default = {

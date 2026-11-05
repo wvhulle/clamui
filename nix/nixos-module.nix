@@ -21,11 +21,20 @@ let
     builtins.any (protectedKey: lib.toLower protectedKey == lib.toLower settingKey) protectedSettings;
   refusedSettings = builtins.filter isProtectedSetting liveTuning.allowedSettings;
 
-  helperDataFiles = pkgs.runCommand "clamui-settings-helper-data" { } ''
-    install -Dm644 ${../data/io.github.wvhulle.ClamUI.policy} $out/share/polkit-1/actions/io.github.wvhulle.ClamUI.policy
-    install -Dm644 ${../data/io.github.wvhulle.ClamUI.SettingsHelper.conf} $out/share/dbus-1/system.d/${helperBusName}.conf
-    install -Dm644 ${../data/io.github.wvhulle.ClamUI.SettingsHelper.service} $out/share/dbus-1/system-services/${helperBusName}.service
-  '';
+  helperDataFiles = pkgs.linkFarm "clamui-settings-helper-data" [
+    {
+      name = "share/polkit-1/actions/io.github.wvhulle.ClamUI.policy";
+      path = ../data/io.github.wvhulle.ClamUI.policy;
+    }
+    {
+      name = "share/dbus-1/system.d/${helperBusName}.conf";
+      path = ../data/io.github.wvhulle.ClamUI.SettingsHelper.conf;
+    }
+    {
+      name = "share/dbus-1/system-services/${helperBusName}.service";
+      path = ../data/io.github.wvhulle.ClamUI.SettingsHelper.service;
+    }
+  ];
 in
 {
   options.services.clamui = {
