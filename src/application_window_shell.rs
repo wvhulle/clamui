@@ -1,7 +1,6 @@
 use std::{cell::OnceCell, os::unix::ffi::OsStringExt, path::PathBuf, rc::Rc};
 
 use gettextrs::gettext;
-use ksni::TrayMethods;
 use relm4::{
     AsyncComponentSender, Component, ComponentController, Controller, adw,
     adw::prelude::*,
@@ -32,7 +31,7 @@ use crate::{
         running_instance_forwarding::{
             SCAN_PATHS_ACTION, SHOW_WINDOW_ACTION, paths_from_variant, scan_paths_action_type,
         },
-        system_tray_menu::SystemTrayMenu,
+        system_tray_menu::{SystemTrayMenu, spawn_system_tray},
     },
     file_process_lock::{ProcessFileLock, wait_for_file_lock},
     file_quarantine::{
@@ -539,13 +538,23 @@ fn start_system_tray(
 ) {
     let hidden_window = window_root.clone();
     relm4::spawn_local(async move {
-        let tray_outcome = relm4::spawn(async { SystemTrayMenu::default().spawn().await }).await;
+        let tray_outcome = relm4::spawn(spawn_system_tray()).await;
         match tray_outcome {
             Ok(Ok(tray_handle)) => {
                 let _tray_started_once = running_tray.set(tray_handle);
             }
-            _tray_unavailable if start_in_background => {}
-            _tray_unavailable => hidden_window.present(),
+            Ok(Err(tray_failure)) => {
+                eprintln!("the system tray is unavailable: {tray_failure}");
+                if !start_in_background {
+                    hidden_window.present();
+                }
+            }
+            Err(join_failure) => {
+                eprintln!("the system tray could not start: {join_failure}");
+                if !start_in_background {
+                    hidden_window.present();
+                }
+            }
         }
     });
 }
