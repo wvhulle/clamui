@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: clamui\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:30+0100\n"
+"POT-Creation-Date: 2026-11-05 09:48+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -737,7 +737,7 @@ msgid "Quarantine"
 msgstr ""
 
 #: src/application_window_shell.rs:359
-#: src/malware_scan/scan_results_dialog.rs:334
+#: src/malware_scan/scan_results_dialog.rs:332
 msgid "Statistics"
 msgstr ""
 
@@ -1091,7 +1091,7 @@ msgstr ""
 
 #: src/malware_scan/scan_progress_page.rs:361
 #: src/malware_scan/scan_results_dialog.rs:95
-#: src/malware_scan/scan_results_dialog.rs:360
+#: src/malware_scan/scan_results_dialog.rs:358
 msgid "Threats found"
 msgstr ""
 
@@ -1184,12 +1184,12 @@ msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
 #: src/malware_scan/scan_results_dialog.rs:85
-#: src/malware_scan/scan_results_dialog.rs:346
+#: src/malware_scan/scan_results_dialog.rs:344
 msgid "Files scanned"
 msgstr ""
 
 #: src/malware_scan/scan_results_dialog.rs:90
-#: src/malware_scan/scan_results_dialog.rs:353
+#: src/malware_scan/scan_results_dialog.rs:351
 msgid "Directories"
 msgstr ""
 
@@ -1220,51 +1220,51 @@ msgstr ""
 msgid "Copy Results"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:367
+#: src/malware_scan/scan_results_dialog.rs:365
 msgid "Not accessible"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:385
+#: src/malware_scan/scan_results_dialog.rs:383
 msgid "Detected Threats"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:402
+#: src/malware_scan/scan_results_dialog.rs:400
 msgid "Files Not Accessible"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:410
+#: src/malware_scan/scan_results_dialog.rs:408
 msgid "Scan details"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:498
+#: src/malware_scan/scan_results_dialog.rs:496
 #, rust-format
 msgid "Move '{path}' to quarantine?"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:516
+#: src/malware_scan/scan_results_dialog.rs:514
 #, rust-format
 msgid "Move {count} detected file to quarantine?"
 msgid_plural "Move {count} detected files to quarantine?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_results_dialog.rs:532
+#: src/malware_scan/scan_results_dialog.rs:530
 msgid "Path copied to clipboard"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:544
+#: src/malware_scan/scan_results_dialog.rs:542
 msgid "This file will be skipped in future scans"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:546
+#: src/malware_scan/scan_results_dialog.rs:544
 msgid "This exclusion already exists"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:566
+#: src/malware_scan/scan_results_dialog.rs:564
 msgid "Results copied to clipboard"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:615
+#: src/malware_scan/scan_results_dialog.rs:613
 msgid "Results exported"
 msgstr ""
 

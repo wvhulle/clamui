@@ -212,6 +212,10 @@ impl HeadlessSwaySession {
         self.session_directory.path()
     }
 
+    pub fn wayland_socket_path(&self) -> PathBuf {
+        session_subdirectory(self.session_root(), "runtime").join(&self.wayland_display)
+    }
+
     pub fn session_command(&self, program_name: impl AsRef<OsStr>) -> Command {
         let mut session_command = Command::new(program_name);
         apply_session_environment(self.session_root(), &mut session_command);

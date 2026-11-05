@@ -3,6 +3,7 @@ mod headless_sway_session;
 mod page_screenshots;
 mod screenshot_fixtures;
 mod task_failure;
+mod virtual_pointer_input;
 
 use std::{path::PathBuf, process::ExitCode};
 

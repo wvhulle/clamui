@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 thiserror = "2"
