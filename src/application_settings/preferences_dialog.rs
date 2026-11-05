@@ -194,9 +194,58 @@ fn show_snippet_copied(edited_row: &adw::EntryRow, copied_snippet: &str) {
 struct LiveTuningControls {
     unlock_toggle: gtk::ToggleButton,
     tuning_state: Rc<RefCell<LiveTuningState>>,
+    drift_display: Rc<RefCell<Vec<DriftDisplay>>>,
+}
+
+#[derive(Clone)]
+struct DriftDisplay {
+    drift_row: adw::ActionRow,
+    drift_snippet: Rc<RefCell<String>>,
+    config_kind: ClamavConfigKind,
+}
+
+fn refresh_drift_displays(drift_displays: &[DriftDisplay], active_overrides: &[(String, String)]) {
+    drift_displays.iter().for_each(|drift_display| {
+        let refreshed_snippet = drift_snippet_text(
+            active_overrides,
+            drift_display.config_kind,
+            ConfigFileOwner::NixOsConfiguration,
+        );
+        drift_display
+            .drift_row
+            .set_subtitle(&sanitize_scanner_text(&refreshed_snippet));
+        drift_display
+            .drift_row
+            .set_visible(!refreshed_snippet.is_empty());
+        *drift_display.drift_snippet.borrow_mut() = refreshed_snippet;
+    });
 }
 
 impl LiveTuningControls {
+    fn offers_live_changes(&self) -> bool {
+        !self.tuning_state.borrow().tunable_settings.is_empty()
+    }
+
+    fn current_setting_values(
+        &self,
+        setting_key: &str,
+        configured_values: &[String],
+    ) -> Vec<String> {
+        let overridden_values = self
+            .tuning_state
+            .borrow()
+            .active_overrides
+            .iter()
+            .filter(|active_override| active_override.0 == setting_key)
+            .map(|active_override| sanitize_scanner_line(&active_override.1))
+            .collect::<Vec<_>>();
+        if overridden_values.is_empty() {
+            configured_values.to_vec()
+        } else {
+            overridden_values
+        }
+    }
+
     fn allows_live_change(&self, setting_key: &str) -> bool {
         self.unlock_toggle.is_active()
             && self
@@ -224,10 +273,9 @@ fn toast_on_dialog(shown_widget: &impl IsA<gtk::Widget>, toast_text: &str) {
 
 fn describe_live_change_outcome(change_outcome: &LiveChangeOutcome) -> String {
     match change_outcome {
-        LiveChangeOutcome::SettingsApplied => gettext(
-            "Applied. It lasts until you remove it, and your system configuration doesn't know \
-             about it yet.",
-        ),
+        LiveChangeOutcome::SettingsApplied => {
+            gettext("Applied, but not yet in your system configuration.")
+        }
         LiveChangeOutcome::PreviousRestored => gettext(
             "ClamAV didn't come back healthy with that value, so the previous settings were \
              restored.",
@@ -244,6 +292,7 @@ fn confirm_live_change(
     setting_key: String,
     current_values: Vec<String>,
     new_values: Vec<String>,
+    live_tuning: LiveTuningControls,
 ) {
     let effect = change_effect(&setting_key, &current_values, &new_values);
     let confirmation_dialog = adw::AlertDialog::new(
@@ -274,6 +323,7 @@ fn confirm_live_change(
         let applying_row = answered_row.clone();
         let applied_key = setting_key.clone();
         let applied_values = new_values.clone();
+        let refreshed_live_tuning = live_tuning.clone();
         relm4::spawn_local(async move {
             toast_on_dialog(&applying_row, &gettext("Applying, and restarting ClamAV…"));
             let change_outcome = relm4::spawn(apply_live_change(applied_key, applied_values)).await;
@@ -284,6 +334,13 @@ fn confirm_live_change(
                     |change_outcome| describe_live_change_outcome(&change_outcome),
                 ),
             );
+            if let Ok(refreshed_state) = relm4::spawn(read_live_tuning_state()).await {
+                refresh_drift_displays(
+                    &refreshed_live_tuning.drift_display.borrow(),
+                    &refreshed_state.active_overrides,
+                );
+                *refreshed_live_tuning.tuning_state.borrow_mut() = refreshed_state;
+            }
         });
     });
     confirmation_dialog.present(Some(edited_row));
@@ -303,17 +360,17 @@ fn live_tuning_group(unlock_toggle: &gtk::ToggleButton) -> adw::PreferencesGroup
     tuning_group
 }
 
-fn drift_snippet_row(
+fn drift_snippet_text(
     active_overrides: &[(String, String)],
     config_kind: ClamavConfigKind,
     config_file_owner: ConfigFileOwner,
-) -> adw::ActionRow {
+) -> String {
     let mut override_keys = active_overrides
         .iter()
         .map(|active_override| active_override.0.as_str())
         .collect::<Vec<_>>();
     override_keys.dedup();
-    let drift_snippet = override_keys
+    override_keys
         .iter()
         .map(|override_key| {
             let override_values = active_overrides
@@ -329,15 +386,19 @@ fn drift_snippet_row(
             )
         })
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n")
+}
+
+fn drift_snippet_row(drift_snippet: Rc<RefCell<String>>) -> adw::ActionRow {
     let drift_row = adw::ActionRow::builder()
         .use_markup(false)
         .title(gettext(
             "Changes your system configuration doesn't know about",
         ))
-        .subtitle(sanitize_scanner_text(&drift_snippet))
+        .subtitle(sanitize_scanner_text(&drift_snippet.borrow()))
         .subtitle_selectable(true)
         .subtitle_lines(0)
+        .visible(!drift_snippet.borrow().is_empty())
         .build();
     let copy_button = gtk::Button::builder()
         .icon_name("edit-copy-symbolic")
@@ -346,10 +407,22 @@ fn drift_snippet_row(
         .css_classes(["flat"])
         .build();
     copy_button.connect_clicked(move |clicked_button| {
-        clicked_button.clipboard().set_text(&drift_snippet);
+        clicked_button.clipboard().set_text(&drift_snippet.borrow());
     });
     drift_row.add_suffix(&copy_button);
     drift_row
+}
+
+fn values_with_edit(
+    setting_values: &[String],
+    value_position: usize,
+    edited_text: String,
+) -> Vec<String> {
+    let mut edited_values = setting_values.to_vec();
+    if let Some(edited_value) = edited_values.get_mut(value_position) {
+        *edited_value = edited_text;
+    }
+    edited_values
 }
 
 fn snippet_setting_row(
@@ -367,31 +440,46 @@ fn snippet_setting_row(
         .show_apply_button(true)
         .build();
     setting_row.add_suffix(&lock_indicator(&gettext(
-        "Managed outside ClamUI. Applying copies the change instead of making it.",
+        "Managed outside ClamUI. Unless the setting is unlocked, applying copies the change \
+         instead of making it.",
     )));
     setting_row.connect_apply(move |edited_row| {
-        let mut edited_values = sibling_values.clone();
-        if let Some(edited_value) = edited_values.get_mut(value_position) {
-            *edited_value = sanitize_scanner_line(&edited_row.text());
-        }
-        if live_tuning
+        let edited_text = sanitize_scanner_line(&edited_row.text());
+        if let Some(live_tuning) = live_tuning
             .as_ref()
-            .is_some_and(|live_tuning| live_tuning.allows_live_change(&setting_key))
+            .filter(|live_tuning| live_tuning.allows_live_change(&setting_key))
         {
+            let current_values = live_tuning.current_setting_values(&setting_key, &sibling_values);
+            let new_values = values_with_edit(&current_values, value_position, edited_text);
             confirm_live_change(
                 edited_row,
                 setting_key.clone(),
-                sibling_values.clone(),
-                edited_values,
+                current_values,
+                new_values,
+                live_tuning.clone(),
             );
         } else {
             show_snippet_copied(
                 edited_row,
-                &change_snippet(config_file_owner, config_kind, &setting_key, &edited_values),
+                &change_snippet(
+                    config_file_owner,
+                    config_kind,
+                    &setting_key,
+                    &values_with_edit(&sibling_values, value_position, edited_text),
+                ),
             );
         }
     });
     setting_row.upcast()
+}
+
+fn live_tunable_config_description(config_path: &str) -> String {
+    gettext(
+        "{path} combines your system configuration with the changes made here. While locked, \
+         editing a value and pressing the check mark copies the line for your configuration. \
+         After unlocking, the allowed settings change directly.",
+    )
+    .replace("{path}", config_path)
 }
 
 fn host_config_page(
@@ -414,9 +502,15 @@ fn host_config_page(
             config_settings,
         } => {
             let config_file_owner = inspect_config_file_owner(std::path::Path::new(&config_path));
-            config_group.set_description(Some(&glib::markup_escape_text(
-                &managed_config_description(config_file_owner, &config_path),
-            )));
+            let config_description = if live_tuning
+                .as_ref()
+                .is_some_and(LiveTuningControls::offers_live_changes)
+            {
+                live_tunable_config_description(&config_path)
+            } else {
+                managed_config_description(config_file_owner, &config_path)
+            };
+            config_group.set_description(Some(&glib::markup_escape_text(&config_description)));
             let shown_settings = config_settings
                 .iter()
                 .filter(|config_setting| shows_setting(config_setting))
@@ -474,13 +568,18 @@ fn host_config_page(
         let tuning_group = live_tuning_group(&live_tuning.unlock_toggle);
         let tuning_state = live_tuning.tuning_state.borrow();
         tuning_group.set_visible(!tuning_state.tunable_settings.is_empty());
-        if !tuning_state.active_overrides.is_empty() {
-            tuning_group.add(&drift_snippet_row(
-                &tuning_state.active_overrides,
-                config_kind,
-                ConfigFileOwner::NixOsConfiguration,
-            ));
-        }
+        let drift_snippet = Rc::new(RefCell::new(drift_snippet_text(
+            &tuning_state.active_overrides,
+            config_kind,
+            ConfigFileOwner::NixOsConfiguration,
+        )));
+        let drift_row = drift_snippet_row(Rc::clone(&drift_snippet));
+        tuning_group.add(&drift_row);
+        live_tuning.drift_display.borrow_mut().push(DriftDisplay {
+            drift_row,
+            drift_snippet,
+            config_kind,
+        });
         config_page.add(&tuning_group);
     }
     config_page.add(&config_group);
@@ -567,7 +666,7 @@ fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
     let window_group = adw::PreferencesGroup::builder()
         .title(gettext("Window Behavior"))
         .description(gettext(
-            "Running in the background needs a desktop with a system tray.",
+            "Detection alerts only work while ClamUI is running.",
         ))
         .build();
     let close_labels = [
@@ -595,9 +694,9 @@ fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
     });
     window_group.add(&close_row);
     let background_row = adw::SwitchRow::builder()
-        .title(gettext("Start in System Tray"))
+        .title(gettext("Start in the Background"))
         .subtitle(gettext(
-            "Launch in the background and show only the tray icon.",
+            "Launch in the background without opening a window.",
         ))
         .build();
     settings
@@ -607,7 +706,8 @@ fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
     let notifications_row = adw::SwitchRow::builder()
         .title(gettext("Desktop Notifications"))
         .subtitle(gettext(
-            "Notify about finished scans and updates while the window is not in focus.",
+            "Notify about detections, and about finished scans and updates while the window is \
+             not in focus.",
         ))
         .build();
     settings
@@ -832,6 +932,7 @@ fn present_with_live_tuning(tuning_state: LiveTuningState) {
     let tuning_state = Rc::new(RefCell::new(tuning_state));
     let scanner_toggle = new_unlock_toggle();
     let on_access_toggle = new_unlock_toggle();
+    let drift_display = Rc::new(RefCell::new(Vec::new()));
     scanner_toggle
         .bind_property("active", &on_access_toggle, "active")
         .bidirectional()
@@ -840,10 +941,12 @@ fn present_with_live_tuning(tuning_state: LiveTuningState) {
         LiveTuningControls {
             unlock_toggle: scanner_toggle,
             tuning_state: Rc::clone(&tuning_state),
+            drift_display: Rc::clone(&drift_display),
         },
         LiveTuningControls {
             unlock_toggle: on_access_toggle,
             tuning_state,
+            drift_display,
         },
     );
 }

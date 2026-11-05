@@ -16,6 +16,7 @@ const SERVICE_SUCCESS_RESULT: &str = "success";
 const JOB_DONE_RESULT: &str = "done";
 const JOB_REPLACE_MODE: &str = "replace";
 const START_UNIT_METHOD: &str = "StartUnit";
+const ALREADY_SUBSCRIBED_FAILURE: &str = "org.freedesktop.systemd1.AlreadySubscribed";
 const KILL_UNIT_METHOD: &str = "KillUnit";
 const KILL_EVERY_PROCESS: &str = "all";
 
@@ -114,6 +115,21 @@ async fn user_bus() -> zbus::Result<&'static Connection> {
     USER_BUS_CONNECTION
         .get_or_try_init(Connection::session)
         .await
+}
+
+fn subscription_failure_is_harmless(failure_name: &str) -> bool {
+    failure_name == ALREADY_SUBSCRIBED_FAILURE
+}
+
+async fn subscribe_to_manager_signals(manager_proxy: &SystemdManagerProxy<'_>) -> zbus::Result<()> {
+    match manager_proxy.subscribe().await {
+        Err(zbus::Error::MethodError(failure_name, _failure_text, _reply))
+            if subscription_failure_is_harmless(failure_name.as_str()) =>
+        {
+            Ok(())
+        }
+        subscribe_outcome => subscribe_outcome,
+    }
 }
 
 async fn unit_object_path(unit_name: &str) -> zbus::Result<OwnedObjectPath> {
@@ -255,7 +271,7 @@ fn start_failure_outcome(start_failure: &zbus::Error) -> UnitStartOutcome {
 async fn start_unit_and_wait(unit_name: &str) -> zbus::Result<UnitStartOutcome> {
     let system_connection = system_bus().await?;
     let manager_proxy = SystemdManagerProxy::new(system_connection).await?;
-    manager_proxy.subscribe().await?;
+    subscribe_to_manager_signals(&manager_proxy).await?;
     let mut removed_jobs = manager_proxy.receive_job_removed().await?;
     let started_job: OwnedObjectPath = manager_proxy
         .inner()
@@ -400,7 +416,7 @@ async fn watched_job_completions(
     watched_units: &'static [&'static str],
 ) -> zbus::Result<BoxStream<'static, ()>> {
     let manager_proxy = SystemdManagerProxy::new(system_bus().await?).await?;
-    manager_proxy.subscribe().await?;
+    subscribe_to_manager_signals(&manager_proxy).await?;
     Ok(manager_proxy
         .receive_job_removed()
         .await?
@@ -454,6 +470,16 @@ mod host_systemd_units_tests {
             UnitState::UnitNotFound
         );
         assert_eq!(parse_unit_state("", ""), UnitState::SystemdUnavailable);
+    }
+
+    #[test]
+    fn subscribing_twice_on_a_shared_connection_is_not_a_failure() {
+        assert!(subscription_failure_is_harmless(
+            "org.freedesktop.systemd1.AlreadySubscribed"
+        ));
+        assert!(!subscription_failure_is_harmless(
+            "org.freedesktop.DBus.Error.AccessDenied"
+        ));
     }
 
     #[test]

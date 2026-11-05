@@ -355,7 +355,11 @@ fn review_step(
     if !detection_needs_attention(displayed_detection) {
         return plain_step(
             step_title,
-            mechanism_details,
+            gettext(
+                "Quarantined files can be restored from the Quarantine page. A file you kept is \
+                 still blocked by on-access scanning until its path is excluded in the ClamAV \
+                 configuration.",
+            ),
             StepNodeState::Completed,
             detection_state_text(displayed_detection),
         );

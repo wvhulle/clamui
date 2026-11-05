@@ -19,7 +19,9 @@ use crate::{
         detected_file_state::{
             DetectedFileState, inspect_detected_file, inspect_file_without_opening,
         },
-        detection_alerts::{JournalReplay, plan_detection_alerts, send_detection_alerts},
+        detection_alerts::{
+            JournalReplay, plan_detection_alerts, send_detection_alerts, withdraw_detection_alert,
+        },
         detection_history_store::{DetectionResolution, StoredDetection},
         detection_journal_follower::{
             DetectionJournalEvent, JournalAccess, JournalStartPosition, detection_journal_events,
@@ -121,6 +123,7 @@ pub enum BackgroundDetectionsPageCommand {
     DetectionsLoaded(Vec<DisplayedDetection>),
     LoadingFailed(String),
     IncidentActionFinished {
+        file_path: PathBuf,
         action_outcome: Result<IncidentActionEffect, String>,
     },
     SignatureLookupFinished(SignatureLookupState),
@@ -507,7 +510,10 @@ impl BackgroundDetectionsPage {
                 Ok(action_effect)
             }
             .await;
-            BackgroundDetectionsPageCommand::IncidentActionFinished { action_outcome }
+            BackgroundDetectionsPageCommand::IncidentActionFinished {
+                file_path: stored_detection.file_path,
+                action_outcome,
+            }
         });
     }
 
@@ -765,7 +771,13 @@ impl Component for BackgroundDetectionsPage {
                 self.lookup_state = lookup_state;
                 self.show_opened_incident();
             }
-            BackgroundDetectionsPageCommand::IncidentActionFinished { action_outcome } => {
+            BackgroundDetectionsPageCommand::IncidentActionFinished {
+                file_path,
+                action_outcome,
+            } => {
+                if action_outcome.is_ok() {
+                    withdraw_detection_alert(&file_path);
+                }
                 match action_outcome {
                     Ok(IncidentActionEffect::QuarantineChanged) => {
                         let _shell_closed =

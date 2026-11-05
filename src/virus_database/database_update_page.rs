@@ -512,7 +512,7 @@ impl Component for DatabaseUpdatePage {
 
                 add = &adw::PreferencesGroup {
                     set_title: &gettext("Update database"),
-                    set_description: Some(&gettext("Updates run through the freshclam system service when one exists, so your system may ask for authorization.")),
+                    set_description: Some(&gettext("Updates run through the system's updater services, such as freshclam and fangfrisch, so your system may ask for authorization.")),
 
                     gtk::Box {
                         set_spacing: 6,

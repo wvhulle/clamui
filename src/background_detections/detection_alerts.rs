@@ -121,6 +121,10 @@ fn live_notification_id(file_path: &Path) -> String {
     )
 }
 
+pub fn withdraw_detection_alert(file_path: &Path) {
+    relm4::main_application().withdraw_notification(&live_notification_id(file_path));
+}
+
 pub fn send_detection_alerts(detection_alerts: &[DetectionAlert]) {
     if !application_settings().boolean(NOTIFICATIONS_ENABLED_KEY) {
         return;
