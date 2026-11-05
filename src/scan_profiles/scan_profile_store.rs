@@ -108,6 +108,22 @@ struct StoredProfiles {
     profiles: Vec<ScanProfile>,
 }
 
+const HOME_CACHE_EXCLUSIONS: [&str; 13] = [
+    "~/.cache",
+    "~/.local/share/Trash",
+    "~/.rustup",
+    "~/.cargo/registry",
+    "~/.cargo/git",
+    "~/.npm",
+    "~/.local/share/pnpm/store",
+    "~/.yarn/berry/cache",
+    "~/go/pkg/mod",
+    "~/.gradle/caches",
+    "~/.m2/repository",
+    "~/.local/share/containers/storage",
+    "~/.local/share/flatpak/repo",
+];
+
 fn string_list(listed_values: &[&str]) -> Vec<String> {
     listed_values
         .iter()
@@ -150,7 +166,7 @@ pub fn builtin_profiles(downloads_directory: &str) -> [ScanProfile; 3] {
             profile_name: "Home Folder".to_owned(),
             profile_description: "Scan of the user's home directory and personal files".to_owned(),
             scan_targets: string_list(&["~"]),
-            excluded_paths: string_list(&["~/.cache", "~/.local/share/Trash"]),
+            excluded_paths: string_list(&HOME_CACHE_EXCLUSIONS),
             excluded_patterns: Vec::new(),
             is_builtin: true,
         },
@@ -357,6 +373,46 @@ mod scan_profile_store_tests {
             }),
             Err(ProfileStoreFailure::ProfileTargetsMissing)
         ));
+    }
+
+    #[test]
+    fn home_folder_scan_skips_package_caches_but_keeps_project_folders() {
+        let home_directory = Path::new("/home/user");
+        let home_profile = builtin_profiles("/home/user/Downloads")
+            .into_iter()
+            .find(|builtin_profile| builtin_profile.profile_id == "builtin-home-folder")
+            .expect("home folder profile");
+        let home_exclusions =
+            crate::application_settings::scan_exclusion_rules::ScanExclusions::from_entries(
+                &home_profile.exclusion_entries(),
+                home_directory,
+            );
+        [
+            "/home/user/.rustup/toolchains/nightly",
+            "/home/user/.cargo/registry/src",
+            "/home/user/.cache/mozilla",
+            "/home/user/go/pkg/mod/github.com",
+        ]
+        .into_iter()
+        .for_each(|cache_directory| {
+            assert!(
+                home_exclusions.excludes_directory(Path::new(cache_directory)),
+                "{cache_directory}"
+            );
+        });
+        [
+            "/home/user/Downloads",
+            "/home/user/.cargo/bin",
+            "/home/user/Code/project",
+            "/home/user/.local/share/applications",
+        ]
+        .into_iter()
+        .for_each(|kept_directory| {
+            assert!(
+                !home_exclusions.excludes_directory(Path::new(kept_directory)),
+                "{kept_directory}"
+            );
+        });
     }
 
     #[test]
