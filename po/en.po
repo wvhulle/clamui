@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 13:27+0100\n"
+"POT-Creation-Date: 2026-11-05 13:32+0100\n"
 "PO-Revision-Date: 2026-10-20 10:21+0200\n"
 "Last-Translator: ClamUI Contributors\n"
 "Language-Team: English\n"
@@ -151,7 +151,7 @@ msgstr ""
 "undone."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:572
+#: src/application_window_shell.rs:561
 #: src/background_detections/incident_timeline_presentation.rs:238
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
@@ -205,7 +205,6 @@ msgstr "Log Details"
 
 #: src/activity_history/activity_logs_page.rs:326
 #: src/activity_history/activity_logs_page.rs:388
-#: src/clamav_components/clamav_component_row.rs:126
 #: src/step_timeline/timeline_step_row.rs:70
 #: src/system_audit/audit_check_row.rs:45
 msgid "Copy"
@@ -226,10 +225,9 @@ msgid "Live Updates"
 msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:425
-#: src/clamav_components/clamav_component_row.rs:73
 #: src/malware_scan/scan_progress_page.rs:318
 #: src/protection_status/protection_timeline_page.rs:288
-#: src/scheduled_scans/schedule_preferences_page.rs:220
+#: src/scheduled_scans/schedule_preferences_page.rs:265
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
 #: src/virustotal_lookup/virustotal_preferences_page.rs:98
@@ -270,299 +268,324 @@ msgstr ""
 msgid "Exported."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:133
+#: src/application_settings/preferences_dialog.rs:137
 msgid "Node.js dependencies"
 msgstr "Node.js dependencies"
 
-#: src/application_settings/preferences_dialog.rs:134
+#: src/application_settings/preferences_dialog.rs:138
 msgid "Git repository data"
 msgstr "Git repository data"
 
-#: src/application_settings/preferences_dialog.rs:135
+#: src/application_settings/preferences_dialog.rs:139
 msgid "Python virtual environment"
 msgstr "Python virtual environment"
 
-#: src/application_settings/preferences_dialog.rs:136
+#: src/application_settings/preferences_dialog.rs:140
 msgid "Build output directory"
 msgstr "Build output directory"
 
-#: src/application_settings/preferences_dialog.rs:137
+#: src/application_settings/preferences_dialog.rs:141
 msgid "Distribution output directory"
 msgstr "Distribution output directory"
 
-#: src/application_settings/preferences_dialog.rs:138
+#: src/application_settings/preferences_dialog.rs:142
 msgid "Python bytecode cache"
 msgstr "Python bytecode cache"
 
-#: src/application_settings/preferences_dialog.rs:162
-#, rust-format
+#: src/application_settings/preferences_dialog.rs:164
 msgid ""
-"Read-only view of {path}. ClamUI does not edit this file: it is owned by "
-"root, and settings such as VirusEvent run commands as the scanner's user."
+"This setting runs commands or changes who ClamAV runs as, so ClamUI never "
+"offers to change it"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:174
+#: src/application_settings/preferences_dialog.rs:177
+msgid "Copied. Add it to your configuration to apply it."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:196
+msgid ""
+"Managed outside ClamUI. Applying copies the change instead of making it."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:240
 msgid "No settings in this section"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:192
+#: src/application_settings/preferences_dialog.rs:280
 msgid "Configuration file not found"
 msgstr "Configuration file not found"
 
-#: src/application_settings/preferences_dialog.rs:203
+#: src/application_settings/preferences_dialog.rs:291
 msgid "File Manager Integration"
 msgstr "File Manager Integration"
 
-#: src/application_settings/preferences_dialog.rs:205
+#: src/application_settings/preferences_dialog.rs:293
 msgid "Add context menu actions for supported file managers."
 msgstr "Add context menu actions for supported file managers."
 
-#: src/application_settings/preferences_dialog.rs:235
+#: src/application_settings/preferences_dialog.rs:323
 #: src/malware_scan/scan_progress_page.rs:939
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:237
+#: src/application_settings/preferences_dialog.rs:325
 msgid ""
 "Automatically scan removable and external drives when they are connected."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:241
+#: src/application_settings/preferences_dialog.rs:329
 msgid "Enable Device Auto-Scan"
 msgstr "Enable Device Auto-Scan"
 
-#: src/application_settings/preferences_dialog.rs:248
+#: src/application_settings/preferences_dialog.rs:336
 msgid "Max Device Size (GB)"
 msgstr "Max Device Size (GB)"
 
-#: src/application_settings/preferences_dialog.rs:249
+#: src/application_settings/preferences_dialog.rs:337
 msgid "0 means no size limit."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:268
-#: src/scheduled_scans/schedule_preferences_page.rs:192
+#: src/application_settings/preferences_dialog.rs:356
+#: src/scheduled_scans/schedule_preferences_page.rs:237
 msgid "Skip on Battery"
 msgstr "Skip on Battery"
 
-#: src/application_settings/preferences_dialog.rs:279
+#: src/application_settings/preferences_dialog.rs:367
 msgid "Window Behavior"
 msgstr "Window Behavior"
 
-#: src/application_settings/preferences_dialog.rs:281
+#: src/application_settings/preferences_dialog.rs:369
 msgid "Running in the background needs a desktop with a system tray."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:285
+#: src/application_settings/preferences_dialog.rs:373
 msgid "Quit completely"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:286
+#: src/application_settings/preferences_dialog.rs:374
 msgid "Minimize to tray"
 msgstr "Minimize to tray"
 
-#: src/application_settings/preferences_dialog.rs:287
+#: src/application_settings/preferences_dialog.rs:375
 msgid "Always ask"
 msgstr "Always ask"
 
-#: src/application_settings/preferences_dialog.rs:290
+#: src/application_settings/preferences_dialog.rs:378
 msgid "When closing window"
 msgstr "When closing window"
 
-#: src/application_settings/preferences_dialog.rs:309
+#: src/application_settings/preferences_dialog.rs:397
 msgid "Start in System Tray"
 msgstr "Start in System Tray"
 
-#: src/application_settings/preferences_dialog.rs:311
+#: src/application_settings/preferences_dialog.rs:399
 msgid "Launch in the background and show only the tray icon."
 msgstr "Launch in the background and show only the tray icon."
 
-#: src/application_settings/preferences_dialog.rs:319
+#: src/application_settings/preferences_dialog.rs:407
 msgid "Desktop Notifications"
 msgstr "Desktop Notifications"
 
-#: src/application_settings/preferences_dialog.rs:321
+#: src/application_settings/preferences_dialog.rs:409
 msgid ""
 "Notify about finished scans and updates while the window is not in focus."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:333
+#: src/application_settings/preferences_dialog.rs:421
 msgid "Behavior"
 msgstr "Behavior"
 
-#: src/application_settings/preferences_dialog.rs:337
+#: src/application_settings/preferences_dialog.rs:425
 msgid "Scan Behavior"
 msgstr "Scan Behavior"
 
-#: src/application_settings/preferences_dialog.rs:338
+#: src/application_settings/preferences_dialog.rs:426
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:341
+#: src/application_settings/preferences_dialog.rs:429
 msgid "Show Live Scan Progress"
 msgstr "Show Live Scan Progress"
 
-#: src/application_settings/preferences_dialog.rs:342
+#: src/application_settings/preferences_dialog.rs:430
 msgid "Display files being scanned in real time."
 msgstr "Display files being scanned in real time."
 
-#: src/application_settings/preferences_dialog.rs:349
+#: src/application_settings/preferences_dialog.rs:437
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:350
+#: src/application_settings/preferences_dialog.rs:438
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:351
+#: src/application_settings/preferences_dialog.rs:439
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:354
+#: src/application_settings/preferences_dialog.rs:442
 msgid "Scan Backend"
 msgstr "Scan Backend"
 
-#: src/application_settings/preferences_dialog.rs:356
+#: src/application_settings/preferences_dialog.rs:444
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:419
+#: src/application_settings/preferences_dialog.rs:507
 #: src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "Remove"
 
-#: src/application_settings/preferences_dialog.rs:452
+#: src/application_settings/preferences_dialog.rs:540
 #: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "Exclusions"
 
-#: src/application_settings/preferences_dialog.rs:464
+#: src/application_settings/preferences_dialog.rs:553
+msgid ""
+"These apply to scans started from ClamUI. They don't change what on-access "
+"scanning or a system scan timer checks."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:556
 msgid "Preset Exclusions"
 msgstr "Preset Exclusions"
 
-#: src/application_settings/preferences_dialog.rs:466
+#: src/application_settings/preferences_dialog.rs:558
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr "Common directories to exclude from scanning. Changes save immediately."
 
-#: src/application_settings/preferences_dialog.rs:471
+#: src/application_settings/preferences_dialog.rs:563
 msgid "Custom Exclusions"
 msgstr "Custom Exclusions"
 
-#: src/application_settings/preferences_dialog.rs:473
+#: src/application_settings/preferences_dialog.rs:565
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:477
+#: src/application_settings/preferences_dialog.rs:569
 msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude or *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:518
-#: src/application_window_shell.rs:182
+#: src/application_settings/preferences_dialog.rs:610
+#: src/application_window_shell.rs:180
 msgid "Preferences"
 msgstr "Preferences"
 
-#: src/application_settings/preferences_dialog.rs:526
+#: src/application_settings/preferences_dialog.rs:618
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Database"
 
-#: src/application_settings/preferences_dialog.rs:528
+#: src/application_settings/preferences_dialog.rs:620
 msgid "freshclam settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:534
+#: src/application_settings/preferences_dialog.rs:627
 msgid "Scanner"
 msgstr "Scanner"
 
-#: src/application_settings/preferences_dialog.rs:536
+#: src/application_settings/preferences_dialog.rs:629
 msgid "clamd settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:541
+#: src/application_settings/preferences_dialog.rs:635
 msgid "On-Access"
 msgstr "On-Access"
 
-#: src/application_settings/preferences_dialog.rs:543
+#: src/application_settings/preferences_dialog.rs:637
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_window_shell.rs:91
+#: src/application_settings/setting_provenance.rs:124
+#, rust-format
+msgid ""
+"{path} is generated by your NixOS configuration, so ClamUI can't change it. "
+"Edit a value and press the check mark to copy the line for your "
+"configuration, then rebuild."
+msgstr ""
+
+#: src/application_settings/setting_provenance.rs:128
+#, rust-format
+msgid ""
+"{path} belongs to the system, so ClamUI can't change it. Edit a value and "
+"press the check mark to copy the line to put in that file."
+msgstr ""
+
+#: src/application_window_shell.rs:89
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:168
+#: src/application_window_shell.rs:166
 msgid "Update signatures"
 msgstr ""
 
-#: src/application_window_shell.rs:183
+#: src/application_window_shell.rs:181
 msgid "About ClamUI"
 msgstr "About ClamUI"
 
-#: src/application_window_shell.rs:184 src/application_window_shell.rs:573
+#: src/application_window_shell.rs:182 src/application_window_shell.rs:562
 #: src/desktop_integration/system_tray_menu.rs:65
 msgid "Quit"
 msgstr "Quit"
 
-#: src/application_window_shell.rs:187
+#: src/application_window_shell.rs:185
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:206
+#: src/application_window_shell.rs:204
 msgid "translator-credits"
 msgstr "translator-credits"
 
-#: src/application_window_shell.rs:265
+#: src/application_window_shell.rs:263
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:391
+#: src/application_window_shell.rs:388
 #: src/protection_status/protection_timeline_page.rs:245
 #: src/protection_status/protection_timeline_page.rs:248
 msgid "Protection"
 msgstr ""
 
-#: src/application_window_shell.rs:398
+#: src/application_window_shell.rs:395
 #: src/background_detections/background_detections_page.rs:468
 #: src/background_detections/background_detections_page.rs:506
 msgid "Detections"
 msgstr ""
 
-#: src/application_window_shell.rs:405
+#: src/application_window_shell.rs:402
 #: src/malware_scan/scan_progress_page.rs:356
 msgid "Scan"
 msgstr "Scan"
 
-#: src/application_window_shell.rs:412
+#: src/application_window_shell.rs:409
 msgid "Logs"
 msgstr "Logs"
 
-#: src/application_window_shell.rs:419
-msgid "Components"
-msgstr "Components"
-
-#: src/application_window_shell.rs:426
+#: src/application_window_shell.rs:416
 #: src/background_detections/incident_timeline_presentation.rs:246
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Quarantine"
 
-#: src/application_window_shell.rs:566
+#: src/application_window_shell.rs:555
 msgid "Close ClamUI?"
 msgstr "Close ClamUI?"
 
-#: src/application_window_shell.rs:568
+#: src/application_window_shell.rs:557
 msgid ""
 "Detection alerts stop while ClamUI isn't running. Keep it running in the "
 "background, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:574
+#: src/application_window_shell.rs:563
 msgid "Keep Running"
 msgstr ""
 
-#: src/application_window_shell.rs:658
+#: src/application_window_shell.rs:647
 msgid "The quarantine database could not be locked"
 msgstr ""
 
@@ -578,7 +601,7 @@ msgid ""
 msgstr ""
 
 #: src/background_detections/background_detections_page.rs:264
-#: src/protection_status/protection_timeline_presentation.rs:492
+#: src/protection_status/protection_timeline_presentation.rs:489
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
@@ -825,88 +848,6 @@ msgstr ""
 #, rust-format
 msgid "{state}, {time}"
 msgstr ""
-
-#: src/clamav_components/clamav_component_row.rs:42
-msgid "Virus Scanner"
-msgstr "Virus Scanner"
-
-#: src/clamav_components/clamav_component_row.rs:43
-msgid "Database Updater"
-msgstr "Database Updater"
-
-#: src/clamav_components/clamav_component_row.rs:44
-msgid "Daemon Scanner Client"
-msgstr "Daemon Scanner Client"
-
-#: src/clamav_components/clamav_component_row.rs:45
-msgid "Scanner Daemon"
-msgstr "Scanner Daemon"
-
-#: src/clamav_components/clamav_component_row.rs:60
-msgid "clamscan performs on-demand virus scans."
-msgstr "clamscan performs on-demand virus scans."
-
-#: src/clamav_components/clamav_component_row.rs:62
-msgid "freshclam downloads current virus definitions."
-msgstr "freshclam downloads current virus definitions."
-
-#: src/clamav_components/clamav_component_row.rs:65
-msgid "clamdscan uses the clamd daemon for faster scanning."
-msgstr "clamdscan uses the clamd daemon for faster scanning."
-
-#: src/clamav_components/clamav_component_row.rs:67
-msgid "clamd is the ClamAV daemon for faster scans."
-msgstr "clamd is the ClamAV daemon for faster scans."
-
-#: src/clamav_components/clamav_component_row.rs:74
-msgid "Installed"
-msgstr "Installed"
-
-#: src/clamav_components/clamav_component_row.rs:75
-msgid "Running"
-msgstr "Running"
-
-#: src/clamav_components/clamav_component_row.rs:76
-msgid "Stopped"
-msgstr "Stopped"
-
-#: src/clamav_components/clamav_component_row.rs:77
-#: src/virus_database/database_update_page.rs:279
-msgid "Not installed"
-msgstr "Not installed"
-
-#: src/clamav_components/clamav_component_row.rs:78
-#: src/system_audit/audit_report_model.rs:28
-msgid "Unknown"
-msgstr "Unknown"
-
-#: src/clamav_components/clamav_component_row.rs:119
-#, rust-format
-msgid "{distribution} (this system)"
-msgstr ""
-
-#: src/clamav_components/component_status_page.rs:64
-#: src/clamav_components/component_status_page.rs:67
-msgid "ClamAV components"
-msgstr "ClamAV components"
-
-#: src/clamav_components/component_status_page.rs:68
-msgid ""
-"Setup instructions are copy-only. ClamUI never installs packages or starts "
-"services for you."
-msgstr ""
-"Setup instructions are copy-only. ClamUI never installs packages or starts "
-"services for you."
-
-#: src/clamav_components/component_status_page.rs:72
-#: src/virus_database/database_update_page.rs:479
-msgid "Refresh status"
-msgstr "Refresh status"
-
-#: src/clamav_components/component_status_page.rs:128
-#: src/protection_status/protection_timeline_page.rs:343
-msgid "Command copied to clipboard"
-msgstr "Command copied to clipboard"
 
 #: src/desktop_integration/system_tray_menu.rs:60
 msgid "Show ClamUI"
@@ -1278,7 +1219,7 @@ msgstr ""
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1024
+#: src/malware_scan/scan_progress_page.rs:1030
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
@@ -1409,268 +1350,272 @@ msgstr ""
 msgid "Check again"
 msgstr ""
 
+#: src/protection_status/protection_timeline_page.rs:343
+msgid "Command copied to clipboard"
+msgstr "Command copied to clipboard"
+
 #: src/protection_status/protection_timeline_page.rs:350
 #, rust-format
 msgid "Could not open documentation: {error}"
 msgstr "Could not open documentation: {error}"
 
-#: src/protection_status/protection_timeline_presentation.rs:83
+#: src/protection_status/protection_timeline_presentation.rs:80
 msgid "ClamAV installed"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:85
+#: src/protection_status/protection_timeline_presentation.rs:82
 msgid ""
 "ClamAV is the engine that recognizes malware. ClamUI uses the copy installed "
 "on this computer and never bundles its own."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:111
+#: src/protection_status/protection_timeline_presentation.rs:108
 msgid "ClamAV was not found on this computer"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:137
+#: src/protection_status/protection_timeline_presentation.rs:134
 #, rust-format
 msgid "Definitions built {date}, {days} days ago"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:141
+#: src/protection_status/protection_timeline_presentation.rs:138
 msgid "Definitions exist, but their age could not be determined"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:143
+#: src/protection_status/protection_timeline_presentation.rs:140
 msgid "No virus definitions were found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:153
+#: src/protection_status/protection_timeline_presentation.rs:150
 msgid "Its last update failed"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:156
+#: src/protection_status/protection_timeline_presentation.rs:153
 #, rust-format
 msgid "Last updated {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:160
+#: src/protection_status/protection_timeline_presentation.rs:157
 msgid "No completed update recorded yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:198
+#: src/protection_status/protection_timeline_presentation.rs:195
 #, rust-format
 msgid "Updated {hours} hours ago"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:210
+#: src/protection_status/protection_timeline_presentation.rs:207
 msgid "Update Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:215
+#: src/protection_status/protection_timeline_presentation.rs:212
 msgid "Signatures current"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:217
+#: src/protection_status/protection_timeline_presentation.rs:214
 msgid ""
 "Signatures describe known malware, and new ones are published constantly. "
 "Old signatures miss recent threats even when everything else is running."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:230
+#: src/protection_status/protection_timeline_presentation.rs:227
 msgid "Daemon running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:232
+#: src/protection_status/protection_timeline_presentation.rs:229
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:246
+#: src/protection_status/protection_timeline_presentation.rs:243
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:254
+#: src/protection_status/protection_timeline_presentation.rs:251
 msgid "clamd is answering"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:265
-#: src/protection_status/protection_timeline_presentation.rs:330
+#: src/protection_status/protection_timeline_presentation.rs:262
+#: src/protection_status/protection_timeline_presentation.rs:327
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:277
+#: src/protection_status/protection_timeline_presentation.rs:274
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:289
+#: src/protection_status/protection_timeline_presentation.rs:286
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:291
+#: src/protection_status/protection_timeline_presentation.rs:288
 msgid "None configured"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:298
-#: src/protection_status/protection_timeline_presentation.rs:302
+#: src/protection_status/protection_timeline_presentation.rs:295
+#: src/protection_status/protection_timeline_presentation.rs:299
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:299
+#: src/protection_status/protection_timeline_presentation.rs:296
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:313
+#: src/protection_status/protection_timeline_presentation.rs:310
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:315
+#: src/protection_status/protection_timeline_presentation.rs:312
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:322
+#: src/protection_status/protection_timeline_presentation.rs:319
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:326
-#: src/protection_status/protection_timeline_presentation.rs:416
+#: src/protection_status/protection_timeline_presentation.rs:323
+#: src/protection_status/protection_timeline_presentation.rs:413
 msgid "Waiting for the daemon"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:334
+#: src/protection_status/protection_timeline_presentation.rs:331
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:338
+#: src/protection_status/protection_timeline_presentation.rs:335
 msgid "Running, but no watched folders could be read"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:342
+#: src/protection_status/protection_timeline_presentation.rs:339
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:366
-#: src/scheduled_scans/schedule_preferences_page.rs:77
+#: src/protection_status/protection_timeline_presentation.rs:363
+#: src/scheduled_scans/schedule_preferences_page.rs:84
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:373
+#: src/protection_status/protection_timeline_presentation.rs:370
 #, rust-format
 msgid "{time}, threats found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:378
+#: src/protection_status/protection_timeline_presentation.rs:375
 #, rust-format
 msgid "{time}, nothing found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:382
+#: src/protection_status/protection_timeline_presentation.rs:379
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:399
+#: src/protection_status/protection_timeline_presentation.rs:396
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:401
+#: src/protection_status/protection_timeline_presentation.rs:398
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:421
+#: src/protection_status/protection_timeline_presentation.rs:418
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:426
+#: src/protection_status/protection_timeline_presentation.rs:423
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:431
+#: src/protection_status/protection_timeline_presentation.rs:428
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:436
+#: src/protection_status/protection_timeline_presentation.rs:433
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:437
+#: src/protection_status/protection_timeline_presentation.rs:434
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:440
+#: src/protection_status/protection_timeline_presentation.rs:437
 msgid "Run Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:451
+#: src/protection_status/protection_timeline_presentation.rs:448
 msgid "Scheduled by ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:459
+#: src/protection_status/protection_timeline_presentation.rs:456
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:467
+#: src/protection_status/protection_timeline_presentation.rs:464
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:478
+#: src/protection_status/protection_timeline_presentation.rs:475
 msgid "Alerts"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:480
+#: src/protection_status/protection_timeline_presentation.rs:477
 msgid ""
 "ClamUI follows the system journal and notifies you when something is "
 "detected. It can only do that while it is running, so it should run in the "
 "background."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:487
+#: src/protection_status/protection_timeline_presentation.rs:484
 msgid ""
 "The system journal can't be read. Add your user to the systemd-journal group."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:497
+#: src/protection_status/protection_timeline_presentation.rs:494
 msgid "Notifications are turned off in the preferences"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:502
+#: src/protection_status/protection_timeline_presentation.rs:499
 msgid ""
 "Alerts stop when you quit ClamUI, because it isn't set up to run in the "
 "background"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:508
+#: src/protection_status/protection_timeline_presentation.rs:505
 msgid "Running in the background and following the journal"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:532
+#: src/protection_status/protection_timeline_presentation.rs:529
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:534
+#: src/protection_status/protection_timeline_presentation.rs:531
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:545
+#: src/protection_status/protection_timeline_presentation.rs:542
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:547
+#: src/protection_status/protection_timeline_presentation.rs:544
 msgid "Scheduled scans set up in ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:554
+#: src/protection_status/protection_timeline_presentation.rs:551
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:567
+#: src/protection_status/protection_timeline_presentation.rs:564
 msgid "Files are only checked when you scan them"
 msgstr ""
 
@@ -1843,128 +1788,142 @@ msgstr ""
 msgid "Open ClamUI to read the log."
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:79
+#: src/scheduled_scans/schedule_preferences_page.rs:86
 #, rust-format
 msgid "Next run: {time}"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:82
+#: src/scheduled_scans/schedule_preferences_page.rs:89
 msgid "Scheduled scans need a systemd user session, which is not available."
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:90
+#: src/scheduled_scans/schedule_preferences_page.rs:97
+#, rust-format
+msgid ""
+"Your system already runs scheduled scans, so these settings are locked to "
+"avoid a second schedule. Next scan: {time}. Change it in your system "
+"configuration."
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:102
+msgid ""
+"Your system has a scan timer, so these settings are locked to avoid a second "
+"schedule. Change it in your system configuration."
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:111
 #, rust-format
 msgid "Error creating systemd files: {error}"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:94
+#: src/scheduled_scans/schedule_preferences_page.rs:115
 #, rust-format
 msgid "The timer could not be applied: {error}"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:102
+#: src/scheduled_scans/schedule_preferences_page.rs:123
 msgid "Hourly"
 msgstr "Hourly"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:103
+#: src/scheduled_scans/schedule_preferences_page.rs:124
 msgid "Daily"
 msgstr "Daily"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:104
+#: src/scheduled_scans/schedule_preferences_page.rs:125
 msgid "Weekly"
 msgstr "Weekly"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:105
+#: src/scheduled_scans/schedule_preferences_page.rs:126
 msgid "Monthly"
 msgstr "Monthly"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:112
+#: src/scheduled_scans/schedule_preferences_page.rs:133
 msgid "Monday"
 msgstr "Monday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:113
+#: src/scheduled_scans/schedule_preferences_page.rs:134
 msgid "Tuesday"
 msgstr "Tuesday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:114
+#: src/scheduled_scans/schedule_preferences_page.rs:135
 msgid "Wednesday"
 msgstr "Wednesday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:115
+#: src/scheduled_scans/schedule_preferences_page.rs:136
 msgid "Thursday"
 msgstr "Thursday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:116
+#: src/scheduled_scans/schedule_preferences_page.rs:137
 msgid "Friday"
 msgstr "Friday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:117
+#: src/scheduled_scans/schedule_preferences_page.rs:138
 msgid "Saturday"
 msgstr "Saturday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:118
+#: src/scheduled_scans/schedule_preferences_page.rs:139
 msgid "Sunday"
 msgstr "Sunday"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:140
+#: src/scheduled_scans/schedule_preferences_page.rs:183
 msgid "Scheduled"
 msgstr "Scheduled"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:144
+#: src/scheduled_scans/schedule_preferences_page.rs:187
 msgid "Scheduled Scans"
 msgstr "Scheduled Scans"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:149
+#: src/scheduled_scans/schedule_preferences_page.rs:194
 msgid "Apply"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:157
+#: src/scheduled_scans/schedule_preferences_page.rs:202
 msgid "Enable Scheduled Scans"
 msgstr "Enable Scheduled Scans"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:162
+#: src/scheduled_scans/schedule_preferences_page.rs:207
 msgid "Scan Frequency"
 msgstr "Scan Frequency"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:168
+#: src/scheduled_scans/schedule_preferences_page.rs:213
 msgid "Scan Time (24-hour)"
 msgstr "Scan Time (24-hour)"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:173
+#: src/scheduled_scans/schedule_preferences_page.rs:218
 msgid "Day of Week"
 msgstr "Day of Week"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:174
+#: src/scheduled_scans/schedule_preferences_page.rs:219
 msgid "Used for weekly scans."
 msgstr "Used for weekly scans."
 
-#: src/scheduled_scans/schedule_preferences_page.rs:180
+#: src/scheduled_scans/schedule_preferences_page.rs:225
 msgid "Day of Month"
 msgstr "Day of Month"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:181
+#: src/scheduled_scans/schedule_preferences_page.rs:226
 msgid "Used for monthly scans."
 msgstr "Used for monthly scans."
 
-#: src/scheduled_scans/schedule_preferences_page.rs:187
+#: src/scheduled_scans/schedule_preferences_page.rs:232
 msgid "Scan Targets (separated by commas; empty scans your home folder)"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:193
+#: src/scheduled_scans/schedule_preferences_page.rs:238
 msgid "Do not start scheduled scans while on battery power."
 msgstr "Do not start scheduled scans while on battery power."
 
-#: src/scheduled_scans/schedule_preferences_page.rs:198
+#: src/scheduled_scans/schedule_preferences_page.rs:243
 msgid "Auto-Quarantine"
 msgstr "Auto-Quarantine"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:199
+#: src/scheduled_scans/schedule_preferences_page.rs:244
 msgid ""
 "Automatically quarantine threats found by scheduled scans. While ClamUI is "
 "open, threats are only reported."
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:322
+#: src/scheduled_scans/schedule_preferences_page.rs:368
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 
@@ -1992,6 +1951,10 @@ msgstr "Warning"
 #: src/system_audit/audit_report_model.rs:27
 msgid "Fail"
 msgstr "Fail"
+
+#: src/system_audit/audit_report_model.rs:28
+msgid "Unknown"
+msgstr "Unknown"
 
 #: src/system_audit/audit_report_model.rs:73
 msgid "Firewall"
@@ -2258,6 +2221,10 @@ msgstr "Install freshclam before requesting database updates."
 msgid "Checking freshclam…"
 msgstr "Checking freshclam…"
 
+#: src/virus_database/database_update_page.rs:279
+msgid "Not installed"
+msgstr "Not installed"
+
 #: src/virus_database/database_update_page.rs:448
 msgid ""
 "The service accepted the signal; it performs the update asynchronously. "
@@ -2269,6 +2236,10 @@ msgstr ""
 #: src/virus_database/database_update_page.rs:475
 msgid "Virus definitions"
 msgstr "Virus definitions"
+
+#: src/virus_database/database_update_page.rs:479
+msgid "Refresh status"
+msgstr "Refresh status"
 
 #: src/virus_database/database_update_page.rs:496
 msgid "Update service"
@@ -2455,6 +2426,52 @@ msgid ""
 msgstr ""
 "Free tier: 4 requests per minute, 500 per day. Files up to 650 MB can be "
 "scanned."
+
+#~ msgid "Components"
+#~ msgstr "Components"
+
+#~ msgid "Virus Scanner"
+#~ msgstr "Virus Scanner"
+
+#~ msgid "Database Updater"
+#~ msgstr "Database Updater"
+
+#~ msgid "Daemon Scanner Client"
+#~ msgstr "Daemon Scanner Client"
+
+#~ msgid "Scanner Daemon"
+#~ msgstr "Scanner Daemon"
+
+#~ msgid "clamscan performs on-demand virus scans."
+#~ msgstr "clamscan performs on-demand virus scans."
+
+#~ msgid "freshclam downloads current virus definitions."
+#~ msgstr "freshclam downloads current virus definitions."
+
+#~ msgid "clamdscan uses the clamd daemon for faster scanning."
+#~ msgstr "clamdscan uses the clamd daemon for faster scanning."
+
+#~ msgid "clamd is the ClamAV daemon for faster scans."
+#~ msgstr "clamd is the ClamAV daemon for faster scans."
+
+#~ msgid "Installed"
+#~ msgstr "Installed"
+
+#~ msgid "Running"
+#~ msgstr "Running"
+
+#~ msgid "Stopped"
+#~ msgstr "Stopped"
+
+#~ msgid "ClamAV components"
+#~ msgstr "ClamAV components"
+
+#~ msgid ""
+#~ "Setup instructions are copy-only. ClamUI never installs packages or "
+#~ "starts services for you."
+#~ msgstr ""
+#~ "Setup instructions are copy-only. ClamUI never installs packages or "
+#~ "starts services for you."
 
 #~ msgid "Audit"
 #~ msgstr "Audit"

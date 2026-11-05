@@ -9,6 +9,7 @@ use relm4::{
 };
 
 use crate::{
+    activity_history::activity_entry_row::formatted_local_time,
     application_settings::preferences_dialog::application_settings,
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     scheduled_scans::scan_schedule_units::{
@@ -16,9 +17,13 @@ use crate::{
         disable_scan_schedule, enable_scan_schedule, parse_schedule_time,
         read_schedule_timer_state,
     },
+    systemd_bus::host_systemd_units::{
+        TimerUnitSnapshot, UnitState, UnitTimestamp, timer_unit_snapshot,
+    },
 };
 
 const ENABLED_KEY: &str = "schedule-enabled";
+const SYSTEM_SCAN_TIMER: &str = "clamdscan.timer";
 const FREQUENCY_KEY: &str = "schedule-frequency";
 const TIME_KEY: &str = "schedule-time";
 const WEEKDAY_KEY: &str = "schedule-day-of-week";
@@ -36,6 +41,7 @@ const FREQUENCY_CHOICES: [ScheduleFrequency; 4] = [
 pub struct SchedulePreferencesPage {
     settings: gio::Settings,
     timer_state_text: String,
+    system_schedule_owner: SystemScheduleOwner,
     page_notice: String,
 }
 
@@ -47,6 +53,7 @@ pub enum SchedulePreferencesPageInput {
 #[derive(Debug)]
 pub enum SchedulePreferencesPageCommand {
     TimerStateLoaded(ScheduleTimerState),
+    SystemTimerInspected(SystemScheduleOwner),
     ScheduleApplied(Result<(), ScheduleApplyFailure>),
 }
 
@@ -81,6 +88,20 @@ fn describe_timer_state(timer_state: &ScheduleTimerState) -> String {
         ScheduleTimerState::SystemdUnavailable => {
             gettext("Scheduled scans need a systemd user session, which is not available.")
         }
+    }
+}
+
+fn describe_system_schedule(next_run: UnitTimestamp) -> String {
+    match next_run {
+        UnitTimestamp::RecordedAt { unix_seconds } => gettext(
+            "Your system already runs scheduled scans, so these settings are locked to avoid a \
+             second schedule. Next scan: {time}. Change it in your system configuration.",
+        )
+        .replace("{time}", &formatted_local_time(unix_seconds)),
+        UnitTimestamp::NeverRecorded => gettext(
+            "Your system has a scan timer, so these settings are locked to avoid a second \
+             schedule. Change it in your system configuration.",
+        ),
     }
 }
 
@@ -120,8 +141,30 @@ fn weekday_labels() -> gtk::StringList {
     gtk::StringList::new(&labels.iter().map(String::as_str).collect::<Vec<_>>())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SystemScheduleOwner {
+    NoSystemTimer,
+    SystemTimerExists { next_run: UnitTimestamp },
+}
+
+pub fn system_schedule_owner(timer_snapshot: TimerUnitSnapshot) -> SystemScheduleOwner {
+    match timer_snapshot.unit_state {
+        UnitState::UnitActive | UnitState::UnitInactive => SystemScheduleOwner::SystemTimerExists {
+            next_run: timer_snapshot.next_run,
+        },
+        UnitState::UnitNotFound | UnitState::SystemdUnavailable => {
+            SystemScheduleOwner::NoSystemTimer
+        }
+    }
+}
+
 impl SchedulePreferencesPage {
     fn refresh_timer_state(&self, sender: &ComponentSender<Self>) {
+        sender.oneshot_command(async {
+            SchedulePreferencesPageCommand::SystemTimerInspected(system_schedule_owner(
+                timer_unit_snapshot(SYSTEM_SCAN_TIMER).await,
+            ))
+        });
         sender.oneshot_command(async {
             SchedulePreferencesPageCommand::TimerStateLoaded(read_schedule_timer_state().await)
         });
@@ -142,6 +185,8 @@ impl Component for SchedulePreferencesPage {
 
             add = &adw::PreferencesGroup {
                 set_title: &gettext("Scheduled Scans"),
+                #[watch]
+                set_sensitive: model.system_schedule_owner == SystemScheduleOwner::NoSystemTimer,
                 #[watch]
                 set_description: Some(&model.timer_state_text),
                 #[wrap(Some)]
@@ -218,6 +263,7 @@ impl Component for SchedulePreferencesPage {
         let model = Self {
             settings: application_settings(),
             timer_state_text: gettext("Checking…"),
+            system_schedule_owner: SystemScheduleOwner::NoSystemTimer,
             page_notice: String::new(),
         };
         let widgets = view_output!();
@@ -339,7 +385,15 @@ impl Component for SchedulePreferencesPage {
     ) {
         match page_command {
             SchedulePreferencesPageCommand::TimerStateLoaded(timer_state) => {
-                self.timer_state_text = describe_timer_state(&timer_state);
+                if self.system_schedule_owner == SystemScheduleOwner::NoSystemTimer {
+                    self.timer_state_text = describe_timer_state(&timer_state);
+                }
+            }
+            SchedulePreferencesPageCommand::SystemTimerInspected(system_schedule_owner) => {
+                self.system_schedule_owner = system_schedule_owner;
+                if let SystemScheduleOwner::SystemTimerExists { next_run } = system_schedule_owner {
+                    self.timer_state_text = describe_system_schedule(next_run);
+                }
             }
             SchedulePreferencesPageCommand::ScheduleApplied(apply_outcome) => {
                 if let Err(apply_failure) = apply_outcome {
@@ -348,5 +402,42 @@ impl Component for SchedulePreferencesPage {
                 self.refresh_timer_state(&sender);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod schedule_preferences_page_tests {
+    use super::*;
+
+    fn timer_snapshot_with(unit_state: UnitState) -> TimerUnitSnapshot {
+        TimerUnitSnapshot {
+            unit_state,
+            next_run: UnitTimestamp::NeverRecorded,
+            last_trigger: UnitTimestamp::NeverRecorded,
+        }
+    }
+
+    #[test]
+    fn an_installed_system_timer_locks_the_schedule_even_when_stopped() {
+        [UnitState::UnitActive, UnitState::UnitInactive]
+            .into_iter()
+            .for_each(|unit_state| {
+                assert!(matches!(
+                    system_schedule_owner(timer_snapshot_with(unit_state)),
+                    SystemScheduleOwner::SystemTimerExists { .. }
+                ));
+            });
+    }
+
+    #[test]
+    fn hosts_without_a_system_timer_keep_their_own_schedule() {
+        [UnitState::UnitNotFound, UnitState::SystemdUnavailable]
+            .into_iter()
+            .for_each(|unit_state| {
+                assert_eq!(
+                    system_schedule_owner(timer_snapshot_with(unit_state)),
+                    SystemScheduleOwner::NoSystemTimer
+                );
+            });
     }
 }

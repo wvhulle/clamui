@@ -8,42 +8,6 @@ use tokio::{process::Command, time::timeout};
 
 const PROGRAM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ClamavComponent {
-    ClamscanScanner,
-    FreshclamUpdater,
-    ClamdscanClient,
-    ClamdDaemon,
-}
-
-pub const ALL_CLAMAV_COMPONENTS: [ClamavComponent; 4] = [
-    ClamavComponent::ClamscanScanner,
-    ClamavComponent::FreshclamUpdater,
-    ClamavComponent::ClamdscanClient,
-    ClamavComponent::ClamdDaemon,
-];
-
-impl ClamavComponent {
-    pub fn program_name(self) -> &'static str {
-        match self {
-            Self::ClamscanScanner => "clamscan",
-            Self::FreshclamUpdater => "freshclam",
-            Self::ClamdscanClient => "clamdscan",
-            Self::ClamdDaemon => "clamd",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ComponentAvailability {
-    CheckingAvailability,
-    Installed { version_text: String },
-    Running { version_text: String },
-    Stopped { version_text: String },
-    NotInstalled,
-    ProbeFailed { failure_text: String },
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub enum ProgramProbe {
     VersionReported { version_text: String },
@@ -102,27 +66,6 @@ pub async fn clamd_answers_ping(clamdscan_program: &Path) -> bool {
         timeout(PROGRAM_PROBE_TIMEOUT, ping_command.status()).await,
         Ok(Ok(ping_status)) if ping_status.success()
     )
-}
-
-pub async fn probe_component_availability(component: ClamavComponent) -> ComponentAvailability {
-    match probe_program_version(Path::new(component.program_name())).await {
-        ProgramProbe::NotFoundOnPath => ComponentAvailability::NotInstalled,
-        ProgramProbe::ProbeFailed { failure_text } => {
-            ComponentAvailability::ProbeFailed { failure_text }
-        }
-        ProgramProbe::VersionReported { version_text }
-            if component == ClamavComponent::ClamdDaemon =>
-        {
-            if clamd_answers_ping(Path::new("clamdscan")).await {
-                ComponentAvailability::Running { version_text }
-            } else {
-                ComponentAvailability::Stopped { version_text }
-            }
-        }
-        ProgramProbe::VersionReported { version_text } => {
-            ComponentAvailability::Installed { version_text }
-        }
-    }
 }
 
 #[cfg(test)]

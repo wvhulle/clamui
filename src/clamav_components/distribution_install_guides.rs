@@ -1,5 +1,3 @@
-use crate::clamav_components::component_availability::ClamavComponent;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DistributionFamily {
     DebianFamily,
@@ -13,147 +11,38 @@ pub enum DistributionFamily {
 #[derive(Clone, Copy, Debug)]
 pub struct DistributionInstallGuide {
     pub distribution_family: DistributionFamily,
-    pub distribution_label: &'static str,
     pub install_command: &'static str,
 }
 
 const fn install_guide(
     distribution_family: DistributionFamily,
-    distribution_label: &'static str,
     install_command: &'static str,
 ) -> DistributionInstallGuide {
     DistributionInstallGuide {
         distribution_family,
-        distribution_label,
         install_command,
     }
 }
 
-const DEBIAN_LABEL: &str = "Ubuntu/Debian";
-const FEDORA_LABEL: &str = "Fedora Workstation";
-const ATOMIC_LABEL: &str = "Fedora Atomic";
-const ARCH_LABEL: &str = "Arch Linux";
-const NIXOS_LABEL: &str = "NixOS";
-
 const CLAMSCAN_GUIDES: [DistributionInstallGuide; 5] = [
-    install_guide(
-        DistributionFamily::DebianFamily,
-        DEBIAN_LABEL,
-        "sudo apt install clamav",
-    ),
+    install_guide(DistributionFamily::DebianFamily, "sudo apt install clamav"),
     install_guide(
         DistributionFamily::FedoraWorkstation,
-        FEDORA_LABEL,
         "sudo dnf install clamav",
     ),
     install_guide(
         DistributionFamily::FedoraAtomic,
-        ATOMIC_LABEL,
         "sudo rpm-ostree install clamav\nsudo systemctl reboot",
     ),
-    install_guide(
-        DistributionFamily::ArchFamily,
-        ARCH_LABEL,
-        "sudo pacman -S clamav",
-    ),
+    install_guide(DistributionFamily::ArchFamily, "sudo pacman -S clamav"),
     install_guide(
         DistributionFamily::NixosFamily,
-        NIXOS_LABEL,
         "environment.systemPackages = [ pkgs.clamav ];",
     ),
 ];
-const FRESHCLAM_GUIDES: [DistributionInstallGuide; 5] = [
-    install_guide(
-        DistributionFamily::DebianFamily,
-        DEBIAN_LABEL,
-        "sudo apt install clamav-freshclam",
-    ),
-    install_guide(
-        DistributionFamily::FedoraWorkstation,
-        FEDORA_LABEL,
-        "sudo dnf install clamav-freshclam",
-    ),
-    install_guide(
-        DistributionFamily::FedoraAtomic,
-        ATOMIC_LABEL,
-        "sudo rpm-ostree install clamav-freshclam\nsudo systemctl reboot",
-    ),
-    install_guide(
-        DistributionFamily::ArchFamily,
-        ARCH_LABEL,
-        "sudo pacman -S clamav",
-    ),
-    install_guide(
-        DistributionFamily::NixosFamily,
-        NIXOS_LABEL,
-        "services.clamav.updater.enable = true;",
-    ),
-];
-const CLAMDSCAN_GUIDES: [DistributionInstallGuide; 5] = [
-    install_guide(
-        DistributionFamily::DebianFamily,
-        DEBIAN_LABEL,
-        "sudo apt install clamav-daemon",
-    ),
-    install_guide(
-        DistributionFamily::FedoraWorkstation,
-        FEDORA_LABEL,
-        "sudo dnf install clamd",
-    ),
-    install_guide(
-        DistributionFamily::FedoraAtomic,
-        ATOMIC_LABEL,
-        "sudo rpm-ostree install clamd\nsudo systemctl reboot",
-    ),
-    install_guide(
-        DistributionFamily::ArchFamily,
-        ARCH_LABEL,
-        "sudo pacman -S clamav",
-    ),
-    install_guide(
-        DistributionFamily::NixosFamily,
-        NIXOS_LABEL,
-        "services.clamav.daemon.enable = true;",
-    ),
-];
-const CLAMD_GUIDES: [DistributionInstallGuide; 5] = [
-    install_guide(
-        DistributionFamily::DebianFamily,
-        DEBIAN_LABEL,
-        "sudo apt install clamav-daemon\nsudo systemctl enable clamav-daemon\nsudo systemctl \
-         start clamav-daemon",
-    ),
-    install_guide(
-        DistributionFamily::FedoraWorkstation,
-        FEDORA_LABEL,
-        "sudo dnf install clamd clamav-freshclam\nsudo freshclam\nsudo systemctl enable \
-         clamd@scan\nsudo systemctl start clamd@scan",
-    ),
-    install_guide(
-        DistributionFamily::FedoraAtomic,
-        ATOMIC_LABEL,
-        "sudo rpm-ostree install clamd clamav-freshclam\nsudo systemctl reboot",
-    ),
-    install_guide(
-        DistributionFamily::ArchFamily,
-        ARCH_LABEL,
-        "sudo pacman -S clamav\nsudo systemctl enable clamav-daemon\nsudo systemctl start \
-         clamav-daemon",
-    ),
-    install_guide(
-        DistributionFamily::NixosFamily,
-        NIXOS_LABEL,
-        "services.clamav.daemon.enable = true;",
-    ),
-];
 
-pub fn component_install_guides(component: ClamavComponent) -> &'static [DistributionInstallGuide] {
-    match component {
-        ClamavComponent::ClamscanScanner => &CLAMSCAN_GUIDES,
-        ClamavComponent::FreshclamUpdater => &FRESHCLAM_GUIDES,
-        ClamavComponent::ClamdscanClient => &CLAMDSCAN_GUIDES,
-        ClamavComponent::ClamdDaemon => &CLAMD_GUIDES,
-    }
+pub fn engine_install_guides() -> &'static [DistributionInstallGuide] {
+    &CLAMSCAN_GUIDES
 }
 
 fn os_release_value<'release>(os_release_text: &'release str, release_key: &str) -> &'release str {
@@ -235,30 +124,21 @@ mod distribution_install_guides_tests {
     }
 
     #[test]
-    fn every_component_has_a_guide_for_every_recognized_family() {
+    fn the_engine_has_a_guide_for_every_recognized_family() {
         [
-            ClamavComponent::ClamscanScanner,
-            ClamavComponent::FreshclamUpdater,
-            ClamavComponent::ClamdscanClient,
-            ClamavComponent::ClamdDaemon,
+            DistributionFamily::DebianFamily,
+            DistributionFamily::FedoraWorkstation,
+            DistributionFamily::FedoraAtomic,
+            DistributionFamily::ArchFamily,
+            DistributionFamily::NixosFamily,
         ]
         .into_iter()
-        .for_each(|component| {
-            [
-                DistributionFamily::DebianFamily,
-                DistributionFamily::FedoraWorkstation,
-                DistributionFamily::FedoraAtomic,
-                DistributionFamily::ArchFamily,
-                DistributionFamily::NixosFamily,
-            ]
-            .into_iter()
-            .for_each(|distribution_family| {
-                assert!(
-                    component_install_guides(component)
-                        .iter()
-                        .any(|guide| guide.distribution_family == distribution_family)
-                );
-            });
+        .for_each(|distribution_family| {
+            assert!(
+                engine_install_guides()
+                    .iter()
+                    .any(|guide| guide.distribution_family == distribution_family)
+            );
         });
     }
 }

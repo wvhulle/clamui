@@ -14,6 +14,10 @@ use crate::{
             read_freshclam_config,
         },
         scan_exclusion_rules::{ExclusionEntry, ExclusionKind, PRESET_DIRECTORY_NAMES},
+        setting_provenance::{
+            ClamavConfigKind, ConfigFileOwner, SettingLock, change_snippet,
+            inspect_config_file_owner, managed_config_description, setting_lock_for_key,
+        },
     },
     desktop_integration::{
         device_mount_scans::{
@@ -140,10 +144,75 @@ fn preset_description(exclusion_pattern: &str) -> String {
     }
 }
 
+fn lock_indicator(tooltip_text: &str) -> gtk::Image {
+    gtk::Image::builder()
+        .icon_name("changes-prevent-symbolic")
+        .tooltip_text(tooltip_text)
+        .valign(gtk::Align::Center)
+        .css_classes(["dim-label"])
+        .build()
+}
+
+fn protected_setting_row(config_setting: &ConfigSetting) -> gtk::Widget {
+    let setting_row = adw::ActionRow::builder()
+        .use_markup(false)
+        .title(sanitize_scanner_line(&config_setting.setting_key))
+        .subtitle(sanitize_scanner_line(&config_setting.setting_value))
+        .subtitle_selectable(true)
+        .build();
+    setting_row.add_suffix(&lock_indicator(&gettext(
+        "This setting runs commands or changes who ClamAV runs as, so ClamUI never offers to \
+         change it",
+    )));
+    setting_row.upcast()
+}
+
+fn show_snippet_copied(edited_row: &adw::EntryRow, copied_snippet: &str) {
+    edited_row.clipboard().set_text(copied_snippet);
+    if let Some(preferences_dialog) = edited_row
+        .ancestor(adw::PreferencesDialog::static_type())
+        .and_downcast::<adw::PreferencesDialog>()
+    {
+        preferences_dialog.add_toast(adw::Toast::new(&gettext(
+            "Copied. Add it to your configuration to apply it.",
+        )));
+    }
+}
+
+fn snippet_setting_row(
+    config_setting: &ConfigSetting,
+    sibling_values: Vec<String>,
+    value_position: usize,
+    config_kind: ClamavConfigKind,
+    config_file_owner: ConfigFileOwner,
+) -> gtk::Widget {
+    let setting_key = sanitize_scanner_line(&config_setting.setting_key);
+    let setting_row = adw::EntryRow::builder()
+        .title(&setting_key)
+        .text(sanitize_scanner_line(&config_setting.setting_value))
+        .show_apply_button(true)
+        .build();
+    setting_row.add_suffix(&lock_indicator(&gettext(
+        "Managed outside ClamUI. Applying copies the change instead of making it.",
+    )));
+    setting_row.connect_apply(move |edited_row| {
+        let mut edited_values = sibling_values.clone();
+        if let Some(edited_value) = edited_values.get_mut(value_position) {
+            *edited_value = sanitize_scanner_line(&edited_row.text());
+        }
+        show_snippet_copied(
+            edited_row,
+            &change_snippet(config_file_owner, config_kind, &setting_key, &edited_values),
+        );
+    });
+    setting_row.upcast()
+}
+
 fn host_config_page(
     page_title: String,
     page_icon: &str,
     group_title: String,
+    config_kind: ClamavConfigKind,
     host_config: HostConfigView,
     shows_setting: impl Fn(&ConfigSetting) -> bool,
 ) -> adw::PreferencesPage {
@@ -157,13 +226,10 @@ fn host_config_page(
             config_path,
             config_settings,
         } => {
-            config_group.set_description(Some(
-                &gettext(
-                    "Read-only view of {path}. ClamUI does not edit this file: it is owned by \
-                     root, and settings such as VirusEvent run commands as the scanner's user.",
-                )
-                .replace("{path}", &config_path),
-            ));
+            let config_file_owner = inspect_config_file_owner(std::path::Path::new(&config_path));
+            config_group.set_description(Some(&glib::markup_escape_text(
+                &managed_config_description(config_file_owner, &config_path),
+            )));
             let shown_settings = config_settings
                 .iter()
                 .filter(|config_setting| shows_setting(config_setting))
@@ -176,14 +242,36 @@ fn host_config_page(
                 );
             }
             shown_settings.iter().for_each(|config_setting| {
-                config_group.add(
-                    &adw::ActionRow::builder()
-                        .use_markup(false)
-                        .title(sanitize_scanner_line(&config_setting.setting_key))
-                        .subtitle(sanitize_scanner_line(&config_setting.setting_value))
-                        .subtitle_selectable(true)
-                        .build(),
-                );
+                let setting_row = match setting_lock_for_key(&config_setting.setting_key) {
+                    SettingLock::NeverChangedHere => protected_setting_row(config_setting),
+                    SettingLock::ChangedThroughSnippet => {
+                        let same_key_settings = shown_settings
+                            .iter()
+                            .filter(|other_setting| {
+                                other_setting.setting_key == config_setting.setting_key
+                            })
+                            .collect::<Vec<_>>();
+                        let value_position = same_key_settings
+                            .iter()
+                            .position(|same_key_setting| {
+                                std::ptr::eq(**same_key_setting, *config_setting)
+                            })
+                            .unwrap_or_default();
+                        snippet_setting_row(
+                            config_setting,
+                            same_key_settings
+                                .iter()
+                                .map(|same_key_setting| {
+                                    sanitize_scanner_line(&same_key_setting.setting_value)
+                                })
+                                .collect(),
+                            value_position,
+                            config_kind,
+                            config_file_owner,
+                        )
+                    }
+                };
+                config_group.add(&setting_row);
             });
         }
         HostConfigView::ConfigNotFound => {
@@ -461,6 +549,10 @@ fn exclusions_page(settings: &gio::Settings) -> adw::PreferencesPage {
         .selection_mode(gtk::SelectionMode::None)
         .build();
     let preset_group = adw::PreferencesGroup::builder()
+        .description(gettext(
+            "These apply to scans started from ClamUI. They don't change what on-access scanning \
+             or a system scan timer checks.",
+        ))
         .title(gettext("Preset Exclusions"))
         .description(gettext(
             "Common directories to exclude from scanning. Changes save immediately.",
@@ -526,6 +618,7 @@ pub fn present_preferences_dialog() {
         gettext("Database"),
         "drive-harddisk-symbolic",
         gettext("freshclam settings"),
+        ClamavConfigKind::FreshclamUpdaterConfig,
         read_freshclam_config(),
         |_config_setting| true,
     ));
@@ -534,6 +627,7 @@ pub fn present_preferences_dialog() {
         gettext("Scanner"),
         "system-search-symbolic",
         gettext("clamd settings"),
+        ClamavConfigKind::ClamdDaemonConfig,
         clamd_config.clone(),
         |config_setting| !is_on_access_setting(config_setting),
     ));
@@ -541,6 +635,7 @@ pub fn present_preferences_dialog() {
         gettext("On-Access"),
         "security-high-symbolic",
         gettext("On-access scanning settings"),
+        ClamavConfigKind::ClamdDaemonConfig,
         clamd_config,
         is_on_access_setting,
     ));

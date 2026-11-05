@@ -39,8 +39,7 @@ Deliberately removed: its protection status came from scan recency rather than f
 
 ## Components
 
-- [x] Status, version and install commands per component.
-- [x] Per-component icons.
+Deliberately removed as a page: the Protection timeline shows what is installed and offers the install command when ClamAV is missing.
 
 ## Database
 
@@ -79,9 +78,9 @@ Use `adw::PreferencesDialog` and `gio::Settings`.
 - [x] Live scan progress and scan backend choice.
 - [x] Close action and starting in the background, with the tray.
 - [x] Exclusions: presets, custom paths and patterns.
-- [x] Database and scanner settings, shown read-only. Editing is deliberately not ported: it needed a root helper, and `VirusEvent` and `OnUpdateExecute` run commands.
-- [x] Scheduled scans with user systemd timers. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
-- [x] On-access settings, shown read-only for the same reason.
+- [x] Database and scanner settings, locked because the system owns them. Editing a value copies the line to add to the configuration. Settings that run commands or change identity, such as `VirusEvent`, stay read-only.
+- [x] Scheduled scans with user systemd timers, locked when the system already has a scan timer. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
+- [x] On-access settings, locked in the same way.
 - [x] VirusTotal: key in the system keyring, hash lookup first, and confirmation before any upload. There's no plaintext key fallback. Uploads use a generic file name, so the real name isn't shared.
 - [x] Device auto-scan for removable and external drives, without auto-quarantine or network and internal volumes.
 

@@ -3,10 +3,7 @@ use gettextrs::gettext;
 use crate::{
     activity_history::activity_entry_row::formatted_local_time,
     background_detections::detection_journal_follower::JournalAccess,
-    clamav_components::{
-        component_availability::ClamavComponent,
-        distribution_install_guides::{DistributionFamily, component_install_guides},
-    },
+    clamav_components::distribution_install_guides::{DistributionFamily, engine_install_guides},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         clamav_engine_evidence::DatabaseEvidence,
@@ -99,7 +96,7 @@ fn engine_step(
             failure_text.clone(),
         ),
         EngineInstallation::EngineMissing => TimelineStep {
-            guidance_commands: component_install_guides(ClamavComponent::ClamscanScanner)
+            guidance_commands: engine_install_guides()
                 .iter()
                 .filter(|install_guide| install_guide.distribution_family == distribution_family)
                 .map(|install_guide| install_guide.install_command.to_owned())

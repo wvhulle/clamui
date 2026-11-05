@@ -27,7 +27,6 @@ use crate::{
         },
         detection_alerts::{OPEN_DETECTION_ACTION, OPEN_DETECTIONS_ACTION},
     },
-    clamav_components::component_status_page::ComponentStatusPage,
     desktop_integration::{
         device_mount_scans::watch_device_mounts,
         running_instance_forwarding::{
@@ -67,7 +66,6 @@ struct ApplicationPages {
     _scan_page: Controller<ScanProgressPage>,
     _quarantine_page: Controller<QuarantineEntriesPage>,
     _database_page: Controller<DatabaseUpdatePage>,
-    _component_page: Controller<ComponentStatusPage>,
     _logs_page: Controller<ActivityLogsPage>,
     _protection_page: Controller<ProtectionTimelinePage>,
     _detections_page: Controller<BackgroundDetectionsPage>,
@@ -344,7 +342,6 @@ fn application_pages(
             },
         );
     let database_dialog = signature_update_dialog(&database_page);
-    let component_page = ComponentStatusPage::builder().launch(()).detach();
     let requested_dialog = database_dialog.clone();
     let requesting_window = window_root.clone();
     let protection_page = ProtectionTimelinePage::builder()
@@ -415,18 +412,11 @@ fn application_pages(
             keyboard_accelerator: "<Control>4",
         },
         NavigationPage {
-            page_name: "components",
-            page_title: gettext("Components"),
-            page_icon: "emblem-system-symbolic",
-            page_widget: component_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>5",
-        },
-        NavigationPage {
             page_name: "quarantine",
             page_title: gettext("Quarantine"),
             page_icon: "folder-symbolic",
             page_widget: quarantine_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>6",
+            keyboard_accelerator: "<Control>5",
         },
     ];
     let page_stack = navigation_stack(&navigation_pages);
@@ -520,7 +510,6 @@ fn application_pages(
             _scan_page: scan_page,
             _quarantine_page: quarantine_page,
             _database_page: database_page,
-            _component_page: component_page,
             _logs_page: logs_page,
             _protection_page: protection_page,
             _detections_page: detections_page,
