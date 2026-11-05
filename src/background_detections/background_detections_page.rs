@@ -1,6 +1,7 @@
 use std::{
+    collections::HashMap,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -15,9 +16,11 @@ use tokio::task::spawn_blocking;
 use crate::{
     activity_history::activity_history_database::ActivityHistory,
     background_detections::{
-        detected_file_state::{DetectedFileState, inspect_detected_file},
+        detected_file_state::{
+            DetectedFileState, inspect_detected_file, inspect_file_without_opening,
+        },
         detection_alerts::{JournalReplay, plan_detection_alerts, send_detection_alerts},
-        detection_history_store::DetectionResolution,
+        detection_history_store::{DetectionResolution, StoredDetection},
         detection_journal_follower::{
             DetectionJournalEvent, JournalAccess, JournalStartPosition, detection_journal_events,
         },
@@ -215,8 +218,45 @@ async fn follow_detection_journal(
     }
 }
 
-async fn load_displayed_detections(
+pub fn file_state_for_detection(
+    stored_detection: &StoredDetection,
+    known_file_states: &HashMap<i64, DetectedFileState>,
+    open_to_check_blocking: impl Fn(&Path) -> DetectedFileState,
+    check_without_opening: impl Fn(&Path) -> DetectedFileState,
+) -> DetectedFileState {
+    if let Some(known_state) = known_file_states.get(&stored_detection.detection_id) {
+        return *known_state;
+    }
+    if stored_detection.resolution == DetectionResolution::Unresolved {
+        open_to_check_blocking(&stored_detection.file_path)
+    } else {
+        check_without_opening(&stored_detection.file_path)
+    }
+}
+
+pub fn file_states_to_keep(
+    displayed_detections: &[DisplayedDetection],
+    newly_opened: &[JournalDetectionRecord],
+) -> HashMap<i64, DetectedFileState> {
+    displayed_detections
+        .iter()
+        .filter(|displayed_detection| {
+            !newly_opened.iter().any(|detection_record| {
+                detection_record.file_path == displayed_detection.stored_detection.file_path
+            })
+        })
+        .map(|displayed_detection| {
+            (
+                displayed_detection.stored_detection.detection_id,
+                displayed_detection.file_state,
+            )
+        })
+        .collect()
+}
+
+pub async fn load_displayed_detections(
     activity_history: ActivityHistory,
+    known_file_states: HashMap<i64, DetectedFileState>,
 ) -> BackgroundDetectionsPageCommand {
     let stored_detections = match activity_history.list_detections().await {
         Ok(stored_detections) => stored_detections,
@@ -228,7 +268,12 @@ async fn load_displayed_detections(
         stored_detections
             .into_iter()
             .map(|stored_detection| DisplayedDetection {
-                file_state: inspect_detected_file(&stored_detection.file_path),
+                file_state: file_state_for_detection(
+                    &stored_detection,
+                    &known_file_states,
+                    inspect_detected_file,
+                    inspect_file_without_opening,
+                ),
                 stored_detection,
             })
             .collect::<Vec<_>>()
@@ -270,7 +315,20 @@ async fn delete_detected_file(file_path: PathBuf) -> Result<(), String> {
 impl BackgroundDetectionsPage {
     fn start_reload(&self, sender: &ComponentSender<Self>) {
         let activity_history = self.activity_history.clone();
-        sender.oneshot_command(load_displayed_detections(activity_history));
+        sender.oneshot_command(load_displayed_detections(activity_history, HashMap::new()));
+    }
+
+    fn refresh_after_sightings(
+        &self,
+        newly_opened: &[JournalDetectionRecord],
+        sender: &ComponentSender<Self>,
+    ) {
+        let activity_history = self.activity_history.clone();
+        let known_file_states = file_states_to_keep(&self.displayed_detections, newly_opened);
+        sender.oneshot_command(load_displayed_detections(
+            activity_history,
+            known_file_states,
+        ));
     }
 
     fn opened_detection(&self) -> Option<&DisplayedDetection> {
@@ -664,7 +722,7 @@ impl Component for BackgroundDetectionsPage {
                     journal_replay,
                     self.application_started_unix,
                 ));
-                self.start_reload(&sender);
+                self.refresh_after_sightings(&newly_opened, &sender);
             }
             BackgroundDetectionsPageCommand::JournalAccessChanged(journal_access) => {
                 self.journal_access = journal_access.clone();
@@ -726,10 +784,89 @@ impl Component for BackgroundDetectionsPage {
 
 #[cfg(test)]
 mod background_detections_page_tests {
-    use std::path::PathBuf;
+    use std::{cell::Cell, path::PathBuf};
 
     use super::*;
     use crate::background_detections::detection_journal_records::DetectionSource;
+
+    fn stored_detection(detection_id: i64, resolution: DetectionResolution) -> StoredDetection {
+        StoredDetection {
+            detection_id,
+            file_path: PathBuf::from("/home/user/Downloads/blocked.exe"),
+            signature_name: "Win.Test-1".to_owned(),
+            found_on_access: true,
+            found_by_schedule: false,
+            first_seen_unix: 1,
+            last_seen_unix: 2,
+            sighting_count: 1,
+            resolution,
+            resolved_at_unix: 0,
+        }
+    }
+
+    fn opens_needed_for(
+        detection: &StoredDetection,
+        known_file_states: &HashMap<i64, DetectedFileState>,
+    ) -> u32 {
+        let open_count = Cell::new(0);
+        let _file_state = file_state_for_detection(
+            detection,
+            known_file_states,
+            |_file_path| {
+                open_count.set(open_count.get() + 1);
+                DetectedFileState::BlockedInPlace
+            },
+            |_file_path| DetectedFileState::ReadableInPlace,
+        );
+        open_count.get()
+    }
+
+    #[test]
+    fn a_repeat_sighting_never_reopens_the_file_because_that_would_cause_another_sighting() {
+        let detection = stored_detection(7, DetectionResolution::Unresolved);
+        let displayed_detections = [DisplayedDetection {
+            stored_detection: detection.clone(),
+            file_state: DetectedFileState::BlockedInPlace,
+        }];
+        assert_eq!(
+            opens_needed_for(&detection, &file_states_to_keep(&displayed_detections, &[])),
+            0
+        );
+    }
+
+    #[test]
+    fn a_new_or_reopened_detection_is_checked_once() {
+        let detection = stored_detection(7, DetectionResolution::Unresolved);
+        assert_eq!(opens_needed_for(&detection, &HashMap::new()), 1);
+        let displayed_detections = [DisplayedDetection {
+            stored_detection: detection.clone(),
+            file_state: DetectedFileState::NoLongerThere,
+        }];
+        let reopened_record = JournalDetectionRecord {
+            observed_at_unix: 3,
+            detection_source: DetectionSource::OnAccessScanner,
+            file_path: detection.file_path.clone(),
+            signature_name: detection.signature_name.clone(),
+        };
+        assert_eq!(
+            opens_needed_for(
+                &detection,
+                &file_states_to_keep(&displayed_detections, &[reopened_record])
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn resolved_detections_are_never_opened() {
+        assert_eq!(
+            opens_needed_for(
+                &stored_detection(7, DetectionResolution::DismissedByUser),
+                &HashMap::new()
+            ),
+            0
+        );
+    }
 
     #[test]
     fn a_journal_batch_keeps_the_last_cursor_and_reports_access_problems() {

@@ -38,12 +38,19 @@ pub fn classify_file_state(
     }
 }
 
-pub fn inspect_detected_file(file_path: &Path) -> DetectedFileState {
-    let metadata_outcome = fs::symlink_metadata(file_path)
+fn file_owner_outcome(file_path: &Path) -> Result<u32, io::ErrorKind> {
+    fs::symlink_metadata(file_path)
         .map(|file_metadata| file_metadata.uid())
-        .map_err(|metadata_failure| metadata_failure.kind());
+        .map_err(|metadata_failure| metadata_failure.kind())
+}
+
+pub fn inspect_file_without_opening(file_path: &Path) -> DetectedFileState {
+    classify_file_state(file_owner_outcome(file_path), geteuid().as_raw(), false)
+}
+
+pub fn inspect_detected_file(file_path: &Path) -> DetectedFileState {
     classify_file_state(
-        metadata_outcome,
+        file_owner_outcome(file_path),
         geteuid().as_raw(),
         is_blocked_by_on_access(file_path),
     )

@@ -12,6 +12,9 @@ use crate::{
     activity_history::activity_history_database::ActivityHistory,
     application_settings::scan_exclusion_rules::ScanExclusions,
     background_detections::{
+        background_detections_page::{
+            BackgroundDetectionsPageCommand, file_states_to_keep, load_displayed_detections,
+        },
         detected_file_state::{DetectedFileState, inspect_detected_file},
         detection_history_store::DetectionResolution,
         detection_journal_follower::{
@@ -413,5 +416,70 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     assert_eq!(
         activity_history.list_detections().await.expect("listed")[0].resolution,
         DetectionResolution::MovedToQuarantine
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs a real ClamAV host with OnAccessPrevention on ~/Downloads"]
+async fn host_refreshing_after_sightings_does_not_feed_back_into_the_journal() {
+    let home_directory = PathBuf::from(std::env::var_os("HOME").expect("home directory"));
+    let eicar_path = home_directory
+        .join("Downloads")
+        .join(format!("clamui-feedback-{}.txt", std::process::id()));
+    let verification_root =
+        tempfile::tempdir_in(&home_directory).expect("verification root on the same filesystem");
+    let activity_history =
+        ActivityHistory::at_database_path(verification_root.path().join("history.db"));
+    let mut journal_events = Box::pin(detection_journal_events(
+        JournalStartPosition::FromOldestEntry,
+    ));
+    while tokio::time::timeout(Duration::from_secs(3), journal_events.next())
+        .await
+        .is_ok()
+    {}
+
+    fs::write(&eicar_path, eicar_test_bytes()).expect("write into Downloads");
+    let started_watching = Instant::now();
+    let mut displayed_detections = Vec::new();
+    let mut settled_line_count = 0_u32;
+    let mut late_line_count = 0_u32;
+    while started_watching.elapsed() < Duration::from_secs(25) {
+        let Ok(Some(journal_event)) =
+            tokio::time::timeout(Duration::from_secs(1), journal_events.next()).await
+        else {
+            continue;
+        };
+        let DetectionJournalEvent::DetectionObserved {
+            detection_record,
+            journal_cursor,
+        } = journal_event
+        else {
+            continue;
+        };
+        if detection_record.file_path != eicar_path {
+            continue;
+        }
+        if started_watching.elapsed() < Duration::from_secs(10) {
+            settled_line_count += 1;
+        } else {
+            late_line_count += 1;
+        }
+        let newly_opened = activity_history
+            .record_detection_batch(std::slice::from_ref(&detection_record), &journal_cursor)
+            .await
+            .expect("recorded");
+        let known_file_states = file_states_to_keep(&displayed_detections, &newly_opened);
+        if let BackgroundDetectionsPageCommand::DetectionsLoaded(loaded_detections) =
+            load_displayed_detections(activity_history.clone(), known_file_states).await
+        {
+            displayed_detections = loaded_detections;
+        }
+    }
+    println!("lines in the first 10s: {settled_line_count}, in the next 15s: {late_line_count}");
+    let _removal_outcome = fs::remove_file(&eicar_path);
+    assert!(settled_line_count > 0, "the detection must be seen");
+    assert_eq!(
+        late_line_count, 0,
+        "refreshing must not cause new sightings"
     );
 }
