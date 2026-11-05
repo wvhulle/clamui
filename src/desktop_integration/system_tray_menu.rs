@@ -2,7 +2,10 @@ use gettextrs::gettext;
 use ksni::{TrayMethods, menu::StandardItem};
 use relm4::gtk::{gio::prelude::ActionGroupExt, glib};
 
-use crate::{APPLICATION_ID, background_detections::detection_alerts::OPEN_DETECTIONS_ACTION};
+use crate::{
+    APPLICATION_ICON_NAME, APPLICATION_ID,
+    background_detections::detection_alerts::OPEN_DETECTIONS_ACTION,
+};
 
 #[derive(Default)]
 pub struct SystemTrayMenu {
@@ -43,7 +46,7 @@ impl ksni::Tray for SystemTrayMenu {
     }
 
     fn icon_name(&self) -> String {
-        APPLICATION_ID.to_owned()
+        APPLICATION_ICON_NAME.to_owned()
     }
 
     fn status(&self) -> ksni::Status {

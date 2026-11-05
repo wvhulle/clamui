@@ -100,6 +100,13 @@ mod running_instance_forwarding_tests {
 
     #[test]
     fn the_object_path_follows_the_application_id() {
-        assert_eq!(application_object_path(), "/io/github/wvhulle/ClamUI");
+        assert_eq!(
+            application_object_path(),
+            if cfg!(debug_assertions) {
+                "/io/github/wvhulle/ClamUI/Devel"
+            } else {
+                "/io/github/wvhulle/ClamUI"
+            }
+        );
     }
 }

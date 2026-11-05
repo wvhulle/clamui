@@ -11,7 +11,9 @@ use relm4::{
     },
 };
 
-use crate::{APPLICATION_ID, application_settings::preferences_dialog::application_settings};
+use crate::{
+    APPLICATION_ICON_NAME, application_settings::preferences_dialog::application_settings,
+};
 
 const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
 const NOTIFICATION_TIMEOUT_DEFAULT: i32 = -1;
@@ -49,7 +51,7 @@ pub fn send_session_notification(notification_title: &str, notification_body: &s
     let notification_arguments = (
         "ClamUI",
         0_u32,
-        APPLICATION_ID,
+        APPLICATION_ICON_NAME,
         notification_title,
         notification_body,
         Vec::<String>::new(),

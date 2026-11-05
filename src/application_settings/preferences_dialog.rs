@@ -9,7 +9,7 @@ use relm4::{
 };
 
 use crate::{
-    APPLICATION_ID,
+    SETTINGS_SCHEMA_ID,
     application_settings::{
         clamav_host_config::{
             ConfigSetting, HostConfigView, is_on_access_setting, read_clamd_config,
@@ -56,12 +56,12 @@ pub const CLOSE_ACTION_KEY: &str = "close-action";
 const CLOSE_ACTION_CHOICES: [&str; 3] = ["quit", "minimize", "ask"];
 
 pub fn application_settings() -> gio::Settings {
-    gio::Settings::new(APPLICATION_ID)
+    gio::Settings::new(SETTINGS_SCHEMA_ID)
 }
 
 pub fn settings_schema_is_installed() -> bool {
     gio::SettingsSchemaSource::default()
-        .and_then(|schema_source| schema_source.lookup(APPLICATION_ID, true))
+        .and_then(|schema_source| schema_source.lookup(SETTINGS_SCHEMA_ID, true))
         .is_some()
 }
 

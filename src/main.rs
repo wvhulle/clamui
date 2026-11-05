@@ -45,8 +45,17 @@ use crate::{
     startup_arguments::parse_startup_arguments,
 };
 
-pub(crate) const APPLICATION_ID: &str = "io.github.wvhulle.ClamUI";
+pub(crate) const RELEASE_APPLICATION_ID: &str = "io.github.wvhulle.ClamUI";
+pub(crate) const SETTINGS_SCHEMA_ID: &str = RELEASE_APPLICATION_ID;
+pub(crate) const APPLICATION_ICON_NAME: &str = RELEASE_APPLICATION_ID;
+#[cfg(not(debug_assertions))]
+pub(crate) const APPLICATION_ID: &str = RELEASE_APPLICATION_ID;
+#[cfg(debug_assertions)]
+pub(crate) const APPLICATION_ID: &str = "io.github.wvhulle.ClamUI.Devel";
+#[cfg(not(debug_assertions))]
 pub(crate) const APPLICATION_DATA_NAME: &str = "clamui";
+#[cfg(debug_assertions)]
+pub(crate) const APPLICATION_DATA_NAME: &str = "clamui-devel";
 const TRANSLATION_DOMAIN: &str = "clamui";
 const INSTALLED_LOCALE_DIRECTORY: &str = match option_env!("CLAMUI_LOCALE_DIRECTORY") {
     Some(locale_directory) => locale_directory,

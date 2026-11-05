@@ -10,7 +10,7 @@ use relm4::{
 };
 
 use crate::{
-    APPLICATION_DATA_NAME, APPLICATION_ID,
+    APPLICATION_DATA_NAME, APPLICATION_ICON_NAME,
     activity_history::{
         activity_history_database::ActivityHistory,
         activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
@@ -194,7 +194,7 @@ fn primary_menu_button() -> gtk::MenuButton {
 fn present_about_dialog() {
     adw::AboutDialog::builder()
         .application_name("ClamUI")
-        .application_icon(APPLICATION_ID)
+        .application_icon(APPLICATION_ICON_NAME)
         .version(env!("CARGO_PKG_VERSION"))
         .license_type(gtk::License::MitX11)
         .website("https://github.com/linx-systems/clamui")
