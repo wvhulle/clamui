@@ -4,6 +4,52 @@
     <key name="show-live-progress" type="b">
       <default>true</default>
     </key>
+    <key name="notifications-enabled" type="b">
+      <default>true</default>
+    </key>
+    <key name="close-action" type="s">
+      <choices>
+        <choice value="quit"/>
+        <choice value="minimize"/>
+        <choice value="ask"/>
+      </choices>
+      <default>"quit"</default>
+    </key>
+    <key name="start-in-background" type="b">
+      <default>false</default>
+    </key>
+    <key name="schedule-enabled" type="b">
+      <default>false</default>
+    </key>
+    <key name="schedule-frequency" type="s">
+      <choices>
+        <choice value="hourly"/>
+        <choice value="daily"/>
+        <choice value="weekly"/>
+        <choice value="monthly"/>
+      </choices>
+      <default>"weekly"</default>
+    </key>
+    <key name="schedule-time" type="s">
+      <default>"02:00"</default>
+    </key>
+    <key name="schedule-day-of-week" type="i">
+      <range min="0" max="6"/>
+      <default>0</default>
+    </key>
+    <key name="schedule-day-of-month" type="i">
+      <range min="1" max="28"/>
+      <default>1</default>
+    </key>
+    <key name="schedule-targets" type="as">
+      <default>[]</default>
+    </key>
+    <key name="schedule-skip-on-battery" type="b">
+      <default>true</default>
+    </key>
+    <key name="schedule-auto-quarantine" type="b">
+      <default>false</default>
+    </key>
     <key name="scan-backend" type="s">
       <choices>
         <choice value="auto"/>

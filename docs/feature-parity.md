@@ -79,16 +79,17 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 Use `adw::PreferencesDialog` and `gio::Settings`.
 
 - [x] Live scan progress and scan backend choice.
-- [ ] Close action and starting in the background, with the tray.
+- [x] Close action and starting in the background, with the tray.
 - [x] Exclusions: presets, custom paths and patterns.
 - [ ] Database and scanner settings. Editing host ClamAV configuration needs a decision: only with an allowlist, because `VirusEvent` and `OnUpdateExecute` run commands.
-- [ ] Scheduled scans with user systemd timers.
+- [x] Scheduled scans with user systemd timers. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
 - [ ] On-access settings.
 - [ ] VirusTotal: key storage, and confirmation before any upload.
 - [ ] Debug logs.
 
 ## Desktop integration
 
-- [ ] Tray with `ksni`.
-- [ ] Notifications with `gio::Notification`.
+- [x] Tray with `ksni`.
+- [x] Notifications with `gio::Notification`, and over D-Bus from scheduled scans.
+- [x] A second launch forwards its paths to the running window.
 - [ ] File manager actions.

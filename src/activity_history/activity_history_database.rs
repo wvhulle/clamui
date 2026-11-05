@@ -3,8 +3,11 @@ use std::{path::PathBuf, time::Duration};
 use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Row, Value};
 
-use crate::file_quarantine::quarantine_file_moves::{
-    QuarantineMoveFailure, pin_database_file, secure_database_files,
+use crate::{
+    file_process_lock::{ProcessFileLock, wait_for_file_lock},
+    file_quarantine::quarantine_file_moves::{
+        QuarantineMoveFailure, pin_database_file, secure_database_files,
+    },
 };
 
 const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -37,6 +40,8 @@ pub enum ActivityHistoryFailure {
     DatabasePathNotUtf8,
     #[error("a stored history entry has an unknown status")]
     StoredStatusUnknown,
+    #[error("the history lock is unavailable: {0}")]
+    HistoryLockUnavailable(#[from] std::io::Error),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
@@ -46,6 +51,7 @@ pub enum ActivityStatus {
     ScanInfected,
     ScanFailed,
     ScanCancelled,
+    ScanSkipped,
     UpdateApplied,
     UpdateAlreadyCurrent,
     UpdateRequested,
@@ -60,6 +66,7 @@ impl ActivityStatus {
             Self::ScanInfected => "scan_infected",
             Self::ScanFailed => "scan_failed",
             Self::ScanCancelled => "scan_cancelled",
+            Self::ScanSkipped => "scan_skipped",
             Self::UpdateApplied => "update_applied",
             Self::UpdateAlreadyCurrent => "update_already_current",
             Self::UpdateRequested => "update_requested",
@@ -74,6 +81,7 @@ impl ActivityStatus {
             "scan_infected" => Ok(Self::ScanInfected),
             "scan_failed" => Ok(Self::ScanFailed),
             "scan_cancelled" => Ok(Self::ScanCancelled),
+            "scan_skipped" => Ok(Self::ScanSkipped),
             "update_applied" => Ok(Self::UpdateApplied),
             "update_already_current" => Ok(Self::UpdateAlreadyCurrent),
             "update_requested" => Ok(Self::UpdateRequested),
@@ -145,6 +153,11 @@ impl ActivityHistory {
         Self { database_path }
     }
 
+    async fn lock_history(&self) -> Result<ProcessFileLock, ActivityHistoryFailure> {
+        let lock_path = self.database_path.with_extension("lock");
+        Ok(spawn_blocking(move || wait_for_file_lock(&lock_path)).await??)
+    }
+
     async fn open_connection(&self) -> Result<Connection, ActivityHistoryFailure> {
         let pinned_path = self.database_path.clone();
         spawn_blocking(move || pin_database_file(&pinned_path)).await??;
@@ -164,6 +177,7 @@ impl ActivityHistory {
         &self,
         new_entry: NewActivityEntry,
     ) -> Result<(), ActivityHistoryFailure> {
+        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         database_connection
             .execute(
@@ -201,6 +215,7 @@ impl ActivityHistory {
     pub async fn list_recent_entries(
         &self,
     ) -> Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure> {
+        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         let mut entry_rows = database_connection
             .query(
@@ -219,6 +234,7 @@ impl ActivityHistory {
     }
 
     pub async fn clear_all_entries(&self) -> Result<(), ActivityHistoryFailure> {
+        let _history_lock = self.lock_history().await?;
         self.open_connection()
             .await?
             .execute("DELETE FROM activity_entries", ())

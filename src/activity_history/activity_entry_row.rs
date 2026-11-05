@@ -26,6 +26,7 @@ fn status_icon(activity_status: ActivityStatus) -> &'static str {
         | ActivityStatus::ScanFailed
         | ActivityStatus::UpdateFailed => "dialog-warning-symbolic",
         ActivityStatus::ScanCancelled
+        | ActivityStatus::ScanSkipped
         | ActivityStatus::UpdateCancelled
         | ActivityStatus::UpdateRequested => "content-loading-symbolic",
     }

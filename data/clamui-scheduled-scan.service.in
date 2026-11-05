@@ -1,0 +1,8 @@
+[Unit]
+Description=ClamUI Scheduled Antivirus Scan
+
+[Service]
+Type=oneshot
+ExecStart=@EXEC_START@
+Nice=19
+IOSchedulingClass=idle

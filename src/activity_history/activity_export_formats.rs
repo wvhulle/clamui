@@ -8,6 +8,7 @@ const CSV_HEADER: &str =
 pub fn activity_status_text(activity_status: ActivityStatus) -> String {
     match activity_status {
         ActivityStatus::ScanClean => gettext("Clean"),
+        ActivityStatus::ScanSkipped => gettext("Skipped"),
         ActivityStatus::ScanInfected => gettext("Infected"),
         ActivityStatus::ScanFailed | ActivityStatus::UpdateFailed => gettext("Error"),
         ActivityStatus::ScanCancelled | ActivityStatus::UpdateCancelled => gettext("Cancelled"),
@@ -26,6 +27,7 @@ pub fn activity_summary_text(activity_entry: &ActivityEntryRecord) -> String {
         )
         .replace("{count}", &activity_entry.threat_count.to_string()),
         ActivityStatus::ScanClean => gettext("No threats found"),
+        ActivityStatus::ScanSkipped => gettext("Scheduled scan skipped (on battery power)"),
         ActivityStatus::ScanFailed => gettext("The scan did not finish cleanly"),
         ActivityStatus::ScanCancelled => gettext("Scan cancelled by user"),
         ActivityStatus::UpdateApplied => gettext("Virus definitions updated"),
@@ -84,7 +86,9 @@ pub fn activity_detail_text(
     activity_entry: &ActivityEntryRecord,
     formatted_start_time: &str,
 ) -> String {
-    let heading = if activity_entry.activity_status.is_virus_scan() {
+    let heading = if activity_entry.activity_status.is_virus_scan()
+        || activity_entry.activity_status == ActivityStatus::ScanSkipped
+    {
         gettext("SCAN LOG")
     } else {
         gettext("UPDATE LOG")

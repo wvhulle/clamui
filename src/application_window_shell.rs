@@ -1,6 +1,7 @@
-use std::{path::PathBuf, rc::Rc};
+use std::{cell::OnceCell, path::PathBuf, rc::Rc};
 
 use gettextrs::gettext;
+use ksni::TrayMethods;
 use relm4::{
     AsyncComponentSender, Component, ComponentController, Controller, adw,
     adw::prelude::*,
@@ -10,14 +11,24 @@ use relm4::{
 };
 
 use crate::{
-    APPLICATION_ID,
+    APPLICATION_DATA_NAME, APPLICATION_ID,
     activity_history::{
         activity_history_database::ActivityHistory,
         activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
         scan_statistics_page::{ScanStatisticsPage, ScanStatisticsPageInput},
     },
-    application_settings::preferences_dialog::present_preferences_dialog,
+    application_data_directory,
+    application_settings::preferences_dialog::{
+        CLOSE_ACTION_KEY, application_settings, present_preferences_dialog,
+    },
     clamav_components::component_status_page::ComponentStatusPage,
+    desktop_integration::{
+        running_instance_forwarding::{
+            SCAN_PATHS_ACTION, SHOW_WINDOW_ACTION, paths_from_variant, scan_paths_action_type,
+        },
+        system_tray_menu::SystemTrayMenu,
+    },
+    file_process_lock::{ProcessFileLock, wait_for_file_lock},
     file_quarantine::{
         quarantine_entries_page::{
             QuarantineEntriesPage, QuarantineEntriesPageInput, describe_quarantine_failure,
@@ -30,13 +41,15 @@ use crate::{
     },
     scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
-    virus_database::database_update_page::{DatabaseUpdatePage, DatabaseUpdatePageOutput},
+    virus_database::database_update_page::{
+        DatabaseUpdatePage, DatabaseUpdatePageInput, DatabaseUpdatePageOutput,
+    },
 };
 
-const APPLICATION_DATA_NAME: &str = "clamui";
 const PREFERENCES_STARTUP_PAGE: &str = "preferences";
 
 struct ApplicationPages {
+    _vault_lock: ProcessFileLock,
     _scan_page: Controller<ScanProgressPage>,
     _quarantine_page: Controller<QuarantineEntriesPage>,
     _database_page: Controller<DatabaseUpdatePage>,
@@ -54,10 +67,6 @@ enum ShellContent {
 
 pub struct ApplicationWindowShell {
     _shell_content: ShellContent,
-}
-
-fn application_data_directory() -> PathBuf {
-    glib::user_data_dir().join(APPLICATION_DATA_NAME)
 }
 
 fn vault_unavailable_page(vault_failure: &QuarantineMoveFailure) -> adw::StatusPage {
@@ -250,6 +259,7 @@ fn adaptive_navigation_layout(
 }
 
 fn application_pages(
+    vault_lock: ProcessFileLock,
     quarantine_vault: QuarantineVault,
     data_directory: PathBuf,
     window_root: &adw::ApplicationWindow,
@@ -363,6 +373,7 @@ fn application_pages(
         ));
     }
     register_application_actions(window_root, &page_stack);
+    let main_application = relm4::main_application();
     let quick_scan_action = gio::SimpleAction::new("quick-scan", None);
     let quick_scan_sender = scan_page.sender().clone();
     let quick_scan_stack = page_stack.clone();
@@ -370,7 +381,36 @@ fn application_pages(
         quick_scan_stack.set_visible_child_name("scan");
         quick_scan_sender.emit(ScanProgressPageInput::QuickScanRequested);
     });
-    window_root.add_action(&quick_scan_action);
+    main_application.add_action(&quick_scan_action);
+    let update_action = gio::SimpleAction::new("update-definitions", None);
+    let update_sender = database_page.sender().clone();
+    let update_stack = page_stack.clone();
+    update_action.connect_activate(move |_activated_action, _parameter| {
+        update_stack.set_visible_child_name("database");
+        update_sender.emit(DatabaseUpdatePageInput::StartUpdate);
+    });
+    main_application.add_action(&update_action);
+    let scan_paths_action =
+        gio::SimpleAction::new(SCAN_PATHS_ACTION, Some(scan_paths_action_type()));
+    let scan_paths_sender = scan_page.sender().clone();
+    let scan_paths_stack = page_stack.clone();
+    let scan_paths_window = window_root.clone();
+    scan_paths_action.connect_activate(move |_activated_action, forwarded_paths| {
+        if let Some(forwarded_paths) = forwarded_paths {
+            scan_paths_stack.set_visible_child_name("scan");
+            scan_paths_window.present();
+            scan_paths_sender.emit(ScanProgressPageInput::ScanTargetsChosen(
+                paths_from_variant(forwarded_paths),
+            ));
+        }
+    });
+    main_application.add_action(&scan_paths_action);
+    let show_window_action = gio::SimpleAction::new(SHOW_WINDOW_ACTION, None);
+    let shown_window = window_root.clone();
+    show_window_action.connect_activate(move |_activated_action, _parameter| {
+        shown_window.present();
+    });
+    main_application.add_action(&show_window_action);
     window_root.set_content(Some(&adaptive_navigation_layout(
         &sidebar_list,
         &page_stack,
@@ -378,6 +418,7 @@ fn application_pages(
     )));
     ShellContent::VaultReady {
         _application_pages: Box::new(ApplicationPages {
+            _vault_lock: vault_lock,
             _scan_page: scan_page,
             _quarantine_page: quarantine_page,
             _database_page: database_page,
@@ -386,6 +427,61 @@ fn application_pages(
             _statistics_page: statistics_page,
         }),
     }
+}
+
+type RunningTray = Rc<OnceCell<ksni::Handle<SystemTrayMenu>>>;
+
+fn start_system_tray(window_root: &adw::ApplicationWindow, running_tray: RunningTray) {
+    let hidden_window = window_root.clone();
+    relm4::spawn_local(async move {
+        let tray_outcome = relm4::spawn(async { SystemTrayMenu.spawn().await }).await;
+        match tray_outcome {
+            Ok(Ok(tray_handle)) => {
+                let _tray_started_once = running_tray.set(tray_handle);
+            }
+            _tray_unavailable => hidden_window.present(),
+        }
+    });
+}
+
+fn confirm_close_action(window_root: &adw::ApplicationWindow) {
+    let close_dialog = adw::AlertDialog::new(
+        Some(&gettext("Close ClamUI?")),
+        Some(&gettext(
+            "Keep ClamUI running in the system tray, or quit completely?",
+        )),
+    );
+    close_dialog.add_response("cancel", &gettext("Cancel"));
+    close_dialog.add_response("quit", &gettext("Quit"));
+    close_dialog.add_response("minimize", &gettext("Minimize to tray"));
+    close_dialog.set_default_response(Some("minimize"));
+    close_dialog.set_close_response("cancel");
+    let answered_window = window_root.clone();
+    close_dialog.connect_response(None, move |_dialog, close_response| match close_response {
+        "quit" => relm4::main_application().quit(),
+        "minimize" => answered_window.set_visible(false),
+        _cancelled => {}
+    });
+    close_dialog.present(Some(window_root));
+}
+
+fn handle_window_close(window_root: &adw::ApplicationWindow, running_tray: RunningTray) {
+    window_root.connect_close_request(move |closed_window| {
+        if running_tray.get().is_none() {
+            return glib::Propagation::Proceed;
+        }
+        match application_settings().string(CLOSE_ACTION_KEY).as_str() {
+            "minimize" => {
+                closed_window.set_visible(false);
+                glib::Propagation::Stop
+            }
+            "ask" => {
+                confirm_close_action(closed_window);
+                glib::Propagation::Stop
+            }
+            _quit => glib::Propagation::Proceed,
+        }
+    });
 }
 
 impl AsyncComponent for ApplicationWindowShell {
@@ -412,16 +508,25 @@ impl AsyncComponent for ApplicationWindowShell {
         _sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let data_directory = application_data_directory();
+        let lock_path = data_directory.join("quarantine.lock");
+        let vault_lock = relm4::spawn(async move {
+            tokio::task::spawn_blocking(move || wait_for_file_lock(&lock_path)).await
+        })
+        .await;
         let opened_vault = QuarantineVault::open_vault(
             data_directory.join("quarantine.db"),
             data_directory.join("quarantine"),
         )
         .await;
-        let shell_content = match opened_vault {
-            Ok(quarantine_vault) => {
-                application_pages(quarantine_vault, data_directory, &root, startup_request)
-            }
-            Err(vault_failure) => {
+        let shell_content = match (vault_lock, opened_vault) {
+            (Ok(Ok(Ok(vault_lock))), Ok(quarantine_vault)) => application_pages(
+                vault_lock,
+                quarantine_vault,
+                data_directory,
+                &root,
+                startup_request,
+            ),
+            (_lock_outcome, Err(vault_failure)) => {
                 let unavailable_page = vault_unavailable_page(&vault_failure);
                 let toolbar_view = adw::ToolbarView::new();
                 toolbar_view.add_top_bar(&adw::HeaderBar::new());
@@ -429,7 +534,21 @@ impl AsyncComponent for ApplicationWindowShell {
                 root.set_content(Some(&toolbar_view));
                 ShellContent::VaultUnavailable
             }
+            (_lock_failure, Ok(_quarantine_vault)) => {
+                let unavailable_page = adw::StatusPage::builder()
+                    .icon_name("dialog-error-symbolic")
+                    .title(gettext("The quarantine database could not be locked"))
+                    .build();
+                let toolbar_view = adw::ToolbarView::new();
+                toolbar_view.add_top_bar(&adw::HeaderBar::new());
+                toolbar_view.set_content(Some(&unavailable_page));
+                root.set_content(Some(&toolbar_view));
+                ShellContent::VaultUnavailable
+            }
         };
+        let running_tray = RunningTray::default();
+        start_system_tray(&root, Rc::clone(&running_tray));
+        handle_window_close(&root, running_tray);
         AsyncComponentParts {
             model: Self {
                 _shell_content: shell_content,

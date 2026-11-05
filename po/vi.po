@@ -35,7 +35,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:11+0100\n"
+"POT-Creation-Date: 2026-11-05 09:20+0100\n"
 "PO-Revision-Date: 2026-11-03 21:00+0700\n"
 "Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
 "Language-Team: Vietnamese\n"
@@ -50,103 +50,113 @@ msgid "Clean"
 msgstr "Sạch"
 
 #: src/activity_history/activity_export_formats.rs:11
+msgid "Skipped"
+msgstr "Đã bỏ qua"
+
+#: src/activity_history/activity_export_formats.rs:12
 msgid "Infected"
 msgstr "Bị nhiễm"
 
-#: src/activity_history/activity_export_formats.rs:12
+#: src/activity_history/activity_export_formats.rs:13
 msgid "Error"
 msgstr "Lỗi"
 
-#: src/activity_history/activity_export_formats.rs:13
+#: src/activity_history/activity_export_formats.rs:14
 msgid "Cancelled"
 msgstr "Đã hủy"
 
-#: src/activity_history/activity_export_formats.rs:14
+#: src/activity_history/activity_export_formats.rs:15
 msgid "Success"
 msgstr "Thành công"
 
-#: src/activity_history/activity_export_formats.rs:15
+#: src/activity_history/activity_export_formats.rs:16
 msgid "Up to date"
 msgstr "Đã là bản mới nhất"
 
-#: src/activity_history/activity_export_formats.rs:16
+#: src/activity_history/activity_export_formats.rs:17
 msgid "Requested"
 msgstr ""
 
-#: src/activity_history/activity_export_formats.rs:23
+#: src/activity_history/activity_export_formats.rs:24
 #, rust-format
 msgid "Found {count} threat"
 msgid_plural "Found {count} threats"
 msgstr[0] ""
 
-#: src/activity_history/activity_export_formats.rs:28
-#: src/malware_scan/scan_progress_page.rs:347
+#: src/activity_history/activity_export_formats.rs:29
+#: src/malware_scan/scan_progress_page.rs:348
+#: src/malware_scan/scan_progress_page.rs:491
 #: src/malware_scan/scan_results_dialog.rs:54
 msgid "No threats found"
 msgstr ""
 
-#: src/activity_history/activity_export_formats.rs:29
-#: src/malware_scan/scan_progress_page.rs:345
+#: src/activity_history/activity_export_formats.rs:30
+msgid "Scheduled scan skipped (on battery power)"
+msgstr "Đã bỏ qua quét theo lịch (đang dùng pin)"
+
+#: src/activity_history/activity_export_formats.rs:31
+#: src/malware_scan/scan_progress_page.rs:346
+#: src/malware_scan/scan_progress_page.rs:492
 #: src/malware_scan/scan_results_dialog.rs:55
 msgid "The scan did not finish cleanly"
 msgstr ""
 
-#: src/activity_history/activity_export_formats.rs:30
-#: src/malware_scan/scan_progress_page.rs:340
+#: src/activity_history/activity_export_formats.rs:32
+#: src/malware_scan/scan_progress_page.rs:341
 #: src/malware_scan/scan_results_dialog.rs:56
 msgid "Scan cancelled by user"
 msgstr "Người dùng đã hủy quá trình quét"
 
-#: src/activity_history/activity_export_formats.rs:31
+#: src/activity_history/activity_export_formats.rs:33
 msgid "Virus definitions updated"
 msgstr ""
 
-#: src/activity_history/activity_export_formats.rs:32
+#: src/activity_history/activity_export_formats.rs:34
 msgid "Virus definitions are up to date"
 msgstr ""
 
-#: src/activity_history/activity_export_formats.rs:33
+#: src/activity_history/activity_export_formats.rs:35
 msgid "Update requested from the service"
 msgstr ""
 
-#: src/activity_history/activity_export_formats.rs:34
+#: src/activity_history/activity_export_formats.rs:36
 msgid "Database update failed"
 msgstr "Cập nhật cơ sở dữ liệu thất bại"
 
-#: src/activity_history/activity_export_formats.rs:35
-#: src/virus_database/database_update_page.rs:435
+#: src/activity_history/activity_export_formats.rs:37
+#: src/virus_database/database_update_page.rs:436
 msgid "Database update cancelled"
 msgstr "Đã hủy cập nhật cơ sở dữ liệu"
 
-#: src/activity_history/activity_export_formats.rs:88
+#: src/activity_history/activity_export_formats.rs:92
 msgid "SCAN LOG"
 msgstr "NHẬT KÝ QUÉT"
 
-#: src/activity_history/activity_export_formats.rs:90
+#: src/activity_history/activity_export_formats.rs:94
 msgid "UPDATE LOG"
 msgstr "NHẬT KÝ CẬP NHẬT"
 
-#: src/activity_history/activity_export_formats.rs:93
+#: src/activity_history/activity_export_formats.rs:97
 msgid "Timestamp"
 msgstr "Thời điểm"
 
-#: src/activity_history/activity_export_formats.rs:96
+#: src/activity_history/activity_export_formats.rs:100
 msgid "Status"
 msgstr "Trạng thái"
 
-#: src/activity_history/activity_export_formats.rs:101
+#: src/activity_history/activity_export_formats.rs:105
 msgid "Duration"
 msgstr "Thời lượng"
 
-#: src/activity_history/activity_export_formats.rs:106
+#: src/activity_history/activity_export_formats.rs:110
 msgid "Summary"
 msgstr "Tóm tắt"
 
-#: src/activity_history/activity_export_formats.rs:116
+#: src/activity_history/activity_export_formats.rs:120
 msgid "Path"
 msgstr "Đường dẫn"
 
-#: src/activity_history/activity_export_formats.rs:125
+#: src/activity_history/activity_export_formats.rs:129
 msgid "Full Output"
 msgstr "Toàn bộ đầu ra"
 
@@ -166,12 +176,13 @@ msgstr ""
 "Thao tác này sẽ xóa vĩnh viễn toàn bộ nhật ký lịch sử và không thể hoàn tác."
 
 #: src/activity_history/activity_logs_page.rs:152
+#: src/application_window_shell.rs:454
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
-#: src/malware_scan/scan_progress_page.rs:703
+#: src/malware_scan/scan_progress_page.rs:718
 #: src/malware_scan/scan_results_dialog.rs:198
 #: src/scan_profiles/profile_manager_dialog.rs:116
-#: src/virus_database/database_update_page.rs:529
+#: src/virus_database/database_update_page.rs:530
 msgid "Cancel"
 msgstr "Hủy"
 
@@ -238,9 +249,10 @@ msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:425
 #: src/clamav_components/clamav_component_row.rs:73
-#: src/malware_scan/scan_progress_page.rs:299
-#: src/virus_database/database_update_page.rs:285
-#: src/virus_database/database_update_page.rs:292
+#: src/malware_scan/scan_progress_page.rs:300
+#: src/scheduled_scans/schedule_preferences_page.rs:221
+#: src/virus_database/database_update_page.rs:286
+#: src/virus_database/database_update_page.rs:293
 msgid "Checking…"
 msgstr "Đang kiểm tra…"
 
@@ -396,7 +408,9 @@ msgid "Total files checked"
 msgstr "Tổng số tệp đã kiểm tra"
 
 #: src/activity_history/scan_statistics_page.rs:308
+#: src/malware_scan/scan_progress_page.rs:490
 #: src/malware_scan/scan_results_dialog.rs:53
+#: src/scheduled_scans/headless_scheduled_scan.rs:241
 msgid "Threats Detected"
 msgstr "Phát hiện mối đe dọa"
 
@@ -441,6 +455,7 @@ msgid "Quick Actions"
 msgstr "Thao tác nhanh"
 
 #: src/activity_history/scan_statistics_page.rs:366
+#: src/desktop_integration/system_tray_menu.rs:46
 #: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr "Quét nhanh"
@@ -478,161 +493,216 @@ msgstr "Toàn bộ thời gian"
 msgid "Failed to load statistics: {error}"
 msgstr "Không thể tải thống kê: {error}"
 
-#: src/application_settings/preferences_dialog.rs:113
+#: src/application_settings/preferences_dialog.rs:116
 msgid "Node.js dependencies"
 msgstr "Thư viện phụ thuộc Node.js"
 
-#: src/application_settings/preferences_dialog.rs:114
+#: src/application_settings/preferences_dialog.rs:117
 msgid "Git repository data"
 msgstr "Dữ liệu kho Git"
 
-#: src/application_settings/preferences_dialog.rs:115
+#: src/application_settings/preferences_dialog.rs:118
 msgid "Python virtual environment"
 msgstr "Môi trường ảo Python"
 
-#: src/application_settings/preferences_dialog.rs:116
+#: src/application_settings/preferences_dialog.rs:119
 msgid "Build output directory"
 msgstr "Thư mục đầu ra bản dựng"
 
-#: src/application_settings/preferences_dialog.rs:117
+#: src/application_settings/preferences_dialog.rs:120
 msgid "Distribution output directory"
 msgstr "Thư mục đầu ra bản phân phối"
 
-#: src/application_settings/preferences_dialog.rs:118
+#: src/application_settings/preferences_dialog.rs:121
 msgid "Python bytecode cache"
 msgstr "Bộ nhớ đệm bytecode Python"
 
-#: src/application_settings/preferences_dialog.rs:125
+#: src/application_settings/preferences_dialog.rs:128
+msgid "Window Behavior"
+msgstr "Hành vi cửa sổ"
+
+#: src/application_settings/preferences_dialog.rs:130
+msgid "Running in the background needs a desktop with a system tray."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:134
+msgid "Quit completely"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:135
+#: src/application_window_shell.rs:456
+msgid "Minimize to tray"
+msgstr "Thu nhỏ xuống khay hệ thống"
+
+#: src/application_settings/preferences_dialog.rs:136
+msgid "Always ask"
+msgstr "Luôn hỏi"
+
+#: src/application_settings/preferences_dialog.rs:139
+msgid "When closing window"
+msgstr "Khi đóng cửa sổ"
+
+#: src/application_settings/preferences_dialog.rs:158
+msgid "Start in System Tray"
+msgstr "Khởi động trong khay hệ thống"
+
+#: src/application_settings/preferences_dialog.rs:160
+msgid "Launch in the background and show only the tray icon."
+msgstr "Chạy ở chế độ nền và chỉ hiện biểu tượng trên khay hệ thống."
+
+#: src/application_settings/preferences_dialog.rs:168
+msgid "Desktop Notifications"
+msgstr "Thông báo trên màn hình"
+
+#: src/application_settings/preferences_dialog.rs:170
+msgid ""
+"Notify about finished scans and updates while the window is not in focus."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:182
 msgid "Behavior"
 msgstr "Hành vi"
 
-#: src/application_settings/preferences_dialog.rs:129
+#: src/application_settings/preferences_dialog.rs:186
 msgid "Scan Behavior"
 msgstr "Hành vi quét"
 
-#: src/application_settings/preferences_dialog.rs:130
+#: src/application_settings/preferences_dialog.rs:187
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:133
+#: src/application_settings/preferences_dialog.rs:190
 msgid "Show Live Scan Progress"
 msgstr "Hiện tiến trình quét trực tiếp"
 
-#: src/application_settings/preferences_dialog.rs:134
+#: src/application_settings/preferences_dialog.rs:191
 msgid "Display files being scanned in real time."
 msgstr "Hiển thị các tệp đang được quét theo thời gian thực."
 
-#: src/application_settings/preferences_dialog.rs:141
+#: src/application_settings/preferences_dialog.rs:198
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:142
+#: src/application_settings/preferences_dialog.rs:199
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:143
+#: src/application_settings/preferences_dialog.rs:200
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:146
+#: src/application_settings/preferences_dialog.rs:203
 msgid "Scan Backend"
 msgstr "Cơ chế quét"
 
-#: src/application_settings/preferences_dialog.rs:148
+#: src/application_settings/preferences_dialog.rs:205
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:208
+#: src/application_settings/preferences_dialog.rs:266
 #: src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "Gỡ bỏ"
 
-#: src/application_settings/preferences_dialog.rs:241
+#: src/application_settings/preferences_dialog.rs:299
 #: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "Ngoại lệ"
 
-#: src/application_settings/preferences_dialog.rs:253
+#: src/application_settings/preferences_dialog.rs:311
 msgid "Preset Exclusions"
 msgstr "Ngoại lệ có sẵn"
 
-#: src/application_settings/preferences_dialog.rs:255
+#: src/application_settings/preferences_dialog.rs:313
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 "Các thư mục thường được loại trừ khỏi quá trình quét. Thay đổi được lưu ngay "
 "lập tức."
 
-#: src/application_settings/preferences_dialog.rs:260
+#: src/application_settings/preferences_dialog.rs:318
 msgid "Custom Exclusions"
 msgstr "Ngoại lệ tùy chỉnh"
 
-#: src/application_settings/preferences_dialog.rs:262
+#: src/application_settings/preferences_dialog.rs:320
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:266
+#: src/application_settings/preferences_dialog.rs:324
 msgid "/path/to/exclude or *.tmp"
 msgstr "/đường/dẫn/cần/loại/trừ hoặc *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:307
-#: src/application_window_shell.rs:143
+#: src/application_settings/preferences_dialog.rs:365
+#: src/application_window_shell.rs:152
 msgid "Preferences"
 msgstr "Tùy chọn"
 
-#: src/application_window_shell.rs:66
+#: src/application_window_shell.rs:75
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:144
+#: src/application_window_shell.rs:153
 msgid "About ClamUI"
 msgstr "Giới thiệu về ClamUI"
 
-#: src/application_window_shell.rs:145
+#: src/application_window_shell.rs:154 src/application_window_shell.rs:455
+#: src/desktop_integration/system_tray_menu.rs:49
 msgid "Quit"
 msgstr "Thoát"
 
-#: src/application_window_shell.rs:148
+#: src/application_window_shell.rs:157
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:167
+#: src/application_window_shell.rs:176
 msgid "translator-credits"
 msgstr "dinhkarate"
 
-#: src/application_window_shell.rs:226
+#: src/application_window_shell.rs:235
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:312
-#: src/malware_scan/scan_progress_page.rs:337
+#: src/application_window_shell.rs:322
+#: src/malware_scan/scan_progress_page.rs:338
 msgid "Scan"
 msgstr "Quét"
 
-#: src/application_window_shell.rs:319
-#: src/virus_database/database_update_page.rs:471
+#: src/application_window_shell.rs:329
+#: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Cơ sở dữ liệu"
 
-#: src/application_window_shell.rs:326
+#: src/application_window_shell.rs:336
 msgid "Logs"
 msgstr "Nhật ký"
 
-#: src/application_window_shell.rs:333
+#: src/application_window_shell.rs:343
 msgid "Components"
 msgstr "Thành phần"
 
-#: src/application_window_shell.rs:340
+#: src/application_window_shell.rs:350
 #: src/malware_scan/detected_threat_row.rs:110
 #: src/malware_scan/scan_results_dialog.rs:199
 msgid "Quarantine"
 msgstr "Khu cách ly"
 
-#: src/application_window_shell.rs:347
+#: src/application_window_shell.rs:357
 #: src/malware_scan/scan_results_dialog.rs:324
 msgid "Statistics"
 msgstr "Thống kê"
+
+#: src/application_window_shell.rs:449
+msgid "Close ClamUI?"
+msgstr "Đóng ClamUI?"
+
+#: src/application_window_shell.rs:451
+msgid "Keep ClamUI running in the system tray, or quit completely?"
+msgstr ""
+
+#: src/application_window_shell.rs:540
+msgid "The quarantine database could not be locked"
+msgstr ""
 
 #: src/clamav_components/clamav_component_row.rs:42
 msgid "Virus Scanner"
@@ -679,7 +749,7 @@ msgid "Stopped"
 msgstr "Đã dừng"
 
 #: src/clamav_components/clamav_component_row.rs:77
-#: src/virus_database/database_update_page.rs:278
+#: src/virus_database/database_update_page.rs:279
 msgid "Not installed"
 msgstr "Chưa cài đặt"
 
@@ -706,13 +776,21 @@ msgstr ""
 "khởi động dịch vụ thay bạn."
 
 #: src/clamav_components/component_status_page.rs:72
-#: src/virus_database/database_update_page.rs:478
+#: src/virus_database/database_update_page.rs:479
 msgid "Refresh status"
 msgstr "Làm mới trạng thái"
 
 #: src/clamav_components/component_status_page.rs:128
 msgid "Command copied to clipboard"
 msgstr "Đã sao chép lệnh vào bộ nhớ tạm"
+
+#: src/desktop_integration/system_tray_menu.rs:45
+msgid "Show ClamUI"
+msgstr ""
+
+#: src/desktop_integration/system_tray_menu.rs:47
+msgid "Update Definitions"
+msgstr ""
 
 #: src/file_quarantine/quarantine_entries_page.rs:23
 msgid "File hash mismatch — file may be corrupted"
@@ -826,7 +904,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Khôi phục"
 
-#: src/main.rs:49
+#: src/main.rs:65
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -861,73 +939,73 @@ msgstr "Loại trừ"
 msgid "Copy Path"
 msgstr "Sao chép đường dẫn"
 
-#: src/malware_scan/scan_progress_page.rs:155
+#: src/malware_scan/scan_progress_page.rs:156
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:158
+#: src/malware_scan/scan_progress_page.rs:159
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:162
+#: src/malware_scan/scan_progress_page.rs:163
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:166
+#: src/malware_scan/scan_progress_page.rs:167
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:171
+#: src/malware_scan/scan_progress_page.rs:172
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:183
+#: src/malware_scan/scan_progress_page.rs:184
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr "Mục tiêu quét không tồn tại hoặc chứa byte NUL không hợp lệ"
 
-#: src/malware_scan/scan_progress_page.rs:186
+#: src/malware_scan/scan_progress_page.rs:187
 msgid "Scan target is not a regular file or directory"
 msgstr "Mục tiêu quét không phải là tệp hoặc thư mục thông thường"
 
-#: src/malware_scan/scan_progress_page.rs:191
+#: src/malware_scan/scan_progress_page.rs:192
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:198
+#: src/malware_scan/scan_progress_page.rs:199
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:202
+#: src/malware_scan/scan_progress_page.rs:203
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:210
+#: src/malware_scan/scan_progress_page.rs:211
 msgid "No files could be scanned"
 msgstr "Không thể quét tệp nào"
 
-#: src/malware_scan/scan_progress_page.rs:216
+#: src/malware_scan/scan_progress_page.rs:217
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:228
+#: src/malware_scan/scan_progress_page.rs:229
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] "Không thể truy cập {count} tệp"
 
-#: src/malware_scan/scan_progress_page.rs:234
+#: src/malware_scan/scan_progress_page.rs:235
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] "Không thể đọc {count} tệp"
 
-#: src/malware_scan/scan_progress_page.rs:240
+#: src/malware_scan/scan_progress_page.rs:241
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -939,110 +1017,111 @@ msgstr[0] ""
 "{count} cảnh báo không nghiêm trọng trong quá trình quét; một số tệp có thể "
 "chỉ được quét một phần"
 
-#: src/malware_scan/scan_progress_page.rs:301
+#: src/malware_scan/scan_progress_page.rs:302
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:304
+#: src/malware_scan/scan_progress_page.rs:305
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:319
+#: src/malware_scan/scan_progress_page.rs:320
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:338
+#: src/malware_scan/scan_progress_page.rs:339
 msgid "Scanning…"
 msgstr "Đang quét…"
 
-#: src/malware_scan/scan_progress_page.rs:339
+#: src/malware_scan/scan_progress_page.rs:340
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:342
+#: src/malware_scan/scan_progress_page.rs:343
 #: src/malware_scan/scan_results_dialog.rs:94
 #: src/malware_scan/scan_results_dialog.rs:350
 msgid "Threats found"
 msgstr "Mối đe dọa tìm thấy"
 
-#: src/malware_scan/scan_progress_page.rs:355
+#: src/malware_scan/scan_progress_page.rs:356
 #: src/malware_scan/scan_results_dialog.rs:72
+#: src/scheduled_scans/headless_scheduled_scan.rs:163
 #, rust-format
 msgid "{count} threat found"
 msgid_plural "{count} threats found"
 msgstr[0] ""
 
-#: src/malware_scan/scan_progress_page.rs:362
+#: src/malware_scan/scan_progress_page.rs:363
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "Đã quét {count} tệp"
 
-#: src/malware_scan/scan_progress_page.rs:381
+#: src/malware_scan/scan_progress_page.rs:382
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:432
+#: src/malware_scan/scan_progress_page.rs:433
 msgid "No Profile (Manual)"
 msgstr "Không dùng hồ sơ (thủ công)"
 
-#: src/malware_scan/scan_progress_page.rs:623
+#: src/malware_scan/scan_progress_page.rs:638
 msgid "Scan Profile"
 msgstr "Quét theo hồ sơ"
 
-#: src/malware_scan/scan_progress_page.rs:626
+#: src/malware_scan/scan_progress_page.rs:641
 msgid "Profile"
 msgstr "Hồ sơ quét"
 
-#: src/malware_scan/scan_progress_page.rs:636
+#: src/malware_scan/scan_progress_page.rs:651
 #: src/scan_profiles/profile_manager_dialog.rs:139
 msgid "Manage Profiles"
 msgstr "Quản lý hồ sơ quét"
 
-#: src/malware_scan/scan_progress_page.rs:645
+#: src/malware_scan/scan_progress_page.rs:660
 msgid "Scan Targets"
 msgstr "Mục tiêu quét"
 
-#: src/malware_scan/scan_progress_page.rs:646
+#: src/malware_scan/scan_progress_page.rs:661
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:654
+#: src/malware_scan/scan_progress_page.rs:669
 msgid "Add Files"
 msgstr "Thêm tệp"
 
-#: src/malware_scan/scan_progress_page.rs:661
+#: src/malware_scan/scan_progress_page.rs:676
 #: src/scan_profiles/profile_editor_dialog.rs:170
 #: src/scan_profiles/profile_editor_dialog.rs:269
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:673
+#: src/malware_scan/scan_progress_page.rs:688
 msgid "No targets added"
 msgstr "Chưa thêm mục tiêu nào"
 
-#: src/malware_scan/scan_progress_page.rs:686
+#: src/malware_scan/scan_progress_page.rs:701
 msgid "Start Scan"
 msgstr "Bắt đầu quét"
 
-#: src/malware_scan/scan_progress_page.rs:696
+#: src/malware_scan/scan_progress_page.rs:711
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:758
+#: src/malware_scan/scan_progress_page.rs:773
 msgid "View Results"
 msgstr "Xem kết quả"
 
-#: src/malware_scan/scan_progress_page.rs:838
+#: src/malware_scan/scan_progress_page.rs:853
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:853
+#: src/malware_scan/scan_progress_page.rs:868
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:958
+#: src/malware_scan/scan_progress_page.rs:974
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
@@ -1283,127 +1362,282 @@ msgstr "Quét toàn diện toàn hệ thống, bao gồm mọi thư mục có th
 msgid "Scan of the user's home directory and personal files"
 msgstr "Quét thư mục cá nhân và các tệp riêng của người dùng"
 
+#: src/scheduled_scans/headless_scheduled_scan.rs:169
+msgid "Open ClamUI to review them."
+msgstr ""
+
+#: src/scheduled_scans/headless_scheduled_scan.rs:174
+#, rust-format
+msgid "{count} moved to quarantine."
+msgid_plural "{count} moved to quarantine."
+msgstr[0] ""
+
+#: src/scheduled_scans/headless_scheduled_scan.rs:248
+msgid "Scheduled scan failed"
+msgstr ""
+
+#: src/scheduled_scans/headless_scheduled_scan.rs:249
+msgid "Open ClamUI to read the log."
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:77
+msgid "Not scheduled"
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:79
+#, rust-format
+msgid "Next run: {time}"
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:82
+msgid "Scheduled scans need a systemd user session, which is not available."
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:90
+#, rust-format
+msgid "Error creating systemd files: {error}"
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:94
+#, rust-format
+msgid "systemctl could not be run: {error}"
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:97
+msgid "Failed to enable the timer."
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:103
+msgid "Hourly"
+msgstr "Hằng giờ"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:104
+msgid "Daily"
+msgstr "Hằng ngày"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:105
+msgid "Weekly"
+msgstr "Hằng tuần"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:106
+msgid "Monthly"
+msgstr "Hằng tháng"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:113
+msgid "Monday"
+msgstr "Thứ Hai"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:114
+msgid "Tuesday"
+msgstr "Thứ Ba"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:115
+msgid "Wednesday"
+msgstr "Thứ Tư"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:116
+msgid "Thursday"
+msgstr "Thứ Năm"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:117
+msgid "Friday"
+msgstr "Thứ Sáu"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:118
+msgid "Saturday"
+msgstr "Thứ Bảy"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:119
+msgid "Sunday"
+msgstr "Chủ Nhật"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:141
+msgid "Scheduled"
+msgstr "Quét theo lịch"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:145
+msgid "Scheduled Scans"
+msgstr "Quét theo lịch"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:150
+msgid "Apply"
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:158
+msgid "Enable Scheduled Scans"
+msgstr "Bật quét theo lịch"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:163
+msgid "Scan Frequency"
+msgstr "Tần suất quét"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:169
+msgid "Scan Time (24-hour)"
+msgstr "Thời gian quét (định dạng 24 giờ)"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:174
+msgid "Day of Week"
+msgstr "Ngày trong tuần"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:175
+msgid "Used for weekly scans."
+msgstr "Dùng cho quét hằng tuần."
+
+#: src/scheduled_scans/schedule_preferences_page.rs:181
+msgid "Day of Month"
+msgstr "Ngày trong tháng"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:182
+msgid "Used for monthly scans."
+msgstr "Dùng cho quét hằng tháng."
+
+#: src/scheduled_scans/schedule_preferences_page.rs:188
+msgid "Scan Targets (separated by commas; empty scans your home folder)"
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:193
+msgid "Skip on Battery"
+msgstr "Bỏ qua khi dùng pin"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:194
+msgid "Do not start scheduled scans while on battery power."
+msgstr "Không bắt đầu quét theo lịch khi máy đang chạy bằng pin."
+
+#: src/scheduled_scans/schedule_preferences_page.rs:199
+msgid "Auto-Quarantine"
+msgstr "Tự động cách ly"
+
+#: src/scheduled_scans/schedule_preferences_page.rs:200
+msgid ""
+"Automatically quarantine threats found by scheduled scans. While ClamUI is "
+"open, threats are only reported."
+msgstr ""
+
+#: src/scheduled_scans/schedule_preferences_page.rs:323
+msgid "Enter the scan time as HH:MM, for example 02:00."
+msgstr ""
+
 #: src/text_export_dialog.rs:20
 #, rust-format
 msgid "Could not save the file: {error}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:99
+#: src/virus_database/database_update_page.rs:100
 msgid "Active"
 msgstr "Đang hoạt động"
 
-#: src/virus_database/database_update_page.rs:100
+#: src/virus_database/database_update_page.rs:101
 msgid "Scheduled by a systemd timer"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:101
+#: src/virus_database/database_update_page.rs:102
 msgid "Installed but stopped"
 msgstr "Đã cài đặt nhưng đang dừng"
 
-#: src/virus_database/database_update_page.rs:103
+#: src/virus_database/database_update_page.rs:104
 msgid "No freshclam service detected; updates run manually"
 msgstr "Không phát hiện dịch vụ freshclam; cập nhật được chạy thủ công"
 
-#: src/virus_database/database_update_page.rs:114
+#: src/virus_database/database_update_page.rs:115
 #, rust-format
 msgid "{count} day old"
 msgid_plural "{count} days old"
 msgstr[0] "{count} ngày tuổi"
 
-#: src/virus_database/database_update_page.rs:120
+#: src/virus_database/database_update_page.rs:121
 msgid "No readable virus database was found"
 msgstr "Không tìm thấy cơ sở dữ liệu virus nào đọc được"
 
-#: src/virus_database/database_update_page.rs:139
+#: src/virus_database/database_update_page.rs:140
 msgid ""
 "Authentication cancelled. Database update requires administrator privileges."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:142
+#: src/virus_database/database_update_page.rs:143
 msgid "Authorization failed. Please try again and enter your password."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:145
+#: src/virus_database/database_update_page.rs:146
 msgid "Update rate limited by mirror. Please wait a few minutes and try again."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:148
+#: src/virus_database/database_update_page.rs:149
 msgid ""
 "Update blocked by CDN. This may be due to rate limiting. Please wait and try "
 "again later."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:152
+#: src/virus_database/database_update_page.rs:153
 msgid "ClamAV mirror is currently unavailable. Please try again later."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:155
+#: src/virus_database/database_update_page.rs:156
 msgid "SSL/TLS certificate error. The mirror may have configuration issues."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:158
+#: src/virus_database/database_update_page.rs:159
 msgid "Connection timed out. Please check your network connection."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:161
+#: src/virus_database/database_update_page.rs:162
 msgid "Database is locked. Another freshclam instance may be running."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:164
+#: src/virus_database/database_update_page.rs:165
 msgid ""
 "Permission denied. You may need elevated privileges to update the database."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:167
+#: src/virus_database/database_update_page.rs:168
 msgid "Connection error. Please check your network connection."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:170
+#: src/virus_database/database_update_page.rs:171
 msgid "DNS resolution failed. Please check your network settings."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:176
-#: src/virus_database/database_update_page.rs:454
+#: src/virus_database/database_update_page.rs:177
+#: src/virus_database/database_update_page.rs:455
 msgid "Update failed with an unknown error. Check the logs for details."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:183
+#: src/virus_database/database_update_page.rs:184
 #, rust-format
 msgid "Updated: {databases}"
 msgstr "Đã cập nhật: {databases}"
 
-#: src/virus_database/database_update_page.rs:187
+#: src/virus_database/database_update_page.rs:188
 #, rust-format
 msgid "Already current: {databases}"
 msgstr "Đã là bản mới nhất: {databases}"
 
-#: src/virus_database/database_update_page.rs:196
+#: src/virus_database/database_update_page.rs:197
 #, rust-format
 msgid "Rate limited: {database}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:199
+#: src/virus_database/database_update_page.rs:200
 #, rust-format
 msgid "Rate limited: {database} until {cooldown}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:216
+#: src/virus_database/database_update_page.rs:217
 msgid "Database update completed"
 msgstr "Đã cập nhật cơ sở dữ liệu xong"
 
-#: src/virus_database/database_update_page.rs:219
+#: src/virus_database/database_update_page.rs:220
 msgid "Database is already up to date"
 msgstr "Cơ sở dữ liệu đã là bản mới nhất"
 
-#: src/virus_database/database_update_page.rs:236
+#: src/virus_database/database_update_page.rs:237
 msgid "Install freshclam before requesting database updates."
 msgstr "Hãy cài đặt freshclam trước khi yêu cầu cập nhật cơ sở dữ liệu."
 
-#: src/virus_database/database_update_page.rs:274
+#: src/virus_database/database_update_page.rs:275
 msgid "Checking freshclam…"
 msgstr "Đang kiểm tra freshclam…"
 
-#: src/virus_database/database_update_page.rs:447
+#: src/virus_database/database_update_page.rs:448
 msgid ""
 "The service accepted the signal; it performs the update asynchronously. "
 "Check its logs for completion."
@@ -1411,38 +1645,42 @@ msgstr ""
 "Dịch vụ đã nhận tín hiệu và sẽ cập nhật ở chế độ nền. Hãy xem nhật ký của "
 "dịch vụ để biết khi nào hoàn tất."
 
-#: src/virus_database/database_update_page.rs:474
+#: src/virus_database/database_update_page.rs:475
 msgid "Virus definitions"
 msgstr "Cơ sở dữ liệu virus"
 
-#: src/virus_database/database_update_page.rs:495
+#: src/virus_database/database_update_page.rs:496
 msgid "Update service"
 msgstr "Dịch vụ cập nhật"
 
-#: src/virus_database/database_update_page.rs:503
+#: src/virus_database/database_update_page.rs:504
 msgid "Database freshness"
 msgstr "Độ mới của cơ sở dữ liệu"
 
-#: src/virus_database/database_update_page.rs:513
-#: src/virus_database/database_update_page.rs:522
+#: src/virus_database/database_update_page.rs:514
+#: src/virus_database/database_update_page.rs:523
 msgid "Update database"
 msgstr "Cập nhật cơ sở dữ liệu"
 
-#: src/virus_database/database_update_page.rs:514
+#: src/virus_database/database_update_page.rs:515
 msgid ""
 "Updates run through the freshclam system service when one exists, so your "
 "system may ask for authorization."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:522
+#: src/virus_database/database_update_page.rs:523
 msgid "Updating…"
 msgstr "Đang cập nhật…"
 
-#: src/virus_database/database_update_page.rs:550
+#: src/virus_database/database_update_page.rs:551
 msgid "Update log"
 msgstr "Nhật ký cập nhật"
 
-#: src/virus_database/database_update_page.rs:659
+#: src/virus_database/database_update_page.rs:651
+msgid "Database update finished"
+msgstr ""
+
+#: src/virus_database/database_update_page.rs:665
 #, rust-format
 msgid "The update could not be added to the history: {error}"
 msgstr ""

@@ -366,7 +366,7 @@ impl Component for ScanStatisticsPage {
                         set_title: &gettext("Quick Scan"),
                         set_subtitle: &gettext("Scan your home directory"),
                         set_activatable: true,
-                        set_action_name: Some("win.quick-scan"),
+                        set_action_name: Some("app.quick-scan"),
                         add_suffix = &gtk::Image { set_icon_name: Some("go-next-symbolic") },
                     },
 

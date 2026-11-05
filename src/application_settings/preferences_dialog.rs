@@ -1,6 +1,6 @@
 use gettextrs::gettext;
 use relm4::{
-    adw,
+    Component, ComponentController, adw,
     adw::prelude::*,
     gtk,
     gtk::{gio, gio::prelude::SettingsExtManual, glib},
@@ -15,12 +15,15 @@ use crate::{
         scanner_command_builder::ScannerBackendPreference,
         scanner_output_parser::sanitize_scanner_line,
     },
+    scheduled_scans::schedule_preferences_page::SchedulePreferencesPage,
 };
 
 const EXCLUSION_RULES_KEY: &str = "exclusion-rules";
 const SCAN_BACKEND_KEY: &str = "scan-backend";
 pub const SHOW_LIVE_PROGRESS_KEY: &str = "show-live-progress";
 const SCAN_BACKEND_CHOICES: [&str; 3] = ["auto", "clamd", "clamscan"];
+pub const CLOSE_ACTION_KEY: &str = "close-action";
+const CLOSE_ACTION_CHOICES: [&str; 3] = ["quit", "minimize", "ask"];
 
 pub fn application_settings() -> gio::Settings {
     gio::Settings::new(APPLICATION_ID)
@@ -120,6 +123,60 @@ fn preset_description(exclusion_pattern: &str) -> String {
     }
 }
 
+fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
+    let window_group = adw::PreferencesGroup::builder()
+        .title(gettext("Window Behavior"))
+        .description(gettext(
+            "Running in the background needs a desktop with a system tray.",
+        ))
+        .build();
+    let close_labels = [
+        gettext("Quit completely"),
+        gettext("Minimize to tray"),
+        gettext("Always ask"),
+    ];
+    let close_row = adw::ComboRow::builder()
+        .title(gettext("When closing window"))
+        .model(&gtk::StringList::new(
+            &close_labels.iter().map(String::as_str).collect::<Vec<_>>(),
+        ))
+        .selected(
+            CLOSE_ACTION_CHOICES
+                .iter()
+                .position(|close_choice| *close_choice == settings.string(CLOSE_ACTION_KEY))
+                .unwrap_or(0) as u32,
+        )
+        .build();
+    let close_settings = settings.clone();
+    close_row.connect_selected_notify(move |changed_row| {
+        if let Some(close_choice) = CLOSE_ACTION_CHOICES.get(changed_row.selected() as usize) {
+            let _read_only_settings = close_settings.set_string(CLOSE_ACTION_KEY, close_choice);
+        }
+    });
+    window_group.add(&close_row);
+    let background_row = adw::SwitchRow::builder()
+        .title(gettext("Start in System Tray"))
+        .subtitle(gettext(
+            "Launch in the background and show only the tray icon.",
+        ))
+        .build();
+    settings
+        .bind("start-in-background", &background_row, "active")
+        .build();
+    window_group.add(&background_row);
+    let notifications_row = adw::SwitchRow::builder()
+        .title(gettext("Desktop Notifications"))
+        .subtitle(gettext(
+            "Notify about finished scans and updates while the window is not in focus.",
+        ))
+        .build();
+    settings
+        .bind("notifications-enabled", &notifications_row, "active")
+        .build();
+    window_group.add(&notifications_row);
+    window_group
+}
+
 fn behavior_page(settings: &gio::Settings) -> adw::PreferencesPage {
     let behavior_page = adw::PreferencesPage::builder()
         .title(gettext("Behavior"))
@@ -168,6 +225,7 @@ fn behavior_page(settings: &gio::Settings) -> adw::PreferencesPage {
     });
     scan_group.add(&backend_row);
     behavior_page.add(&scan_group);
+    behavior_page.add(&window_group(settings));
     behavior_page
 }
 
@@ -309,5 +367,10 @@ pub fn present_preferences_dialog() {
         .build();
     preferences_dialog.add(&behavior_page(&settings));
     preferences_dialog.add(&exclusions_page(&settings));
+    let schedule_page = SchedulePreferencesPage::builder().launch(()).detach();
+    preferences_dialog.add(schedule_page.widget());
+    preferences_dialog.connect_closed(move |_closed_dialog| {
+        let _keep_page_until_closed = &schedule_page;
+    });
     preferences_dialog.present(relm4::main_application().active_window().as_ref());
 }

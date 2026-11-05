@@ -1,0 +1,10 @@
+[Unit]
+Description=ClamUI Scheduled Scan Timer
+
+[Timer]
+OnCalendar=@ON_CALENDAR@
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

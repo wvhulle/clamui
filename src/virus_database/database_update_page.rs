@@ -13,6 +13,7 @@ use crate::{
         ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
     },
     clamav_components::component_availability::{ProgramProbe, probe_program_version},
+    desktop_integration::desktop_notifications::notify_outside_the_window,
     malware_scan::{
         scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
         scanner_process_events::ScanStartFailure,
@@ -645,6 +646,11 @@ impl Component for DatabaseUpdatePage {
             DatabaseUpdatePageCommand::UpdateStreamFinished => {
                 self.update_summary = self.finished_update_summary();
                 self.record_finished_update(&sender);
+                notify_outside_the_window(
+                    "update-finished",
+                    &gettext("Database update finished"),
+                    self.update_summary.lines().next().unwrap_or_default(),
+                );
                 self.update_state = DatabaseUpdateState::NoActiveUpdate;
                 root.add_toast(adw::Toast::new(
                     self.update_summary.lines().next().unwrap_or_default(),
