@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 11:48+0100\n"
+"POT-Creation-Date: 2026-11-05 12:08+0100\n"
 "PO-Revision-Date: 2026-06-30 13:00+0200\n"
 "Last-Translator: Robin GUY <contact@robinguy.fr>\n"
 "Language-Team: French\n"
@@ -153,7 +153,7 @@ msgstr ""
 "Cette action est irréversible."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:454
+#: src/application_window_shell.rs:480
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:743
@@ -207,6 +207,7 @@ msgstr "Détails du journal"
 #: src/activity_history/activity_logs_page.rs:326
 #: src/activity_history/activity_logs_page.rs:388
 #: src/clamav_components/clamav_component_row.rs:126
+#: src/step_timeline/timeline_step_row.rs:69
 #: src/system_audit/audit_check_row.rs:45
 msgid "Copy"
 msgstr "Copier"
@@ -218,7 +219,6 @@ msgstr "Exporter au format texte"
 
 #: src/activity_history/activity_logs_page.rs:346
 #: src/activity_history/activity_logs_page.rs:360
-#: src/system_audit/clamav_health_checks.rs:310
 msgid "ClamAV Daemon"
 msgstr "Démon ClamAV"
 
@@ -229,6 +229,7 @@ msgstr ""
 #: src/activity_history/activity_logs_page.rs:425
 #: src/clamav_components/clamav_component_row.rs:73
 #: src/malware_scan/scan_progress_page.rs:318
+#: src/protection_status/protection_timeline_page.rs:249
 #: src/scheduled_scans/schedule_preferences_page.rs:221
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
@@ -359,7 +360,7 @@ msgid "Quit completely"
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:286
-#: src/application_window_shell.rs:456
+#: src/application_window_shell.rs:482
 msgid "Minimize to tray"
 msgstr "Réduire dans la zone de notification"
 
@@ -465,12 +466,11 @@ msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude ou *.tmp"
 
 #: src/application_settings/preferences_dialog.rs:518
-#: src/application_window_shell.rs:154
+#: src/application_window_shell.rs:173
 msgid "Preferences"
 msgstr "Préférences"
 
 #: src/application_settings/preferences_dialog.rs:526
-#: src/application_window_shell.rs:327
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Base virale"
@@ -495,63 +495,69 @@ msgstr "Analyse à l’accès"
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_window_shell.rs:77
+#: src/application_window_shell.rs:82
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:155
+#: src/application_window_shell.rs:159
+msgid "Update signatures"
+msgstr ""
+
+#: src/application_window_shell.rs:174
 msgid "About ClamUI"
 msgstr "À propos de ClamUI"
 
-#: src/application_window_shell.rs:156 src/application_window_shell.rs:455
+#: src/application_window_shell.rs:175 src/application_window_shell.rs:481
 #: src/desktop_integration/system_tray_menu.rs:49
 msgid "Quit"
 msgstr "Quitter"
 
-#: src/application_window_shell.rs:159
+#: src/application_window_shell.rs:178
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:178
+#: src/application_window_shell.rs:197
 msgid "translator-credits"
 msgstr "Robin GUY"
 
-#: src/application_window_shell.rs:237
+#: src/application_window_shell.rs:256
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:320
+#: src/application_window_shell.rs:350
+#: src/protection_status/protection_timeline_page.rs:206
+#: src/protection_status/protection_timeline_page.rs:209
+msgid "Protection"
+msgstr ""
+
+#: src/application_window_shell.rs:357
 #: src/malware_scan/scan_progress_page.rs:356
 msgid "Scan"
 msgstr "Analyse"
 
-#: src/application_window_shell.rs:334
+#: src/application_window_shell.rs:364
 msgid "Logs"
 msgstr "Journaux"
 
-#: src/application_window_shell.rs:341
+#: src/application_window_shell.rs:371
 msgid "Components"
 msgstr "Composants"
 
-#: src/application_window_shell.rs:348
+#: src/application_window_shell.rs:378
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Quarantaine"
 
-#: src/application_window_shell.rs:355
-msgid "Audit"
-msgstr "Audit"
-
-#: src/application_window_shell.rs:449
+#: src/application_window_shell.rs:475
 msgid "Close ClamUI?"
 msgstr "Fermer ClamUI ?"
 
-#: src/application_window_shell.rs:451
+#: src/application_window_shell.rs:477
 msgid "Keep ClamUI running in the system tray, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:540
+#: src/application_window_shell.rs:566
 msgid "The quarantine database could not be locked"
 msgstr ""
 
@@ -633,7 +639,7 @@ msgid "Refresh status"
 msgstr "Actualiser l’état"
 
 #: src/clamav_components/component_status_page.rs:128
-#: src/system_audit/system_audit_page.rs:260
+#: src/protection_status/protection_timeline_page.rs:294
 msgid "Command copied to clipboard"
 msgstr "Commande copiée dans le presse-papiers"
 
@@ -766,7 +772,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Restaurer"
 
-#: src/main.rs:67
+#: src/main.rs:71
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -1104,6 +1110,267 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
+#: src/protection_status/protection_timeline_page.rs:77
+msgid "The scan finished"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:79
+#, rust-format
+msgid "The scan did not finish cleanly: {result}"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:83
+msgid "Starting the scan needs administrator authorization"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:86
+#, rust-format
+msgid "The scan could not be started: {error}"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:162
+msgid "Starting the scan…"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:215
+msgid "Check again"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:301
+#, rust-format
+msgid "Could not open documentation: {error}"
+msgstr "Impossible d’ouvrir la documentation : {error}"
+
+#: src/protection_status/protection_timeline_presentation.rs:74
+msgid "ClamAV installed"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:76
+msgid ""
+"ClamAV is the engine that recognizes malware. ClamUI uses the copy installed "
+"on this computer and never bundles its own."
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:102
+msgid "ClamAV was not found on this computer"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:128
+#, rust-format
+msgid "Definitions built {date}, {days} days ago"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:132
+msgid "Definitions exist, but their age could not be determined"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:134
+msgid "No virus definitions were found"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:144
+msgid "Its last update failed"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:147
+#, rust-format
+msgid "Last updated {time}"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:151
+msgid "No completed update recorded yet"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:189
+#, rust-format
+msgid "Updated {hours} hours ago"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:201
+msgid "Update Now"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:206
+msgid "Signatures current"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:208
+msgid ""
+"Signatures describe known malware, and new ones are published constantly. "
+"Old signatures miss recent threats even when everything else is running."
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:221
+msgid "Daemon running"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:223
+msgid ""
+"clamd keeps the signatures loaded in memory. On-access blocking and "
+"scheduled scans both send their files to it."
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:237
+#, rust-format
+msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:245
+msgid "clamd is answering"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:256
+#: src/protection_status/protection_timeline_presentation.rs:321
+#, rust-format
+msgid "{unit} is not running"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:268
+msgid "clamd is not set up, so scans fall back to the slower clamscan"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:280
+msgid "Watched folders"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:282
+msgid "None configured"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:289
+#: src/protection_status/protection_timeline_presentation.rs:293
+msgid "Largest file scanned"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:290
+msgid "The ClamAV default"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:304
+msgid "On-access blocking"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:306
+msgid ""
+"clamonacc checks files in the watched folders as they are opened. With "
+"prevention on, the kernel refuses access to a detected file, which is why "
+"such a file can't be opened even though it is still there."
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:313
+msgid "On-access scanning is not set up"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:317
+#: src/protection_status/protection_timeline_presentation.rs:407
+msgid "Waiting for the daemon"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:325
+msgid "Files are checked, but detected files are not blocked"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:329
+msgid "Running, but no watched folders could be read"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:333
+msgid "Detected files are blocked"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:357
+#: src/scheduled_scans/schedule_preferences_page.rs:77
+msgid "Not scheduled"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:364
+#, rust-format
+msgid "{time}, threats found"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:369
+#, rust-format
+msgid "{time}, nothing found"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:373
+msgid "Not run yet"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:390
+msgid "Scheduled scan"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:392
+msgid ""
+"A scheduled scan catches files that were not opened, or that only became "
+"detectable after a signature update."
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:412
+msgid "The system timer is not active"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:417
+msgid "The last scan ended with an error"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:422
+#, rust-format
+msgid "Next scan: {time}"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:427
+msgid "Last scan"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:428
+msgid "Folders scanned"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:431
+msgid "Run Now"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:442
+msgid "Scheduled by ClamUI"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:450
+msgid "Set Up"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:458
+msgid "No scan is scheduled"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:472
+#, rust-format
+msgid "{paths} blocked on access"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:474
+#, rust-format
+msgid "{paths} checked on access, not blocked"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:485
+#, rust-format
+msgid "{paths} scanned on a schedule"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:487
+msgid "Scheduled scans set up in ClamUI"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:494
+msgid "ClamAV is not installed, so nothing is being checked"
+msgstr ""
+
+#: src/protection_status/protection_timeline_presentation.rs:507
+msgid "Files are only checked when you scan them"
+msgstr ""
+
 #: src/scan_profiles/profile_editor_dialog.rs:118
 msgid "Profile name is required"
 msgstr "Nom du profil requis"
@@ -1276,10 +1543,6 @@ msgstr ""
 msgid "Open ClamUI to read the log."
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:77
-msgid "Not scheduled"
-msgstr ""
-
 #: src/scheduled_scans/schedule_preferences_page.rs:79
 #, rust-format
 msgid "Next run: {time}"
@@ -1425,12 +1688,10 @@ msgid "Checking"
 msgstr "Vérification"
 
 #: src/system_audit/audit_report_model.rs:25
-#: src/system_audit/system_audit_page.rs:181
 msgid "Pass"
 msgstr "Réussi"
 
 #: src/system_audit/audit_report_model.rs:26
-#: src/system_audit/system_audit_page.rs:166
 msgid "Warning"
 msgstr "Avertissement"
 
@@ -1439,118 +1700,21 @@ msgid "Fail"
 msgstr "Échec"
 
 #: src/system_audit/audit_report_model.rs:73
-msgid "ClamAV Health"
-msgstr "État de ClamAV"
-
-#: src/system_audit/audit_report_model.rs:74
 msgid "Firewall"
 msgstr "Pare-feu"
 
-#: src/system_audit/audit_report_model.rs:75
+#: src/system_audit/audit_report_model.rs:74
 msgid "Access Control"
 msgstr "Contrôle d’accès"
 
-#: src/system_audit/audit_report_model.rs:76
+#: src/system_audit/audit_report_model.rs:75
 msgid "Intrusion Detection"
 msgstr "Détection d’intrusions"
 
-#: src/system_audit/clamav_health_checks.rs:134
-#, rust-format
-msgid "Database is {days} day old (built {date})"
-msgid_plural "Database is {days} days old (built {date})"
-msgstr[0] "La base de données a {days} jour (créée le {date})"
-msgstr[1] "La base de données a {days} jours (créée le {date})"
-
-#: src/system_audit/clamav_health_checks.rs:143
-msgid "Virus Database"
+#: src/system_audit/audit_report_model.rs:76
+#: src/system_audit/security_audit_checks.rs:295
+msgid "Rootkits"
 msgstr ""
-
-#: src/system_audit/clamav_health_checks.rs:152
-#, rust-format
-msgid "Up to date ({days} day old, built {date})"
-msgid_plural "Up to date ({days} days old, built {date})"
-msgstr[0] "À jour (il y a {days} jour, créée le {date})"
-msgstr[1] "À jour (il y a {days} jours, créée le {date})"
-
-#: src/system_audit/clamav_health_checks.rs:167
-msgid "Update virus database to ensure protection"
-msgstr "Mettez à jour la base virale pour garantir une protection optimale"
-
-#: src/system_audit/clamav_health_checks.rs:178
-msgid "Database is critically outdated. Update immediately."
-msgstr ""
-"La base de données est extrêmement obsolète. Mettez-la à jour immédiatement."
-
-#: src/system_audit/clamav_health_checks.rs:184
-msgid "Database files exist but age could not be determined"
-msgstr ""
-"Les fichiers de base virale existent mais leur âge n'a pas pu être déterminé"
-
-#: src/system_audit/clamav_health_checks.rs:189
-msgid "No virus database found"
-msgstr "Aucune base virale détectée"
-
-#: src/system_audit/clamav_health_checks.rs:191
-msgid "Download virus database"
-msgstr "Télécharger la base virale"
-
-#: src/system_audit/clamav_health_checks.rs:262
-#: src/system_audit/clamav_health_checks.rs:283
-#: src/system_audit/clamav_health_checks.rs:292
-msgid "ClamAV Installation"
-msgstr ""
-
-#: src/system_audit/clamav_health_checks.rs:264
-msgid "ClamAV is not installed"
-msgstr "ClamAV n'est pas installé"
-
-#: src/system_audit/clamav_health_checks.rs:266
-msgid "Install ClamAV to enable virus scanning"
-msgstr "Installez ClamAV pour activer l'analyse des virus"
-
-#: src/system_audit/clamav_health_checks.rs:285
-#, rust-format
-msgid "Installed: {version}"
-msgstr "Installé : {version}"
-
-#: src/system_audit/clamav_health_checks.rs:315
-#, rust-format
-msgid "Service {name} is running"
-msgstr "Le service {name} est en cours d’exécution"
-
-#: src/system_audit/clamav_health_checks.rs:320
-msgid "Daemon is responding"
-msgstr "Le service répond"
-
-#: src/system_audit/clamav_health_checks.rs:325
-msgid "ClamAV daemon is not running"
-msgstr "Le service n'est pas en cours d'exécution"
-
-#: src/system_audit/clamav_health_checks.rs:327
-msgid "Start the daemon for faster scanning"
-msgstr "Démarrez le service pour accélérer les analyses"
-
-#: src/system_audit/clamav_health_checks.rs:341
-msgid "Automatic Updates"
-msgstr "Mises à jour automatiques"
-
-#: src/system_audit/clamav_health_checks.rs:347
-msgid "Freshclam service is active"
-msgstr "Le service freshclam est actif"
-
-#: src/system_audit/clamav_health_checks.rs:355
-msgid "Could not determine automatic update status"
-msgstr "Impossible de déterminer l'état des mises à jour automatiques"
-
-#: src/system_audit/clamav_health_checks.rs:362
-msgid "Freshclam automatic update service is not running"
-msgstr ""
-"Le service de mise à jour automatique Freshclam n'est pas en cours "
-"d'exécution"
-
-#: src/system_audit/clamav_health_checks.rs:364
-msgid "Enable automatic database updates"
-msgstr "Activer les mises à jour automatiques de la base virale"
 
 #: src/system_audit/firewall_audit_checks.rs:32
 msgid "Firewall Service"
@@ -1578,145 +1742,107 @@ msgstr ""
 msgid "Firewall services could not be listed without systemd."
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:68
+#: src/system_audit/security_audit_checks.rs:67
 msgid "AppArmor"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:74
+#: src/system_audit/security_audit_checks.rs:73
 msgid "AppArmor is enabled"
 msgstr "AppArmor est activé"
 
-#: src/system_audit/security_audit_checks.rs:80
-#: src/system_audit/security_audit_checks.rs:86
+#: src/system_audit/security_audit_checks.rs:79
+#: src/system_audit/security_audit_checks.rs:85
 msgid "AppArmor module is loaded but not enabled"
 msgstr "Le module AppArmor est chargé mais n'est pas activé"
 
-#: src/system_audit/security_audit_checks.rs:88
+#: src/system_audit/security_audit_checks.rs:87
 msgid "Enable AppArmor for application sandboxing"
 msgstr "Activez AppArmor pour permettre les bacs-à-sable d'applications"
 
-#: src/system_audit/security_audit_checks.rs:94
+#: src/system_audit/security_audit_checks.rs:93
 msgid "SELinux"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:100
+#: src/system_audit/security_audit_checks.rs:99
 msgid "SELinux is enforcing"
 msgstr "SELinux est en mode strict"
 
-#: src/system_audit/security_audit_checks.rs:105
+#: src/system_audit/security_audit_checks.rs:104
 msgid "SELinux is in permissive mode"
 msgstr "SELinux est en mode permissif"
 
-#: src/system_audit/security_audit_checks.rs:108
+#: src/system_audit/security_audit_checks.rs:107
 msgid "Consider switching to enforcing mode for stronger protection"
 msgstr ""
 "Envisagez de passer en mode d’application pour une protection renforcée"
 
-#: src/system_audit/security_audit_checks.rs:114
-#: src/system_audit/security_audit_checks.rs:120
+#: src/system_audit/security_audit_checks.rs:113
+#: src/system_audit/security_audit_checks.rs:119
 msgid "SELinux is disabled"
 msgstr "SELinux est désactivé"
 
-#: src/system_audit/security_audit_checks.rs:122
+#: src/system_audit/security_audit_checks.rs:121
 msgid "Enable SELinux for mandatory access control"
 msgstr "Activez SELinux pour bénéficier du contrôle d'accès obligatoire"
 
-#: src/system_audit/security_audit_checks.rs:126
+#: src/system_audit/security_audit_checks.rs:125
 msgid "SELinux mode could not be determined"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:143
+#: src/system_audit/security_audit_checks.rs:142
 msgid "MAC Framework"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:145
+#: src/system_audit/security_audit_checks.rs:144
 msgid "No mandatory access control framework detected"
 msgstr "Aucune politique de contrôle d'accès obligatoire détectée"
 
-#: src/system_audit/security_audit_checks.rs:147
+#: src/system_audit/security_audit_checks.rs:146
 msgid "Consider enabling AppArmor or SELinux"
 msgstr "Envisagez d'activer AppArmor ou SELinux"
 
-#: src/system_audit/security_audit_checks.rs:198
+#: src/system_audit/security_audit_checks.rs:197
 msgid "fail2ban is active and protecting services"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:199
+#: src/system_audit/security_audit_checks.rs:198
 msgid "CrowdSec is active with community threat intelligence"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:205
+#: src/system_audit/security_audit_checks.rs:204
 msgid "Start fail2ban to protect against brute force attacks"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:206
+#: src/system_audit/security_audit_checks.rs:205
 msgid "Start CrowdSec for collaborative intrusion prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:234
+#: src/system_audit/security_audit_checks.rs:233
 #, rust-format
 msgid "{name} is installed but not running"
 msgstr "{name} est installé, mais n’est pas en cours d’exécution"
 
-#: src/system_audit/security_audit_checks.rs:266
+#: src/system_audit/security_audit_checks.rs:265
 msgid "Intrusion Prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:268
+#: src/system_audit/security_audit_checks.rs:267
 msgid "No intrusion detection system found"
 msgstr "Aucun système de détection des intrusions trouvé"
 
-#: src/system_audit/security_audit_checks.rs:271
+#: src/system_audit/security_audit_checks.rs:270
 msgid "Install fail2ban or CrowdSec to protect against attacks"
 msgstr "Installez fail2ban ou CrowdSec pour vous protéger contre les attaques"
 
-#: src/system_audit/system_audit_page.rs:49
-msgid "Auditing…"
-msgstr "Audit en cours…"
-
-#: src/system_audit/system_audit_page.rs:52
-#, rust-format
-msgid "{count} security issue needs attention"
-msgid_plural "{count} security issues need attention"
-msgstr[0] "{count} problème de sécurité requiert votre attention"
-msgstr[1] "{count} problèmes de sécurité requièrent votre attention"
-
-#: src/system_audit/system_audit_page.rs:59
-#, rust-format
-msgid "{count} audit check needs review"
-msgid_plural "{count} audit checks need review"
-msgstr[0] "{count} vérification d’audit doit être examinée"
-msgstr[1] "{count} vérifications d’audit doivent être examinées"
-
-#: src/system_audit/system_audit_page.rs:65
-msgid "Security audit completed"
-msgstr "Audit de sécurité terminé"
-
-#: src/system_audit/system_audit_page.rs:135
-#: src/system_audit/system_audit_page.rs:138
-msgid "System security audit"
-msgstr "Audit de sécurité du système"
-
-#: src/system_audit/system_audit_page.rs:139
-msgid ""
-"Inspect your security posture and copy recommendations. Audit checks never "
-"change system configuration."
+#: src/system_audit/security_audit_checks.rs:297
+msgid "ClamAV does not cover rootkits, and ClamUI does not check for them."
 msgstr ""
-"Examinez votre niveau de sécurité et copiez les recommandations. Les "
-"vérifications d’audit ne modifient jamais la configuration système."
 
-#: src/system_audit/system_audit_page.rs:143
-msgid "Refresh audit"
-msgstr "Actualiser l’audit"
-
-#: src/system_audit/system_audit_page.rs:196
-msgid "unavailable or skipped"
-msgstr "indisponible ou ignoré"
-
-#: src/system_audit/system_audit_page.rs:267
-#, rust-format
-msgid "Could not open documentation: {error}"
-msgstr "Impossible d’ouvrir la documentation : {error}"
+#: src/system_audit/security_audit_checks.rs:300
+msgid ""
+"Run a check yourself. A rootkit can hide from checks made on the running "
+"system, so a clean result is only weak evidence."
+msgstr ""
 
 #: src/text_export_dialog.rs:20
 #, rust-format
@@ -2041,6 +2167,117 @@ msgid ""
 msgstr ""
 "Offre gratuite : 4 requêtes par minute, 500 par jour. Les fichiers d’une "
 "taille maximale de 650 Mo peuvent être analysés."
+
+#~ msgid "Audit"
+#~ msgstr "Audit"
+
+#~ msgid "ClamAV Health"
+#~ msgstr "État de ClamAV"
+
+#, rust-format
+#~ msgid "Database is {days} day old (built {date})"
+#~ msgid_plural "Database is {days} days old (built {date})"
+#~ msgstr[0] "La base de données a {days} jour (créée le {date})"
+#~ msgstr[1] "La base de données a {days} jours (créée le {date})"
+
+#, rust-format
+#~ msgid "Up to date ({days} day old, built {date})"
+#~ msgid_plural "Up to date ({days} days old, built {date})"
+#~ msgstr[0] "À jour (il y a {days} jour, créée le {date})"
+#~ msgstr[1] "À jour (il y a {days} jours, créée le {date})"
+
+#~ msgid "Update virus database to ensure protection"
+#~ msgstr "Mettez à jour la base virale pour garantir une protection optimale"
+
+#~ msgid "Database is critically outdated. Update immediately."
+#~ msgstr ""
+#~ "La base de données est extrêmement obsolète. Mettez-la à jour "
+#~ "immédiatement."
+
+#~ msgid "Database files exist but age could not be determined"
+#~ msgstr ""
+#~ "Les fichiers de base virale existent mais leur âge n'a pas pu être "
+#~ "déterminé"
+
+#~ msgid "No virus database found"
+#~ msgstr "Aucune base virale détectée"
+
+#~ msgid "Download virus database"
+#~ msgstr "Télécharger la base virale"
+
+#~ msgid "ClamAV is not installed"
+#~ msgstr "ClamAV n'est pas installé"
+
+#~ msgid "Install ClamAV to enable virus scanning"
+#~ msgstr "Installez ClamAV pour activer l'analyse des virus"
+
+#, rust-format
+#~ msgid "Installed: {version}"
+#~ msgstr "Installé : {version}"
+
+#, rust-format
+#~ msgid "Service {name} is running"
+#~ msgstr "Le service {name} est en cours d’exécution"
+
+#~ msgid "Daemon is responding"
+#~ msgstr "Le service répond"
+
+#~ msgid "ClamAV daemon is not running"
+#~ msgstr "Le service n'est pas en cours d'exécution"
+
+#~ msgid "Start the daemon for faster scanning"
+#~ msgstr "Démarrez le service pour accélérer les analyses"
+
+#~ msgid "Automatic Updates"
+#~ msgstr "Mises à jour automatiques"
+
+#~ msgid "Freshclam service is active"
+#~ msgstr "Le service freshclam est actif"
+
+#~ msgid "Could not determine automatic update status"
+#~ msgstr "Impossible de déterminer l'état des mises à jour automatiques"
+
+#~ msgid "Freshclam automatic update service is not running"
+#~ msgstr ""
+#~ "Le service de mise à jour automatique Freshclam n'est pas en cours "
+#~ "d'exécution"
+
+#~ msgid "Enable automatic database updates"
+#~ msgstr "Activer les mises à jour automatiques de la base virale"
+
+#~ msgid "Auditing…"
+#~ msgstr "Audit en cours…"
+
+#, rust-format
+#~ msgid "{count} security issue needs attention"
+#~ msgid_plural "{count} security issues need attention"
+#~ msgstr[0] "{count} problème de sécurité requiert votre attention"
+#~ msgstr[1] "{count} problèmes de sécurité requièrent votre attention"
+
+#, rust-format
+#~ msgid "{count} audit check needs review"
+#~ msgid_plural "{count} audit checks need review"
+#~ msgstr[0] "{count} vérification d’audit doit être examinée"
+#~ msgstr[1] "{count} vérifications d’audit doivent être examinées"
+
+#~ msgid "Security audit completed"
+#~ msgstr "Audit de sécurité terminé"
+
+#~ msgid "System security audit"
+#~ msgstr "Audit de sécurité du système"
+
+#~ msgid ""
+#~ "Inspect your security posture and copy recommendations. Audit checks "
+#~ "never change system configuration."
+#~ msgstr ""
+#~ "Examinez votre niveau de sécurité et copiez les recommandations. Les "
+#~ "vérifications d’audit ne modifient jamais la configuration système."
+
+#~ msgid "Refresh audit"
+#~ msgstr "Actualiser l’audit"
+
+#~ msgid "unavailable or skipped"
+#~ msgstr "indisponible ou ignoré"
 
 #, rust-format
 #~ msgid "{count} scan"

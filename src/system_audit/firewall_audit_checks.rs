@@ -4,9 +4,9 @@ use crate::{
     clamav_components::distribution_install_guides::DistributionFamily,
     system_audit::{
         audit_report_model::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
-        host_command_probes::{first_active_unit, systemd_is_available},
         suggested_audit_commands::{SuggestedRemedy, suggested_command},
     },
+    systemd_bus::host_systemd_units::{first_active_unit, systemd_is_available},
 };
 
 const NIXOS_FIREWALL_UNIT: &str = "firewall.service";
@@ -65,7 +65,7 @@ pub fn firewall_service_check(
 }
 
 async fn inspect_firewall_service() -> FirewallServiceEvidence {
-    if !systemd_is_available() {
+    if !systemd_is_available().await {
         return FirewallServiceEvidence::SystemdMissing;
     }
     first_active_unit(&FIREWALL_SERVICE_UNITS).await.map_or(

@@ -1,4 +1,5 @@
 mod fixture_clamav_programs;
+mod fixture_systemd_service;
 mod headless_sway_session;
 mod page_screenshots;
 mod screenshot_fixtures;

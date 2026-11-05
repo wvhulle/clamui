@@ -1,11 +1,10 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Stdio,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
-use tokio::{process::Command, time::timeout};
+use crate::systemd_bus::host_systemd_units::{UnitState, probe_unit_state};
 
 const CONFIG_CANDIDATES: &[&str] = &[
     "/etc/clamav/freshclam.conf",
@@ -15,7 +14,6 @@ const CONFIG_CANDIDATES: &[&str] = &[
 ];
 const DEFAULT_DATABASE_DIRECTORY: &str = "/var/lib/clamav";
 const FRESHCLAM_SERVICE_UNITS: [&str; 2] = ["clamav-freshclam", "freshclam"];
-const SYSTEMCTL_TIMEOUT: Duration = Duration::from_secs(5);
 const SECONDS_PER_DAY: u64 = 86_400;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -97,39 +95,16 @@ pub fn inspect_database_directory(
 
 pub fn classify_service_state(
     service_unit: &'static str,
-    service_properties: &str,
-    timer_properties: &str,
+    service_state: UnitState,
+    timer_state: UnitState,
 ) -> Option<FreshclamServiceState> {
-    let mut service_lines = service_properties.lines().map(str::trim);
-    let service_load_state = service_lines.next().unwrap_or_default();
-    let service_active_state = service_lines.next().unwrap_or_default();
-    if service_load_state != "loaded" {
-        return None;
-    }
-    let timer_is_active = timer_properties
-        .lines()
-        .map(str::trim)
-        .eq(["loaded", "active"]);
-    Some(if service_active_state == "active" {
-        FreshclamServiceState::DaemonRunning { service_unit }
-    } else if timer_is_active {
-        FreshclamServiceState::TimerScheduled { service_unit }
-    } else {
-        FreshclamServiceState::ServiceStopped { service_unit }
-    })
-}
-
-async fn unit_properties(unit_name: String) -> String {
-    let mut show_command = Command::new("systemctl");
-    show_command
-        .args(["show", "--property=LoadState,ActiveState", "--value"])
-        .arg(unit_name)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    match timeout(SYSTEMCTL_TIMEOUT, show_command.output()).await {
-        Ok(Ok(show_output)) => String::from_utf8_lossy(&show_output.stdout).into_owned(),
-        _ => String::new(),
+    match service_state {
+        UnitState::UnitActive => Some(FreshclamServiceState::DaemonRunning { service_unit }),
+        UnitState::UnitInactive if timer_state == UnitState::UnitActive => {
+            Some(FreshclamServiceState::TimerScheduled { service_unit })
+        }
+        UnitState::UnitInactive => Some(FreshclamServiceState::ServiceStopped { service_unit }),
+        UnitState::UnitNotFound | UnitState::SystemdUnavailable => None,
     }
 }
 
@@ -138,8 +113,8 @@ pub async fn detect_freshclam_service() -> FreshclamServiceState {
         futures::future::join_all(FRESHCLAM_SERVICE_UNITS.map(|service_unit| async move {
             classify_service_state(
                 service_unit,
-                &unit_properties(format!("{service_unit}.service")).await,
-                &unit_properties(format!("{service_unit}.timer")).await,
+                probe_unit_state(&format!("{service_unit}.service")).await,
+                probe_unit_state(&format!("{service_unit}.timer")).await,
             )
         }))
         .await;
@@ -152,7 +127,7 @@ pub async fn detect_freshclam_service() -> FreshclamServiceState {
 
 #[cfg(test)]
 mod database_directory_status_tests {
-    use std::time::UNIX_EPOCH;
+    use std::time::{Duration, UNIX_EPOCH};
 
     use super::*;
 
@@ -219,23 +194,31 @@ mod database_directory_status_tests {
     #[test]
     fn service_state_distinguishes_daemon_timer_and_stopped_units() {
         assert_eq!(
-            classify_service_state("freshclam", "not-found\ninactive\n", ""),
+            classify_service_state(
+                "freshclam",
+                UnitState::UnitNotFound,
+                UnitState::UnitNotFound
+            ),
             None
         );
         assert_eq!(
-            classify_service_state("freshclam", "loaded\nactive\n", "not-found\ninactive\n"),
+            classify_service_state("freshclam", UnitState::UnitActive, UnitState::UnitNotFound),
             Some(FreshclamServiceState::DaemonRunning {
                 service_unit: "freshclam"
             })
         );
         assert_eq!(
-            classify_service_state("freshclam", "loaded\ninactive\n", "loaded\nactive\n"),
+            classify_service_state("freshclam", UnitState::UnitInactive, UnitState::UnitActive),
             Some(FreshclamServiceState::TimerScheduled {
                 service_unit: "freshclam"
             })
         );
         assert_eq!(
-            classify_service_state("freshclam", "loaded\nfailed\n", "not-found\ninactive\n"),
+            classify_service_state(
+                "freshclam",
+                UnitState::UnitInactive,
+                UnitState::UnitNotFound
+            ),
             Some(FreshclamServiceState::ServiceStopped {
                 service_unit: "freshclam"
             })

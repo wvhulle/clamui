@@ -10,6 +10,8 @@ pub enum TaskFailure {
     VirtualPointerUnsupported(#[from] wayland_client::globals::BindError),
     #[error("the Wayland queue failed: {0}")]
     WaylandDispatchFailed(#[from] wayland_client::DispatchError),
+    #[error("the fixture systemd service failed: {0}")]
+    FixtureSystemdFailed(#[from] zbus::Error),
     #[error("an interaction had no effect: {expected_effect}")]
     InteractionHadNoEffect { expected_effect: &'static str },
     #[error("file operation failed: {0}")]

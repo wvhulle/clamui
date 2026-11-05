@@ -1,7 +1,5 @@
 use crate::clamav_components::distribution_install_guides::DistributionFamily;
 
-pub const FRESHCLAM_UPDATE_COMMAND: &str = "sudo freshclam";
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SuggestedRemedy {
     ClamavDaemonStart,
@@ -10,6 +8,9 @@ pub enum SuggestedRemedy {
     IntrusionPreventionInstall,
     Fail2banServiceStart,
     CrowdsecServiceStart,
+    OnAccessScanningEnable,
+    OnAccessPreventionEnable,
+    ScheduledScanEnable,
 }
 
 fn non_nixos_or_option(
@@ -21,6 +22,17 @@ fn non_nixos_or_option(
         Some(nixos_option)
     } else {
         Some(generic_command)
+    }
+}
+
+pub const fn rootkit_check_command(distribution_family: DistributionFamily) -> &'static str {
+    match distribution_family {
+        DistributionFamily::NixosFamily => "sudo nix-store --verify --check-contents",
+        DistributionFamily::DebianFamily
+        | DistributionFamily::FedoraWorkstation
+        | DistributionFamily::FedoraAtomic
+        | DistributionFamily::ArchFamily
+        | DistributionFamily::UnrecognizedFamily => "sudo chkrootkit -q",
     }
 }
 
@@ -73,6 +85,23 @@ pub fn suggested_command(
             "services.crowdsec.enable = true;",
             "sudo systemctl start crowdsec",
         ),
+        SuggestedRemedy::OnAccessScanningEnable => non_nixos_or_option(
+            distribution_family,
+            "services.clamav.clamonacc.enable = true;",
+            "sudo systemctl enable --now clamav-clamonacc",
+        ),
+        SuggestedRemedy::OnAccessPreventionEnable => match distribution_family {
+            NixosFamily => Some("services.clamav.daemon.settings.OnAccessPrevention = true;"),
+            DebianFamily | FedoraWorkstation | FedoraAtomic | ArchFamily | UnrecognizedFamily => {
+                None
+            }
+        },
+        SuggestedRemedy::ScheduledScanEnable => match distribution_family {
+            NixosFamily => Some("services.clamav.scanner.enable = true;"),
+            DebianFamily | FedoraWorkstation | FedoraAtomic | ArchFamily | UnrecognizedFamily => {
+                None
+            }
+        },
     }
 }
 
@@ -80,13 +109,16 @@ pub fn suggested_command(
 mod suggested_audit_commands_tests {
     use super::*;
 
-    const ALL_REMEDIES: [SuggestedRemedy; 6] = [
+    const ALL_REMEDIES: [SuggestedRemedy; 9] = [
         SuggestedRemedy::ClamavDaemonStart,
         SuggestedRemedy::FreshclamUpdatesEnable,
         SuggestedRemedy::FirewallServiceEnable,
         SuggestedRemedy::IntrusionPreventionInstall,
         SuggestedRemedy::Fail2banServiceStart,
         SuggestedRemedy::CrowdsecServiceStart,
+        SuggestedRemedy::OnAccessScanningEnable,
+        SuggestedRemedy::OnAccessPreventionEnable,
+        SuggestedRemedy::ScheduledScanEnable,
     ];
 
     fn remedies_for(distribution_family: DistributionFamily) -> Vec<&'static str> {

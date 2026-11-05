@@ -5,7 +5,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 ## Shell
 
 - [x] Sidebar icons, using a `gtk::ListBox` with the `navigation-sidebar` style.
-- [x] Pages: Logs, Audit.
+- [x] Pages: Protection, which replaces Audit and Statistics and opens first, and Logs.
 - [x] Empty states with `adw::StatusPage`.
 
 ## Scan
@@ -44,7 +44,7 @@ Deliberately removed: its protection status came from scan recency rather than f
 
 ## Database
 
-- [x] freshclam, service and definition status, updates and log.
+- [x] freshclam, service and definition status, updates and log, in a dialog opened from the Protection page.
 
 Force update is deliberately not ported: upstream ran a shell script as root.
 
@@ -58,7 +58,8 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 
 ## Audit
 
-- [x] ClamAV health, firewall service, mandatory access control and intrusion prevention, with status and suggested commands.
+- [x] Firewall service, mandatory access control and intrusion prevention, with status and suggested commands, below the Protection timeline.
+- [x] A row stating that ClamAV doesn't cover rootkits, with a copyable check command.
 
 Only checks related to virus or exploit blocking are kept. SSH settings, open ports, firewall rule parsing, automatic updates, Portmaster, Lynis and chkrootkit are deliberately left out.
 

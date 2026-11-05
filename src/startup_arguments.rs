@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 const STARTUP_PAGE_PREFIX: &str = "--page=";
-pub const DEFAULT_STARTUP_PAGE: &str = "scan";
+pub const DEFAULT_STARTUP_PAGE: &str = "protection";
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct StartupRequest {
@@ -45,7 +45,7 @@ mod startup_arguments_tests {
     }
 
     #[test]
-    fn no_arguments_open_the_scan_page_without_targets() {
+    fn no_arguments_open_the_protection_page_without_targets() {
         assert_eq!(
             parsed_arguments(&["clamui"]),
             StartupRequest {

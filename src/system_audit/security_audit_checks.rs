@@ -4,14 +4,13 @@ use crate::{
     clamav_components::distribution_install_guides::DistributionFamily,
     system_audit::{
         audit_report_model::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
-        clamav_health_checks::audit_clamav_health,
         firewall_audit_checks::audit_firewall,
         host_command_probes::{
-            CommandProbe, UnitState, locate_host_program, probe_unit_state, read_host_text,
-            run_command_probe,
+            CommandProbe, locate_host_program, read_host_text, run_command_probe,
         },
-        suggested_audit_commands::{SuggestedRemedy, suggested_command},
+        suggested_audit_commands::{SuggestedRemedy, rootkit_check_command, suggested_command},
     },
+    systemd_bus::host_systemd_units::{UnitState, probe_unit_state},
 };
 
 const APPARMOR_DOCUMENTATION_URL: &str = "https://wiki.archlinux.org/title/AppArmor";
@@ -291,12 +290,24 @@ async fn inspect_tool_presence(detection_tool: IntrusionDetectionTool) -> ToolPr
     }
 }
 
+pub fn rootkit_coverage_check(distribution_family: DistributionFamily) -> AuditCheck {
+    AuditCheck::new(
+        gettext("Rootkits"),
+        AuditStatus::CheckSkipped,
+        gettext("ClamAV does not cover rootkits, and ClamUI does not check for them."),
+    )
+    .with_recommendation(gettext(
+        "Run a check yourself. A rootkit can hide from checks made on the running system, so a \
+         clean result is only weak evidence.",
+    ))
+    .with_suggested_commands([rootkit_check_command(distribution_family)])
+}
+
 pub async fn gather_audit_section(
     audit_category: AuditCategory,
     distribution_family: DistributionFamily,
 ) -> AuditSection {
     let section_checks = match audit_category {
-        AuditCategory::ClamavHealth => return audit_clamav_health(distribution_family).await,
         AuditCategory::FirewallProtection => return audit_firewall(distribution_family).await,
         AuditCategory::AccessControl => {
             let apparmor_state = read_host_text(APPARMOR_ENABLED_PATH)
@@ -312,6 +323,7 @@ pub async fn gather_audit_section(
             inspect_tool_presence(IntrusionDetectionTool::CrowdsecTool).await,
             distribution_family,
         ),
+        AuditCategory::RootkitCoverage => vec![rootkit_coverage_check(distribution_family)],
     };
     AuditSection {
         audit_category,

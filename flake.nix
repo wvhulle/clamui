@@ -60,6 +60,7 @@
           buildInputs = [
             pkgs.gtk4
             pkgs.libadwaita
+            pkgs.systemdLibs
           ];
           meta = {
             description = "Native GTK desktop frontend for host-installed ClamAV";

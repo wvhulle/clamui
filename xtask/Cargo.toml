@@ -10,3 +10,4 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 thiserror = "2"
+zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }

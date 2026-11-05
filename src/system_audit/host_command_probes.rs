@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use futures::future::join_all;
 use tokio::{
     io::AsyncReadExt,
     process::{Child, Command},
@@ -39,14 +38,6 @@ impl CommandProbe {
             | Self::OutputExceededLimit => None,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UnitState {
-    UnitActive,
-    UnitInactive,
-    UnitNotFound,
-    SystemdUnavailable,
 }
 
 struct ProbeLimits {
@@ -146,52 +137,6 @@ pub async fn run_command_probe(program_name: &str, program_arguments: &[&str]) -
     .await
 }
 
-pub fn parse_unit_state(unit_properties: &str) -> UnitState {
-    let mut property_values = unit_properties.lines().map(str::trim);
-    let load_state = property_values.next().unwrap_or_default();
-    let active_state = property_values.next().unwrap_or_default();
-    match load_state {
-        "loaded" if active_state == "active" => UnitState::UnitActive,
-        "loaded" | "masked" => UnitState::UnitInactive,
-        "not-found" => UnitState::UnitNotFound,
-        _other_state => UnitState::SystemdUnavailable,
-    }
-}
-
-pub async fn probe_unit_state(unit_name: &str) -> UnitState {
-    let show_probe = run_command_probe(
-        "systemctl",
-        &[
-            "show",
-            "--property=LoadState,ActiveState",
-            "--value",
-            unit_name,
-        ],
-    )
-    .await;
-    show_probe
-        .verified_text()
-        .map_or(UnitState::SystemdUnavailable, parse_unit_state)
-}
-
-pub async fn first_active_unit(unit_names: &[&'static str]) -> Option<&'static str> {
-    let unit_states = join_all(
-        unit_names
-            .iter()
-            .map(|unit_name| probe_unit_state(unit_name)),
-    )
-    .await;
-    unit_names
-        .iter()
-        .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitActive)
-        .map(|named_state| *named_state.0)
-}
-
-pub fn systemd_is_available() -> bool {
-    locate_host_program("systemctl").is_some()
-}
-
 pub async fn read_host_text(host_path: &'static str) -> Option<String> {
     spawn_blocking(move || std::fs::read_to_string(host_path).ok())
         .await
@@ -272,24 +217,6 @@ mod host_command_probes_tests {
         ]
         .iter()
         .for_each(|incomplete_probe| assert_eq!(incomplete_probe.verified_text(), None));
-    }
-
-    #[test]
-    fn unit_states_distinguish_absent_stopped_and_active_units() {
-        assert_eq!(parse_unit_state("loaded\nactive\n"), UnitState::UnitActive);
-        assert_eq!(
-            parse_unit_state("loaded\ninactive\n"),
-            UnitState::UnitInactive
-        );
-        assert_eq!(
-            parse_unit_state("loaded\nfailed\n"),
-            UnitState::UnitInactive
-        );
-        assert_eq!(
-            parse_unit_state("not-found\ninactive\n"),
-            UnitState::UnitNotFound
-        );
-        assert_eq!(parse_unit_state(""), UnitState::SystemdUnavailable);
     }
 
     #[test]

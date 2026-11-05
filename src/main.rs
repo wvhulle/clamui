@@ -8,11 +8,15 @@ mod file_quarantine;
 #[cfg(test)]
 mod host_verification_tests;
 mod malware_scan;
+mod protection_status;
 mod scan_profiles;
 mod scheduled_scans;
 mod shared_page_widget_templates;
 mod startup_arguments;
+mod step_timeline;
 mod system_audit;
+mod systemd_bus;
+mod systemd_journal;
 mod text_export_dialog;
 mod virus_database;
 mod virustotal_lookup;

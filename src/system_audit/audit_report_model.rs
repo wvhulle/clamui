@@ -54,26 +54,26 @@ impl AuditStatus {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditCategory {
-    ClamavHealth,
     FirewallProtection,
     AccessControl,
     IntrusionDetection,
+    RootkitCoverage,
 }
 
 pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 4] = [
-    AuditCategory::ClamavHealth,
     AuditCategory::FirewallProtection,
     AuditCategory::AccessControl,
     AuditCategory::IntrusionDetection,
+    AuditCategory::RootkitCoverage,
 ];
 
 impl AuditCategory {
     pub fn section_title(self) -> String {
         match self {
-            Self::ClamavHealth => gettext("ClamAV Health"),
             Self::FirewallProtection => gettext("Firewall"),
             Self::AccessControl => gettext("Access Control"),
             Self::IntrusionDetection => gettext("Intrusion Detection"),
+            Self::RootkitCoverage => gettext("Rootkits"),
         }
     }
 
@@ -176,48 +176,6 @@ pub fn overall_check_status(audit_checks: &[AuditCheck]) -> AuditStatus {
         .unwrap_or(AuditStatus::StatusUnknown)
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct AuditStatusCounts {
-    pub failed_count: u32,
-    pub review_count: u32,
-    pub passed_count: u32,
-    pub unverified_count: u32,
-}
-
-impl AuditStatusCounts {
-    pub fn including_section(self, audit_section: &AuditSection) -> Self {
-        audit_section
-            .section_checks
-            .iter()
-            .fold(self, |status_counts, audit_check| {
-                status_counts.including_status(audit_check.check_status)
-            })
-    }
-
-    fn including_status(self, check_status: AuditStatus) -> Self {
-        match check_status {
-            AuditStatus::CheckFailed => Self {
-                failed_count: self.failed_count + 1,
-                ..self
-            },
-            AuditStatus::NeedsReview => Self {
-                review_count: self.review_count + 1,
-                ..self
-            },
-            AuditStatus::CheckPassed => Self {
-                passed_count: self.passed_count + 1,
-                ..self
-            },
-            AuditStatus::StatusUnknown
-            | AuditStatus::CheckSkipped
-            | AuditStatus::CheckInProgress => Self {
-                unverified_count: self.unverified_count + 1,
-                ..self
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod audit_report_model_tests {
     use super::*;
@@ -276,30 +234,6 @@ mod audit_report_model_tests {
         assert_eq!(
             AuditSection::awaiting_checks(AuditCategory::AccessControl).overall_status(),
             AuditStatus::CheckInProgress
-        );
-    }
-
-    #[test]
-    fn counts_group_unknown_and_skipped_checks_together() {
-        let audit_section = AuditSection {
-            audit_category: AuditCategory::FirewallProtection,
-            section_checks: vec![
-                check_with_status(AuditStatus::CheckFailed),
-                check_with_status(AuditStatus::NeedsReview),
-                check_with_status(AuditStatus::NeedsReview),
-                check_with_status(AuditStatus::CheckPassed),
-                check_with_status(AuditStatus::StatusUnknown),
-                check_with_status(AuditStatus::CheckSkipped),
-            ],
-        };
-        assert_eq!(
-            AuditStatusCounts::default().including_section(&audit_section),
-            AuditStatusCounts {
-                failed_count: 1,
-                review_count: 2,
-                passed_count: 1,
-                unverified_count: 2,
-            }
         );
     }
 

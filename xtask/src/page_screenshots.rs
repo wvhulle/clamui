@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    fixture_systemd_service::serve_fixture_systemd,
     headless_sway_session::HeadlessSwaySession,
     screenshot_fixtures::{ScreenshotFixtures, prepare_screenshot_fixtures},
     task_failure::TaskFailure,
@@ -78,7 +79,7 @@ const PAGE_CAPTURES: [PageCapture; 8] = [
         pointer_clicks: &LOG_ENTRY_CLICKS,
         ..PageCapture::idle_page("logs", "--page=logs")
     },
-    PageCapture::idle_page("audit", "--page=audit"),
+    PageCapture::idle_page("protection", "--page=protection"),
     PageCapture {
         pointer_clicks: &PREFERENCE_TAB_CLICKS,
         ..PageCapture::idle_page("preferences", "--page=preferences")
@@ -214,6 +215,7 @@ pub fn render_page_screenshots(output_directory: &Path) -> Result<(), TaskFailur
     fs::create_dir_all(output_directory)?;
     let absolute_output = fs::canonicalize(output_directory)?;
     let sway_session = HeadlessSwaySession::start_session()?;
+    let _fixture_systemd = serve_fixture_systemd(&sway_session.bus_address())?;
     let screenshot_fixtures = prepare_screenshot_fixtures(sway_session.session_root())?;
     let mut pointer_input =
         VirtualPointerInput::connect(&sway_session.wayland_socket_path(), SCREEN_SIZE)?;

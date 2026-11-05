@@ -9,12 +9,13 @@ use futures::{
     future::{Either, ready},
     stream,
 };
-use tokio::process::Command;
+use tokio::{process::Command, task::spawn_blocking};
 
 use crate::{
     malware_scan::scanner_process_events::{
         RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
     },
+    systemd_journal::unit_journal_reader::unit_messages_since,
     virus_database::database_directory_status::FreshclamServiceState,
 };
 
@@ -94,23 +95,10 @@ fn update_event_from_process(process_event: ScannerProcessEvent) -> DatabaseUpda
 }
 
 async fn service_journal_lines(service_unit: &'static str, started_after: u64) -> Vec<String> {
-    let mut journal_command = Command::new("journalctl");
-    journal_command
-        .arg(format!("--unit={service_unit}.service"))
-        .arg(format!("--since=@{started_after}"))
-        .args(["--no-pager", "--quiet", "--output=cat"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    journal_command
-        .output()
+    spawn_blocking(move || unit_messages_since(&format!("{service_unit}.service"), started_after))
         .await
-        .map(|journal_output| {
-            String::from_utf8_lossy(&journal_output.stdout)
-                .lines()
-                .map(str::to_owned)
-                .collect()
-        })
+        .ok()
+        .and_then(Result::ok)
         .unwrap_or_default()
 }
 

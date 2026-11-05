@@ -103,6 +103,10 @@ fn apply_session_environment(session_directory: &Path, session_command: &mut Com
             "DBUS_SESSION_BUS_ADDRESS",
             session_bus_address(session_directory),
         )
+        .env(
+            "DBUS_SYSTEM_BUS_ADDRESS",
+            session_bus_address(session_directory),
+        )
         .env("HOME", session_subdirectory(session_directory, "home"))
         .env(
             "XDG_RUNTIME_DIR",
@@ -210,6 +214,10 @@ impl HeadlessSwaySession {
 
     pub fn session_root(&self) -> &Path {
         self.session_directory.path()
+    }
+
+    pub fn bus_address(&self) -> String {
+        session_bus_address(self.session_root())
     }
 
     pub fn wayland_socket_path(&self) -> PathBuf {

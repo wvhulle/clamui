@@ -3,6 +3,7 @@
 The `clamui` crate at the repository root, plus `xtask/` for repository tasks. It uses Relm4 and libadwaita. Source is organised by feature: `src/malware_scan/` and `src/file_quarantine/` hold logic next to pages. `data/` holds the desktop entry and icons, `po/` the translations.
 
 - **Host ClamAV:** never bundle the engine. Scanning runs `clamdscan --fdpass` or `clamscan` from `PATH`.
+- **Host services:** use `src/systemd_bus/` (D-Bus) for units and `src/systemd_journal/` (libsystemd) for the journal. Don't run `systemctl` or `journalctl`, and don't refresh on timers: react to bus signals and journal wakeups.
 - **Scanner output:** model it as `impl Stream`. Split on bytes and decode lossily, because filenames can be arbitrary bytes. Sanitize scanner text before display, and keep `set_use_markup: false` on rows showing filenames.
 - **Quarantine safety:** keep file operations no-follow and integrity-checked, and keep the order: copy, pending row, remove source, commit. Never abort a move in progress.
 - **Translations:** use `gettext` with literal strings and substitute untrusted values last. Run `make update-translation-template` after changing strings.

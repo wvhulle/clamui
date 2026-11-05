@@ -2,24 +2,28 @@ use std::{
     fs,
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    process::Stdio,
-    time::Duration,
 };
 
-use tokio::{process::Command, task::spawn_blocking};
+use tokio::task::spawn_blocking;
 
-use crate::malware_scan::scanner_output_parser::sanitize_scanner_text;
+use crate::{
+    malware_scan::scanner_output_parser::sanitize_scanner_text,
+    systemd_journal::unit_journal_reader::newest_unit_messages,
+};
 
 const SHOWN_LINE_COUNT: usize = 100;
 const LOG_TAIL_BYTES: u64 = 256 * 1024;
-const JOURNAL_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_LOG_PATHS: [&str; 2] = ["/var/log/clamav/clamd.log", "/var/log/clamd.log"];
 const CLAMD_CONFIG_PATHS: [&str; 3] = [
     "/etc/clamav/clamd.conf",
     "/etc/clamd.conf",
     "/etc/clamd.d/scan.conf",
 ];
-const DAEMON_SERVICE_UNITS: [&str; 3] = ["clamav-daemon", "clamd", "clamd@scan"];
+const DAEMON_SERVICE_UNITS: [&str; 3] = [
+    "clamav-daemon.service",
+    "clamd.service",
+    "clamd@scan.service",
+];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DaemonLogContents {
@@ -75,25 +79,16 @@ fn read_configured_log_file() -> Option<DaemonLogContents> {
 }
 
 async fn read_system_journal() -> Option<DaemonLogContents> {
-    let mut journal_command = Command::new("journalctl");
-    DAEMON_SERVICE_UNITS.iter().for_each(|service_unit| {
-        journal_command.arg("--unit").arg(service_unit);
-    });
-    journal_command
-        .arg("--lines")
-        .arg(SHOWN_LINE_COUNT.to_string())
-        .args(["--no-pager", "--quiet"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let journal_output = tokio::time::timeout(JOURNAL_TIMEOUT, journal_command.output())
-        .await
-        .ok()?
-        .ok()?;
-    (journal_output.status.success() && !journal_output.stdout.is_empty()).then(|| {
-        DaemonLogContents::FromSystemJournal {
-            log_text: sanitize_scanner_text(&String::from_utf8_lossy(&journal_output.stdout)),
-        }
+    let unit_messages =
+        spawn_blocking(|| newest_unit_messages(&DAEMON_SERVICE_UNITS, SHOWN_LINE_COUNT))
+            .await
+            .ok()?
+            .ok()?;
+    (!unit_messages.is_empty()).then(|| DaemonLogContents::FromSystemJournal {
+        log_text: sanitize_scanner_text(&unit_messages.join(
+            "
+",
+        )),
     })
 }
 

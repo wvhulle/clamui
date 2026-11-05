@@ -39,15 +39,19 @@ use crate::{
     malware_scan::scan_progress_page::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
+    protection_status::protection_timeline_page::{
+        ProtectionTimelinePage, ProtectionTimelinePageOutput,
+    },
     scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
-    system_audit::system_audit_page::SystemAuditPage,
     virus_database::database_update_page::{
         DatabaseUpdatePage, DatabaseUpdatePageInput, DatabaseUpdatePageOutput,
     },
 };
 
 const PREFERENCES_STARTUP_PAGE: &str = "preferences";
+const DATABASE_STARTUP_PAGE: &str = "database";
+const SCAN_PAGE_NAME: &str = "scan";
 
 struct ApplicationPages {
     _device_monitor: gio::VolumeMonitor,
@@ -57,7 +61,8 @@ struct ApplicationPages {
     _database_page: Controller<DatabaseUpdatePage>,
     _component_page: Controller<ComponentStatusPage>,
     _logs_page: Controller<ActivityLogsPage>,
-    _audit_page: Controller<SystemAuditPage>,
+    _protection_page: Controller<ProtectionTimelinePage>,
+    _database_dialog: adw::Dialog,
 }
 
 enum ShellContent {
@@ -147,6 +152,20 @@ fn navigation_sidebar(
     select_visible_page(page_stack);
     page_stack.connect_visible_child_name_notify(select_visible_page);
     sidebar_list
+}
+
+fn signature_update_dialog(database_page: &Controller<DatabaseUpdatePage>) -> adw::Dialog {
+    adw::Dialog::builder()
+        .title(gettext("Update signatures"))
+        .content_width(560)
+        .content_height(640)
+        .child(&{
+            let dialog_view = adw::ToolbarView::new();
+            dialog_view.add_top_bar(&adw::HeaderBar::new());
+            dialog_view.set_content(Some(database_page.widget()));
+            dialog_view
+        })
+        .build()
 }
 
 fn primary_menu_button() -> gtk::MenuButton {
@@ -311,22 +330,33 @@ fn application_pages(
                 DatabaseUpdatePageOutput::ActivityRecorded => reload_activity_views(),
             },
         );
+    let database_dialog = signature_update_dialog(&database_page);
     let component_page = ComponentStatusPage::builder().launch(()).detach();
-    let audit_page = SystemAuditPage::builder().launch(()).detach();
+    let requested_dialog = database_dialog.clone();
+    let requesting_window = window_root.clone();
+    let protection_page = ProtectionTimelinePage::builder()
+        .launch(())
+        .connect_receiver(
+            move |_protection_sender, protection_output| match protection_output {
+                ProtectionTimelinePageOutput::UpdateSignaturesRequested => {
+                    requested_dialog.present(Some(&requesting_window));
+                }
+            },
+        );
 
     let navigation_pages = [
         NavigationPage {
-            page_name: "scan",
-            page_title: gettext("Scan"),
-            page_icon: "system-search-symbolic",
-            page_widget: scan_page.widget().upcast_ref(),
+            page_name: "protection",
+            page_title: gettext("Protection"),
+            page_icon: "security-high-symbolic",
+            page_widget: protection_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>1",
         },
         NavigationPage {
-            page_name: "database",
-            page_title: gettext("Database"),
-            page_icon: "drive-harddisk-symbolic",
-            page_widget: database_page.widget().upcast_ref(),
+            page_name: SCAN_PAGE_NAME,
+            page_title: gettext("Scan"),
+            page_icon: "system-search-symbolic",
+            page_widget: scan_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>2",
         },
         NavigationPage {
@@ -346,26 +376,20 @@ fn application_pages(
         NavigationPage {
             page_name: "quarantine",
             page_title: gettext("Quarantine"),
-            page_icon: "security-high-symbolic",
+            page_icon: "folder-symbolic",
             page_widget: quarantine_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>5",
         },
-        NavigationPage {
-            page_name: "audit",
-            page_title: gettext("Audit"),
-            page_icon: "channel-secure-symbolic",
-            page_widget: audit_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>6",
-        },
     ];
     let page_stack = navigation_stack(&navigation_pages);
-    if startup_request.startup_page == PREFERENCES_STARTUP_PAGE {
-        present_preferences_dialog();
-    } else {
-        page_stack.set_visible_child_name(&startup_request.startup_page);
+    match startup_request.startup_page.as_str() {
+        PREFERENCES_STARTUP_PAGE => present_preferences_dialog(),
+        DATABASE_STARTUP_PAGE => database_dialog.present(Some(window_root)),
+        startup_page => page_stack.set_visible_child_name(startup_page),
     }
     let sidebar_list = navigation_sidebar(&navigation_pages, &page_stack);
     if !startup_request.scan_targets.is_empty() {
+        page_stack.set_visible_child_name(SCAN_PAGE_NAME);
         scan_page.emit(ScanProgressPageInput::ScanTargetsChosen(
             startup_request.scan_targets,
         ));
@@ -383,9 +407,10 @@ fn application_pages(
     main_application.add_action(&quick_scan_action);
     let update_action = gio::SimpleAction::new("update-definitions", None);
     let update_sender = database_page.sender().clone();
-    let update_stack = page_stack.clone();
+    let update_dialog = database_dialog.clone();
+    let update_window = window_root.clone();
     update_action.connect_activate(move |_activated_action, _parameter| {
-        update_stack.set_visible_child_name("database");
+        update_dialog.present(Some(&update_window));
         update_sender.emit(DatabaseUpdatePageInput::StartUpdate);
     });
     main_application.add_action(&update_action);
@@ -424,7 +449,8 @@ fn application_pages(
             _database_page: database_page,
             _component_page: component_page,
             _logs_page: logs_page,
-            _audit_page: audit_page,
+            _protection_page: protection_page,
+            _database_dialog: database_dialog,
         }),
     }
 }
