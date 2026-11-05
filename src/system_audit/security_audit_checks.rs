@@ -386,12 +386,15 @@ mod security_audit_checks_tests {
     #[ignore = "reads the real host"]
     async fn host_audit_reports_every_section() {
         let audited_sections = futures::future::join_all(
-            crate::system_audit::audit_report_model::ALL_AUDIT_CATEGORIES.map(|audit_category| {
-                gather_audit_section(
-                    audit_category,
-                    crate::clamav_components::distribution_install_guides::detect_distribution_family(),
-                )
-            }),
+            crate::system_audit::audit_report_model::SIGNATURE_AUDIT_CATEGORIES
+                .into_iter()
+                .chain(crate::system_audit::audit_report_model::HARDENING_AUDIT_CATEGORIES)
+                .map(|audit_category| {
+                    gather_audit_section(
+                        audit_category,
+                        crate::clamav_components::distribution_install_guides::detect_distribution_family(),
+                    )
+                }),
         )
         .await;
         audited_sections.iter().for_each(|audited_section| {

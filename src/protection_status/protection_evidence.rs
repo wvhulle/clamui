@@ -279,13 +279,15 @@ async fn inspect_updater_unit(updater_unit: SignatureUpdaterUnit) -> Option<Upda
     })
 }
 
+fn count_lines_with_content(file_bytes: &[u8]) -> u64 {
+    file_bytes
+        .split(|file_byte| *file_byte == b'\n')
+        .filter(|file_line| !file_line.is_empty())
+        .count() as u64
+}
+
 fn count_signature_lines(signature_file: &Path) -> u64 {
-    fs::read(signature_file).map_or(0, |file_bytes| {
-        file_bytes
-            .iter()
-            .filter(|file_byte| **file_byte == b'\n')
-            .count() as u64
-    })
+    fs::read(signature_file).map_or(0, |file_bytes| count_lines_with_content(&file_bytes))
 }
 
 fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySignatureFile> {
@@ -461,6 +463,13 @@ mod protection_evidence_tests {
         ProgramProbe::VersionReported {
             version_text: version_text.to_owned(),
         }
+    }
+
+    #[test]
+    fn signature_counts_include_a_last_line_without_a_newline() {
+        assert_eq!(count_lines_with_content(b"first\nsecond"), 2);
+        assert_eq!(count_lines_with_content(b"first\nsecond\n"), 2);
+        assert_eq!(count_lines_with_content(b""), 0);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use gettextrs::gettext;
+use gettextrs::{gettext, ngettext};
 
 use crate::{
     activity_history::activity_entry_row::formatted_local_time,
@@ -194,14 +194,18 @@ fn signature_step(
         .map(|signature_file| {
             evidence_row(
                 provider_of_signature_file(&signature_file.file_name).to_owned(),
-                gettext("{count} signatures, {size}, updated {hours} hours ago ({file})")
-                    .replace("{count}", &signature_file.signature_count.to_string())
-                    .replace(
-                        "{size}",
-                        &ByteSize::b(signature_file.file_size_bytes).to_string(),
-                    )
-                    .replace("{hours}", &signature_file.age_hours.to_string())
-                    .replace("{file}", &signature_file.file_name),
+                ngettext(
+                    "{count} signature, {size}, updated {hours} hours ago ({file})",
+                    "{count} signatures, {size}, updated {hours} hours ago ({file})",
+                    u32::try_from(signature_file.signature_count).unwrap_or(u32::MAX),
+                )
+                .replace("{count}", &signature_file.signature_count.to_string())
+                .replace(
+                    "{size}",
+                    &ByteSize::b(signature_file.file_size_bytes).to_string(),
+                )
+                .replace("{hours}", &signature_file.age_hours.to_string())
+                .replace("{file}", &signature_file.file_name),
             )
         });
     TimelineStep {
@@ -581,31 +585,35 @@ pub fn protection_timeline(
     distribution_family: DistributionFamily,
 ) -> ProtectionTimeline {
     let daemon_answering = daemon_is_answering(&protection_evidence.daemon_evidence);
+    let engine_problem = Some(engine_step(
+        &protection_evidence.engine_installation,
+        distribution_family,
+    ))
+    .filter(|installation_step| installation_step.node_state != StepNodeState::Completed);
     ProtectionTimeline {
         coverage_summary: coverage_summary(protection_evidence),
-        timeline_steps: vec![
-            engine_step(
-                &protection_evidence.engine_installation,
-                distribution_family,
-            ),
-            signature_step(&protection_evidence.signature_evidence, distribution_family),
-            daemon_step(&protection_evidence.daemon_evidence, distribution_family),
-            on_access_step(
-                &protection_evidence.on_access_evidence,
-                daemon_answering,
-                distribution_family,
-            ),
-            scheduled_scan_step(
-                &protection_evidence.scheduled_scan_evidence,
-                daemon_answering,
-                distribution_family,
-            ),
-            alerts_step(
-                alert_readiness,
-                protection_evidence.background_service_state,
-                distribution_family,
-            ),
-        ],
+        timeline_steps: engine_problem
+            .into_iter()
+            .chain([
+                signature_step(&protection_evidence.signature_evidence, distribution_family),
+                daemon_step(&protection_evidence.daemon_evidence, distribution_family),
+                on_access_step(
+                    &protection_evidence.on_access_evidence,
+                    daemon_answering,
+                    distribution_family,
+                ),
+                scheduled_scan_step(
+                    &protection_evidence.scheduled_scan_evidence,
+                    daemon_answering,
+                    distribution_family,
+                ),
+                alerts_step(
+                    alert_readiness,
+                    protection_evidence.background_service_state,
+                    distribution_family,
+                ),
+            ])
+            .collect(),
     }
 }
 
@@ -613,9 +621,9 @@ pub fn protection_timeline(
 mod protection_timeline_presentation_tests {
     use super::*;
 
-    const ON_ACCESS_POSITION: usize = 3;
-    const SCHEDULED_POSITION: usize = 4;
-    const SIGNATURE_POSITION: usize = 1;
+    const ON_ACCESS_POSITION: usize = 2;
+    const SCHEDULED_POSITION: usize = 3;
+    const SIGNATURE_POSITION: usize = 0;
 
     fn healthy_evidence() -> ProtectionEvidence {
         ProtectionEvidence {
@@ -718,6 +726,17 @@ mod protection_timeline_presentation_tests {
     }
 
     #[test]
+    fn the_installation_step_only_appears_when_clamav_is_missing() {
+        let installed_steps = protection_timeline(
+            &healthy_evidence(),
+            &ready_alerts(),
+            DistributionFamily::NixosFamily,
+        )
+        .timeline_steps;
+        assert_eq!(installed_steps[0].step_title, "Signatures current");
+    }
+
+    #[test]
     fn a_stopped_daemon_fails_once_and_leaves_its_dependents_pending() {
         let protection_evidence = ProtectionEvidence {
             daemon_evidence: DaemonEvidence::UnitStopped {
@@ -728,7 +747,6 @@ mod protection_timeline_presentation_tests {
         assert_eq!(
             step_states(&protection_evidence),
             vec![
-                StepNodeState::Completed,
                 StepNodeState::Completed,
                 StepNodeState::HasFailed,
                 StepNodeState::AwaitingEarlier,

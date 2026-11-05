@@ -49,6 +49,10 @@ use crate::{
     },
     scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
+    system_audit::{
+        audit_report_model::{HARDENING_AUDIT_CATEGORIES, SIGNATURE_AUDIT_CATEGORIES},
+        audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
+    },
     virus_database::database_update_page::{
         DatabaseUpdatePage, DatabaseUpdatePageInput, DatabaseUpdatePageOutput,
     },
@@ -66,6 +70,8 @@ struct ApplicationPages {
     _quarantine_page: Controller<QuarantineEntriesPage>,
     _database_page: Controller<DatabaseUpdatePage>,
     _logs_page: Controller<ActivityLogsPage>,
+    _signatures_page: Controller<AuditSectionsPage>,
+    _hardening_page: Controller<AuditSectionsPage>,
     _protection_page: Controller<ProtectionTimelinePage>,
     _detections_page: Controller<BackgroundDetectionsPage>,
     _database_dialog: adw::Dialog,
@@ -101,9 +107,7 @@ struct NavigationPage<'page> {
 }
 
 fn navigation_stack(navigation_pages: &[NavigationPage<'_>]) -> gtk::Stack {
-    let page_stack = gtk::Stack::builder()
-        .transition_type(gtk::StackTransitionType::Crossfade)
-        .build();
+    let page_stack = gtk::Stack::new();
     navigation_pages.iter().for_each(|navigation_page| {
         page_stack.add_titled(
             navigation_page.page_widget,
@@ -381,6 +385,27 @@ fn application_pages(
             },
         );
 
+    let signatures_page = AuditSectionsPage::builder()
+        .launch(AuditSectionsPageInit {
+            page_title: gettext("Signatures"),
+            page_description: gettext(
+                "Where ClamAV's malware signatures come from, and which other sources you could \
+                 add.",
+            ),
+            audited_categories: &SIGNATURE_AUDIT_CATEGORIES,
+        })
+        .detach();
+    let hardening_page = AuditSectionsPage::builder()
+        .launch(AuditSectionsPageInit {
+            page_title: gettext("Hardening"),
+            page_description: gettext(
+                "Protections outside ClamAV that make exploits harder. They are listed for \
+                 reference and don't affect the Protection summary.",
+            ),
+            audited_categories: &HARDENING_AUDIT_CATEGORIES,
+        })
+        .detach();
+
     let navigation_pages = [
         NavigationPage {
             page_name: "protection",
@@ -416,6 +441,20 @@ fn application_pages(
             page_icon: "folder-symbolic",
             page_widget: quarantine_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>5",
+        },
+        NavigationPage {
+            page_name: "signatures",
+            page_title: gettext("Signatures"),
+            page_icon: "drive-harddisk-symbolic",
+            page_widget: signatures_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>6",
+        },
+        NavigationPage {
+            page_name: "hardening",
+            page_title: gettext("Hardening"),
+            page_icon: "channel-secure-symbolic",
+            page_widget: hardening_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>7",
         },
     ];
     let page_stack = navigation_stack(&navigation_pages);
@@ -469,7 +508,9 @@ fn application_pages(
     let open_detections_action = gio::SimpleAction::new(OPEN_DETECTIONS_ACTION, None);
     let open_detections_stack = page_stack.clone();
     let open_detections_window = window_root.clone();
+    let open_detections_sender = detections_page.sender().clone();
     open_detections_action.connect_activate(move |_activated_action, _parameter| {
+        open_detections_sender.emit(BackgroundDetectionsPageInput::BackToListRequested);
         open_detections_stack.set_visible_child_name(DETECTIONS_PAGE_NAME);
         open_detections_window.present();
     });
@@ -510,6 +551,8 @@ fn application_pages(
             _quarantine_page: quarantine_page,
             _database_page: database_page,
             _logs_page: logs_page,
+            _signatures_page: signatures_page,
+            _hardening_page: hardening_page,
             _protection_page: protection_page,
             _detections_page: detections_page,
             _database_dialog: database_dialog,

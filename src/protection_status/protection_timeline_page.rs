@@ -1,8 +1,7 @@
 use futures::StreamExt;
 use gettextrs::{gettext, ngettext};
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, gtk::gio,
-    prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 
 use crate::{
@@ -23,13 +22,13 @@ use crate::{
         timeline_step_model::{TimelineStepAction, TimelineStepRequest},
         timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
     },
-    system_audit::{
-        audit_report_model::{ALL_AUDIT_CATEGORIES, AuditSection},
-        audit_section_group::{AuditGuidanceRequest, AuditSectionGroup, AuditSectionGroupInput},
-        security_audit_checks::gather_audit_section,
+    systemd_bus::host_systemd_units::{
+        ServiceLastResult, UnitStartOutcome, service_unit_snapshot, start_system_unit,
+        watched_unit_changes,
     },
-    systemd_bus::host_systemd_units::{UnitStartOutcome, start_system_unit, watched_unit_changes},
 };
+
+const SCANNER_FOUND_THREATS_STATUS: i32 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EvidenceRefresh {
@@ -40,7 +39,6 @@ enum EvidenceRefresh {
 
 pub struct ProtectionTimelinePage {
     timeline_rows: FactoryVecDeque<TimelineStepRow>,
-    section_groups: FactoryVecDeque<AuditSectionGroup>,
     distribution_family: DistributionFamily,
     evidence_refresh: EvidenceRefresh,
     coverage_summary: String,
@@ -60,8 +58,6 @@ pub enum ProtectionTimelinePageInput {
     UnresolvedDetectionsChanged(usize),
     JournalAccessChanged(JournalAccess),
     StepRequested(TimelineStepRequest),
-    GuidanceRequested(AuditGuidanceRequest),
-    DocumentationOpenFailed(String),
 }
 
 #[derive(Debug)]
@@ -72,9 +68,11 @@ pub enum ProtectionTimelinePageOutput {
 #[derive(Debug)]
 pub enum ProtectionTimelinePageCommand {
     EvidenceGathered(Box<ProtectionEvidence>),
-    SectionFinished(AuditSection),
     WatchedUnitChanged,
-    UnitRunFinished(UnitStartOutcome),
+    UnitRunFinished {
+        start_outcome: UnitStartOutcome,
+        last_result: ServiceLastResult,
+    },
 }
 
 pub fn headline_text(unresolved_detections: usize, coverage_summary: &str) -> String {
@@ -97,7 +95,18 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .build()
 }
 
-fn unit_run_toast_text(start_outcome: &UnitStartOutcome) -> String {
+pub fn unit_run_toast_text(
+    start_outcome: &UnitStartOutcome,
+    last_result: &ServiceLastResult,
+) -> String {
+    if matches!(start_outcome, UnitStartOutcome::JobEnded { .. })
+        && *last_result
+            == (ServiceLastResult::ExitedWithStatus {
+                exit_status: SCANNER_FOUND_THREATS_STATUS,
+            })
+    {
+        return gettext("The scan found malware. See Detections.");
+    }
     match start_outcome {
         UnitStartOutcome::UnitFinished => gettext("The scan finished"),
         UnitStartOutcome::JobEnded { job_result } => {
@@ -126,23 +135,6 @@ impl ProtectionTimelinePage {
             ProtectionTimelinePageCommand::EvidenceGathered(Box::new(
                 gather_protection_evidence(clamui_schedule_enabled).await,
             ))
-        });
-    }
-
-    fn start_section_audit(&self, sender: &ComponentSender<Self>) {
-        let distribution_family = self.distribution_family;
-        ALL_AUDIT_CATEGORIES.into_iter().for_each(|audit_category| {
-            self.section_groups.send(
-                audit_category.section_position(),
-                AuditSectionGroupInput::SectionChanged(AuditSection::awaiting_checks(
-                    audit_category,
-                )),
-            );
-            sender.oneshot_command(async move {
-                ProtectionTimelinePageCommand::SectionFinished(
-                    gather_audit_section(audit_category, distribution_family).await,
-                )
-            });
         });
     }
 
@@ -195,9 +187,11 @@ impl ProtectionTimelinePage {
             TimelineStepAction::RunScheduledScan { service_unit } => {
                 root.add_toast(plain_text_toast(&gettext("Starting the scan…")));
                 sender.oneshot_command(async move {
-                    ProtectionTimelinePageCommand::UnitRunFinished(
-                        start_system_unit(service_unit).await,
-                    )
+                    let start_outcome = start_system_unit(service_unit).await;
+                    ProtectionTimelinePageCommand::UnitRunFinished {
+                        start_outcome,
+                        last_result: service_unit_snapshot(service_unit).await.last_result,
+                    }
                 });
             }
             TimelineStepAction::OpenSchedulePreferences => present_preferences_dialog(),
@@ -209,26 +203,6 @@ impl ProtectionTimelinePage {
             | TimelineStepAction::LookUpIncidentSignature
             | TimelineStepAction::CheckIncidentOnVirusTotal => {}
         }
-    }
-
-    fn open_documentation(
-        documentation_url: &str,
-        sender: &ComponentSender<Self>,
-        root: &adw::ToastOverlay,
-    ) {
-        let failure_sender = sender.clone();
-        let parent_window = root.root().and_downcast::<gtk::Window>();
-        gtk::UriLauncher::new(documentation_url).launch(
-            parent_window.as_ref(),
-            gio::Cancellable::NONE,
-            move |launch_outcome| {
-                if let Err(launch_failure) = launch_outcome {
-                    failure_sender.input(ProtectionTimelinePageInput::DocumentationOpenFailed(
-                        launch_failure.message().to_owned(),
-                    ));
-                }
-            },
-        );
     }
 }
 
@@ -242,14 +216,10 @@ impl Component for ProtectionTimelinePage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
-            #[local_ref]
-            set_child = protection_preferences_page -> adw::PreferencesPage {
-                set_title: &gettext("Protection"),
-
+            set_child = &adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
-                    set_title: &gettext("Protection"),
                     #[watch]
-                    set_description: Some(&gtk::glib::markup_escape_text(&headline_text(model.unresolved_detections, &model.coverage_summary))),
+                    set_title: &gtk::glib::markup_escape_text(&headline_text(model.unresolved_detections, &model.coverage_summary)),
                     #[wrap(Some)]
                     set_header_suffix = &gtk::Button {
                         set_icon_name: "view-refresh-symbolic",
@@ -276,15 +246,8 @@ impl Component for ProtectionTimelinePage {
                 sender.input_sender(),
                 ProtectionTimelinePageInput::StepRequested,
             );
-        let section_groups = FactoryVecDeque::builder()
-            .launch(adw::PreferencesPage::default())
-            .forward(
-                sender.input_sender(),
-                ProtectionTimelinePageInput::GuidanceRequested,
-            );
         let mut model = Self {
             timeline_rows,
-            section_groups,
             distribution_family: detect_distribution_family(),
             evidence_refresh: EvidenceRefresh::NothingRunning,
             coverage_summary: gettext("Checking…"),
@@ -292,13 +255,9 @@ impl Component for ProtectionTimelinePage {
             journal_access: JournalAccess::FollowingJournal,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
         };
-        let protection_preferences_page = &model.section_groups.widget().clone();
         let timeline_group = model.timeline_rows.widget().clone();
         let timeline_group = &timeline_group;
         let widgets = view_output!();
-        ALL_AUDIT_CATEGORIES.into_iter().for_each(|audit_category| {
-            model.section_groups.guard().push_back(audit_category);
-        });
         sender.command(|command_sender, shutdown_receiver| {
             shutdown_receiver
                 .register(async move {
@@ -310,7 +269,6 @@ impl Component for ProtectionTimelinePage {
                 .drop_on_shutdown()
         });
         model.start_evidence_refresh(&sender);
-        model.start_section_audit(&sender);
         ComponentParts { model, widgets }
     }
 
@@ -330,28 +288,15 @@ impl Component for ProtectionTimelinePage {
             }
             ProtectionTimelinePageInput::RefreshRequested => {
                 self.start_evidence_refresh(&sender);
-                self.start_section_audit(&sender);
             }
             ProtectionTimelinePageInput::StepRequested(TimelineStepRequest::ActionChosen(
                 chosen_action,
             )) => Self::run_step_action(chosen_action, &sender, root),
             ProtectionTimelinePageInput::StepRequested(TimelineStepRequest::CopyRequested(
                 copied_command,
-            ))
-            | ProtectionTimelinePageInput::GuidanceRequested(
-                AuditGuidanceRequest::CopyCommandRequested(copied_command),
-            ) => {
+            )) => {
                 root.clipboard().set_text(&copied_command);
                 root.add_toast(adw::Toast::new(&gettext("Command copied to clipboard")));
-            }
-            ProtectionTimelinePageInput::GuidanceRequested(
-                AuditGuidanceRequest::OpenDocumentationRequested(documentation_url),
-            ) => Self::open_documentation(documentation_url, &sender, root),
-            ProtectionTimelinePageInput::DocumentationOpenFailed(failure_text) => {
-                root.add_toast(plain_text_toast(
-                    &gettext("Could not open documentation: {error}")
-                        .replace("{error}", &sanitize_scanner_line(&failure_text)),
-                ));
             }
         }
     }
@@ -372,17 +317,17 @@ impl Component for ProtectionTimelinePage {
                     self.start_evidence_refresh(&sender);
                 }
             }
-            ProtectionTimelinePageCommand::SectionFinished(audit_section) => {
-                self.section_groups.send(
-                    audit_section.audit_category.section_position(),
-                    AuditSectionGroupInput::SectionChanged(audit_section),
-                );
-            }
             ProtectionTimelinePageCommand::WatchedUnitChanged => {
                 self.start_evidence_refresh(&sender);
             }
-            ProtectionTimelinePageCommand::UnitRunFinished(start_outcome) => {
-                root.add_toast(plain_text_toast(&unit_run_toast_text(&start_outcome)));
+            ProtectionTimelinePageCommand::UnitRunFinished {
+                start_outcome,
+                last_result,
+            } => {
+                root.add_toast(plain_text_toast(&unit_run_toast_text(
+                    &start_outcome,
+                    &last_result,
+                )));
                 self.start_evidence_refresh(&sender);
             }
         }
@@ -392,6 +337,27 @@ impl Component for ProtectionTimelinePage {
 #[cfg(test)]
 mod protection_timeline_page_tests {
     use super::*;
+
+    #[test]
+    fn finding_malware_is_not_reported_as_a_failed_scan() {
+        let failed_job = UnitStartOutcome::JobEnded {
+            job_result: "failed".to_owned(),
+        };
+        assert_eq!(
+            unit_run_toast_text(
+                &failed_job,
+                &ServiceLastResult::ExitedWithStatus { exit_status: 1 }
+            ),
+            "The scan found malware. See Detections."
+        );
+        assert!(
+            unit_run_toast_text(
+                &failed_job,
+                &ServiceLastResult::ExitedWithStatus { exit_status: 2 }
+            )
+            .contains("did not finish cleanly")
+        );
+    }
 
     #[test]
     fn unresolved_detections_come_before_coverage() {

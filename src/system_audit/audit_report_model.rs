@@ -61,8 +61,9 @@ pub enum AuditCategory {
     RootkitCoverage,
 }
 
-pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 5] = [
-    AuditCategory::SignatureSources,
+pub const SIGNATURE_AUDIT_CATEGORIES: [AuditCategory; 1] = [AuditCategory::SignatureSources];
+
+pub const HARDENING_AUDIT_CATEGORIES: [AuditCategory; 4] = [
     AuditCategory::FirewallProtection,
     AuditCategory::AccessControl,
     AuditCategory::IntrusionDetection,
@@ -78,13 +79,6 @@ impl AuditCategory {
             Self::IntrusionDetection => gettext("Intrusion Detection"),
             Self::RootkitCoverage => gettext("Rootkits"),
         }
-    }
-
-    pub fn section_position(self) -> usize {
-        ALL_AUDIT_CATEGORIES
-            .iter()
-            .position(|audit_category| *audit_category == self)
-            .unwrap_or_default()
     }
 }
 
@@ -246,18 +240,5 @@ mod audit_report_model_tests {
             AuditSection::awaiting_checks(AuditCategory::AccessControl).overall_status(),
             AuditStatus::CheckInProgress
         );
-    }
-
-    #[test]
-    fn category_positions_follow_the_display_order() {
-        ALL_AUDIT_CATEGORIES
-            .into_iter()
-            .enumerate()
-            .for_each(|positioned_category| {
-                assert_eq!(
-                    positioned_category.1.section_position(),
-                    positioned_category.0
-                );
-            });
     }
 }
