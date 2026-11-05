@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:57+0100\n"
+"POT-Creation-Date: 2026-11-05 11:27+0100\n"
 "PO-Revision-Date: 2026-06-30 13:00+0200\n"
 "Last-Translator: Robin GUY <contact@robinguy.fr>\n"
 "Language-Team: French\n"
@@ -180,7 +180,7 @@ msgstr "Opérations d’analyse et de mise à jour précédentes"
 
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
-#: src/activity_history/scan_statistics_page.rs:234
+#: src/activity_history/scan_statistics_page.rs:251
 #: src/file_quarantine/quarantine_entries_page.rs:272
 #: src/network_sockets/network_sockets_page.rs:212
 msgid "Refresh"
@@ -286,195 +286,207 @@ msgid_plural "{count} threats"
 msgstr[0] "{count} menace"
 msgstr[1] "{count} menaces"
 
-#: src/activity_history/scan_statistics_page.rs:72
+#: src/activity_history/scan_statistics_page.rs:75
 msgid "Protected"
 msgstr "Protégé"
 
-#: src/activity_history/scan_statistics_page.rs:73
+#: src/activity_history/scan_statistics_page.rs:76
 msgid "At Risk"
 msgstr "À risque"
 
-#: src/activity_history/scan_statistics_page.rs:74
+#: src/activity_history/scan_statistics_page.rs:77
 msgid "Unprotected"
 msgstr "Non protégé"
 
-#: src/activity_history/scan_statistics_page.rs:95
+#: src/activity_history/scan_statistics_page.rs:98
 msgid "No scans performed yet"
 msgstr "Aucune analyse effectuée pour le moment"
 
-#: src/activity_history/scan_statistics_page.rs:96
+#: src/activity_history/scan_statistics_page.rs:99
 msgid "Last scan was over 30 days ago"
 msgstr "La dernière analyse remonte à plus de 30 jours"
 
-#: src/activity_history/scan_statistics_page.rs:97
+#: src/activity_history/scan_statistics_page.rs:100
 msgid "Last scan was over a week ago"
 msgstr "La dernière analyse remonte à plus d’une semaine"
 
-#: src/activity_history/scan_statistics_page.rs:99
+#: src/activity_history/scan_statistics_page.rs:102
 msgid "Virus definitions are over 7 days old"
 msgstr "Les définitions de virus datent de plus de 7 jours"
 
-#: src/activity_history/scan_statistics_page.rs:101
+#: src/activity_history/scan_statistics_page.rs:104
 msgid "Virus definitions are over 1 day old"
 msgstr "Les définitions de virus datent de plus d’un jour"
 
-#: src/activity_history/scan_statistics_page.rs:102
+#: src/activity_history/scan_statistics_page.rs:105
 msgid "System is protected"
 msgstr "Le système est protégé"
 
-#: src/activity_history/scan_statistics_page.rs:108
+#: src/activity_history/scan_statistics_page.rs:111
 msgid "less than an hour ago"
 msgstr "il y a moins d’une heure"
 
-#: src/activity_history/scan_statistics_page.rs:112
+#: src/activity_history/scan_statistics_page.rs:115
 #, rust-format
 msgid "{count} hour ago"
 msgid_plural "{count} hours ago"
 msgstr[0] "il y a {count} heure"
 msgstr[1] "il y a {count} heures"
 
-#: src/activity_history/scan_statistics_page.rs:116
+#: src/activity_history/scan_statistics_page.rs:119
 #, rust-format
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "il y a {count} jour"
 msgstr[1] "il y a {count} jours"
 
-#: src/activity_history/scan_statistics_page.rs:156
+#: src/activity_history/scan_statistics_page.rs:158
 msgid "No scans recorded"
 msgstr "Aucune analyse enregistrée"
 
-#: src/activity_history/scan_statistics_page.rs:161
+#: src/activity_history/scan_statistics_page.rs:169
+#, rust-format
+msgid "{moment}, by clamdscan.service"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:172
+#, rust-format
+msgid "{moment}, by clamdscan.service, which found threats"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:178
 #, rust-format
 msgid "Statistics for: {range}"
 msgstr "Statistiques pour la période : {range}"
 
-#: src/activity_history/scan_statistics_page.rs:229
+#: src/activity_history/scan_statistics_page.rs:246
 msgid "Protection Status"
 msgstr "État de la protection"
 
-#: src/activity_history/scan_statistics_page.rs:230
-msgid "Based on scans run from ClamUI and the age of the virus definitions"
+#: src/activity_history/scan_statistics_page.rs:247
+msgid ""
+"Based on scans run from ClamUI or clamdscan.service, and the age of the "
+"virus definitions"
 msgstr ""
 
-#: src/activity_history/scan_statistics_page.rs:241
+#: src/activity_history/scan_statistics_page.rs:258
 msgid "System Status"
 msgstr "État du système"
 
-#: src/activity_history/scan_statistics_page.rs:259
+#: src/activity_history/scan_statistics_page.rs:276
 msgid "Last Scan"
 msgstr "Dernière analyse"
 
-#: src/activity_history/scan_statistics_page.rs:270
+#: src/activity_history/scan_statistics_page.rs:287
 msgid "Timeframe"
 msgstr "Période"
 
-#: src/activity_history/scan_statistics_page.rs:271
+#: src/activity_history/scan_statistics_page.rs:288
 msgid "Select the time period for statistics"
 msgstr ""
 
-#: src/activity_history/scan_statistics_page.rs:281
+#: src/activity_history/scan_statistics_page.rs:298
 msgid "Scan Statistics"
 msgstr "Statistiques des analyses"
 
-#: src/activity_history/scan_statistics_page.rs:286
+#: src/activity_history/scan_statistics_page.rs:303
 msgid "Total Scans"
 msgstr "Nombre total d’analyses"
 
-#: src/activity_history/scan_statistics_page.rs:287
+#: src/activity_history/scan_statistics_page.rs:304
 msgid "Number of scans performed"
 msgstr "Nombre d’analyses effectuées"
 
-#: src/activity_history/scan_statistics_page.rs:297
+#: src/activity_history/scan_statistics_page.rs:314
 msgid "Files Scanned"
 msgstr "Fichiers analysés"
 
-#: src/activity_history/scan_statistics_page.rs:298
+#: src/activity_history/scan_statistics_page.rs:315
 msgid "Total files checked"
 msgstr "Nombre total de fichiers vérifiés"
 
-#: src/activity_history/scan_statistics_page.rs:308
+#: src/activity_history/scan_statistics_page.rs:325
 #: src/malware_scan/scan_progress_page.rs:508
 #: src/malware_scan/scan_results_dialog.rs:54
 #: src/scheduled_scans/headless_scheduled_scan.rs:241
 msgid "Threats Detected"
 msgstr "Menaces détectées"
 
-#: src/activity_history/scan_statistics_page.rs:309
+#: src/activity_history/scan_statistics_page.rs:326
 msgid "Malware and suspicious files found"
 msgstr "Logiciels malveillants et fichiers suspects détectés"
 
-#: src/activity_history/scan_statistics_page.rs:319
+#: src/activity_history/scan_statistics_page.rs:336
 msgid "Clean Scans"
 msgstr "Analyses sans menace"
 
-#: src/activity_history/scan_statistics_page.rs:320
+#: src/activity_history/scan_statistics_page.rs:337
 msgid "Scans with no threats found"
 msgstr "Analyses n’ayant détecté aucune menace"
 
-#: src/activity_history/scan_statistics_page.rs:330
+#: src/activity_history/scan_statistics_page.rs:347
 msgid "Average Scan Duration"
 msgstr "Durée moyenne d’une analyse"
 
-#: src/activity_history/scan_statistics_page.rs:331
+#: src/activity_history/scan_statistics_page.rs:348
 msgid "Mean time per scan"
 msgstr "Durée moyenne par analyse"
 
-#: src/activity_history/scan_statistics_page.rs:342
+#: src/activity_history/scan_statistics_page.rs:359
 msgid "Scan Activity"
 msgstr "Activité des analyses"
 
-#: src/activity_history/scan_statistics_page.rs:343
+#: src/activity_history/scan_statistics_page.rs:360
 msgid "Scan trends over the selected timeframe"
 msgstr "Évolution des analyses sur la période sélectionnée"
 
-#: src/activity_history/scan_statistics_page.rs:358
+#: src/activity_history/scan_statistics_page.rs:375
 msgid "Scans"
 msgstr "Analyses"
 
-#: src/activity_history/scan_statistics_page.rs:358
+#: src/activity_history/scan_statistics_page.rs:375
 msgid "Threats"
 msgstr "Menaces"
 
-#: src/activity_history/scan_statistics_page.rs:363
+#: src/activity_history/scan_statistics_page.rs:380
 msgid "Quick Actions"
 msgstr "Actions rapides"
 
-#: src/activity_history/scan_statistics_page.rs:366
+#: src/activity_history/scan_statistics_page.rs:383
 #: src/desktop_integration/system_tray_menu.rs:46
 #: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr "Analyse rapide"
 
-#: src/activity_history/scan_statistics_page.rs:367
+#: src/activity_history/scan_statistics_page.rs:384
 msgid "Scan your home directory"
 msgstr "Analyser votre répertoire personnel"
 
-#: src/activity_history/scan_statistics_page.rs:374
+#: src/activity_history/scan_statistics_page.rs:391
 msgid "View Scan Logs"
 msgstr "Afficher les journaux d’analyse"
 
-#: src/activity_history/scan_statistics_page.rs:375
+#: src/activity_history/scan_statistics_page.rs:392
 msgid "See detailed scan history"
 msgstr "Consulter l’historique détaillé des analyses"
 
-#: src/activity_history/scan_statistics_page.rs:392
+#: src/activity_history/scan_statistics_page.rs:409
 msgid "Day"
 msgstr "Jour"
 
-#: src/activity_history/scan_statistics_page.rs:393
+#: src/activity_history/scan_statistics_page.rs:410
 msgid "Week"
 msgstr "Semaine"
 
-#: src/activity_history/scan_statistics_page.rs:394
+#: src/activity_history/scan_statistics_page.rs:411
 msgid "Month"
 msgstr "Mois"
 
-#: src/activity_history/scan_statistics_page.rs:395
+#: src/activity_history/scan_statistics_page.rs:412
 msgid "All Time"
 msgstr "Depuis le début"
 
-#: src/activity_history/scan_statistics_page.rs:455
+#: src/activity_history/scan_statistics_page.rs:475
 #, rust-format
 msgid "Failed to load statistics: {error}"
 msgstr "Échec du chargement des statistiques : {error}"

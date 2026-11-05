@@ -1,4 +1,7 @@
-use crate::activity_history::activity_history_database::ActivityEntryRecord;
+use crate::activity_history::{
+    activity_history_database::ActivityEntryRecord,
+    system_scan_journal::{SystemScanHistory, SystemScanRun},
+};
 
 const SECONDS_PER_HOUR: i64 = 3600;
 const SECONDS_PER_DAY: i64 = 24 * SECONDS_PER_HOUR;
@@ -58,6 +61,18 @@ pub enum DefinitionFreshness {
 pub struct ProtectionAssessment {
     pub protection_level: ProtectionLevel,
     pub protection_reason: ProtectionReason,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CompletedScanOrigin {
+    RunFromClamUi,
+    RunBySystemTimer { threats_found: bool },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NewestCompletedScan {
+    pub scanned_at_unix: i64,
+    pub scan_origin: CompletedScanOrigin,
 }
 
 struct BucketLayout {
@@ -149,11 +164,28 @@ pub fn summarize_scan_activity(
 
 pub fn newest_completed_scan(
     activity_entries: &[ActivityEntryRecord],
-) -> Option<&ActivityEntryRecord> {
-    activity_entries
+    system_scan_history: SystemScanHistory,
+) -> Option<NewestCompletedScan> {
+    let application_scans = activity_entries
         .iter()
         .filter(|activity_entry| activity_entry.activity_status.is_completed_scan())
-        .max_by_key(|activity_entry| activity_entry.started_at_unix)
+        .map(|activity_entry| NewestCompletedScan {
+            scanned_at_unix: activity_entry.started_at_unix,
+            scan_origin: CompletedScanOrigin::RunFromClamUi,
+        });
+    let system_scans = match system_scan_history {
+        SystemScanHistory::CompletedRun(SystemScanRun {
+            finished_at_unix,
+            threats_found,
+        }) => Some(NewestCompletedScan {
+            scanned_at_unix: finished_at_unix,
+            scan_origin: CompletedScanOrigin::RunBySystemTimer { threats_found },
+        }),
+        SystemScanHistory::NoCompletedRun => None,
+    };
+    application_scans
+        .chain(system_scans)
+        .max_by_key(|completed_scan| completed_scan.scanned_at_unix)
 }
 
 fn definition_reason(definition_freshness: DefinitionFreshness) -> ProtectionAssessment {
@@ -179,16 +211,17 @@ fn definition_reason(definition_freshness: DefinitionFreshness) -> ProtectionAss
 
 pub fn assess_protection(
     activity_entries: &[ActivityEntryRecord],
+    system_scan_history: SystemScanHistory,
     definition_freshness: DefinitionFreshness,
     current_unix: i64,
 ) -> ProtectionAssessment {
-    let Some(newest_scan) = newest_completed_scan(activity_entries) else {
+    let Some(newest_scan) = newest_completed_scan(activity_entries, system_scan_history) else {
         return ProtectionAssessment {
             protection_level: ProtectionLevel::Unprotected,
             protection_reason: ProtectionReason::NoCompletedScans,
         };
     };
-    let scan_age_seconds = current_unix - newest_scan.started_at_unix;
+    let scan_age_seconds = current_unix - newest_scan.scanned_at_unix;
     if scan_age_seconds > 30 * SECONDS_PER_DAY {
         ProtectionAssessment {
             protection_level: ProtectionLevel::Unprotected,
@@ -294,6 +327,7 @@ mod scan_activity_statistics_tests {
         let assess = |activity_entries: &[ActivityEntryRecord], age_days| {
             assess_protection(
                 activity_entries,
+                SystemScanHistory::NoCompletedRun,
                 DefinitionFreshness::DefinitionsAged { age_days },
                 CURRENT_UNIX,
             )
@@ -345,11 +379,71 @@ mod scan_activity_statistics_tests {
         assert_eq!(
             assess_protection(
                 &activity_entries,
+                SystemScanHistory::NoCompletedRun,
                 DefinitionFreshness::FreshnessUnknown,
                 CURRENT_UNIX
             )
             .protection_level,
             ProtectionLevel::Unprotected
+        );
+    }
+
+    fn system_scan_finished(seconds_ago: i64, threats_found: bool) -> SystemScanHistory {
+        SystemScanHistory::CompletedRun(SystemScanRun {
+            finished_at_unix: CURRENT_UNIX - seconds_ago,
+            threats_found,
+        })
+    }
+
+    #[test]
+    fn a_recent_system_timer_run_counts_as_protection_without_application_scans() {
+        assert_eq!(
+            assess_protection(
+                &[],
+                system_scan_finished(SECONDS_PER_DAY, false),
+                DefinitionFreshness::FreshnessUnknown,
+                CURRENT_UNIX
+            )
+            .protection_level,
+            ProtectionLevel::Protected
+        );
+    }
+
+    #[test]
+    fn a_stale_system_timer_run_does_not_hide_its_age() {
+        assert_eq!(
+            assess_protection(
+                &[],
+                system_scan_finished(8 * SECONDS_PER_DAY, false),
+                DefinitionFreshness::FreshnessUnknown,
+                CURRENT_UNIX
+            )
+            .protection_reason,
+            ProtectionReason::LastScanOverWeekOld
+        );
+    }
+
+    #[test]
+    fn the_newest_scan_is_chosen_across_both_origins() {
+        let application_scan = [activity_entry(
+            ActivityStatus::ScanClean,
+            2 * SECONDS_PER_DAY,
+            0,
+        )];
+        assert_eq!(
+            newest_completed_scan(&application_scan, system_scan_finished(60, true))
+                .map(|newest_scan| newest_scan.scan_origin),
+            Some(CompletedScanOrigin::RunBySystemTimer {
+                threats_found: true
+            })
+        );
+        assert_eq!(
+            newest_completed_scan(
+                &application_scan,
+                system_scan_finished(3 * SECONDS_PER_DAY, false)
+            )
+            .map(|newest_scan| newest_scan.scan_origin),
+            Some(CompletedScanOrigin::RunFromClamUi)
         );
     }
 }

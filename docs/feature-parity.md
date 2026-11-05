@@ -36,7 +36,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Statistics
 
-- [x] Protection status and last scan. Failed and cancelled scans don't count as protection, and scans run outside ClamUI aren't seen.
+- [x] Protection status and last scan. Failed and cancelled scans don't count as protection. Completed runs of `clamdscan.service` count too, read from the system journal. Other scans run outside ClamUI aren't seen.
 - [x] Timeframe selection: day, week, month, all time.
 - [x] Totals: scans, files, threats, clean scans, average duration.
 - [x] Scan activity trend and quick actions.

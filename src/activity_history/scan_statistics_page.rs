@@ -11,10 +11,11 @@ use crate::{
         activity_history_database::{ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure},
         scan_activity_chart::{chart_legend, replace_chart_columns},
         scan_activity_statistics::{
-            DefinitionFreshness, ProtectionAssessment, ProtectionLevel, ProtectionReason,
-            ScanActivityStatistics, StatisticsTimeframe, assess_protection, newest_completed_scan,
-            summarize_scan_activity,
+            CompletedScanOrigin, DefinitionFreshness, ProtectionAssessment, ProtectionLevel,
+            ProtectionReason, ScanActivityStatistics, StatisticsTimeframe, assess_protection,
+            newest_completed_scan, summarize_scan_activity,
         },
+        system_scan_journal::{SystemScanHistory, newest_system_scan_run},
     },
     shared_page_widget_templates::ClampedPage,
     virus_database::database_directory_status::{
@@ -28,6 +29,7 @@ const SECONDS_PER_DAY: i64 = 24 * SECONDS_PER_HOUR;
 pub struct ScanStatisticsPage {
     activity_history: ActivityHistory,
     listed_entries: Vec<ActivityEntryRecord>,
+    system_scan_history: SystemScanHistory,
     definition_freshness: DefinitionFreshness,
     selected_timeframe: StatisticsTimeframe,
     page_notice: String,
@@ -45,6 +47,7 @@ pub enum ScanStatisticsPageInput {
 pub enum ScanStatisticsPageCommand {
     HistoryLoaded {
         loaded_entries: Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure>,
+        system_scan_history: SystemScanHistory,
         definition_freshness: DefinitionFreshness,
     },
 }
@@ -123,6 +126,7 @@ impl ScanStatisticsPage {
         sender.oneshot_command(async move {
             ScanStatisticsPageCommand::HistoryLoaded {
                 loaded_entries: activity_history.list_recent_entries().await,
+                system_scan_history: newest_system_scan_run().await,
                 definition_freshness: spawn_blocking(inspect_definition_freshness)
                     .await
                     .unwrap_or(DefinitionFreshness::FreshnessUnknown),
@@ -141,19 +145,32 @@ impl ScanStatisticsPage {
     fn protection_assessment(&self) -> ProtectionAssessment {
         assess_protection(
             &self.listed_entries,
+            self.system_scan_history,
             self.definition_freshness,
             current_unix_time(),
         )
     }
 
     fn last_scan_text(&self) -> String {
-        match newest_completed_scan(&self.listed_entries) {
-            Some(newest_scan) => format!(
-                "{} ({})",
-                formatted_local_time(newest_scan.started_at_unix),
-                scan_age_text(current_unix_time() - newest_scan.started_at_unix)
-            ),
-            None => gettext("No scans recorded"),
+        let Some(newest_scan) =
+            newest_completed_scan(&self.listed_entries, self.system_scan_history)
+        else {
+            return gettext("No scans recorded");
+        };
+        let scan_moment = format!(
+            "{} ({})",
+            formatted_local_time(newest_scan.scanned_at_unix),
+            scan_age_text(current_unix_time() - newest_scan.scanned_at_unix)
+        );
+        match newest_scan.scan_origin {
+            CompletedScanOrigin::RunFromClamUi => scan_moment,
+            CompletedScanOrigin::RunBySystemTimer {
+                threats_found: false,
+            } => gettext("{moment}, by clamdscan.service").replace("{moment}", &scan_moment),
+            CompletedScanOrigin::RunBySystemTimer {
+                threats_found: true,
+            } => gettext("{moment}, by clamdscan.service, which found threats")
+                .replace("{moment}", &scan_moment),
         }
     }
 
@@ -227,7 +244,7 @@ impl Component for ScanStatisticsPage {
 
                 adw::PreferencesGroup {
                     set_title: &gettext("Protection Status"),
-                    set_description: Some(&gettext("Based on scans run from ClamUI and the age of the virus definitions")),
+                    set_description: Some(&gettext("Based on scans run from ClamUI or clamdscan.service, and the age of the virus definitions")),
                     #[wrap(Some)]
                     set_header_suffix = &gtk::Button {
                         set_icon_name: "view-refresh-symbolic",
@@ -397,6 +414,7 @@ impl Component for ScanStatisticsPage {
         let model = Self {
             activity_history,
             listed_entries: Vec::new(),
+            system_scan_history: SystemScanHistory::NoCompletedRun,
             definition_freshness: DefinitionFreshness::FreshnessUnknown,
             selected_timeframe: StatisticsTimeframe::LastWeek,
             page_notice: String::new(),
@@ -442,8 +460,10 @@ impl Component for ScanStatisticsPage {
         match page_command {
             ScanStatisticsPageCommand::HistoryLoaded {
                 loaded_entries,
+                system_scan_history,
                 definition_freshness,
             } => {
+                self.system_scan_history = system_scan_history;
                 self.definition_freshness = definition_freshness;
                 match loaded_entries {
                     Ok(listed_entries) => {

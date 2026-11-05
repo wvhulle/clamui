@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:57+0100\n"
+"POT-Creation-Date: 2026-11-05 11:27+0100\n"
 "PO-Revision-Date: 2026-10-20 10:21+0200\n"
 "Last-Translator: ClamUI Contributors\n"
 "Language-Team: English\n"
@@ -178,7 +178,7 @@ msgstr "Previous scan and update operations"
 
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
-#: src/activity_history/scan_statistics_page.rs:234
+#: src/activity_history/scan_statistics_page.rs:251
 #: src/file_quarantine/quarantine_entries_page.rs:272
 #: src/network_sockets/network_sockets_page.rs:212
 msgid "Refresh"
@@ -284,195 +284,207 @@ msgid_plural "{count} threats"
 msgstr[0] "{count} threat"
 msgstr[1] "{count} threats"
 
-#: src/activity_history/scan_statistics_page.rs:72
+#: src/activity_history/scan_statistics_page.rs:75
 msgid "Protected"
 msgstr "Protected"
 
-#: src/activity_history/scan_statistics_page.rs:73
+#: src/activity_history/scan_statistics_page.rs:76
 msgid "At Risk"
 msgstr "At Risk"
 
-#: src/activity_history/scan_statistics_page.rs:74
+#: src/activity_history/scan_statistics_page.rs:77
 msgid "Unprotected"
 msgstr "Unprotected"
 
-#: src/activity_history/scan_statistics_page.rs:95
+#: src/activity_history/scan_statistics_page.rs:98
 msgid "No scans performed yet"
 msgstr "No scans performed yet"
 
-#: src/activity_history/scan_statistics_page.rs:96
+#: src/activity_history/scan_statistics_page.rs:99
 msgid "Last scan was over 30 days ago"
 msgstr "Last scan was over 30 days ago"
 
-#: src/activity_history/scan_statistics_page.rs:97
+#: src/activity_history/scan_statistics_page.rs:100
 msgid "Last scan was over a week ago"
 msgstr "Last scan was over a week ago"
 
-#: src/activity_history/scan_statistics_page.rs:99
+#: src/activity_history/scan_statistics_page.rs:102
 msgid "Virus definitions are over 7 days old"
 msgstr "Virus definitions are over 7 days old"
 
-#: src/activity_history/scan_statistics_page.rs:101
+#: src/activity_history/scan_statistics_page.rs:104
 msgid "Virus definitions are over 1 day old"
 msgstr "Virus definitions are over 1 day old"
 
-#: src/activity_history/scan_statistics_page.rs:102
+#: src/activity_history/scan_statistics_page.rs:105
 msgid "System is protected"
 msgstr "System is protected"
 
-#: src/activity_history/scan_statistics_page.rs:108
+#: src/activity_history/scan_statistics_page.rs:111
 msgid "less than an hour ago"
 msgstr "less than an hour ago"
 
-#: src/activity_history/scan_statistics_page.rs:112
+#: src/activity_history/scan_statistics_page.rs:115
 #, rust-format
 msgid "{count} hour ago"
 msgid_plural "{count} hours ago"
 msgstr[0] "{count} hour ago"
 msgstr[1] "{count} hours ago"
 
-#: src/activity_history/scan_statistics_page.rs:116
+#: src/activity_history/scan_statistics_page.rs:119
 #, rust-format
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} day ago"
 msgstr[1] "{count} days ago"
 
-#: src/activity_history/scan_statistics_page.rs:156
+#: src/activity_history/scan_statistics_page.rs:158
 msgid "No scans recorded"
 msgstr "No scans recorded"
 
-#: src/activity_history/scan_statistics_page.rs:161
+#: src/activity_history/scan_statistics_page.rs:169
+#, rust-format
+msgid "{moment}, by clamdscan.service"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:172
+#, rust-format
+msgid "{moment}, by clamdscan.service, which found threats"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:178
 #, rust-format
 msgid "Statistics for: {range}"
 msgstr "Statistics for: {range}"
 
-#: src/activity_history/scan_statistics_page.rs:229
+#: src/activity_history/scan_statistics_page.rs:246
 msgid "Protection Status"
 msgstr "Protection Status"
 
-#: src/activity_history/scan_statistics_page.rs:230
-msgid "Based on scans run from ClamUI and the age of the virus definitions"
+#: src/activity_history/scan_statistics_page.rs:247
+msgid ""
+"Based on scans run from ClamUI or clamdscan.service, and the age of the "
+"virus definitions"
 msgstr ""
 
-#: src/activity_history/scan_statistics_page.rs:241
+#: src/activity_history/scan_statistics_page.rs:258
 msgid "System Status"
 msgstr "System Status"
 
-#: src/activity_history/scan_statistics_page.rs:259
+#: src/activity_history/scan_statistics_page.rs:276
 msgid "Last Scan"
 msgstr "Last Scan"
 
-#: src/activity_history/scan_statistics_page.rs:270
+#: src/activity_history/scan_statistics_page.rs:287
 msgid "Timeframe"
 msgstr "Timeframe"
 
-#: src/activity_history/scan_statistics_page.rs:271
+#: src/activity_history/scan_statistics_page.rs:288
 msgid "Select the time period for statistics"
 msgstr ""
 
-#: src/activity_history/scan_statistics_page.rs:281
+#: src/activity_history/scan_statistics_page.rs:298
 msgid "Scan Statistics"
 msgstr "Scan Statistics"
 
-#: src/activity_history/scan_statistics_page.rs:286
+#: src/activity_history/scan_statistics_page.rs:303
 msgid "Total Scans"
 msgstr "Total Scans"
 
-#: src/activity_history/scan_statistics_page.rs:287
+#: src/activity_history/scan_statistics_page.rs:304
 msgid "Number of scans performed"
 msgstr "Number of scans performed"
 
-#: src/activity_history/scan_statistics_page.rs:297
+#: src/activity_history/scan_statistics_page.rs:314
 msgid "Files Scanned"
 msgstr "Files Scanned"
 
-#: src/activity_history/scan_statistics_page.rs:298
+#: src/activity_history/scan_statistics_page.rs:315
 msgid "Total files checked"
 msgstr "Total files checked"
 
-#: src/activity_history/scan_statistics_page.rs:308
+#: src/activity_history/scan_statistics_page.rs:325
 #: src/malware_scan/scan_progress_page.rs:508
 #: src/malware_scan/scan_results_dialog.rs:54
 #: src/scheduled_scans/headless_scheduled_scan.rs:241
 msgid "Threats Detected"
 msgstr "Threats Detected"
 
-#: src/activity_history/scan_statistics_page.rs:309
+#: src/activity_history/scan_statistics_page.rs:326
 msgid "Malware and suspicious files found"
 msgstr "Malware and suspicious files found"
 
-#: src/activity_history/scan_statistics_page.rs:319
+#: src/activity_history/scan_statistics_page.rs:336
 msgid "Clean Scans"
 msgstr "Clean Scans"
 
-#: src/activity_history/scan_statistics_page.rs:320
+#: src/activity_history/scan_statistics_page.rs:337
 msgid "Scans with no threats found"
 msgstr "Scans with no threats found"
 
-#: src/activity_history/scan_statistics_page.rs:330
+#: src/activity_history/scan_statistics_page.rs:347
 msgid "Average Scan Duration"
 msgstr "Average Scan Duration"
 
-#: src/activity_history/scan_statistics_page.rs:331
+#: src/activity_history/scan_statistics_page.rs:348
 msgid "Mean time per scan"
 msgstr "Mean time per scan"
 
-#: src/activity_history/scan_statistics_page.rs:342
+#: src/activity_history/scan_statistics_page.rs:359
 msgid "Scan Activity"
 msgstr "Scan Activity"
 
-#: src/activity_history/scan_statistics_page.rs:343
+#: src/activity_history/scan_statistics_page.rs:360
 msgid "Scan trends over the selected timeframe"
 msgstr "Scan trends over the selected timeframe"
 
-#: src/activity_history/scan_statistics_page.rs:358
+#: src/activity_history/scan_statistics_page.rs:375
 msgid "Scans"
 msgstr "Scans"
 
-#: src/activity_history/scan_statistics_page.rs:358
+#: src/activity_history/scan_statistics_page.rs:375
 msgid "Threats"
 msgstr "Threats"
 
-#: src/activity_history/scan_statistics_page.rs:363
+#: src/activity_history/scan_statistics_page.rs:380
 msgid "Quick Actions"
 msgstr "Quick Actions"
 
-#: src/activity_history/scan_statistics_page.rs:366
+#: src/activity_history/scan_statistics_page.rs:383
 #: src/desktop_integration/system_tray_menu.rs:46
 #: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr "Quick Scan"
 
-#: src/activity_history/scan_statistics_page.rs:367
+#: src/activity_history/scan_statistics_page.rs:384
 msgid "Scan your home directory"
 msgstr "Scan your home directory"
 
-#: src/activity_history/scan_statistics_page.rs:374
+#: src/activity_history/scan_statistics_page.rs:391
 msgid "View Scan Logs"
 msgstr "View Scan Logs"
 
-#: src/activity_history/scan_statistics_page.rs:375
+#: src/activity_history/scan_statistics_page.rs:392
 msgid "See detailed scan history"
 msgstr "See detailed scan history"
 
-#: src/activity_history/scan_statistics_page.rs:392
+#: src/activity_history/scan_statistics_page.rs:409
 msgid "Day"
 msgstr "Day"
 
-#: src/activity_history/scan_statistics_page.rs:393
+#: src/activity_history/scan_statistics_page.rs:410
 msgid "Week"
 msgstr "Week"
 
-#: src/activity_history/scan_statistics_page.rs:394
+#: src/activity_history/scan_statistics_page.rs:411
 msgid "Month"
 msgstr "Month"
 
-#: src/activity_history/scan_statistics_page.rs:395
+#: src/activity_history/scan_statistics_page.rs:412
 msgid "All Time"
 msgstr "All Time"
 
-#: src/activity_history/scan_statistics_page.rs:455
+#: src/activity_history/scan_statistics_page.rs:475
 #, rust-format
 msgid "Failed to load statistics: {error}"
 msgstr "Failed to load statistics: {error}"

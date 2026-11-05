@@ -6,3 +6,4 @@ pub mod daemon_log_reader;
 pub mod scan_activity_chart;
 pub mod scan_activity_statistics;
 pub mod scan_statistics_page;
+pub mod system_scan_journal;

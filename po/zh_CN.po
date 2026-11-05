@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:57+0100\n"
+"POT-Creation-Date: 2026-11-05 11:27+0100\n"
 "PO-Revision-Date: 2026-07-22 21:29+0800\n"
 "Last-Translator: Markson Hosben <marksonhosben@proton.me>\n"
 "Language-Team: Chinese <>\n"
@@ -176,7 +176,7 @@ msgstr "以往的扫描和更新操作"
 
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
-#: src/activity_history/scan_statistics_page.rs:234
+#: src/activity_history/scan_statistics_page.rs:251
 #: src/file_quarantine/quarantine_entries_page.rs:272
 #: src/network_sockets/network_sockets_page.rs:212
 msgid "Refresh"
@@ -280,193 +280,205 @@ msgid "{count} threat"
 msgid_plural "{count} threats"
 msgstr[0] "{count} 个威胁"
 
-#: src/activity_history/scan_statistics_page.rs:72
+#: src/activity_history/scan_statistics_page.rs:75
 msgid "Protected"
 msgstr "受保护"
 
-#: src/activity_history/scan_statistics_page.rs:73
+#: src/activity_history/scan_statistics_page.rs:76
 msgid "At Risk"
 msgstr "存在风险"
 
-#: src/activity_history/scan_statistics_page.rs:74
+#: src/activity_history/scan_statistics_page.rs:77
 msgid "Unprotected"
 msgstr "未受保护"
 
-#: src/activity_history/scan_statistics_page.rs:95
+#: src/activity_history/scan_statistics_page.rs:98
 msgid "No scans performed yet"
 msgstr "尚未执行任何扫描"
 
-#: src/activity_history/scan_statistics_page.rs:96
+#: src/activity_history/scan_statistics_page.rs:99
 msgid "Last scan was over 30 days ago"
 msgstr "距上次扫描已超过 30 天"
 
-#: src/activity_history/scan_statistics_page.rs:97
+#: src/activity_history/scan_statistics_page.rs:100
 msgid "Last scan was over a week ago"
 msgstr "距上次扫描已超过一周"
 
-#: src/activity_history/scan_statistics_page.rs:99
+#: src/activity_history/scan_statistics_page.rs:102
 msgid "Virus definitions are over 7 days old"
 msgstr "病毒特征库已超过 7 天未更新"
 
-#: src/activity_history/scan_statistics_page.rs:101
+#: src/activity_history/scan_statistics_page.rs:104
 msgid "Virus definitions are over 1 day old"
 msgstr "病毒特征库已超过 1 天未更新"
 
-#: src/activity_history/scan_statistics_page.rs:102
+#: src/activity_history/scan_statistics_page.rs:105
 msgid "System is protected"
 msgstr "系统已受到保护"
 
-#: src/activity_history/scan_statistics_page.rs:108
+#: src/activity_history/scan_statistics_page.rs:111
 msgid "less than an hour ago"
 msgstr "不到一小时前"
 
-#: src/activity_history/scan_statistics_page.rs:112
+#: src/activity_history/scan_statistics_page.rs:115
 #, rust-format
 msgid "{count} hour ago"
 msgid_plural "{count} hours ago"
 msgstr[0] "{count} 小时前"
 
-#: src/activity_history/scan_statistics_page.rs:116
+#: src/activity_history/scan_statistics_page.rs:119
 #, rust-format
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} 天前"
 
-#: src/activity_history/scan_statistics_page.rs:156
+#: src/activity_history/scan_statistics_page.rs:158
 msgid "No scans recorded"
 msgstr "暂无扫描记录"
 
-#: src/activity_history/scan_statistics_page.rs:161
+#: src/activity_history/scan_statistics_page.rs:169
+#, rust-format
+msgid "{moment}, by clamdscan.service"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:172
+#, rust-format
+msgid "{moment}, by clamdscan.service, which found threats"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:178
 #, rust-format
 msgid "Statistics for: {range}"
 msgstr "统计时段：{range}"
 
-#: src/activity_history/scan_statistics_page.rs:229
+#: src/activity_history/scan_statistics_page.rs:246
 msgid "Protection Status"
 msgstr "防护状态"
 
-#: src/activity_history/scan_statistics_page.rs:230
-msgid "Based on scans run from ClamUI and the age of the virus definitions"
+#: src/activity_history/scan_statistics_page.rs:247
+msgid ""
+"Based on scans run from ClamUI or clamdscan.service, and the age of the "
+"virus definitions"
 msgstr ""
 
-#: src/activity_history/scan_statistics_page.rs:241
+#: src/activity_history/scan_statistics_page.rs:258
 msgid "System Status"
 msgstr "系统状态"
 
-#: src/activity_history/scan_statistics_page.rs:259
+#: src/activity_history/scan_statistics_page.rs:276
 msgid "Last Scan"
 msgstr "上次扫描"
 
-#: src/activity_history/scan_statistics_page.rs:270
+#: src/activity_history/scan_statistics_page.rs:287
 msgid "Timeframe"
 msgstr "时间范围"
 
-#: src/activity_history/scan_statistics_page.rs:271
+#: src/activity_history/scan_statistics_page.rs:288
 msgid "Select the time period for statistics"
 msgstr ""
 
-#: src/activity_history/scan_statistics_page.rs:281
+#: src/activity_history/scan_statistics_page.rs:298
 msgid "Scan Statistics"
 msgstr "扫描统计"
 
-#: src/activity_history/scan_statistics_page.rs:286
+#: src/activity_history/scan_statistics_page.rs:303
 msgid "Total Scans"
 msgstr "扫描总次数"
 
-#: src/activity_history/scan_statistics_page.rs:287
+#: src/activity_history/scan_statistics_page.rs:304
 msgid "Number of scans performed"
 msgstr "已执行的扫描次数"
 
-#: src/activity_history/scan_statistics_page.rs:297
+#: src/activity_history/scan_statistics_page.rs:314
 msgid "Files Scanned"
 msgstr "已扫描文件数"
 
-#: src/activity_history/scan_statistics_page.rs:298
+#: src/activity_history/scan_statistics_page.rs:315
 msgid "Total files checked"
 msgstr "已检查的文件总数"
 
-#: src/activity_history/scan_statistics_page.rs:308
+#: src/activity_history/scan_statistics_page.rs:325
 #: src/malware_scan/scan_progress_page.rs:508
 #: src/malware_scan/scan_results_dialog.rs:54
 #: src/scheduled_scans/headless_scheduled_scan.rs:241
 msgid "Threats Detected"
 msgstr "检测到威胁"
 
-#: src/activity_history/scan_statistics_page.rs:309
+#: src/activity_history/scan_statistics_page.rs:326
 msgid "Malware and suspicious files found"
 msgstr "发现的恶意软件和可疑文件"
 
-#: src/activity_history/scan_statistics_page.rs:319
+#: src/activity_history/scan_statistics_page.rs:336
 msgid "Clean Scans"
 msgstr "无威胁扫描"
 
-#: src/activity_history/scan_statistics_page.rs:320
+#: src/activity_history/scan_statistics_page.rs:337
 msgid "Scans with no threats found"
 msgstr "未发现威胁的扫描"
 
-#: src/activity_history/scan_statistics_page.rs:330
+#: src/activity_history/scan_statistics_page.rs:347
 msgid "Average Scan Duration"
 msgstr "平均扫描时长"
 
-#: src/activity_history/scan_statistics_page.rs:331
+#: src/activity_history/scan_statistics_page.rs:348
 msgid "Mean time per scan"
 msgstr "每次扫描的平均耗时"
 
-#: src/activity_history/scan_statistics_page.rs:342
+#: src/activity_history/scan_statistics_page.rs:359
 msgid "Scan Activity"
 msgstr "扫描活动"
 
-#: src/activity_history/scan_statistics_page.rs:343
+#: src/activity_history/scan_statistics_page.rs:360
 msgid "Scan trends over the selected timeframe"
 msgstr "所选时间范围内的扫描趋势"
 
-#: src/activity_history/scan_statistics_page.rs:358
+#: src/activity_history/scan_statistics_page.rs:375
 msgid "Scans"
 msgstr "扫描次数"
 
-#: src/activity_history/scan_statistics_page.rs:358
+#: src/activity_history/scan_statistics_page.rs:375
 msgid "Threats"
 msgstr "威胁数"
 
-#: src/activity_history/scan_statistics_page.rs:363
+#: src/activity_history/scan_statistics_page.rs:380
 msgid "Quick Actions"
 msgstr "快捷操作"
 
-#: src/activity_history/scan_statistics_page.rs:366
+#: src/activity_history/scan_statistics_page.rs:383
 #: src/desktop_integration/system_tray_menu.rs:46
 #: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr "快速扫描"
 
-#: src/activity_history/scan_statistics_page.rs:367
+#: src/activity_history/scan_statistics_page.rs:384
 msgid "Scan your home directory"
 msgstr "扫描您的主目录"
 
-#: src/activity_history/scan_statistics_page.rs:374
+#: src/activity_history/scan_statistics_page.rs:391
 msgid "View Scan Logs"
 msgstr "查看扫描日志"
 
-#: src/activity_history/scan_statistics_page.rs:375
+#: src/activity_history/scan_statistics_page.rs:392
 msgid "See detailed scan history"
 msgstr "查看详细的扫描历史记录"
 
-#: src/activity_history/scan_statistics_page.rs:392
+#: src/activity_history/scan_statistics_page.rs:409
 msgid "Day"
 msgstr "日"
 
-#: src/activity_history/scan_statistics_page.rs:393
+#: src/activity_history/scan_statistics_page.rs:410
 msgid "Week"
 msgstr "周"
 
-#: src/activity_history/scan_statistics_page.rs:394
+#: src/activity_history/scan_statistics_page.rs:411
 msgid "Month"
 msgstr "月"
 
-#: src/activity_history/scan_statistics_page.rs:395
+#: src/activity_history/scan_statistics_page.rs:412
 msgid "All Time"
 msgstr "全部时间"
 
-#: src/activity_history/scan_statistics_page.rs:455
+#: src/activity_history/scan_statistics_page.rs:475
 #, rust-format
 msgid "Failed to load statistics: {error}"
 msgstr "加载统计数据失败：{error}"
