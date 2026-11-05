@@ -14,6 +14,7 @@ mod shared_page_widget_templates;
 mod startup_arguments;
 mod text_export_dialog;
 mod virus_database;
+mod virustotal_lookup;
 
 use std::{path::PathBuf, process::ExitCode};
 

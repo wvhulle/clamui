@@ -61,7 +61,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:20+0100\n"
+"POT-Creation-Date: 2026-11-05 09:30+0100\n"
 "PO-Revision-Date: 2026-10-17 12:00+0200\n"
 "Last-Translator: John Erling Blad <jeblad@gmail.com>\n"
 "Language-Team: Norwegian Bokmål\n"
@@ -111,9 +111,9 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/activity_history/activity_export_formats.rs:29
-#: src/malware_scan/scan_progress_page.rs:348
-#: src/malware_scan/scan_progress_page.rs:491
-#: src/malware_scan/scan_results_dialog.rs:54
+#: src/malware_scan/scan_progress_page.rs:366
+#: src/malware_scan/scan_progress_page.rs:509
+#: src/malware_scan/scan_results_dialog.rs:55
 msgid "No threats found"
 msgstr ""
 
@@ -122,15 +122,15 @@ msgid "Scheduled scan skipped (on battery power)"
 msgstr "Planlagt skanning ble hoppet over (går på batteri)"
 
 #: src/activity_history/activity_export_formats.rs:31
-#: src/malware_scan/scan_progress_page.rs:346
-#: src/malware_scan/scan_progress_page.rs:492
-#: src/malware_scan/scan_results_dialog.rs:55
+#: src/malware_scan/scan_progress_page.rs:364
+#: src/malware_scan/scan_progress_page.rs:510
+#: src/malware_scan/scan_results_dialog.rs:56
 msgid "The scan did not finish cleanly"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:32
-#: src/malware_scan/scan_progress_page.rs:341
-#: src/malware_scan/scan_results_dialog.rs:56
+#: src/malware_scan/scan_progress_page.rs:359
+#: src/malware_scan/scan_results_dialog.rs:57
 msgid "Scan cancelled by user"
 msgstr "Skanning avbrutt av brukeren"
 
@@ -168,6 +168,7 @@ msgid "Timestamp"
 msgstr "Tidsstempel"
 
 #: src/activity_history/activity_export_formats.rs:100
+#: src/virustotal_lookup/virustotal_preferences_page.rs:62
 msgid "Status"
 msgstr "Status"
 
@@ -202,13 +203,14 @@ msgid ""
 msgstr "Dette sletter alle tidligere logger permanent. Dette kan ikke angres."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:454
+#: src/application_window_shell.rs:458
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
-#: src/malware_scan/scan_progress_page.rs:718
-#: src/malware_scan/scan_results_dialog.rs:198
+#: src/malware_scan/scan_progress_page.rs:743
+#: src/malware_scan/scan_results_dialog.rs:208
 #: src/scan_profiles/profile_manager_dialog.rs:116
 #: src/virus_database/database_update_page.rs:530
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:162
 msgid "Cancel"
 msgstr "Avbryt"
 
@@ -275,10 +277,11 @@ msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:425
 #: src/clamav_components/clamav_component_row.rs:73
-#: src/malware_scan/scan_progress_page.rs:300
+#: src/malware_scan/scan_progress_page.rs:318
 #: src/scheduled_scans/schedule_preferences_page.rs:221
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
+#: src/virustotal_lookup/virustotal_preferences_page.rs:98
 msgid "Checking…"
 msgstr "Sjekker …"
 
@@ -438,8 +441,8 @@ msgid "Total files checked"
 msgstr "Antall filer kontrollert"
 
 #: src/activity_history/scan_statistics_page.rs:308
-#: src/malware_scan/scan_progress_page.rs:490
-#: src/malware_scan/scan_results_dialog.rs:53
+#: src/malware_scan/scan_progress_page.rs:508
+#: src/malware_scan/scan_results_dialog.rs:54
 #: src/scheduled_scans/headless_scheduled_scan.rs:241
 msgid "Threats Detected"
 msgstr "Trusler oppdaget"
@@ -523,213 +526,284 @@ msgstr "Hele perioden"
 msgid "Failed to load statistics: {error}"
 msgstr "Kunne ikke laste inn statistikk: {error}"
 
-#: src/application_settings/preferences_dialog.rs:116
+#: src/application_settings/preferences_dialog.rs:133
 msgid "Node.js dependencies"
 msgstr "Node.js-avhengigheter"
 
-#: src/application_settings/preferences_dialog.rs:117
+#: src/application_settings/preferences_dialog.rs:134
 msgid "Git repository data"
 msgstr "Data fra Git-depot"
 
-#: src/application_settings/preferences_dialog.rs:118
+#: src/application_settings/preferences_dialog.rs:135
 msgid "Python virtual environment"
 msgstr "Virtuelt Python-miljø"
 
-#: src/application_settings/preferences_dialog.rs:119
+#: src/application_settings/preferences_dialog.rs:136
 msgid "Build output directory"
 msgstr "Mappe for byggeresultater"
 
-#: src/application_settings/preferences_dialog.rs:120
+#: src/application_settings/preferences_dialog.rs:137
 msgid "Distribution output directory"
 msgstr "Mappe for distribusjonsfiler"
 
-#: src/application_settings/preferences_dialog.rs:121
+#: src/application_settings/preferences_dialog.rs:138
 msgid "Python bytecode cache"
 msgstr "Hurtigbuffer for Python-bytekode"
 
-#: src/application_settings/preferences_dialog.rs:128
+#: src/application_settings/preferences_dialog.rs:162
+#, rust-format
+msgid ""
+"Read-only view of {path}. ClamUI does not edit this file: it is owned by "
+"root, and settings such as VirusEvent run commands as the scanner's user."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:174
+msgid "No settings in this section"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:192
+msgid "Configuration file not found"
+msgstr "Finner ikke konfigurasjonsfilen"
+
+#: src/application_settings/preferences_dialog.rs:203
+msgid "File Manager Integration"
+msgstr "Integrasjon med filbehandleren"
+
+#: src/application_settings/preferences_dialog.rs:205
+msgid "Add context menu actions for supported file managers."
+msgstr "Legg til kontekstmenyhandlinger for støttede filbehandlere."
+
+#: src/application_settings/preferences_dialog.rs:235
+#: src/malware_scan/scan_progress_page.rs:939
+msgid "Device Auto-Scan"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:237
+msgid ""
+"Automatically scan removable and external drives when they are connected."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:241
+msgid "Enable Device Auto-Scan"
+msgstr "Slå på automatisk skanning av enheter"
+
+#: src/application_settings/preferences_dialog.rs:248
+msgid "Max Device Size (GB)"
+msgstr "Maks enhetsstørrelse (GB)"
+
+#: src/application_settings/preferences_dialog.rs:249
+msgid "0 means no size limit."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:268
+#: src/scheduled_scans/schedule_preferences_page.rs:193
+msgid "Skip on Battery"
+msgstr "Hopp over på batteri"
+
+#: src/application_settings/preferences_dialog.rs:279
 msgid "Window Behavior"
 msgstr "Vindusoppførsel"
 
-#: src/application_settings/preferences_dialog.rs:130
+#: src/application_settings/preferences_dialog.rs:281
 msgid "Running in the background needs a desktop with a system tray."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:134
+#: src/application_settings/preferences_dialog.rs:285
 msgid "Quit completely"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:135
-#: src/application_window_shell.rs:456
+#: src/application_settings/preferences_dialog.rs:286
+#: src/application_window_shell.rs:460
 msgid "Minimize to tray"
 msgstr "Minimer til varslingsområdet"
 
-#: src/application_settings/preferences_dialog.rs:136
+#: src/application_settings/preferences_dialog.rs:287
 msgid "Always ask"
 msgstr "Spør alltid"
 
-#: src/application_settings/preferences_dialog.rs:139
+#: src/application_settings/preferences_dialog.rs:290
 msgid "When closing window"
 msgstr "Når vinduet lukkes"
 
-#: src/application_settings/preferences_dialog.rs:158
+#: src/application_settings/preferences_dialog.rs:309
 msgid "Start in System Tray"
 msgstr "Start i varslingsområdet"
 
-#: src/application_settings/preferences_dialog.rs:160
+#: src/application_settings/preferences_dialog.rs:311
 msgid "Launch in the background and show only the tray icon."
 msgstr "Start i bakgrunnen og vis bare ikonet i varslingsområdet."
 
-#: src/application_settings/preferences_dialog.rs:168
+#: src/application_settings/preferences_dialog.rs:319
 msgid "Desktop Notifications"
 msgstr "Skrivebordsvarsler"
 
-#: src/application_settings/preferences_dialog.rs:170
+#: src/application_settings/preferences_dialog.rs:321
 msgid ""
 "Notify about finished scans and updates while the window is not in focus."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:182
+#: src/application_settings/preferences_dialog.rs:333
 msgid "Behavior"
 msgstr "Oppførsel"
 
-#: src/application_settings/preferences_dialog.rs:186
+#: src/application_settings/preferences_dialog.rs:337
 msgid "Scan Behavior"
 msgstr "Skanneoppførsel"
 
-#: src/application_settings/preferences_dialog.rs:187
+#: src/application_settings/preferences_dialog.rs:338
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:190
+#: src/application_settings/preferences_dialog.rs:341
 msgid "Show Live Scan Progress"
 msgstr "Vis skannefremdrift fortløpende"
 
-#: src/application_settings/preferences_dialog.rs:191
+#: src/application_settings/preferences_dialog.rs:342
 msgid "Display files being scanned in real time."
 msgstr "Vis filer som skannes i sanntid."
 
-#: src/application_settings/preferences_dialog.rs:198
+#: src/application_settings/preferences_dialog.rs:349
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:199
+#: src/application_settings/preferences_dialog.rs:350
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:200
+#: src/application_settings/preferences_dialog.rs:351
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:203
+#: src/application_settings/preferences_dialog.rs:354
 msgid "Scan Backend"
 msgstr "Skannemotor"
 
-#: src/application_settings/preferences_dialog.rs:205
+#: src/application_settings/preferences_dialog.rs:356
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:266
+#: src/application_settings/preferences_dialog.rs:419
 #: src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "Fjern"
 
-#: src/application_settings/preferences_dialog.rs:299
+#: src/application_settings/preferences_dialog.rs:452
 #: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "Unntak"
 
-#: src/application_settings/preferences_dialog.rs:311
+#: src/application_settings/preferences_dialog.rs:464
 msgid "Preset Exclusions"
 msgstr "Forhåndsinnstilte ekskluderinger"
 
-#: src/application_settings/preferences_dialog.rs:313
+#: src/application_settings/preferences_dialog.rs:466
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 "Vanlige mapper å ekskludere fra skanning. Endringer lagres umiddelbart."
 
-#: src/application_settings/preferences_dialog.rs:318
+#: src/application_settings/preferences_dialog.rs:471
 msgid "Custom Exclusions"
 msgstr "Egendefinerte ekskluderinger"
 
-#: src/application_settings/preferences_dialog.rs:320
+#: src/application_settings/preferences_dialog.rs:473
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:324
+#: src/application_settings/preferences_dialog.rs:477
 msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude eller *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:365
-#: src/application_window_shell.rs:152
+#: src/application_settings/preferences_dialog.rs:518
+#: src/application_window_shell.rs:154
 msgid "Preferences"
 msgstr "Brukervalg"
 
-#: src/application_window_shell.rs:75
-msgid "The quarantine database could not be opened"
-msgstr ""
-
-#: src/application_window_shell.rs:153
-msgid "About ClamUI"
-msgstr "Om ClamUI"
-
-#: src/application_window_shell.rs:154 src/application_window_shell.rs:455
-#: src/desktop_integration/system_tray_menu.rs:49
-msgid "Quit"
-msgstr "Avslutt"
-
-#: src/application_window_shell.rs:157
-msgid "Menu"
-msgstr "Meny"
-
-#: src/application_window_shell.rs:176
-msgid "translator-credits"
-msgstr "John Erling Blad https://github.com/jeblad"
-
-#: src/application_window_shell.rs:235
-msgid "Toggle sidebar"
-msgstr ""
-
-#: src/application_window_shell.rs:322
-#: src/malware_scan/scan_progress_page.rs:338
-msgid "Scan"
-msgstr "Skanning"
-
-#: src/application_window_shell.rs:329
+#: src/application_settings/preferences_dialog.rs:526
+#: src/application_window_shell.rs:331
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Database"
 
-#: src/application_window_shell.rs:336
+#: src/application_settings/preferences_dialog.rs:528
+msgid "freshclam settings"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:534
+msgid "Scanner"
+msgstr "Skanner"
+
+#: src/application_settings/preferences_dialog.rs:536
+msgid "clamd settings"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:541
+msgid "On-Access"
+msgstr "Sanntidsskanning"
+
+#: src/application_settings/preferences_dialog.rs:543
+msgid "On-access scanning settings"
+msgstr ""
+
+#: src/application_window_shell.rs:77
+msgid "The quarantine database could not be opened"
+msgstr ""
+
+#: src/application_window_shell.rs:155
+msgid "About ClamUI"
+msgstr "Om ClamUI"
+
+#: src/application_window_shell.rs:156 src/application_window_shell.rs:459
+#: src/desktop_integration/system_tray_menu.rs:49
+msgid "Quit"
+msgstr "Avslutt"
+
+#: src/application_window_shell.rs:159
+msgid "Menu"
+msgstr "Meny"
+
+#: src/application_window_shell.rs:178
+msgid "translator-credits"
+msgstr "John Erling Blad https://github.com/jeblad"
+
+#: src/application_window_shell.rs:237
+msgid "Toggle sidebar"
+msgstr ""
+
+#: src/application_window_shell.rs:324
+#: src/malware_scan/scan_progress_page.rs:356
+msgid "Scan"
+msgstr "Skanning"
+
+#: src/application_window_shell.rs:338
 msgid "Logs"
 msgstr "Logger"
 
-#: src/application_window_shell.rs:343
+#: src/application_window_shell.rs:345
 msgid "Components"
 msgstr "Komponenter"
 
-#: src/application_window_shell.rs:350
-#: src/malware_scan/detected_threat_row.rs:110
-#: src/malware_scan/scan_results_dialog.rs:199
+#: src/application_window_shell.rs:352
+#: src/malware_scan/detected_threat_row.rs:111
+#: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Sett i karantene"
 
-#: src/application_window_shell.rs:357
-#: src/malware_scan/scan_results_dialog.rs:324
+#: src/application_window_shell.rs:359
+#: src/malware_scan/scan_results_dialog.rs:334
 msgid "Statistics"
 msgstr "Statistikk"
 
-#: src/application_window_shell.rs:449
+#: src/application_window_shell.rs:453
 msgid "Close ClamUI?"
 msgstr "Vil du lukke ClamUI?"
 
-#: src/application_window_shell.rs:451
+#: src/application_window_shell.rs:455
 msgid "Keep ClamUI running in the system tray, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:540
+#: src/application_window_shell.rs:544
 msgid "The quarantine database could not be locked"
 msgstr ""
 
@@ -935,110 +1009,115 @@ msgstr ""
 msgid "Restore"
 msgstr "Gjenopprett"
 
-#: src/main.rs:65
+#: src/main.rs:66
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:42
+#: src/malware_scan/detected_threat_row.rs:43
 msgid "Critical"
 msgstr "Kritisk"
 
-#: src/malware_scan/detected_threat_row.rs:43
+#: src/malware_scan/detected_threat_row.rs:44
 msgid "High"
 msgstr "Høy"
 
-#: src/malware_scan/detected_threat_row.rs:44
+#: src/malware_scan/detected_threat_row.rs:45
 msgid "Medium"
 msgstr "Medium"
 
-#: src/malware_scan/detected_threat_row.rs:45
+#: src/malware_scan/detected_threat_row.rs:46
 msgid "Low"
 msgstr "Lav"
 
-#: src/malware_scan/detected_threat_row.rs:65
+#: src/malware_scan/detected_threat_row.rs:66
 #, rust-format
 msgid "Moved to quarantine: {path}"
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:121
+#: src/malware_scan/detected_threat_row.rs:122
+#: src/malware_scan/scan_progress_page.rs:736
+msgid "Scan with VirusTotal"
+msgstr "Skann med VirusTotal"
+
+#: src/malware_scan/detected_threat_row.rs:132
 msgid "Exclude"
 msgstr "Unnta"
 
-#: src/malware_scan/detected_threat_row.rs:131
+#: src/malware_scan/detected_threat_row.rs:142
 msgid "Copy Path"
 msgstr "Kopier sti"
 
-#: src/malware_scan/scan_progress_page.rs:156
+#: src/malware_scan/scan_progress_page.rs:167
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:159
+#: src/malware_scan/scan_progress_page.rs:170
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:163
+#: src/malware_scan/scan_progress_page.rs:174
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:167
+#: src/malware_scan/scan_progress_page.rs:178
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:172
+#: src/malware_scan/scan_progress_page.rs:183
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:184
+#: src/malware_scan/scan_progress_page.rs:195
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr "Skannemål eksisterer ikke eller inneholder en ugyldig NUL-byte"
 
-#: src/malware_scan/scan_progress_page.rs:187
+#: src/malware_scan/scan_progress_page.rs:198
 msgid "Scan target is not a regular file or directory"
 msgstr "Skannemål er ikke en vanlig fil eller mappe"
 
-#: src/malware_scan/scan_progress_page.rs:192
+#: src/malware_scan/scan_progress_page.rs:203
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:199
+#: src/malware_scan/scan_progress_page.rs:210
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:203
+#: src/malware_scan/scan_progress_page.rs:214
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:211
+#: src/malware_scan/scan_progress_page.rs:222
 msgid "No files could be scanned"
 msgstr "Ingen filer kunne skannes"
 
-#: src/malware_scan/scan_progress_page.rs:217
+#: src/malware_scan/scan_progress_page.rs:228
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:229
+#: src/malware_scan/scan_progress_page.rs:240
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] "{count} fil var utilgjengelig"
 msgstr[1] "{count} filer var utilgjengelige"
 
-#: src/malware_scan/scan_progress_page.rs:235
+#: src/malware_scan/scan_progress_page.rs:246
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] "{count} fil kunne ikke leses"
 msgstr[1] "{count} filer kunne ikke leses"
 
-#: src/malware_scan/scan_progress_page.rs:241
+#: src/malware_scan/scan_progress_page.rs:252
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -1053,35 +1132,35 @@ msgstr[1] ""
 "{count} ikke-dødelige advarsler under skanning; noen filer kan bare ha blitt "
 "skannet delvis"
 
-#: src/malware_scan/scan_progress_page.rs:302
+#: src/malware_scan/scan_progress_page.rs:320
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:305
+#: src/malware_scan/scan_progress_page.rs:323
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:320
+#: src/malware_scan/scan_progress_page.rs:338
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:339
+#: src/malware_scan/scan_progress_page.rs:357
 msgid "Scanning…"
 msgstr "Skanner …"
 
-#: src/malware_scan/scan_progress_page.rs:340
+#: src/malware_scan/scan_progress_page.rs:358
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:343
-#: src/malware_scan/scan_results_dialog.rs:94
-#: src/malware_scan/scan_results_dialog.rs:350
+#: src/malware_scan/scan_progress_page.rs:361
+#: src/malware_scan/scan_results_dialog.rs:95
+#: src/malware_scan/scan_results_dialog.rs:360
 msgid "Threats found"
 msgstr "Trusler funnet"
 
-#: src/malware_scan/scan_progress_page.rs:356
-#: src/malware_scan/scan_results_dialog.rs:72
+#: src/malware_scan/scan_progress_page.rs:374
+#: src/malware_scan/scan_results_dialog.rs:73
 #: src/scheduled_scans/headless_scheduled_scan.rs:163
 #, rust-format
 msgid "{count} threat found"
@@ -1089,163 +1168,167 @@ msgid_plural "{count} threats found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:363
+#: src/malware_scan/scan_progress_page.rs:381
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "{count} fil skannet"
 msgstr[1] "{count} filer skannet"
 
-#: src/malware_scan/scan_progress_page.rs:382
+#: src/malware_scan/scan_progress_page.rs:400
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:433
+#: src/malware_scan/scan_progress_page.rs:451
 msgid "No Profile (Manual)"
 msgstr "Ingen profil (manuelt)"
 
-#: src/malware_scan/scan_progress_page.rs:638
+#: src/malware_scan/scan_progress_page.rs:656
 msgid "Scan Profile"
 msgstr "Skanneprofil"
 
-#: src/malware_scan/scan_progress_page.rs:641
+#: src/malware_scan/scan_progress_page.rs:659
 msgid "Profile"
 msgstr "Profil"
 
-#: src/malware_scan/scan_progress_page.rs:651
+#: src/malware_scan/scan_progress_page.rs:669
 #: src/scan_profiles/profile_manager_dialog.rs:139
 msgid "Manage Profiles"
 msgstr "Administrer profiler"
 
-#: src/malware_scan/scan_progress_page.rs:660
+#: src/malware_scan/scan_progress_page.rs:678
 msgid "Scan Targets"
 msgstr "Skannemål"
 
-#: src/malware_scan/scan_progress_page.rs:661
+#: src/malware_scan/scan_progress_page.rs:679
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:669
+#: src/malware_scan/scan_progress_page.rs:687
 msgid "Add Files"
 msgstr "Legg til filer"
 
-#: src/malware_scan/scan_progress_page.rs:676
+#: src/malware_scan/scan_progress_page.rs:694
 #: src/scan_profiles/profile_editor_dialog.rs:170
 #: src/scan_profiles/profile_editor_dialog.rs:269
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:688
+#: src/malware_scan/scan_progress_page.rs:706
 msgid "No targets added"
 msgstr "Ingen mål er lagt til"
 
-#: src/malware_scan/scan_progress_page.rs:701
+#: src/malware_scan/scan_progress_page.rs:719
 msgid "Start Scan"
 msgstr "Start skanning"
 
-#: src/malware_scan/scan_progress_page.rs:711
+#: src/malware_scan/scan_progress_page.rs:729
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:773
+#: src/malware_scan/scan_progress_page.rs:798
 msgid "View Results"
 msgstr "Vis resultater"
 
-#: src/malware_scan/scan_progress_page.rs:853
+#: src/malware_scan/scan_progress_page.rs:879
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:868
+#: src/malware_scan/scan_progress_page.rs:894
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:974
+#: src/malware_scan/scan_progress_page.rs:941
+msgid "A device was connected during another scan, so it was not scanned."
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:1024
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:84
-#: src/malware_scan/scan_results_dialog.rs:336
+#: src/malware_scan/scan_results_dialog.rs:85
+#: src/malware_scan/scan_results_dialog.rs:346
 msgid "Files scanned"
 msgstr "Filer skannet"
 
-#: src/malware_scan/scan_results_dialog.rs:89
-#: src/malware_scan/scan_results_dialog.rs:343
+#: src/malware_scan/scan_results_dialog.rs:90
+#: src/malware_scan/scan_results_dialog.rs:353
 msgid "Directories"
 msgstr "Mapper"
 
-#: src/malware_scan/scan_results_dialog.rs:177
+#: src/malware_scan/scan_results_dialog.rs:187
 #, rust-format
 msgid "Quarantine {count} Threat"
 msgid_plural "Quarantine {count} Threats"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_results_dialog.rs:192
+#: src/malware_scan/scan_results_dialog.rs:202
 msgid "Move to Quarantine?"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:195
+#: src/malware_scan/scan_results_dialog.rs:205
 msgid "This removes each original file from its current location."
 msgstr "Dette fjerner hver originalfil fra sin nåværende plassering."
 
-#: src/malware_scan/scan_results_dialog.rs:274
+#: src/malware_scan/scan_results_dialog.rs:284
 msgid "Scan Results"
 msgstr "Skanneresultater"
 
-#: src/malware_scan/scan_results_dialog.rs:286
+#: src/malware_scan/scan_results_dialog.rs:296
 msgid "Export Results"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:292
+#: src/malware_scan/scan_results_dialog.rs:302
 msgid "Copy Results"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:357
+#: src/malware_scan/scan_results_dialog.rs:367
 msgid "Not accessible"
 msgstr "Ikke tilgjengelig"
 
-#: src/malware_scan/scan_results_dialog.rs:375
+#: src/malware_scan/scan_results_dialog.rs:385
 msgid "Detected Threats"
 msgstr "Oppdagede trusler"
 
-#: src/malware_scan/scan_results_dialog.rs:392
+#: src/malware_scan/scan_results_dialog.rs:402
 msgid "Files Not Accessible"
 msgstr "Filer uten tilgang"
 
-#: src/malware_scan/scan_results_dialog.rs:400
+#: src/malware_scan/scan_results_dialog.rs:410
 msgid "Scan details"
 msgstr "Skannedetaljer"
 
-#: src/malware_scan/scan_results_dialog.rs:484
+#: src/malware_scan/scan_results_dialog.rs:498
 #, rust-format
 msgid "Move '{path}' to quarantine?"
 msgstr "Flytte '{path}' til karantene?"
 
-#: src/malware_scan/scan_results_dialog.rs:502
+#: src/malware_scan/scan_results_dialog.rs:516
 #, rust-format
 msgid "Move {count} detected file to quarantine?"
 msgid_plural "Move {count} detected files to quarantine?"
 msgstr[0] "Flytte {count} oppdaget fil til karantene?"
 msgstr[1] "Flytte {count} oppdagede filer til karantene?"
 
-#: src/malware_scan/scan_results_dialog.rs:518
+#: src/malware_scan/scan_results_dialog.rs:532
 msgid "Path copied to clipboard"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:530
+#: src/malware_scan/scan_results_dialog.rs:544
 msgid "This file will be skipped in future scans"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:532
+#: src/malware_scan/scan_results_dialog.rs:546
 msgid "This exclusion already exists"
 msgstr "Denne ekskluderingen eksisterer allerede"
 
-#: src/malware_scan/scan_results_dialog.rs:541
+#: src/malware_scan/scan_results_dialog.rs:566
 msgid "Results copied to clipboard"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:590
+#: src/malware_scan/scan_results_dialog.rs:615
 msgid "Results exported"
 msgstr ""
 
@@ -1537,10 +1620,6 @@ msgstr "Brukes til månedlige skanninger."
 msgid "Scan Targets (separated by commas; empty scans your home folder)"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:193
-msgid "Skip on Battery"
-msgstr "Hopp over på batteri"
-
 #: src/scheduled_scans/schedule_preferences_page.rs:194
 msgid "Do not start scheduled scans while on battery power."
 msgstr "Ikke start planlagte skanninger mens du er på batteri."
@@ -1727,3 +1806,153 @@ msgstr ""
 #, rust-format
 msgid "The update could not be added to the history: {error}"
 msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:68
+msgid "VirusTotal rejected the API key."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:70
+msgid "The VirusTotal request limit was reached. Try again later."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:72
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:427
+msgid "File too large"
+msgstr "Filen er for stor"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:74
+msgid ""
+"VirusTotal has the file but did not finish analyzing it in time. Check back "
+"later."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:77
+msgid "The file changed after you confirmed, so it was not uploaded."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:85
+msgid "Path is not a regular file"
+msgstr "Banen er ikke en vanlig fil"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:87
+#, rust-format
+msgid "Cannot read file: {error}"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:150
+#, rust-format
+msgid ""
+"VirusTotal does not know this file yet.\n"
+"\n"
+"{path}\n"
+"{size}\n"
+"\n"
+"Uploading shares its contents with VirusTotal and its security partners, and "
+"other users may be able to download them. Only upload files you are "
+"authorized to share, and never files with personal or confidential data."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:161
+msgid "Upload to VirusTotal?"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:163
+msgid "Upload File"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:184
+msgid "Checking the file's hash…"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:185
+#: src/virustotal_lookup/virustotal_preferences_page.rs:144
+msgid "Not configured"
+msgstr "Ikke satt opp"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:186
+msgid "Uploading and waiting for the analysis…"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:189
+#, rust-format
+msgid "{count} engine detected a threat"
+msgid_plural "{count} engines detected a threat"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:195
+msgid "No engines detected a threat"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:196
+msgid "The lookup failed"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:203
+msgid ""
+"Add an API key in Preferences, or open VirusTotal's upload page to send the "
+"file yourself."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:226
+msgid "Malicious"
+msgstr "Ondsinnet"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:227
+msgid "Suspicious"
+msgstr "Mistenksom"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:264
+msgid "VirusTotal Scan"
+msgstr "VirusTotal skanning"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:329
+msgid "View on VirusTotal"
+msgstr "Vis på VirusTotal"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:337
+msgid "Open VirusTotal website"
+msgstr "Åpne nettstedet til VirusTotal"
+
+#: src/virustotal_lookup/virustotal_lookup_dialog.rs:390
+msgid "VirusTotal does not know this file, and it was not uploaded."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:30
+msgid "VirusTotal API keys must be exactly 64 hexadecimal characters"
+msgstr "VirusTotal-API-nøkler må inneholde nøyaktig 64 heksadesimale tegn"
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:32
+msgid "Unable to read the stored API key"
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:33
+msgid "Keyring unavailable"
+msgstr "Nøkkelringen er utilgjengelig"
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:58
+#: src/virustotal_lookup/virustotal_preferences_page.rs:75
+msgid "API Key"
+msgstr "API-nøkkel"
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:59
+msgid ""
+"The key is stored in the system keyring. ClamUI first asks VirusTotal about "
+"a file's hash, and only uploads the file after you confirm."
+msgstr ""
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:67
+msgid "Delete Key"
+msgstr "Slett nøkkel"
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:86
+msgid "Get a free API key"
+msgstr "Skaff en gratis API-nøkkel"
+
+#: src/virustotal_lookup/virustotal_preferences_page.rs:87
+msgid ""
+"Free tier: 4 requests per minute, 500 per day. Files up to 650 MB can be "
+"scanned."
+msgstr ""
+"Gratis nivå: 4 forespørsler per minutt, 500 per dag. Filer på opptil 650 MB "
+"kan skannes."

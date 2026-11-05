@@ -156,7 +156,7 @@ pub fn launcher_path_from(
         .unwrap_or(fallback_executable)
 }
 
-fn current_launcher_path() -> io::Result<PathBuf> {
+pub fn current_launcher_path() -> io::Result<PathBuf> {
     let current_executable = std::env::current_exe()?;
     Ok(launcher_path_from(
         &std::env::args_os().next().unwrap_or_default(),

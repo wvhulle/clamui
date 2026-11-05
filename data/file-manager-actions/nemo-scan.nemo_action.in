@@ -1,0 +1,7 @@
+[Nemo Action]
+Name=Scan with ClamUI
+Comment=Scan the selection for viruses
+Exec="@LAUNCHER@" %F
+Icon-Name=io.github.wvhulle.ClamUI
+Selection=notnone
+Extensions=any;

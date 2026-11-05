@@ -50,6 +50,15 @@
     <key name="schedule-auto-quarantine" type="b">
       <default>false</default>
     </key>
+    <key name="device-scan-enabled" type="b">
+      <default>false</default>
+    </key>
+    <key name="device-scan-max-gigabytes" type="u">
+      <default>32</default>
+    </key>
+    <key name="device-scan-skip-on-battery" type="b">
+      <default>true</default>
+    </key>
     <key name="scan-backend" type="s">
       <choices>
         <choice value="auto"/>

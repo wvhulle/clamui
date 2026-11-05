@@ -23,6 +23,7 @@ use crate::{
     },
     clamav_components::component_status_page::ComponentStatusPage,
     desktop_integration::{
+        device_mount_scans::watch_device_mounts,
         running_instance_forwarding::{
             SCAN_PATHS_ACTION, SHOW_WINDOW_ACTION, paths_from_variant, scan_paths_action_type,
         },
@@ -49,6 +50,7 @@ use crate::{
 const PREFERENCES_STARTUP_PAGE: &str = "preferences";
 
 struct ApplicationPages {
+    _device_monitor: gio::VolumeMonitor,
     _vault_lock: ProcessFileLock,
     _scan_page: Controller<ScanProgressPage>,
     _quarantine_page: Controller<QuarantineEntriesPage>,
@@ -373,6 +375,7 @@ fn application_pages(
         ));
     }
     register_application_actions(window_root, &page_stack);
+    let device_monitor = watch_device_mounts(&scan_page);
     let main_application = relm4::main_application();
     let quick_scan_action = gio::SimpleAction::new("quick-scan", None);
     let quick_scan_sender = scan_page.sender().clone();
@@ -419,6 +422,7 @@ fn application_pages(
     ShellContent::VaultReady {
         _application_pages: Box::new(ApplicationPages {
             _vault_lock: vault_lock,
+            _device_monitor: device_monitor,
             _scan_page: scan_page,
             _quarantine_page: quarantine_page,
             _database_page: database_page,

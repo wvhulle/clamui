@@ -81,15 +81,17 @@ Use `adw::PreferencesDialog` and `gio::Settings`.
 - [x] Live scan progress and scan backend choice.
 - [x] Close action and starting in the background, with the tray.
 - [x] Exclusions: presets, custom paths and patterns.
-- [ ] Database and scanner settings. Editing host ClamAV configuration needs a decision: only with an allowlist, because `VirusEvent` and `OnUpdateExecute` run commands.
+- [x] Database and scanner settings, shown read-only. Editing is deliberately not ported: it needed a root helper, and `VirusEvent` and `OnUpdateExecute` run commands.
 - [x] Scheduled scans with user systemd timers. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
-- [ ] On-access settings.
-- [ ] VirusTotal: key storage, and confirmation before any upload.
-- [ ] Debug logs.
+- [x] On-access settings, shown read-only for the same reason.
+- [x] VirusTotal: key in the system keyring, hash lookup first, and confirmation before any upload. There's no plaintext key fallback. Uploads use a generic file name, so the real name isn't shared.
+- [x] Device auto-scan for removable and external drives, without auto-quarantine or network and internal volumes.
+
+Debug logs and the in-app language picker are deliberately not ported: this fork has no debug logging, and the language follows the system locale.
 
 ## Desktop integration
 
 - [x] Tray with `ksni`.
 - [x] Notifications with `gio::Notification`, and over D-Bus from scheduled scans.
 - [x] A second launch forwards its paths to the running window.
-- [ ] File manager actions.
+- [x] File manager actions for Nautilus, Nemo and Dolphin. Scan only, with no VirusTotal action.

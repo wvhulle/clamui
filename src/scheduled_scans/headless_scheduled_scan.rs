@@ -32,7 +32,7 @@ use crate::{
 
 const THREATS_FOUND_EXIT_CODE: u8 = 1;
 const SCAN_FAILED_EXIT_CODE: u8 = 2;
-const POWER_SUPPLY_DIRECTORY: &str = "/sys/class/power_supply";
+pub const POWER_SUPPLY_DIRECTORY: &str = "/sys/class/power_supply";
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ScheduledScanOptions {

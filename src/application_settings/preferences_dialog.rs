@@ -8,14 +8,31 @@ use relm4::{
 
 use crate::{
     APPLICATION_ID,
-    application_settings::scan_exclusion_rules::{
-        ExclusionEntry, ExclusionKind, PRESET_DIRECTORY_NAMES,
+    application_settings::{
+        clamav_host_config::{
+            ConfigSetting, HostConfigView, is_on_access_setting, read_clamd_config,
+            read_freshclam_config,
+        },
+        scan_exclusion_rules::{ExclusionEntry, ExclusionKind, PRESET_DIRECTORY_NAMES},
+    },
+    desktop_integration::{
+        device_mount_scans::{
+            DEVICE_SCAN_ENABLED_KEY, DEVICE_SCAN_MAX_GIGABYTES_KEY, DEVICE_SCAN_SKIP_BATTERY_KEY,
+        },
+        file_manager_actions::{
+            SUPPORTED_FILE_MANAGERS, file_manager_action_installed, install_file_manager_action,
+            remove_file_manager_action,
+        },
     },
     malware_scan::{
         scanner_command_builder::ScannerBackendPreference,
         scanner_output_parser::sanitize_scanner_line,
     },
-    scheduled_scans::schedule_preferences_page::SchedulePreferencesPage,
+    scheduled_scans::{
+        scan_schedule_units::current_launcher_path,
+        schedule_preferences_page::SchedulePreferencesPage,
+    },
+    virustotal_lookup::virustotal_preferences_page::VirusTotalPreferencesPage,
 };
 
 const EXCLUSION_RULES_KEY: &str = "exclusion-rules";
@@ -123,6 +140,140 @@ fn preset_description(exclusion_pattern: &str) -> String {
     }
 }
 
+fn host_config_page(
+    page_title: String,
+    page_icon: &str,
+    group_title: String,
+    host_config: HostConfigView,
+    shows_setting: impl Fn(&ConfigSetting) -> bool,
+) -> adw::PreferencesPage {
+    let config_page = adw::PreferencesPage::builder()
+        .title(page_title)
+        .icon_name(page_icon)
+        .build();
+    let config_group = adw::PreferencesGroup::builder().title(group_title).build();
+    match host_config {
+        HostConfigView::ConfigFound {
+            config_path,
+            config_settings,
+        } => {
+            config_group.set_description(Some(
+                &gettext(
+                    "Read-only view of {path}. ClamUI does not edit this file: it is owned by \
+                     root, and settings such as VirusEvent run commands as the scanner's user.",
+                )
+                .replace("{path}", &config_path),
+            ));
+            let shown_settings = config_settings
+                .iter()
+                .filter(|config_setting| shows_setting(config_setting))
+                .collect::<Vec<_>>();
+            if shown_settings.is_empty() {
+                config_group.add(
+                    &adw::ActionRow::builder()
+                        .title(gettext("No settings in this section"))
+                        .build(),
+                );
+            }
+            shown_settings.iter().for_each(|config_setting| {
+                config_group.add(
+                    &adw::ActionRow::builder()
+                        .use_markup(false)
+                        .title(sanitize_scanner_line(&config_setting.setting_key))
+                        .subtitle(sanitize_scanner_line(&config_setting.setting_value))
+                        .subtitle_selectable(true)
+                        .build(),
+                );
+            });
+        }
+        HostConfigView::ConfigNotFound => {
+            config_group.add(
+                &adw::ActionRow::builder()
+                    .title(gettext("Configuration file not found"))
+                    .build(),
+            );
+        }
+    }
+    config_page.add(&config_group);
+    config_page
+}
+
+fn file_manager_group() -> adw::PreferencesGroup {
+    let integration_group = adw::PreferencesGroup::builder()
+        .title(gettext("File Manager Integration"))
+        .description(gettext(
+            "Add context menu actions for supported file managers.",
+        ))
+        .build();
+    SUPPORTED_FILE_MANAGERS.iter().for_each(|file_manager| {
+        let file_manager = *file_manager;
+        let data_directory = glib::user_data_dir();
+        let manager_row = adw::SwitchRow::builder()
+            .title(file_manager.displayed_name())
+            .active(file_manager_action_installed(file_manager, &data_directory))
+            .build();
+        manager_row.connect_active_notify(move |changed_row| {
+            let change_outcome = if changed_row.is_active() {
+                current_launcher_path().and_then(|launcher_path| {
+                    install_file_manager_action(file_manager, &data_directory, &launcher_path)
+                })
+            } else {
+                remove_file_manager_action(file_manager, &data_directory)
+            };
+            changed_row.set_subtitle(&change_outcome.map_or_else(
+                |change_failure| change_failure.to_string(),
+                |()| String::new(),
+            ));
+        });
+        integration_group.add(&manager_row);
+    });
+    integration_group
+}
+
+fn device_scan_group(settings: &gio::Settings) -> adw::PreferencesGroup {
+    let device_group = adw::PreferencesGroup::builder()
+        .title(gettext("Device Auto-Scan"))
+        .description(gettext(
+            "Automatically scan removable and external drives when they are connected.",
+        ))
+        .build();
+    let enabled_row = adw::SwitchRow::builder()
+        .title(gettext("Enable Device Auto-Scan"))
+        .build();
+    settings
+        .bind(DEVICE_SCAN_ENABLED_KEY, &enabled_row, "active")
+        .build();
+    device_group.add(&enabled_row);
+    let size_row = adw::SpinRow::builder()
+        .title(gettext("Max Device Size (GB)"))
+        .subtitle(gettext("0 means no size limit."))
+        .adjustment(&gtk::Adjustment::new(32.0, 0.0, 10_000.0, 1.0, 10.0, 0.0))
+        .build();
+    settings
+        .bind(DEVICE_SCAN_MAX_GIGABYTES_KEY, &size_row, "value")
+        .mapping(|stored_value, _value_type| {
+            stored_value
+                .get::<u32>()
+                .map(|maximum_gigabytes| f64::from(maximum_gigabytes).to_value())
+        })
+        .set_mapping(|spin_value, _variant_type| {
+            spin_value
+                .get::<f64>()
+                .ok()
+                .map(|maximum_gigabytes| (maximum_gigabytes as u32).to_variant())
+        })
+        .build();
+    device_group.add(&size_row);
+    let battery_row = adw::SwitchRow::builder()
+        .title(gettext("Skip on Battery"))
+        .build();
+    settings
+        .bind(DEVICE_SCAN_SKIP_BATTERY_KEY, &battery_row, "active")
+        .build();
+    device_group.add(&battery_row);
+    device_group
+}
+
 fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
     let window_group = adw::PreferencesGroup::builder()
         .title(gettext("Window Behavior"))
@@ -226,6 +377,8 @@ fn behavior_page(settings: &gio::Settings) -> adw::PreferencesPage {
     scan_group.add(&backend_row);
     behavior_page.add(&scan_group);
     behavior_page.add(&window_group(settings));
+    behavior_page.add(&device_scan_group(settings));
+    behavior_page.add(&file_manager_group());
     behavior_page
 }
 
@@ -369,8 +522,32 @@ pub fn present_preferences_dialog() {
     preferences_dialog.add(&exclusions_page(&settings));
     let schedule_page = SchedulePreferencesPage::builder().launch(()).detach();
     preferences_dialog.add(schedule_page.widget());
+    preferences_dialog.add(&host_config_page(
+        gettext("Database"),
+        "drive-harddisk-symbolic",
+        gettext("freshclam settings"),
+        read_freshclam_config(),
+        |_config_setting| true,
+    ));
+    let clamd_config = read_clamd_config();
+    preferences_dialog.add(&host_config_page(
+        gettext("Scanner"),
+        "system-search-symbolic",
+        gettext("clamd settings"),
+        clamd_config.clone(),
+        |config_setting| !is_on_access_setting(config_setting),
+    ));
+    preferences_dialog.add(&host_config_page(
+        gettext("On-Access"),
+        "security-high-symbolic",
+        gettext("On-access scanning settings"),
+        clamd_config,
+        is_on_access_setting,
+    ));
+    let virustotal_page = VirusTotalPreferencesPage::builder().launch(()).detach();
+    preferences_dialog.add(virustotal_page.widget());
     preferences_dialog.connect_closed(move |_closed_dialog| {
-        let _keep_page_until_closed = &schedule_page;
+        let _keep_pages_until_closed = (&schedule_page, &virustotal_page);
     });
     preferences_dialog.present(relm4::main_application().active_window().as_ref());
 }
