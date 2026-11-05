@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="io.github.wvhulle.ClamUI" path="/io/github/wvhulle/ClamUI/">
+    <key name="show-live-progress" type="b">
+      <default>true</default>
+    </key>
+    <key name="scan-backend" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="clamd"/>
+        <choice value="clamscan"/>
+      </choices>
+      <default>"auto"</default>
+    </key>
+    <key name="exclusion-rules" type="a(ssb)">
+      <default>[("node_modules", "directory", true), (".git", "directory", true), (".venv", "directory", true), ("build", "directory", true), ("dist", "directory", true), ("__pycache__", "directory", true)]</default>
+    </key>
+  </schema>
+</schemalist>

@@ -79,12 +79,16 @@
             CLAMUI_LOCALE_DIRECTORY = "${placeholder "out"}/share/locale";
             nativeBuildInputs = commonArgs.nativeBuildInputs ++ [
               pkgs.gettext
+              pkgs.glib
               pkgs.gnumake
               pkgs.wrapGAppsHook4
             ];
-            buildInputs = commonArgs.buildInputs ++ [ pkgs.adwaita-icon-theme ];
+            buildInputs = commonArgs.buildInputs ++ [
+              pkgs.adwaita-icon-theme
+              pkgs.dconf
+            ];
             preFixup = ''
-              gappsWrapperArgs+=(--prefix XDG_DATA_DIRS : "${
+              gappsWrapperArgs+=(--prefix XDG_DATA_DIRS : "$out/share:${
                 lib.makeSearchPath "share" [
                   pkgs.adwaita-icon-theme
                   pkgs.hicolor-icon-theme
@@ -203,10 +207,16 @@
             treefmtWrapper
             rustfmtToolchain
             pkgs.gettext
+            pkgs.glib
             pkgs.gnumake
             pkgs.nixfmt
             pkgs.sqlite
           ];
+          shellHook = ''
+            export GSETTINGS_SCHEMA_DIR="$PWD/target/gschemas"
+            mkdir -p "$GSETTINGS_SCHEMA_DIR"
+            glib-compile-schemas --targetdir="$GSETTINGS_SCHEMA_DIR" data
+          '';
         };
       }
     );

@@ -23,7 +23,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 - [x] Results in an `adw::Dialog`, with files, directories and threats statistics.
 - [x] Severity badge per threat.
 - [x] Per-threat Copy Path.
-- [ ] Per-threat Exclude, once exclusions exist in Preferences.
+- [x] Per-threat Exclude.
 - [x] Quarantine All, with confirmation.
 - [x] Export and copy results.
 
@@ -78,8 +78,9 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 
 Use `adw::PreferencesDialog` and `gio::Settings`.
 
-- [ ] Behavior: close action, live scan progress.
-- [ ] Exclusions.
+- [x] Live scan progress and scan backend choice.
+- [ ] Close action and starting in the background, with the tray.
+- [x] Exclusions: presets, custom paths and patterns.
 - [ ] Database and scanner settings. Editing host ClamAV configuration needs a decision: only with an allowlist, because `VirusEvent` and `OnUpdateExecute` run commands.
 - [ ] Scheduled scans with user systemd timers.
 - [ ] On-access settings.

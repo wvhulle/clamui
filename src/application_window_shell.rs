@@ -16,6 +16,7 @@ use crate::{
         activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
         scan_statistics_page::{ScanStatisticsPage, ScanStatisticsPageInput},
     },
+    application_settings::preferences_dialog::present_preferences_dialog,
     clamav_components::component_status_page::ComponentStatusPage,
     file_quarantine::{
         quarantine_entries_page::{
@@ -32,6 +33,7 @@ use crate::{
 };
 
 const APPLICATION_DATA_NAME: &str = "clamui";
+const PREFERENCES_STARTUP_PAGE: &str = "preferences";
 
 struct ApplicationPages {
     _scan_page: Controller<ScanProgressPage>,
@@ -137,6 +139,7 @@ fn navigation_sidebar(
 
 fn primary_menu_button() -> gtk::MenuButton {
     let primary_menu = gio::Menu::new();
+    primary_menu.append(Some(&gettext("Preferences")), Some("app.preferences"));
     primary_menu.append(Some(&gettext("About ClamUI")), Some("app.about"));
     primary_menu.append(Some(&gettext("Quit")), Some("app.quit"));
     gtk::MenuButton::builder()
@@ -175,6 +178,11 @@ fn register_application_actions(window_root: &adw::ApplicationWindow, page_stack
     let about_action = gio::SimpleAction::new("about", None);
     about_action.connect_activate(|_activated_action, _parameter| present_about_dialog());
     main_application.add_action(&about_action);
+    let preferences_action = gio::SimpleAction::new("preferences", None);
+    preferences_action
+        .connect_activate(|_activated_action, _parameter| present_preferences_dialog());
+    main_application.add_action(&preferences_action);
+    main_application.set_accels_for_action("app.preferences", &["<Control>comma"]);
     let quit_action = gio::SimpleAction::new("quit", None);
     quit_action.connect_activate(|_activated_action, _parameter| {
         relm4::main_application().quit();
@@ -333,7 +341,11 @@ fn application_pages(
         },
     ];
     let page_stack = navigation_stack(&navigation_pages);
-    page_stack.set_visible_child_name(&startup_request.startup_page);
+    if startup_request.startup_page == PREFERENCES_STARTUP_PAGE {
+        present_preferences_dialog();
+    } else {
+        page_stack.set_visible_child_name(&startup_request.startup_page);
+    }
     let sidebar_list = navigation_sidebar(&navigation_pages, &page_stack);
     if !startup_request.scan_targets.is_empty() {
         scan_page.emit(ScanProgressPageInput::ScanTargetsChosen(

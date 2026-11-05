@@ -11,7 +11,7 @@ TRANSLATION_BUILD_DIRECTORY ?= target/locale
 SOURCE_FILES := $(shell find src -name '*.rs' | LC_ALL=C sort)
 LINGUAS := $(shell sed -e '/^[[:space:]]*$$/d' -e '/^\#/d' po/LINGUAS)
 
-.PHONY: build install install-binary install-data install-desktop-entry install-icons install-translations compile-translations update-translation-template
+.PHONY: build install install-binary install-data install-desktop-entry install-icons install-settings-schema install-translations compile-translations update-translation-template
 
 build:
 	$(CARGO) build --release --locked
@@ -21,13 +21,17 @@ install: install-binary install-data
 install-binary:
 	install -Dm755 $(RELEASE_BINARY) $(INSTALL_ROOT)/bin/clamui
 
-install-data: install-desktop-entry install-icons install-translations
+install-data: install-desktop-entry install-icons install-settings-schema install-translations
 
 install-desktop-entry:
 	install -Dm644 data/$(APPLICATION_ID).desktop.in $(SHARE_DIRECTORY)/applications/$(APPLICATION_ID).desktop
 
 install-icons:
 	install -Dm644 data/icons/hicolor/scalable/apps/$(APPLICATION_ID).svg $(SHARE_DIRECTORY)/icons/hicolor/scalable/apps/$(APPLICATION_ID).svg
+
+install-settings-schema:
+	install -Dm644 data/$(APPLICATION_ID).gschema.xml $(SHARE_DIRECTORY)/glib-2.0/schemas/$(APPLICATION_ID).gschema.xml
+	glib-compile-schemas $(SHARE_DIRECTORY)/glib-2.0/schemas
 
 update-translation-template:
 	xgettext --language=Rust --from-code=UTF-8 --keyword=gettext --keyword=ngettext:1,2 \

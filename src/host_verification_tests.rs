@@ -9,6 +9,7 @@ use std::{
 use futures::{StreamExt, future::ready, stream};
 
 use crate::{
+    application_settings::scan_exclusion_rules::ScanExclusions,
     file_quarantine::quarantine_entry_database::QuarantineVault,
     malware_scan::{
         eicar_test_file::eicar_test_bytes,
@@ -27,6 +28,7 @@ fn host_scan_request(
         scanner_backend,
         scanner_programs: ScannerProgramPaths::from_search_path(),
         file_list_directory: file_list_directory.to_path_buf(),
+        scan_exclusions: ScanExclusions::default(),
     }
 }
 

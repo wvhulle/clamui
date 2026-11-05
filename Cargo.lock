@@ -426,6 +426,7 @@ dependencies = [
  "hex",
  "humantime",
  "libc",
+ "regex",
  "relm4",
  "rusqlite",
  "rustix 1.1.5",

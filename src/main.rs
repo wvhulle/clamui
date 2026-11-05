@@ -1,4 +1,5 @@
 mod activity_history;
+mod application_settings;
 mod application_window_shell;
 mod clamav_components;
 mod file_quarantine;
@@ -10,10 +11,15 @@ mod startup_arguments;
 mod text_export_dialog;
 mod virus_database;
 
-use gettextrs::{LocaleCategory, bind_textdomain_codeset, bindtextdomain, setlocale, textdomain};
+use std::process::ExitCode;
+
+use gettextrs::{
+    LocaleCategory, bind_textdomain_codeset, bindtextdomain, gettext, setlocale, textdomain,
+};
 use relm4::adw;
 
 use crate::{
+    application_settings::preferences_dialog::settings_schema_is_installed,
     application_window_shell::ApplicationWindowShell, startup_arguments::parse_startup_arguments,
 };
 
@@ -33,8 +39,18 @@ fn initialize_translations() {
         .and_then(|_bound_codeset| textdomain(TRANSLATION_DOMAIN));
 }
 
-fn main() {
+fn main() -> ExitCode {
     initialize_translations();
+    if !settings_schema_is_installed() {
+        eprintln!(
+            "{}",
+            gettext(
+                "The ClamUI settings schema is not installed. Run make install, or set \
+                 GSETTINGS_SCHEMA_DIR."
+            )
+        );
+        return ExitCode::FAILURE;
+    }
     let application = adw::Application::builder()
         .application_id(APPLICATION_ID)
         .build();
@@ -42,4 +58,5 @@ fn main() {
     relm4::RelmApp::from_app(application)
         .with_args(Vec::new())
         .run_async::<ApplicationWindowShell>(startup_request);
+    ExitCode::SUCCESS
 }
