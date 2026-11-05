@@ -19,11 +19,12 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Scan results
 
-- [ ] Results in an `adw::Dialog`, with files, directories and threats statistics.
-- [ ] Severity badge per threat. Removed from this fork as unused; restore with the display.
-- [ ] Per-threat Exclude and Copy Path actions.
-- [ ] Quarantine All.
-- [ ] Export results.
+- [x] Results in an `adw::Dialog`, with files, directories and threats statistics.
+- [x] Severity badge per threat.
+- [x] Per-threat Copy Path.
+- [ ] Per-threat Exclude, once exclusions exist in Preferences.
+- [x] Quarantine All, with confirmation.
+- [x] Export and copy results.
 
 ## Logs
 

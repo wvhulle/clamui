@@ -6,6 +6,7 @@ mod host_verification_tests;
 mod malware_scan;
 mod shared_page_widget_templates;
 mod startup_arguments;
+mod text_export_dialog;
 mod virus_database;
 
 use gettextrs::{LocaleCategory, bind_textdomain_codeset, bindtextdomain, setlocale, textdomain};
