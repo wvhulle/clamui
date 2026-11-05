@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use gettextrs::gettext;
 
 use crate::{
@@ -8,10 +10,12 @@ use crate::{
     },
     clamav_components::distribution_install_guides::DistributionFamily,
     malware_scan::scanner_output_parser::sanitize_scanner_line,
+    signature_sources::signature_provider_catalogue::provider_of_signature,
     step_timeline::timeline_step_model::{
         StepActionSlot, StepChoiceRow, StepEvidenceRow, StepNodeState, TimelineStep,
         TimelineStepAction,
     },
+    threat_intel_lookup::malware_bazaar_client::SignatureLookup,
 };
 
 const TEST_SIGNATURE_MARKER: &str = "Eicar-Test-Signature";
@@ -20,6 +24,15 @@ const TEST_SIGNATURE_MARKER: &str = "Eicar-Test-Signature";
 pub struct DisplayedDetection {
     pub stored_detection: StoredDetection,
     pub file_state: DetectedFileState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SignatureLookupState {
+    NotLookedUp,
+    LookingUp,
+    KeyMissing,
+    LookupFinished(SignatureLookup),
+    LookupFailed { failure_text: String },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -125,6 +138,10 @@ fn detected_step(stored_detection: &StoredDetection) -> TimelineStep {
     TimelineStep {
         evidence_rows: vec![
             evidence_row(gettext("File"), displayed_file_path(stored_detection)),
+            evidence_row(
+                gettext("Signature source"),
+                provider_of_signature(&stored_detection.signature_name).to_owned(),
+            ),
             evidence_row(gettext("Found by"), source_text(stored_detection)),
             evidence_row(
                 gettext("Last seen"),
@@ -213,6 +230,65 @@ fn false_positive_snippet(
     }
 }
 
+fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
+    match lookup_state {
+        SignatureLookupState::NotLookedUp => None,
+        SignatureLookupState::LookingUp => Some(gettext("Looking up…")),
+        SignatureLookupState::KeyMissing => Some(gettext(
+            "Add your abuse.ch key in Preferences to look up detections.",
+        )),
+        SignatureLookupState::LookupFailed { failure_text } => {
+            Some(sanitize_scanner_line(failure_text))
+        }
+        SignatureLookupState::LookupFinished(SignatureLookup::SignatureUnknown) => {
+            Some(gettext("No known samples match this signature."))
+        }
+        SignatureLookupState::LookupFinished(SignatureLookup::SamplesFound { known_samples }) => {
+            let families = known_samples
+                .iter()
+                .map(|known_sample| sanitize_scanner_line(&known_sample.malware_family))
+                .filter(|malware_family| !malware_family.is_empty())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let earliest_seen = known_samples
+                .iter()
+                .map(|known_sample| known_sample.first_seen.as_str())
+                .filter(|first_seen| !first_seen.is_empty())
+                .min()
+                .map(sanitize_scanner_line)
+                .unwrap_or_default();
+            Some(
+                gettext("{count} known samples. Families: {families}. Earliest seen: {date}.")
+                    .replace("{count}", &known_samples.len().to_string())
+                    .replace("{families}", &families)
+                    .replace("{date}", &earliest_seen),
+            )
+        }
+    }
+}
+
+fn lookup_choices(file_state: DetectedFileState) -> Vec<StepChoiceRow> {
+    let signature_lookup = StepChoiceRow {
+        choice_description: gettext(
+            "Ask MalwareBazaar about this signature. Only its name is sent.",
+        ),
+        choice_label: gettext("Look Up"),
+        chosen_action: TimelineStepAction::LookUpIncidentSignature,
+        choice_destructive: false,
+    };
+    let file_lookup = (file_state == DetectedFileState::ReadableInPlace).then(|| StepChoiceRow {
+        choice_description: gettext("Ask VirusTotal about this file's hash"),
+        choice_label: gettext("Check File"),
+        chosen_action: TimelineStepAction::CheckIncidentOnVirusTotal,
+        choice_destructive: false,
+    });
+    std::iter::once(signature_lookup)
+        .chain(file_lookup)
+        .collect()
+}
+
 fn decision_choices(
     deletion_prompt: DeletionPrompt,
     file_state: DetectedFileState,
@@ -266,6 +342,7 @@ fn decision_choices(
 fn review_step(
     displayed_detection: &DisplayedDetection,
     deletion_prompt: DeletionPrompt,
+    lookup_state: &SignatureLookupState,
     distribution_family: DistributionFamily,
 ) -> TimelineStep {
     let stored_detection = &displayed_detection.stored_detection;
@@ -289,7 +366,14 @@ fn review_step(
         gettext("Choose what happens to this file")
     };
     TimelineStep {
-        choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state),
+        choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state)
+            .into_iter()
+            .chain(lookup_choices(displayed_detection.file_state))
+            .collect(),
+        evidence_rows: lookup_summary_text(lookup_state)
+            .map(|lookup_summary| evidence_row(gettext("MalwareBazaar"), lookup_summary))
+            .into_iter()
+            .collect(),
         guidance_commands: vec![false_positive_snippet(
             stored_detection,
             distribution_family,
@@ -339,12 +423,18 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
 pub fn incident_timeline(
     displayed_detection: &DisplayedDetection,
     deletion_prompt: DeletionPrompt,
+    lookup_state: &SignatureLookupState,
     distribution_family: DistributionFamily,
 ) -> Vec<TimelineStep> {
     vec![
         detected_step(&displayed_detection.stored_detection),
         blocked_step(displayed_detection),
-        review_step(displayed_detection, deletion_prompt, distribution_family),
+        review_step(
+            displayed_detection,
+            deletion_prompt,
+            lookup_state,
+            distribution_family,
+        ),
         resolved_step(displayed_detection),
     ]
 }
@@ -384,11 +474,19 @@ mod incident_timeline_presentation_tests {
         incident_timeline(
             displayed_detection,
             deletion_prompt,
+            &SignatureLookupState::NotLookedUp,
             DistributionFamily::NixosFamily,
         )[REVIEW_POSITION]
             .choice_rows
             .iter()
             .map(|choice_row| choice_row.chosen_action)
+            .filter(|chosen_action| {
+                !matches!(
+                    chosen_action,
+                    TimelineStepAction::LookUpIncidentSignature
+                        | TimelineStepAction::CheckIncidentOnVirusTotal
+                )
+            })
             .collect()
     }
 
@@ -397,6 +495,7 @@ mod incident_timeline_presentation_tests {
         let incident_steps = incident_timeline(
             &blocked_detection(),
             DeletionPrompt::NotAsked,
+            &SignatureLookupState::NotLookedUp,
             DistributionFamily::NixosFamily,
         );
         assert_eq!(
@@ -445,6 +544,7 @@ mod incident_timeline_presentation_tests {
         let incident_steps = incident_timeline(
             &displayed_detection,
             DeletionPrompt::NotAsked,
+            &SignatureLookupState::NotLookedUp,
             DistributionFamily::NixosFamily,
         );
         assert_eq!(
@@ -527,5 +627,45 @@ mod incident_timeline_presentation_tests {
             ..blocked_detection()
         };
         assert!(detection_summary_text(&displayed_detection).contains("test file"));
+    }
+
+    #[test]
+    fn a_blocked_file_offers_a_signature_lookup_but_no_file_lookup() {
+        let lookup_actions = lookup_choices(DetectedFileState::BlockedInPlace)
+            .into_iter()
+            .map(|choice_row| choice_row.chosen_action)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            lookup_actions,
+            vec![TimelineStepAction::LookUpIncidentSignature]
+        );
+        assert_eq!(lookup_choices(DetectedFileState::ReadableInPlace).len(), 2);
+    }
+
+    #[test]
+    fn lookup_results_summarise_families_and_the_earliest_date() {
+        let known_sample = |malware_family: &str, first_seen: &str| {
+            crate::threat_intel_lookup::malware_bazaar_client::SampleSummary {
+                malware_family: malware_family.to_owned(),
+                first_seen: first_seen.to_owned(),
+                file_type: "exe".to_owned(),
+                sample_tags: Vec::new(),
+            }
+        };
+        assert_eq!(
+            lookup_summary_text(&SignatureLookupState::LookupFinished(
+                SignatureLookup::SamplesFound {
+                    known_samples: vec![
+                        known_sample("AgentTesla", "2026-10-02"),
+                        known_sample("AgentTesla", "2026-10-01"),
+                    ],
+                }
+            )),
+            Some("2 known samples. Families: AgentTesla. Earliest seen: 2026-10-01.".to_owned())
+        );
+        assert_eq!(
+            lookup_summary_text(&SignatureLookupState::NotLookedUp),
+            None
+        );
     }
 }

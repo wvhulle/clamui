@@ -103,6 +103,8 @@ pub struct UpdaterEvidence {
 pub struct ThirdPartySignatureFile {
     pub file_name: String,
     pub age_hours: u64,
+    pub file_size_bytes: u64,
+    pub signature_count: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -277,6 +279,15 @@ async fn inspect_updater_unit(updater_unit: SignatureUpdaterUnit) -> Option<Upda
     })
 }
 
+fn count_signature_lines(signature_file: &Path) -> u64 {
+    fs::read(signature_file).map_or(0, |file_bytes| {
+        file_bytes
+            .iter()
+            .filter(|file_byte| **file_byte == b'\n')
+            .count() as u64
+    })
+}
+
 fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySignatureFile> {
     let current_time = SystemTime::now();
     let mut signature_files = fs::read_dir(database_directory)
@@ -293,7 +304,8 @@ fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySigna
                         })
                 })
                 .filter_map(|directory_entry| {
-                    let modified_time = directory_entry.metadata().ok()?.modified().ok()?;
+                    let file_metadata = directory_entry.metadata().ok()?;
+                    let modified_time = file_metadata.modified().ok()?;
                     Some(ThirdPartySignatureFile {
                         file_name: sanitize_scanner_line(
                             &directory_entry.file_name().to_string_lossy(),
@@ -303,6 +315,8 @@ fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySigna
                             .unwrap_or_default()
                             .as_secs()
                             / SECONDS_PER_HOUR,
+                        file_size_bytes: file_metadata.len(),
+                        signature_count: count_signature_lines(&directory_entry.path()),
                     })
                 })
                 .collect::<Vec<_>>()

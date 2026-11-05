@@ -1,7 +1,11 @@
+use std::path::Path;
+
 use gettextrs::gettext;
+use tokio::task::spawn_blocking;
 
 use crate::{
     clamav_components::distribution_install_guides::DistributionFamily,
+    signature_sources::signature_provider_catalogue::signature_source_checks,
     system_audit::{
         audit_report_model::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
         firewall_audit_checks::audit_firewall,
@@ -11,6 +15,7 @@ use crate::{
         suggested_audit_commands::{SuggestedRemedy, rootkit_check_command, suggested_command},
     },
     systemd_bus::host_systemd_units::{UnitState, probe_unit_state},
+    virus_database::database_directory_status::configured_database_directory,
 };
 
 const APPARMOR_DOCUMENTATION_URL: &str = "https://wiki.archlinux.org/title/AppArmor";
@@ -290,6 +295,17 @@ async fn inspect_tool_presence(detection_tool: IntrusionDetectionTool) -> ToolPr
     }
 }
 
+fn signature_file_names(database_directory: &Path) -> Vec<String> {
+    std::fs::read_dir(database_directory)
+        .map(|directory_entries| {
+            directory_entries
+                .filter_map(Result::ok)
+                .map(|directory_entry| directory_entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn rootkit_coverage_check(distribution_family: DistributionFamily) -> AuditCheck {
     AuditCheck::new(
         gettext("Rootkits"),
@@ -324,6 +340,12 @@ pub async fn gather_audit_section(
             distribution_family,
         ),
         AuditCategory::RootkitCoverage => vec![rootkit_coverage_check(distribution_family)],
+        AuditCategory::SignatureSources => signature_source_checks(
+            &spawn_blocking(|| signature_file_names(&configured_database_directory()))
+                .await
+                .unwrap_or_default(),
+            distribution_family,
+        ),
     };
     AuditSection {
         audit_category,

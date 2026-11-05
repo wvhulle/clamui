@@ -7,7 +7,8 @@ use std::{
 use futures::StreamExt;
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
+    adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 use tokio::task::spawn_blocking;
 
@@ -22,8 +23,8 @@ use crate::{
         },
         detection_journal_records::JournalDetectionRecord,
         incident_timeline_presentation::{
-            DeletionPrompt, DisplayedDetection, detection_needs_attention, detection_summary_text,
-            displayed_file_name, displayed_file_path, incident_timeline,
+            DeletionPrompt, DisplayedDetection, SignatureLookupState, detection_needs_attention,
+            detection_summary_text, displayed_file_name, displayed_file_path, incident_timeline,
         },
     },
     clamav_components::distribution_install_guides::{
@@ -38,11 +39,23 @@ use crate::{
         timeline_step_model::{TimelineStepAction, TimelineStepRequest},
         timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
     },
+    threat_intel_lookup::{
+        malware_bazaar_client::look_up_signature,
+        service_key_storage::{ThreatIntelService, read_stored_api_key},
+        virustotal_lookup_dialog::VirusTotalLookupDialog,
+    },
 };
 
 const JOURNAL_BATCH_SIZE: usize = 256;
 const LIST_VIEW_NAME: &str = "list";
 const INCIDENT_VIEW_NAME: &str = "incident";
+
+enum VirusTotalDialogHolder {
+    NoDialogOpened,
+    DialogOpened {
+        _lookup_dialog: Controller<VirusTotalLookupDialog>,
+    },
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OpenedIncident {
@@ -66,6 +79,8 @@ pub struct BackgroundDetectionsPage {
     awaited_incident: AwaitedIncident,
     application_started_unix: i64,
     deletion_prompt: DeletionPrompt,
+    lookup_state: SignatureLookupState,
+    virustotal_dialog: VirusTotalDialogHolder,
     list_rows: Vec<adw::ActionRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow>,
     list_group: adw::PreferencesGroup,
@@ -105,6 +120,7 @@ pub enum BackgroundDetectionsPageCommand {
     IncidentActionFinished {
         action_outcome: Result<IncidentActionEffect, String>,
     },
+    SignatureLookupFinished(SignatureLookupState),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -222,6 +238,21 @@ async fn load_displayed_detections(
     BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections)
 }
 
+async fn signature_lookup_state(signature_name: &str) -> SignatureLookupState {
+    match read_stored_api_key(ThreatIntelService::AbuseChService).await {
+        Ok(None) => SignatureLookupState::KeyMissing,
+        Err(key_failure) => SignatureLookupState::LookupFailed {
+            failure_text: key_failure.to_string(),
+        },
+        Ok(Some(auth_key)) => match look_up_signature(&auth_key, signature_name).await {
+            Ok(signature_lookup) => SignatureLookupState::LookupFinished(signature_lookup),
+            Err(lookup_failure) => SignatureLookupState::LookupFailed {
+                failure_text: lookup_failure.to_string(),
+            },
+        },
+    }
+}
+
 async fn delete_detected_file(file_path: PathBuf) -> Result<(), String> {
     spawn_blocking(move || match inspect_detected_file(&file_path) {
         DetectedFileState::NoLongerThere => Ok(()),
@@ -328,6 +359,7 @@ impl BackgroundDetectionsPage {
         let incident_steps = incident_timeline(
             &displayed_detection,
             self.deletion_prompt,
+            &self.lookup_state,
             self.distribution_family,
         );
         if self.incident_rows.len() == incident_steps.len() {
@@ -421,12 +453,45 @@ impl BackgroundDetectionsPage {
         });
     }
 
+    fn start_signature_lookup(&mut self, sender: &ComponentSender<Self>) {
+        let Some(signature_name) = self
+            .opened_detection()
+            .map(|displayed_detection| displayed_detection.stored_detection.signature_name.clone())
+        else {
+            return;
+        };
+        self.lookup_state = SignatureLookupState::LookingUp;
+        self.show_opened_incident();
+        sender.oneshot_command(async move {
+            BackgroundDetectionsPageCommand::SignatureLookupFinished(
+                signature_lookup_state(&signature_name).await,
+            )
+        });
+    }
+
+    fn open_virustotal_dialog(&mut self, root: &adw::ToastOverlay) {
+        let Some(file_path) = self
+            .opened_detection()
+            .map(|displayed_detection| displayed_detection.stored_detection.file_path.clone())
+        else {
+            return;
+        };
+        let lookup_dialog = VirusTotalLookupDialog::builder().launch(file_path).detach();
+        lookup_dialog.widget().present(Some(root));
+        self.virustotal_dialog = VirusTotalDialogHolder::DialogOpened {
+            _lookup_dialog: lookup_dialog,
+        };
+    }
+
     fn run_incident_action(
         &mut self,
         chosen_action: TimelineStepAction,
         sender: &ComponentSender<Self>,
+        root: &adw::ToastOverlay,
     ) {
         match chosen_action {
+            TimelineStepAction::LookUpIncidentSignature => self.start_signature_lookup(sender),
+            TimelineStepAction::CheckIncidentOnVirusTotal => self.open_virustotal_dialog(root),
             TimelineStepAction::AskIncidentDeletion => {
                 self.deletion_prompt = DeletionPrompt::AwaitingAnswer;
                 self.show_opened_incident();
@@ -516,6 +581,8 @@ impl Component for BackgroundDetectionsPage {
             awaited_incident: AwaitedIncident::NothingAwaited,
             application_started_unix: current_unix_seconds(),
             deletion_prompt: DeletionPrompt::NotAsked,
+            lookup_state: SignatureLookupState::NotLookedUp,
+            virustotal_dialog: VirusTotalDialogHolder::NoDialogOpened,
             list_rows: Vec::new(),
             incident_rows,
             list_group: list_group.clone(),
@@ -554,6 +621,7 @@ impl Component for BackgroundDetectionsPage {
         match page_input {
             BackgroundDetectionsPageInput::ReloadRequested => self.start_reload(&sender),
             BackgroundDetectionsPageInput::IncidentOpened(detection_id) => {
+                self.lookup_state = SignatureLookupState::NotLookedUp;
                 self.opened_incident = OpenedIncident::IncidentOpen { detection_id };
                 self.deletion_prompt = DeletionPrompt::NotAsked;
                 self.show_opened_incident();
@@ -576,7 +644,7 @@ impl Component for BackgroundDetectionsPage {
             }
             BackgroundDetectionsPageInput::StepRequested(TimelineStepRequest::ActionChosen(
                 chosen_action,
-            )) => self.run_incident_action(chosen_action, &sender),
+            )) => self.run_incident_action(chosen_action, &sender, root),
         }
     }
 
@@ -634,6 +702,10 @@ impl Component for BackgroundDetectionsPage {
                     &gettext("Detections could not be read: {error}")
                         .replace("{error}", &sanitize_scanner_line(&failure_text)),
                 ));
+            }
+            BackgroundDetectionsPageCommand::SignatureLookupFinished(lookup_state) => {
+                self.lookup_state = lookup_state;
+                self.show_opened_incident();
             }
             BackgroundDetectionsPageCommand::IncidentActionFinished { action_outcome } => {
                 match action_outcome {

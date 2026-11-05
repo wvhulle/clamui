@@ -44,6 +44,8 @@ pub enum TimelineStepAction {
     DeleteIncidentFile,
     CancelIncidentDeletion,
     DismissIncident,
+    LookUpIncidentSignature,
+    CheckIncidentOnVirusTotal,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

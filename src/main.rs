@@ -13,14 +13,15 @@ mod protection_status;
 mod scan_profiles;
 mod scheduled_scans;
 mod shared_page_widget_templates;
+mod signature_sources;
 mod startup_arguments;
 mod step_timeline;
 mod system_audit;
 mod systemd_bus;
 mod systemd_journal;
 mod text_export_dialog;
+mod threat_intel_lookup;
 mod virus_database;
-mod virustotal_lookup;
 
 use std::{path::PathBuf, process::ExitCode};
 

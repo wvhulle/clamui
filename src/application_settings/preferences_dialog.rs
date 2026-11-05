@@ -36,7 +36,10 @@ use crate::{
         scan_schedule_units::current_launcher_path,
         schedule_preferences_page::SchedulePreferencesPage,
     },
-    virustotal_lookup::virustotal_preferences_page::VirusTotalPreferencesPage,
+    threat_intel_lookup::{
+        service_key_preferences_page::ServiceKeyPreferencesPage,
+        service_key_storage::ThreatIntelService,
+    },
 };
 
 const EXCLUSION_RULES_KEY: &str = "exclusion-rules";
@@ -639,10 +642,16 @@ pub fn present_preferences_dialog() {
         clamd_config,
         is_on_access_setting,
     ));
-    let virustotal_page = VirusTotalPreferencesPage::builder().launch(()).detach();
+    let virustotal_page = ServiceKeyPreferencesPage::builder()
+        .launch(ThreatIntelService::VirusTotalService)
+        .detach();
     preferences_dialog.add(virustotal_page.widget());
+    let abuse_ch_page = ServiceKeyPreferencesPage::builder()
+        .launch(ThreatIntelService::AbuseChService)
+        .detach();
+    preferences_dialog.add(abuse_ch_page.widget());
     preferences_dialog.connect_closed(move |_closed_dialog| {
-        let _keep_pages_until_closed = (&schedule_page, &virustotal_page);
+        let _keep_pages_until_closed = (&schedule_page, &virustotal_page, &abuse_ch_page);
     });
     preferences_dialog.present(relm4::main_application().active_window().as_ref());
 }

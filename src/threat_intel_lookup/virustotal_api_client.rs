@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, time::Duration};
 use reqwest::{StatusCode, multipart};
 use serde::Deserialize;
 
-use crate::virustotal_lookup::pinned_scan_file::PinnedScanFile;
+use crate::threat_intel_lookup::pinned_scan_file::PinnedScanFile;
 
 const API_BASE_URL: &str = "https://www.virustotal.com/api/v3";
 const REPORT_BASE_URL: &str = "https://www.virustotal.com/gui/file";

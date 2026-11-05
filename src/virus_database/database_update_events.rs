@@ -11,12 +11,17 @@ use crate::{
     malware_scan::scanner_process_events::{
         RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
     },
-    systemd_bus::host_systemd_units::{UnitStartOutcome, signal_system_unit, start_system_unit},
+    signature_sources::signature_provider_catalogue::hide_addresses_in_text,
+    systemd_bus::host_systemd_units::{
+        UnitStartOutcome, UnitState, probe_unit_state, signal_system_unit, start_system_unit,
+    },
     systemd_journal::unit_journal_reader::unit_messages_since,
     virus_database::database_directory_status::FreshclamServiceState,
 };
 
 const UPDATE_NOW_SIGNAL: i32 = 10;
+const FANGFRISCH_UNIT_NAME: &str = "clamav-fangfrisch";
+const FANGFRISCH_SERVICE_UNIT: &str = "clamav-fangfrisch.service";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DatabaseUpdatePlan {
@@ -101,6 +106,26 @@ async fn service_journal_lines(service_unit: &'static str, started_after: u64) -
         .unwrap_or_default()
 }
 
+async fn third_party_update_lines(started_after: u64) -> Vec<String> {
+    if !matches!(
+        probe_unit_state(FANGFRISCH_SERVICE_UNIT).await,
+        UnitState::UnitActive | UnitState::UnitInactive
+    ) {
+        return Vec::new();
+    }
+    let outcome_line = match start_system_unit(FANGFRISCH_SERVICE_UNIT).await {
+        UnitStartOutcome::UnitFinished => "fangfrisch finished".to_owned(),
+        UnitStartOutcome::JobEnded { job_result } => format!("fangfrisch ended: {job_result}"),
+        UnitStartOutcome::AuthorizationRefused => "fangfrisch: access denied".to_owned(),
+        UnitStartOutcome::BusFailure { failure_text } => format!("fangfrisch: {failure_text}"),
+    };
+    service_journal_lines(FANGFRISCH_UNIT_NAME, started_after)
+        .await
+        .into_iter()
+        .chain(std::iter::once(outcome_line))
+        .collect()
+}
+
 fn current_unix_seconds() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -127,7 +152,10 @@ pub fn database_update_events(
             service_journal_lines(service_unit, started_after)
                 .await
                 .into_iter()
-                .map(DatabaseUpdateEvent::UpdateOutputLine)
+                .chain(third_party_update_lines(started_after).await)
+                .map(|output_line| {
+                    DatabaseUpdateEvent::UpdateOutputLine(hide_addresses_in_text(&output_line))
+                })
                 .chain(unit_events)
                 .collect::<Vec<_>>()
         })

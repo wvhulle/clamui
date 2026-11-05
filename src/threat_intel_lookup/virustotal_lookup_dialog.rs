@@ -7,14 +7,14 @@ use tokio::task::spawn_blocking;
 
 use crate::{
     malware_scan::scanner_output_parser::sanitize_scanner_line,
-    virustotal_lookup::{
+    threat_intel_lookup::{
         pinned_scan_file::{PinnedFileFailure, PinnedScanFile},
+        service_key_preferences_page::describe_key_failure,
+        service_key_storage::{ThreatIntelService, read_stored_api_key},
         virustotal_api_client::{
             DetectionCategory, FileReportLookup, MAXIMUM_UPLOAD_BYTES, VirusTotalClient,
             VirusTotalFailure, VirusTotalReport,
         },
-        virustotal_key_storage::read_stored_api_key,
-        virustotal_preferences_page::describe_key_failure,
     },
 };
 
@@ -90,7 +90,7 @@ fn describe_pin_failure(pin_failure: &PinnedFileFailure) -> String {
 }
 
 async fn check_file_against_virustotal(file_path: PathBuf) -> VirusTotalLookupDialogCommand {
-    let stored_key = match read_stored_api_key().await {
+    let stored_key = match read_stored_api_key(ThreatIntelService::VirusTotalService).await {
         Ok(Some(stored_key)) => stored_key,
         Ok(None) => return VirusTotalLookupDialogCommand::ApiKeyMissing,
         Err(key_failure) => {

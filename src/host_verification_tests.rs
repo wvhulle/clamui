@@ -17,7 +17,9 @@ use crate::{
         detection_journal_follower::{
             DetectionJournalEvent, JournalStartPosition, detection_journal_events,
         },
-        incident_timeline_presentation::{DeletionPrompt, DisplayedDetection, incident_timeline},
+        incident_timeline_presentation::{
+            DeletionPrompt, DisplayedDetection, SignatureLookupState, incident_timeline,
+        },
     },
     clamav_components::distribution_install_guides::DistributionFamily,
     file_quarantine::quarantine_entry_database::QuarantineVault,
@@ -380,6 +382,7 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
             file_state: inspect_detected_file(&eicar_path),
         },
         DeletionPrompt::NotAsked,
+        &SignatureLookupState::NotLookedUp,
         DistributionFamily::NixosFamily,
     );
     incident_steps.iter().for_each(|incident_step| {

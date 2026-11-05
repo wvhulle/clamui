@@ -1,3 +1,4 @@
+use bytesize::ByteSize;
 use gettextrs::gettext;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
         },
         service_run_journal::ServiceRunHistory,
     },
+    signature_sources::signature_provider_catalogue::provider_of_signature_file,
     step_timeline::timeline_step_model::{
         StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, TimelineStepAction,
     },
@@ -191,9 +193,15 @@ fn signature_step(
         .iter()
         .map(|signature_file| {
             evidence_row(
-                signature_file.file_name.clone(),
-                gettext("Updated {hours} hours ago")
-                    .replace("{hours}", &signature_file.age_hours.to_string()),
+                provider_of_signature_file(&signature_file.file_name).to_owned(),
+                gettext("{count} signatures, {size}, updated {hours} hours ago ({file})")
+                    .replace("{count}", &signature_file.signature_count.to_string())
+                    .replace(
+                        "{size}",
+                        &ByteSize::b(signature_file.file_size_bytes).to_string(),
+                    )
+                    .replace("{hours}", &signature_file.age_hours.to_string())
+                    .replace("{file}", &signature_file.file_name),
             )
         });
     TimelineStep {

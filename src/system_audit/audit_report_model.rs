@@ -54,13 +54,15 @@ impl AuditStatus {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditCategory {
+    SignatureSources,
     FirewallProtection,
     AccessControl,
     IntrusionDetection,
     RootkitCoverage,
 }
 
-pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 4] = [
+pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 5] = [
+    AuditCategory::SignatureSources,
     AuditCategory::FirewallProtection,
     AuditCategory::AccessControl,
     AuditCategory::IntrusionDetection,
@@ -70,6 +72,7 @@ pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 4] = [
 impl AuditCategory {
     pub fn section_title(self) -> String {
         match self {
+            Self::SignatureSources => gettext("Signature Sources"),
             Self::FirewallProtection => gettext("Firewall"),
             Self::AccessControl => gettext("Access Control"),
             Self::IntrusionDetection => gettext("Intrusion Detection"),
@@ -98,6 +101,7 @@ pub struct AuditCheck {
     pub check_status: AuditStatus,
     pub status_detail: String,
     pub check_guidance: Vec<CheckGuidance>,
+    pub starts_collapsed: bool,
 }
 
 impl AuditCheck {
@@ -107,7 +111,13 @@ impl AuditCheck {
             check_status,
             status_detail,
             check_guidance: Vec::new(),
+            starts_collapsed: false,
         }
+    }
+
+    pub const fn starting_collapsed(mut self) -> Self {
+        self.starts_collapsed = true;
+        self
     }
 
     pub fn with_recommendation(mut self, recommendation_text: String) -> Self {
@@ -135,7 +145,8 @@ impl AuditCheck {
     }
 
     pub fn expanded_by_default(&self) -> bool {
-        self.check_status != AuditStatus::CheckPassed
+        !self.starts_collapsed
+            && self.check_status != AuditStatus::CheckPassed
             && self.check_guidance.iter().any(|check_guidance| {
                 !matches!(check_guidance, CheckGuidance::DocumentationLink(_))
             })

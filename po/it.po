@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 13:32+0100\n"
+"POT-Creation-Date: 2026-11-05 13:41+0100\n"
 "PO-Revision-Date: 2026-04-03 19:20+0200\n"
 "Last-Translator: Albano Battistella\n"
 "Language-Team: Italian\n"
@@ -115,7 +115,7 @@ msgid "Timestamp"
 msgstr "Marca Temporale"
 
 #: src/activity_history/activity_export_formats.rs:100
-#: src/virustotal_lookup/virustotal_preferences_page.rs:62
+#: src/threat_intel_lookup/service_key_preferences_page.rs:106
 msgid "Status"
 msgstr "Stato"
 
@@ -153,14 +153,14 @@ msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:152
 #: src/application_window_shell.rs:561
-#: src/background_detections/incident_timeline_presentation.rs:238
+#: src/background_detections/incident_timeline_presentation.rs:314
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:743
 #: src/malware_scan/scan_results_dialog.rs:208
 #: src/scan_profiles/profile_manager_dialog.rs:116
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:162
 #: src/virus_database/database_update_page.rs:530
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:162
 msgid "Cancel"
 msgstr "Annulla"
 
@@ -227,11 +227,11 @@ msgstr ""
 
 #: src/activity_history/activity_logs_page.rs:425
 #: src/malware_scan/scan_progress_page.rs:318
-#: src/protection_status/protection_timeline_page.rs:288
+#: src/protection_status/protection_timeline_page.rs:290
 #: src/scheduled_scans/schedule_preferences_page.rs:265
+#: src/threat_intel_lookup/service_key_preferences_page.rs:147
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
-#: src/virustotal_lookup/virustotal_preferences_page.rs:98
 msgid "Checking…"
 msgstr "Controllo in corso…"
 
@@ -269,236 +269,236 @@ msgstr ""
 msgid "Exported."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:137
+#: src/application_settings/preferences_dialog.rs:140
 msgid "Node.js dependencies"
 msgstr "Dipendenze Node.js"
 
-#: src/application_settings/preferences_dialog.rs:138
+#: src/application_settings/preferences_dialog.rs:141
 msgid "Git repository data"
 msgstr "Dati del repository Git"
 
-#: src/application_settings/preferences_dialog.rs:139
+#: src/application_settings/preferences_dialog.rs:142
 msgid "Python virtual environment"
 msgstr "Ambiente virtuale Python"
 
-#: src/application_settings/preferences_dialog.rs:140
+#: src/application_settings/preferences_dialog.rs:143
 msgid "Build output directory"
 msgstr "Cartella di output della build"
 
-#: src/application_settings/preferences_dialog.rs:141
+#: src/application_settings/preferences_dialog.rs:144
 msgid "Distribution output directory"
 msgstr "Cartella di output della distribuzione"
 
-#: src/application_settings/preferences_dialog.rs:142
+#: src/application_settings/preferences_dialog.rs:145
 msgid "Python bytecode cache"
 msgstr "Cache del bytecode Python"
 
-#: src/application_settings/preferences_dialog.rs:164
+#: src/application_settings/preferences_dialog.rs:167
 msgid ""
 "This setting runs commands or changes who ClamAV runs as, so ClamUI never "
 "offers to change it"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:177
+#: src/application_settings/preferences_dialog.rs:180
 msgid "Copied. Add it to your configuration to apply it."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:196
+#: src/application_settings/preferences_dialog.rs:199
 msgid ""
 "Managed outside ClamUI. Applying copies the change instead of making it."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:240
+#: src/application_settings/preferences_dialog.rs:243
 msgid "No settings in this section"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:280
+#: src/application_settings/preferences_dialog.rs:283
 msgid "Configuration file not found"
 msgstr "File di configurazione non trovato"
 
-#: src/application_settings/preferences_dialog.rs:291
+#: src/application_settings/preferences_dialog.rs:294
 msgid "File Manager Integration"
 msgstr "Integrazione Gestore File"
 
-#: src/application_settings/preferences_dialog.rs:293
+#: src/application_settings/preferences_dialog.rs:296
 msgid "Add context menu actions for supported file managers."
 msgstr "Aggiungi azioni al menu contestuale per i gestori di file supportati."
 
-#: src/application_settings/preferences_dialog.rs:323
+#: src/application_settings/preferences_dialog.rs:326
 #: src/malware_scan/scan_progress_page.rs:939
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:325
+#: src/application_settings/preferences_dialog.rs:328
 msgid ""
 "Automatically scan removable and external drives when they are connected."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:329
+#: src/application_settings/preferences_dialog.rs:332
 msgid "Enable Device Auto-Scan"
 msgstr "Abilita scansione automatica dei dispositivi"
 
-#: src/application_settings/preferences_dialog.rs:336
+#: src/application_settings/preferences_dialog.rs:339
 msgid "Max Device Size (GB)"
 msgstr "Dimensione massima del dispositivo (GB)"
 
-#: src/application_settings/preferences_dialog.rs:337
+#: src/application_settings/preferences_dialog.rs:340
 msgid "0 means no size limit."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:356
+#: src/application_settings/preferences_dialog.rs:359
 #: src/scheduled_scans/schedule_preferences_page.rs:237
 msgid "Skip on Battery"
 msgstr "Salta con alimentazione a batteria"
 
-#: src/application_settings/preferences_dialog.rs:367
+#: src/application_settings/preferences_dialog.rs:370
 msgid "Window Behavior"
 msgstr "Comportamento della finestra"
 
-#: src/application_settings/preferences_dialog.rs:369
+#: src/application_settings/preferences_dialog.rs:372
 msgid "Running in the background needs a desktop with a system tray."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:373
+#: src/application_settings/preferences_dialog.rs:376
 msgid "Quit completely"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:374
+#: src/application_settings/preferences_dialog.rs:377
 msgid "Minimize to tray"
 msgstr "Minimizza nell'area di notifica"
 
-#: src/application_settings/preferences_dialog.rs:375
+#: src/application_settings/preferences_dialog.rs:378
 msgid "Always ask"
 msgstr "Chiedi sempre"
 
-#: src/application_settings/preferences_dialog.rs:378
+#: src/application_settings/preferences_dialog.rs:381
 msgid "When closing window"
 msgstr "Alla chiusura della finestra"
 
-#: src/application_settings/preferences_dialog.rs:397
+#: src/application_settings/preferences_dialog.rs:400
 msgid "Start in System Tray"
 msgstr "Avvia nel vassoio di sistema"
 
-#: src/application_settings/preferences_dialog.rs:399
+#: src/application_settings/preferences_dialog.rs:402
 msgid "Launch in the background and show only the tray icon."
 msgstr "Avvia in background e mostra solo l'icona nel vassoio."
 
-#: src/application_settings/preferences_dialog.rs:407
+#: src/application_settings/preferences_dialog.rs:410
 msgid "Desktop Notifications"
 msgstr "Notifiche desktop"
 
-#: src/application_settings/preferences_dialog.rs:409
+#: src/application_settings/preferences_dialog.rs:412
 msgid ""
 "Notify about finished scans and updates while the window is not in focus."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:421
+#: src/application_settings/preferences_dialog.rs:424
 msgid "Behavior"
 msgstr "Comportamento"
 
-#: src/application_settings/preferences_dialog.rs:425
+#: src/application_settings/preferences_dialog.rs:428
 msgid "Scan Behavior"
 msgstr "Comportamento della scansione"
 
-#: src/application_settings/preferences_dialog.rs:426
+#: src/application_settings/preferences_dialog.rs:429
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:429
+#: src/application_settings/preferences_dialog.rs:432
 msgid "Show Live Scan Progress"
 msgstr "Mostra avanzamento della scansione in tempo reale"
 
-#: src/application_settings/preferences_dialog.rs:430
+#: src/application_settings/preferences_dialog.rs:433
 msgid "Display files being scanned in real time."
 msgstr "Visualizza in tempo reale i file sottoposti a scansione."
 
-#: src/application_settings/preferences_dialog.rs:437
+#: src/application_settings/preferences_dialog.rs:440
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:438
+#: src/application_settings/preferences_dialog.rs:441
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:439
+#: src/application_settings/preferences_dialog.rs:442
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:442
+#: src/application_settings/preferences_dialog.rs:445
 msgid "Scan Backend"
 msgstr "Backend di scansione"
 
-#: src/application_settings/preferences_dialog.rs:444
+#: src/application_settings/preferences_dialog.rs:447
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:507
+#: src/application_settings/preferences_dialog.rs:510
 #: src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "Rimuovi"
 
-#: src/application_settings/preferences_dialog.rs:540
+#: src/application_settings/preferences_dialog.rs:543
 #: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "Esclusioni"
 
-#: src/application_settings/preferences_dialog.rs:553
+#: src/application_settings/preferences_dialog.rs:556
 msgid ""
 "These apply to scans started from ClamUI. They don't change what on-access "
 "scanning or a system scan timer checks."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:556
+#: src/application_settings/preferences_dialog.rs:559
 msgid "Preset Exclusions"
 msgstr "Esclusioni predefinite"
 
-#: src/application_settings/preferences_dialog.rs:558
+#: src/application_settings/preferences_dialog.rs:561
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 "Directory comuni da escludere dalla scansione. Le modifiche vengono salvate "
 "immediatamente."
 
-#: src/application_settings/preferences_dialog.rs:563
+#: src/application_settings/preferences_dialog.rs:566
 msgid "Custom Exclusions"
 msgstr "Esclusioni personalizzate"
 
-#: src/application_settings/preferences_dialog.rs:565
+#: src/application_settings/preferences_dialog.rs:568
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:569
+#: src/application_settings/preferences_dialog.rs:572
 msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude oppure *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:610
+#: src/application_settings/preferences_dialog.rs:613
 #: src/application_window_shell.rs:180
 msgid "Preferences"
 msgstr "Preferenze"
 
-#: src/application_settings/preferences_dialog.rs:618
+#: src/application_settings/preferences_dialog.rs:621
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Database"
 
-#: src/application_settings/preferences_dialog.rs:620
+#: src/application_settings/preferences_dialog.rs:623
 msgid "freshclam settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:627
+#: src/application_settings/preferences_dialog.rs:630
 msgid "Scanner"
 msgstr "Scanner"
 
-#: src/application_settings/preferences_dialog.rs:629
+#: src/application_settings/preferences_dialog.rs:632
 msgid "clamd settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:635
+#: src/application_settings/preferences_dialog.rs:638
 msgid "On-Access"
 msgstr "Accesso in tempo reale"
 
-#: src/application_settings/preferences_dialog.rs:637
+#: src/application_settings/preferences_dialog.rs:640
 msgid "On-access scanning settings"
 msgstr ""
 
@@ -547,14 +547,14 @@ msgid "Toggle sidebar"
 msgstr ""
 
 #: src/application_window_shell.rs:388
-#: src/protection_status/protection_timeline_page.rs:245
-#: src/protection_status/protection_timeline_page.rs:248
+#: src/protection_status/protection_timeline_page.rs:247
+#: src/protection_status/protection_timeline_page.rs:250
 msgid "Protection"
 msgstr ""
 
 #: src/application_window_shell.rs:395
-#: src/background_detections/background_detections_page.rs:468
-#: src/background_detections/background_detections_page.rs:506
+#: src/background_detections/background_detections_page.rs:533
+#: src/background_detections/background_detections_page.rs:571
 msgid "Detections"
 msgstr ""
 
@@ -568,7 +568,7 @@ msgid "Logs"
 msgstr "Registri"
 
 #: src/application_window_shell.rs:416
-#: src/background_detections/incident_timeline_presentation.rs:246
+#: src/background_detections/incident_timeline_presentation.rs:322
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
@@ -592,44 +592,44 @@ msgstr ""
 msgid "The quarantine database could not be locked"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:229
+#: src/background_detections/background_detections_page.rs:260
 msgid "This file can't be deleted from here"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:259
+#: src/background_detections/background_detections_page.rs:290
 msgid ""
 "ClamUI can't read the system journal, so new background detections won't "
 "appear here. This does not mean nothing was found. Add your user to the "
 "systemd-journal group."
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:264
-#: src/protection_status/protection_timeline_presentation.rs:489
+#: src/background_detections/background_detections_page.rs:295
+#: src/protection_status/protection_timeline_presentation.rs:497
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:268
+#: src/background_detections/background_detections_page.rs:299
 msgid "Nothing has been detected in the background."
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:271
+#: src/background_detections/background_detections_page.rs:302
 msgid "What on-access scanning and scheduled scans have found."
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:473
+#: src/background_detections/background_detections_page.rs:538
 msgid "Detection"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:481
+#: src/background_detections/background_detections_page.rs:546
 msgid "Back to detections"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:575
+#: src/background_detections/background_detections_page.rs:643
 msgid "Copied to clipboard"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:634
+#: src/background_detections/background_detections_page.rs:702
 #, rust-format
 msgid "Detections could not be read: {error}"
 msgstr ""
@@ -651,203 +651,244 @@ msgid_plural "{count} detections while ClamUI wasn't running"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/background_detections/incident_timeline_presentation.rs:57
+#: src/background_detections/incident_timeline_presentation.rs:70
 msgid "Restored from quarantine"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:59
+#: src/background_detections/incident_timeline_presentation.rs:72
 msgid "Moved to quarantine"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:60
+#: src/background_detections/incident_timeline_presentation.rs:73
 msgid "Deleted"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:61
+#: src/background_detections/incident_timeline_presentation.rs:74
 msgid "Kept by you"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:63
+#: src/background_detections/incident_timeline_presentation.rs:76
 msgid "Blocked, needs a decision"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:64
+#: src/background_detections/incident_timeline_presentation.rs:77
 msgid "Not blocked, needs a decision"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:65
+#: src/background_detections/incident_timeline_presentation.rs:78
 msgid "Belongs to another user"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:66
+#: src/background_detections/incident_timeline_presentation.rs:79
 msgid "No longer there"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:67
+#: src/background_detections/incident_timeline_presentation.rs:80
 msgid "File could not be checked"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:77
+#: src/background_detections/incident_timeline_presentation.rs:90
 #, rust-format
 msgid "{signature} (test file) · {state}"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:81
+#: src/background_detections/incident_timeline_presentation.rs:94
 #, rust-format
 msgid "{signature} · {state}"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:117
+#: src/background_detections/incident_timeline_presentation.rs:130
 msgid "On-access scanning and the scheduled scan"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:118
+#: src/background_detections/incident_timeline_presentation.rs:131
 msgid "On-access scanning"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:119
+#: src/background_detections/incident_timeline_presentation.rs:132
 msgid "The scheduled scan"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:127
+#: src/background_detections/incident_timeline_presentation.rs:140
 msgid "File"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:128
+#: src/background_detections/incident_timeline_presentation.rs:142
+msgid "Signature source"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:145
 msgid "Found by"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:130
+#: src/background_detections/incident_timeline_presentation.rs:147
 msgid "Last seen"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:134
+#: src/background_detections/incident_timeline_presentation.rs:151
 msgid "Times seen"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:139
+#: src/background_detections/incident_timeline_presentation.rs:156
 msgid "Detected"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:142
+#: src/background_detections/incident_timeline_presentation.rs:159
 msgid ""
 "This signature matches the harmless EICAR test pattern, which exists to "
 "check that detection works."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:147
+#: src/background_detections/incident_timeline_presentation.rs:164
 msgid ""
 "ClamAV matched this file against a signature. A match is strong evidence, "
 "but false positives happen, especially with packed or administrative tools."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:152
+#: src/background_detections/incident_timeline_presentation.rs:169
 #, rust-format
 msgid "{signature}, first seen {time}"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:167
+#: src/background_detections/incident_timeline_presentation.rs:184
 msgid "Opening this file is refused, which is why it won't open"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:171
+#: src/background_detections/incident_timeline_presentation.rs:188
 msgid "The file is no longer there"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:178
+#: src/background_detections/incident_timeline_presentation.rs:195
 msgid "Not blocked: the scheduled scan found it, and it can still be opened"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:183
+#: src/background_detections/incident_timeline_presentation.rs:200
 msgid "Not blocked right now: it can still be opened"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:187
+#: src/background_detections/incident_timeline_presentation.rs:204
 msgid "Could not check whether the file is blocked"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:191
+#: src/background_detections/incident_timeline_presentation.rs:208
 msgid "Blocked"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:193
+#: src/background_detections/incident_timeline_presentation.rs:210
 msgid ""
 "With on-access prevention, the kernel refuses to open a detected file in a "
 "watched folder. The file stays where it is until you decide what to do with "
 "it."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:222
+#: src/background_detections/incident_timeline_presentation.rs:236
+msgid "Looking up…"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:238
+msgid "Add your abuse.ch key in Preferences to look up detections."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:244
+msgid "No known samples match this signature."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:263
+#, rust-format
+msgid "{count} known samples. Families: {families}. Earliest seen: {date}."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:275
+msgid "Ask MalwareBazaar about this signature. Only its name is sent."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:277
+msgid "Look Up"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:282
+msgid "Ask VirusTotal about this file's hash"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:283
+msgid "Check File"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:298
 msgid "Stop asking about this file"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:223
-#: src/background_detections/incident_timeline_presentation.rs:258
+#: src/background_detections/incident_timeline_presentation.rs:299
+#: src/background_detections/incident_timeline_presentation.rs:334
 msgid "Keep"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:231
+#: src/background_detections/incident_timeline_presentation.rs:307
 msgid "Delete this file permanently? This can't be undone."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:232
+#: src/background_detections/incident_timeline_presentation.rs:308
 msgid "Delete Permanently"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:237
+#: src/background_detections/incident_timeline_presentation.rs:313
 msgid "Go back without deleting"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:245
+#: src/background_detections/incident_timeline_presentation.rs:321
 msgid "Move it somewhere safe. You can restore it later."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:251
+#: src/background_detections/incident_timeline_presentation.rs:327
 msgid "Remove it for good"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:252
+#: src/background_detections/incident_timeline_presentation.rs:328
 msgid "Delete…"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:257
+#: src/background_detections/incident_timeline_presentation.rs:333
 msgid "You know this file is fine"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:272
+#: src/background_detections/incident_timeline_presentation.rs:349
 msgid "Your decision"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:274
+#: src/background_detections/incident_timeline_presentation.rs:351
 msgid ""
 "If it's unfamiliar, quarantine it. Keeping a file only stops ClamUI asking: "
 "on-access scanning keeps blocking it until the path is excluded in the "
 "ClamAV configuration, as shown here."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:287
+#: src/background_detections/incident_timeline_presentation.rs:364
 msgid "This file belongs to another user, so ClamUI can't move or delete it"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:289
+#: src/background_detections/incident_timeline_presentation.rs:366
 msgid "Choose what happens to this file"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:308
+#: src/background_detections/incident_timeline_presentation.rs:374
+msgid "MalwareBazaar"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:392
 msgid "Resolved"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:310
+#: src/background_detections/incident_timeline_presentation.rs:394
 msgid ""
 "A resolved detection opens again if ClamAV finds the same file again later, "
 "for example after you download it a second time."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:318
+#: src/background_detections/incident_timeline_presentation.rs:402
 msgid "Waiting for your decision"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:324
+#: src/background_detections/incident_timeline_presentation.rs:408
 #, rust-format
 msgid "{state}, {time}"
 msgstr ""
@@ -983,7 +1024,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Ripristina"
 
-#: src/main.rs:74
+#: src/main.rs:75
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -1357,276 +1398,276 @@ msgstr ""
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:254
+#: src/protection_status/protection_timeline_page.rs:256
 msgid "Check again"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:343
+#: src/protection_status/protection_timeline_page.rs:345
 msgid "Command copied to clipboard"
 msgstr "Comando copiato negli appunti"
 
-#: src/protection_status/protection_timeline_page.rs:350
+#: src/protection_status/protection_timeline_page.rs:352
 #, rust-format
 msgid "Could not open documentation: {error}"
 msgstr "Impossibile aprire la documentazione: {error}"
 
-#: src/protection_status/protection_timeline_presentation.rs:80
+#: src/protection_status/protection_timeline_presentation.rs:82
 msgid "ClamAV installed"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:82
+#: src/protection_status/protection_timeline_presentation.rs:84
 msgid ""
 "ClamAV is the engine that recognizes malware. ClamUI uses the copy installed "
 "on this computer and never bundles its own."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:108
+#: src/protection_status/protection_timeline_presentation.rs:110
 msgid "ClamAV was not found on this computer"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:134
+#: src/protection_status/protection_timeline_presentation.rs:136
 #, rust-format
 msgid "Definitions built {date}, {days} days ago"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:138
+#: src/protection_status/protection_timeline_presentation.rs:140
 msgid "Definitions exist, but their age could not be determined"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:140
+#: src/protection_status/protection_timeline_presentation.rs:142
 msgid "No virus definitions were found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:150
+#: src/protection_status/protection_timeline_presentation.rs:152
 msgid "Its last update failed"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:153
+#: src/protection_status/protection_timeline_presentation.rs:155
 #, rust-format
 msgid "Last updated {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:157
+#: src/protection_status/protection_timeline_presentation.rs:159
 msgid "No completed update recorded yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:195
+#: src/protection_status/protection_timeline_presentation.rs:197
 #, rust-format
-msgid "Updated {hours} hours ago"
+msgid "{count} signatures, {size}, updated {hours} hours ago ({file})"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:207
+#: src/protection_status/protection_timeline_presentation.rs:215
 msgid "Update Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:212
+#: src/protection_status/protection_timeline_presentation.rs:220
 msgid "Signatures current"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:214
+#: src/protection_status/protection_timeline_presentation.rs:222
 msgid ""
 "Signatures describe known malware, and new ones are published constantly. "
 "Old signatures miss recent threats even when everything else is running."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:227
+#: src/protection_status/protection_timeline_presentation.rs:235
 msgid "Daemon running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:229
+#: src/protection_status/protection_timeline_presentation.rs:237
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:243
+#: src/protection_status/protection_timeline_presentation.rs:251
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:251
+#: src/protection_status/protection_timeline_presentation.rs:259
 msgid "clamd is answering"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:262
-#: src/protection_status/protection_timeline_presentation.rs:327
+#: src/protection_status/protection_timeline_presentation.rs:270
+#: src/protection_status/protection_timeline_presentation.rs:335
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:274
+#: src/protection_status/protection_timeline_presentation.rs:282
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:286
+#: src/protection_status/protection_timeline_presentation.rs:294
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:288
+#: src/protection_status/protection_timeline_presentation.rs:296
 msgid "None configured"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:295
-#: src/protection_status/protection_timeline_presentation.rs:299
+#: src/protection_status/protection_timeline_presentation.rs:303
+#: src/protection_status/protection_timeline_presentation.rs:307
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:296
+#: src/protection_status/protection_timeline_presentation.rs:304
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:310
+#: src/protection_status/protection_timeline_presentation.rs:318
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:312
+#: src/protection_status/protection_timeline_presentation.rs:320
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:319
+#: src/protection_status/protection_timeline_presentation.rs:327
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:323
-#: src/protection_status/protection_timeline_presentation.rs:413
+#: src/protection_status/protection_timeline_presentation.rs:331
+#: src/protection_status/protection_timeline_presentation.rs:421
 msgid "Waiting for the daemon"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:331
+#: src/protection_status/protection_timeline_presentation.rs:339
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:335
+#: src/protection_status/protection_timeline_presentation.rs:343
 msgid "Running, but no watched folders could be read"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:339
+#: src/protection_status/protection_timeline_presentation.rs:347
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:363
+#: src/protection_status/protection_timeline_presentation.rs:371
 #: src/scheduled_scans/schedule_preferences_page.rs:84
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:370
+#: src/protection_status/protection_timeline_presentation.rs:378
 #, rust-format
 msgid "{time}, threats found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:375
+#: src/protection_status/protection_timeline_presentation.rs:383
 #, rust-format
 msgid "{time}, nothing found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:379
+#: src/protection_status/protection_timeline_presentation.rs:387
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:396
+#: src/protection_status/protection_timeline_presentation.rs:404
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:398
+#: src/protection_status/protection_timeline_presentation.rs:406
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:418
+#: src/protection_status/protection_timeline_presentation.rs:426
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:423
+#: src/protection_status/protection_timeline_presentation.rs:431
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:428
+#: src/protection_status/protection_timeline_presentation.rs:436
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:433
+#: src/protection_status/protection_timeline_presentation.rs:441
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:434
+#: src/protection_status/protection_timeline_presentation.rs:442
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:437
+#: src/protection_status/protection_timeline_presentation.rs:445
 msgid "Run Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:448
+#: src/protection_status/protection_timeline_presentation.rs:456
 msgid "Scheduled by ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:456
+#: src/protection_status/protection_timeline_presentation.rs:464
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:464
+#: src/protection_status/protection_timeline_presentation.rs:472
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:475
+#: src/protection_status/protection_timeline_presentation.rs:483
 msgid "Alerts"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:477
+#: src/protection_status/protection_timeline_presentation.rs:485
 msgid ""
 "ClamUI follows the system journal and notifies you when something is "
 "detected. It can only do that while it is running, so it should run in the "
 "background."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:484
+#: src/protection_status/protection_timeline_presentation.rs:492
 msgid ""
 "The system journal can't be read. Add your user to the systemd-journal group."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:494
+#: src/protection_status/protection_timeline_presentation.rs:502
 msgid "Notifications are turned off in the preferences"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:499
+#: src/protection_status/protection_timeline_presentation.rs:507
 msgid ""
 "Alerts stop when you quit ClamUI, because it isn't set up to run in the "
 "background"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:505
+#: src/protection_status/protection_timeline_presentation.rs:513
 msgid "Running in the background and following the journal"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:529
+#: src/protection_status/protection_timeline_presentation.rs:537
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:531
+#: src/protection_status/protection_timeline_presentation.rs:539
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:542
+#: src/protection_status/protection_timeline_presentation.rs:550
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:544
+#: src/protection_status/protection_timeline_presentation.rs:552
 msgid "Scheduled scans set up in ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:551
+#: src/protection_status/protection_timeline_presentation.rs:559
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:564
+#: src/protection_status/protection_timeline_presentation.rs:572
 msgid "Files are only checked when you scan them"
 msgstr ""
 
@@ -1945,6 +1986,21 @@ msgstr ""
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 
+#: src/signature_sources/signature_provider_catalogue.rs:125
+msgid "Not in use"
+msgstr ""
+
+#: src/signature_sources/signature_provider_catalogue.rs:131
+msgid ""
+"This source needs a credential, and fangfrisch reads it from its settings. "
+"On NixOS those settings end up in the world-readable Nix store, so don't put "
+"the credential there."
+msgstr ""
+
+#: src/signature_sources/signature_provider_catalogue.rs:163
+msgid "In use"
+msgstr ""
+
 #: src/system_audit/audit_check_row.rs:67
 msgid "Learn more"
 msgstr "Scopri di più"
@@ -1974,20 +2030,24 @@ msgstr "Non riuscito"
 msgid "Unknown"
 msgstr "Sconosciuto"
 
-#: src/system_audit/audit_report_model.rs:73
+#: src/system_audit/audit_report_model.rs:75
+msgid "Signature Sources"
+msgstr ""
+
+#: src/system_audit/audit_report_model.rs:76
 msgid "Firewall"
 msgstr "Firewall"
 
-#: src/system_audit/audit_report_model.rs:74
+#: src/system_audit/audit_report_model.rs:77
 msgid "Access Control"
 msgstr "Controllo degli accessi"
 
-#: src/system_audit/audit_report_model.rs:75
+#: src/system_audit/audit_report_model.rs:78
 msgid "Intrusion Detection"
 msgstr "Rilevamento intrusioni"
 
-#: src/system_audit/audit_report_model.rs:76
-#: src/system_audit/security_audit_checks.rs:295
+#: src/system_audit/audit_report_model.rs:79
+#: src/system_audit/security_audit_checks.rs:311
 msgid "Rootkits"
 msgstr ""
 
@@ -2017,106 +2077,106 @@ msgstr ""
 msgid "Firewall services could not be listed without systemd."
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:67
+#: src/system_audit/security_audit_checks.rs:72
 msgid "AppArmor"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:73
+#: src/system_audit/security_audit_checks.rs:78
 msgid "AppArmor is enabled"
 msgstr "AppArmor è abilitato"
 
-#: src/system_audit/security_audit_checks.rs:79
-#: src/system_audit/security_audit_checks.rs:85
+#: src/system_audit/security_audit_checks.rs:84
+#: src/system_audit/security_audit_checks.rs:90
 msgid "AppArmor module is loaded but not enabled"
 msgstr "Il modulo AppArmor è caricato ma non abilitato"
 
-#: src/system_audit/security_audit_checks.rs:87
+#: src/system_audit/security_audit_checks.rs:92
 msgid "Enable AppArmor for application sandboxing"
 msgstr "Abilita AppArmor per il sandboxing delle applicazioni"
 
-#: src/system_audit/security_audit_checks.rs:93
+#: src/system_audit/security_audit_checks.rs:98
 msgid "SELinux"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:99
+#: src/system_audit/security_audit_checks.rs:104
 msgid "SELinux is enforcing"
 msgstr "SELinux è in modalità di applicazione forzata"
 
-#: src/system_audit/security_audit_checks.rs:104
+#: src/system_audit/security_audit_checks.rs:109
 msgid "SELinux is in permissive mode"
 msgstr "SELinux è in modalità permissiva"
 
-#: src/system_audit/security_audit_checks.rs:107
+#: src/system_audit/security_audit_checks.rs:112
 msgid "Consider switching to enforcing mode for stronger protection"
 msgstr ""
 "Valutare il passaggio alla modalità di applicazione per una protezione più "
 "efficace"
 
-#: src/system_audit/security_audit_checks.rs:113
-#: src/system_audit/security_audit_checks.rs:119
+#: src/system_audit/security_audit_checks.rs:118
+#: src/system_audit/security_audit_checks.rs:124
 msgid "SELinux is disabled"
 msgstr "SELinux è disabilitato"
 
-#: src/system_audit/security_audit_checks.rs:121
+#: src/system_audit/security_audit_checks.rs:126
 msgid "Enable SELinux for mandatory access control"
 msgstr "Abilita SELinux per il controllo degli accessi obbligatorio"
 
-#: src/system_audit/security_audit_checks.rs:125
+#: src/system_audit/security_audit_checks.rs:130
 msgid "SELinux mode could not be determined"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:142
+#: src/system_audit/security_audit_checks.rs:147
 msgid "MAC Framework"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:144
+#: src/system_audit/security_audit_checks.rs:149
 msgid "No mandatory access control framework detected"
 msgstr "Nessun framework di controllo degli accessi obbligatorio rilevato"
 
-#: src/system_audit/security_audit_checks.rs:146
+#: src/system_audit/security_audit_checks.rs:151
 msgid "Consider enabling AppArmor or SELinux"
 msgstr "Valuta di abilitare AppArmor o SELinux"
 
-#: src/system_audit/security_audit_checks.rs:197
+#: src/system_audit/security_audit_checks.rs:202
 msgid "fail2ban is active and protecting services"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:198
+#: src/system_audit/security_audit_checks.rs:203
 msgid "CrowdSec is active with community threat intelligence"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:204
+#: src/system_audit/security_audit_checks.rs:209
 msgid "Start fail2ban to protect against brute force attacks"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:205
+#: src/system_audit/security_audit_checks.rs:210
 msgid "Start CrowdSec for collaborative intrusion prevention"
 msgstr ""
 
 #
 #
-#: src/system_audit/security_audit_checks.rs:233
+#: src/system_audit/security_audit_checks.rs:238
 #, rust-format
 msgid "{name} is installed but not running"
 msgstr "{name} è installato ma non è in esecuzione"
 
-#: src/system_audit/security_audit_checks.rs:265
+#: src/system_audit/security_audit_checks.rs:270
 msgid "Intrusion Prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:267
+#: src/system_audit/security_audit_checks.rs:272
 msgid "No intrusion detection system found"
 msgstr "Nessun sistema di rilevamento delle intrusioni trovato"
 
-#: src/system_audit/security_audit_checks.rs:270
+#: src/system_audit/security_audit_checks.rs:275
 msgid "Install fail2ban or CrowdSec to protect against attacks"
 msgstr "Installa fail2ban o CrowdSec per proteggerti dagli attacchi"
 
-#: src/system_audit/security_audit_checks.rs:297
+#: src/system_audit/security_audit_checks.rs:313
 msgid "ClamAV does not cover rootkits, and ClamUI does not check for them."
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:300
+#: src/system_audit/security_audit_checks.rs:316
 msgid ""
 "Run a check yourself. A rootkit can hide from checks made on the running "
 "system, so a clean result is only weak evidence."
@@ -2125,6 +2185,168 @@ msgstr ""
 #: src/text_export_dialog.rs:20
 #, rust-format
 msgid "Could not save the file: {error}"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:22
+msgid ""
+"The key is stored in the system keyring. ClamUI first asks VirusTotal about "
+"a file's hash, and only uploads the file after you confirm."
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:26
+msgid ""
+"Used to look up a detection on MalwareBazaar when you ask. The key is stored "
+"in the system keyring, and only the signature name is sent. Separate from "
+"any key your system uses to download signatures. abuse.ch's fair-use terms "
+"say for-profit users may need its commercial API."
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:37
+msgid ""
+"Free tier: 4 requests per minute, 500 per day. Files up to 650 MB can be "
+"scanned."
+msgstr ""
+"Piano gratuito: 4 richieste al minuto, 500 al giorno. È possibile sottoporre "
+"a scansione file fino a 650 MB."
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:40
+msgid "Free from the abuse.ch Authentication Portal."
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:72
+msgid "This doesn't look like a valid API key"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:73
+msgid "Unable to read the stored API key"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:74
+msgid "Keyring unavailable"
+msgstr "Portachiavi non disponibile"
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:102
+#: src/threat_intel_lookup/service_key_preferences_page.rs:119
+msgid "API Key"
+msgstr "Chiave API"
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:111
+msgid "Delete Key"
+msgstr "Elimina chiave"
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:130
+msgid "Get a free API key"
+msgstr "Ottieni una chiave API gratuita"
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:199
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:185
+msgid "Not configured"
+msgstr "Non configurata"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:68
+msgid "VirusTotal rejected the API key."
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:70
+msgid "The VirusTotal request limit was reached. Try again later."
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:72
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:427
+msgid "File too large"
+msgstr "File troppo grande"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:74
+msgid ""
+"VirusTotal has the file but did not finish analyzing it in time. Check back "
+"later."
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:77
+msgid "The file changed after you confirmed, so it was not uploaded."
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:85
+msgid "Path is not a regular file"
+msgstr "Il percorso non è un file regolare"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:87
+#, rust-format
+msgid "Cannot read file: {error}"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:150
+#, rust-format
+msgid ""
+"VirusTotal does not know this file yet.\n"
+"\n"
+"{path}\n"
+"{size}\n"
+"\n"
+"Uploading shares its contents with VirusTotal and its security partners, and "
+"other users may be able to download them. Only upload files you are "
+"authorized to share, and never files with personal or confidential data."
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:161
+msgid "Upload to VirusTotal?"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:163
+msgid "Upload File"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:184
+msgid "Checking the file's hash…"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:186
+msgid "Uploading and waiting for the analysis…"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:189
+#, rust-format
+msgid "{count} engine detected a threat"
+msgid_plural "{count} engines detected a threat"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:195
+msgid "No engines detected a threat"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:196
+msgid "The lookup failed"
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:203
+msgid ""
+"Add an API key in Preferences, or open VirusTotal's upload page to send the "
+"file yourself."
+msgstr ""
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:226
+msgid "Malicious"
+msgstr "Dannoso"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:227
+msgid "Suspicious"
+msgstr "Sospetto"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:264
+msgid "VirusTotal Scan"
+msgstr "Scansione VirusTotal"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:329
+msgid "View on VirusTotal"
+msgstr "Visualizza su VirusTotal"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:337
+msgid "Open VirusTotal website"
+msgstr "Apri il sito web di VirusTotal"
+
+#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:390
+msgid "VirusTotal does not know this file, and it was not uploaded."
 msgstr ""
 
 #: src/virus_database/database_update_page.rs:100
@@ -2302,157 +2524,10 @@ msgstr ""
 msgid "The update could not be added to the history: {error}"
 msgstr ""
 
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:68
-msgid "VirusTotal rejected the API key."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:70
-msgid "The VirusTotal request limit was reached. Try again later."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:72
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:427
-msgid "File too large"
-msgstr "File troppo grande"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:74
-msgid ""
-"VirusTotal has the file but did not finish analyzing it in time. Check back "
-"later."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:77
-msgid "The file changed after you confirmed, so it was not uploaded."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:85
-msgid "Path is not a regular file"
-msgstr "Il percorso non è un file regolare"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:87
-#, rust-format
-msgid "Cannot read file: {error}"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:150
-#, rust-format
-msgid ""
-"VirusTotal does not know this file yet.\n"
-"\n"
-"{path}\n"
-"{size}\n"
-"\n"
-"Uploading shares its contents with VirusTotal and its security partners, and "
-"other users may be able to download them. Only upload files you are "
-"authorized to share, and never files with personal or confidential data."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:161
-msgid "Upload to VirusTotal?"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:163
-msgid "Upload File"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:184
-msgid "Checking the file's hash…"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:185
-#: src/virustotal_lookup/virustotal_preferences_page.rs:144
-msgid "Not configured"
-msgstr "Non configurata"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:186
-msgid "Uploading and waiting for the analysis…"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:189
-#, rust-format
-msgid "{count} engine detected a threat"
-msgid_plural "{count} engines detected a threat"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:195
-msgid "No engines detected a threat"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:196
-msgid "The lookup failed"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:203
-msgid ""
-"Add an API key in Preferences, or open VirusTotal's upload page to send the "
-"file yourself."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:226
-msgid "Malicious"
-msgstr "Dannoso"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:227
-msgid "Suspicious"
-msgstr "Sospetto"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:264
-msgid "VirusTotal Scan"
-msgstr "Scansione VirusTotal"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:329
-msgid "View on VirusTotal"
-msgstr "Visualizza su VirusTotal"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:337
-msgid "Open VirusTotal website"
-msgstr "Apri il sito web di VirusTotal"
-
-#: src/virustotal_lookup/virustotal_lookup_dialog.rs:390
-msgid "VirusTotal does not know this file, and it was not uploaded."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:30
-msgid "VirusTotal API keys must be exactly 64 hexadecimal characters"
-msgstr ""
-"Le chiavi API VirusTotal devono contenere esattamente 64 caratteri "
-"esadecimali"
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:32
-msgid "Unable to read the stored API key"
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:33
-msgid "Keyring unavailable"
-msgstr "Portachiavi non disponibile"
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:58
-#: src/virustotal_lookup/virustotal_preferences_page.rs:75
-msgid "API Key"
-msgstr "Chiave API"
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:59
-msgid ""
-"The key is stored in the system keyring. ClamUI first asks VirusTotal about "
-"a file's hash, and only uploads the file after you confirm."
-msgstr ""
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:67
-msgid "Delete Key"
-msgstr "Elimina chiave"
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:86
-msgid "Get a free API key"
-msgstr "Ottieni una chiave API gratuita"
-
-#: src/virustotal_lookup/virustotal_preferences_page.rs:87
-msgid ""
-"Free tier: 4 requests per minute, 500 per day. Files up to 650 MB can be "
-"scanned."
-msgstr ""
-"Piano gratuito: 4 richieste al minuto, 500 al giorno. È possibile sottoporre "
-"a scansione file fino a 650 MB."
+#~ msgid "VirusTotal API keys must be exactly 64 hexadecimal characters"
+#~ msgstr ""
+#~ "Le chiavi API VirusTotal devono contenere esattamente 64 caratteri "
+#~ "esadecimali"
 
 #~ msgid "Components"
 #~ msgstr "Componenti"
