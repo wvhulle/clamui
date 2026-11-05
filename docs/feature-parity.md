@@ -5,7 +5,8 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 ## Shell
 
 - [x] Sidebar icons, using a `gtk::ListBox` with the `navigation-sidebar` style.
-- [ ] Pages: Logs, Statistics, Audit, Network.
+- [x] Pages: Logs, Statistics.
+- [ ] Pages: Audit, Network.
 - [ ] Empty states with `adw::StatusPage`.
 
 ## Scan
@@ -28,17 +29,17 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Logs
 
-- [ ] Scan and update history, persisted.
-- [ ] History list with status, time and path, and a details pane.
-- [ ] Copy and export a log entry, export all, clear all.
-- [ ] ClamAV daemon log tab.
+- [x] Scan and update history, persisted.
+- [x] History list with status, time and path, and a details pane.
+- [x] Copy and export a log entry, export all as CSV or JSON, clear all.
+- [x] ClamAV daemon log tab with live updates.
 
 ## Statistics
 
-- [ ] Protection status and last scan.
-- [ ] Timeframe selection: day, week, month, all time.
-- [ ] Totals: scans, files, threats, clean scans, average duration.
-- [ ] Scan activity trend and quick actions.
+- [x] Protection status and last scan. Failed and cancelled scans don't count as protection, and scans run outside ClamUI aren't seen.
+- [x] Timeframe selection: day, week, month, all time.
+- [x] Totals: scans, files, threats, clean scans, average duration.
+- [x] Scan activity trend and quick actions.
 
 ## Components
 

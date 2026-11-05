@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 08:35+0100\n"
+"POT-Creation-Date: 2026-11-05 08:51+0100\n"
 "PO-Revision-Date: 2026-09-13 09:59+0200\n"
 "Last-Translator: Kálmán „KAMI” Szalai <kami911@gmail.com>\n"
 "Language-Team: Hungarian\n"
@@ -17,50 +17,494 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.4.2\n"
 
-#: src/application_window_shell.rs:52
+#: src/activity_history/activity_export_formats.rs:10
+msgid "Clean"
+msgstr "Tiszta"
+
+#: src/activity_history/activity_export_formats.rs:11
+msgid "Infected"
+msgstr "Fertőzött"
+
+#: src/activity_history/activity_export_formats.rs:12
+msgid "Error"
+msgstr "Hiba"
+
+#: src/activity_history/activity_export_formats.rs:13
+msgid "Cancelled"
+msgstr "Megszakítva"
+
+#: src/activity_history/activity_export_formats.rs:14
+msgid "Success"
+msgstr "Sikeres"
+
+#: src/activity_history/activity_export_formats.rs:15
+msgid "Up to date"
+msgstr "Naprakész"
+
+#: src/activity_history/activity_export_formats.rs:16
+msgid "Requested"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:23
+#, rust-format
+msgid "Found {count} threat"
+msgid_plural "Found {count} threats"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/activity_history/activity_export_formats.rs:28
+#: src/malware_scan/scan_progress_page.rs:313
+#: src/malware_scan/scan_results_dialog.rs:50
+msgid "No threats found"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:29
+#: src/malware_scan/scan_progress_page.rs:311
+#: src/malware_scan/scan_results_dialog.rs:51
+msgid "The scan did not finish cleanly"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:30
+#: src/malware_scan/scan_progress_page.rs:306
+#: src/malware_scan/scan_results_dialog.rs:52
+msgid "Scan cancelled by user"
+msgstr "A felhasználó megszakította a vizsgálatot"
+
+#: src/activity_history/activity_export_formats.rs:31
+msgid "Virus definitions updated"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:32
+msgid "Virus definitions are up to date"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:33
+msgid "Update requested from the service"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:34
+msgid "Database update failed"
+msgstr "Az adatbázis frissítése sikertelen"
+
+#: src/activity_history/activity_export_formats.rs:35
+#: src/virus_database/database_update_page.rs:435
+msgid "Database update cancelled"
+msgstr "Az adatbázis-frissítés megszakítva"
+
+#: src/activity_history/activity_export_formats.rs:88
+msgid "SCAN LOG"
+msgstr "VIZSGÁLATI NAPLÓ"
+
+#: src/activity_history/activity_export_formats.rs:90
+msgid "UPDATE LOG"
+msgstr "FRISSÍTÉSI NAPLÓ"
+
+#: src/activity_history/activity_export_formats.rs:93
+msgid "Timestamp"
+msgstr "Időbélyeg"
+
+#: src/activity_history/activity_export_formats.rs:96
+msgid "Status"
+msgstr "Állapot"
+
+#: src/activity_history/activity_export_formats.rs:101
+msgid "Duration"
+msgstr "Időtartam"
+
+#: src/activity_history/activity_export_formats.rs:106
+msgid "Summary"
+msgstr "Összegzés"
+
+#: src/activity_history/activity_export_formats.rs:116
+msgid "Path"
+msgstr "Útvonal"
+
+#: src/activity_history/activity_export_formats.rs:125
+msgid "Full Output"
+msgstr "Teljes kimenet"
+
+#: src/activity_history/activity_logs_page.rs:128
+msgid "Select a log entry to view details."
+msgstr "Válasszon naplóbejegyzést a részletek megtekintéséhez."
+
+#: src/activity_history/activity_logs_page.rs:147
+msgid "Clear All Logs?"
+msgstr "Minden napló törlése?"
+
+#: src/activity_history/activity_logs_page.rs:149
+msgid ""
+"This will permanently delete all historical logs. This action cannot be "
+"undone."
+msgstr ""
+"Ez véglegesen törli az összes korábbi naplót. Ez a művelet nem vonható "
+"vissza."
+
+#: src/activity_history/activity_logs_page.rs:152
+#: src/file_quarantine/quarantine_entries_page.rs:89
+#: src/malware_scan/scan_progress_page.rs:577
+#: src/malware_scan/scan_results_dialog.rs:193
+#: src/virus_database/database_update_page.rs:529
+msgid "Cancel"
+msgstr "Mégse"
+
+#: src/activity_history/activity_logs_page.rs:153
+#: src/activity_history/activity_logs_page.rs:271
+msgid "Clear All"
+msgstr "Összes törlése"
+
+#: src/activity_history/activity_logs_page.rs:211
+#: src/activity_history/activity_logs_page.rs:225
+msgid "Historical Logs"
+msgstr "Előzmény-naplók"
+
+#: src/activity_history/activity_logs_page.rs:231
+msgid "Previous scan and update operations"
+msgstr "Korábbi vizsgálati és frissítési műveletek"
+
+#: src/activity_history/activity_logs_page.rs:237
+#: src/activity_history/activity_logs_page.rs:380
+#: src/activity_history/scan_statistics_page.rs:234
+msgid "Refresh"
+msgstr "Frissítés"
+
+#: src/activity_history/activity_logs_page.rs:245
+msgid "Export All"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:256
+msgid "Export CSV"
+msgstr "CSV exportálása"
+
+#: src/activity_history/activity_logs_page.rs:262
+msgid "Export JSON"
+msgstr "JSON exportálása"
+
+#: src/activity_history/activity_logs_page.rs:304
+msgid "No historical logs yet."
+msgstr "Még nincsenek előzmény-naplók."
+
+#: src/activity_history/activity_logs_page.rs:321
+msgid "Log Details"
+msgstr "Napló részletei"
+
+#: src/activity_history/activity_logs_page.rs:326
+#: src/activity_history/activity_logs_page.rs:388
+#: src/clamav_components/clamav_component_row.rs:126
+msgid "Copy"
+msgstr "Másolás"
+
+#: src/activity_history/activity_logs_page.rs:335
+#: src/activity_history/activity_logs_page.rs:396
+msgid "Export Text"
+msgstr "Szöveg exportálása"
+
+#: src/activity_history/activity_logs_page.rs:346
+#: src/activity_history/activity_logs_page.rs:360
+msgid "ClamAV Daemon"
+msgstr "ClamAV démon"
+
+#: src/activity_history/activity_logs_page.rs:373
+msgid "Live Updates"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:425
+#: src/clamav_components/clamav_component_row.rs:73
+#: src/malware_scan/scan_progress_page.rs:265
+#: src/virus_database/database_update_page.rs:285
+#: src/virus_database/database_update_page.rs:292
+msgid "Checking…"
+msgstr "Ellenőrzés…"
+
+#: src/activity_history/activity_logs_page.rs:479
+msgid "Log details copied to clipboard"
+msgstr "A napló részletei a vágólapra másolva"
+
+#: src/activity_history/activity_logs_page.rs:501
+msgid "Daemon logs copied to clipboard"
+msgstr "A démonnaplók a vágólapra másolva"
+
+#: src/activity_history/activity_logs_page.rs:535
+#, rust-format
+msgid "Failed to load historical logs: {error}"
+msgstr "Nem sikerült betölteni az előzmény-naplókat: {error}"
+
+#: src/activity_history/activity_logs_page.rs:542
+msgid "Historical logs cleared."
+msgstr "Az előzmény-naplók törölve."
+
+#: src/activity_history/activity_logs_page.rs:545
+#, rust-format
+msgid "Failed to clear logs: {error}"
+msgstr "Nem sikerült törölni a naplókat: {error}"
+
+#: src/activity_history/activity_logs_page.rs:557
+msgid "System journal"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:561
+msgid "Daemon log file not found."
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:566
+msgid "Exported."
+msgstr ""
+
+#: src/activity_history/scan_activity_chart.rs:82
+#, rust-format
+msgid "{count} scan"
+msgid_plural "{count} scans"
+msgstr[0] "{count} vizsgálat"
+msgstr[1] "{count} vizsgálat"
+
+#: src/activity_history/scan_activity_chart.rs:88
+#, rust-format
+msgid "{count} threat"
+msgid_plural "{count} threats"
+msgstr[0] "{count} fenyegetés"
+msgstr[1] "{count} fenyegetés"
+
+#: src/activity_history/scan_statistics_page.rs:72
+msgid "Protected"
+msgstr "Védett"
+
+#: src/activity_history/scan_statistics_page.rs:73
+msgid "At Risk"
+msgstr "Veszélyeztetett"
+
+#: src/activity_history/scan_statistics_page.rs:74
+msgid "Unprotected"
+msgstr "Nem védett"
+
+#: src/activity_history/scan_statistics_page.rs:95
+msgid "No scans performed yet"
+msgstr "Még nem történt vizsgálat"
+
+#: src/activity_history/scan_statistics_page.rs:96
+msgid "Last scan was over 30 days ago"
+msgstr "Az utolsó vizsgálat több mint 30 napja történt"
+
+#: src/activity_history/scan_statistics_page.rs:97
+msgid "Last scan was over a week ago"
+msgstr "Az utolsó vizsgálat több mint egy hete történt"
+
+#: src/activity_history/scan_statistics_page.rs:99
+msgid "Virus definitions are over 7 days old"
+msgstr "A vírusdefiníciók több mint 7 naposak"
+
+#: src/activity_history/scan_statistics_page.rs:101
+msgid "Virus definitions are over 1 day old"
+msgstr "A vírusdefiníciók több mint 1 naposak"
+
+#: src/activity_history/scan_statistics_page.rs:102
+msgid "System is protected"
+msgstr "A rendszer védett"
+
+#: src/activity_history/scan_statistics_page.rs:108
+msgid "less than an hour ago"
+msgstr "kevesebb mint egy órája"
+
+#: src/activity_history/scan_statistics_page.rs:112
+#, rust-format
+msgid "{count} hour ago"
+msgid_plural "{count} hours ago"
+msgstr[0] "{count} órával ezelőtt"
+msgstr[1] "{count} órával ezelőtt"
+
+#: src/activity_history/scan_statistics_page.rs:116
+#, rust-format
+msgid "{count} day ago"
+msgid_plural "{count} days ago"
+msgstr[0] "{count} nappal ezelőtt"
+msgstr[1] "{count} nappal ezelőtt"
+
+#: src/activity_history/scan_statistics_page.rs:156
+msgid "No scans recorded"
+msgstr "Nincsenek rögzített vizsgálatok"
+
+#: src/activity_history/scan_statistics_page.rs:161
+#, rust-format
+msgid "Statistics for: {range}"
+msgstr "Statisztikák erre az időszakra: {range}"
+
+#: src/activity_history/scan_statistics_page.rs:229
+msgid "Protection Status"
+msgstr "Védelmi állapot"
+
+#: src/activity_history/scan_statistics_page.rs:230
+msgid "Based on scans run from ClamUI and the age of the virus definitions"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:241
+msgid "System Status"
+msgstr "Rendszerállapot"
+
+#: src/activity_history/scan_statistics_page.rs:259
+msgid "Last Scan"
+msgstr "Legutóbbi vizsgálat"
+
+#: src/activity_history/scan_statistics_page.rs:270
+msgid "Timeframe"
+msgstr "Időszak"
+
+#: src/activity_history/scan_statistics_page.rs:271
+msgid "Select the time period for statistics"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:281
+msgid "Scan Statistics"
+msgstr "Vizsgálati statisztikák"
+
+#: src/activity_history/scan_statistics_page.rs:286
+msgid "Total Scans"
+msgstr "Vizsgálatok összesen"
+
+#: src/activity_history/scan_statistics_page.rs:287
+msgid "Number of scans performed"
+msgstr "Elvégzett vizsgálatok száma"
+
+#: src/activity_history/scan_statistics_page.rs:297
+msgid "Files Scanned"
+msgstr "Vizsgált fájlok"
+
+#: src/activity_history/scan_statistics_page.rs:298
+msgid "Total files checked"
+msgstr "Ellenőrzött fájlok száma"
+
+#: src/activity_history/scan_statistics_page.rs:308
+#: src/malware_scan/scan_results_dialog.rs:49
+msgid "Threats Detected"
+msgstr "Fenyegetés észlelve"
+
+#: src/activity_history/scan_statistics_page.rs:309
+msgid "Malware and suspicious files found"
+msgstr "Talált kártevők és gyanús fájlok"
+
+#: src/activity_history/scan_statistics_page.rs:319
+msgid "Clean Scans"
+msgstr "Tiszta vizsgálatok"
+
+#: src/activity_history/scan_statistics_page.rs:320
+msgid "Scans with no threats found"
+msgstr "Fenyegetést nem találó vizsgálatok"
+
+#: src/activity_history/scan_statistics_page.rs:330
+msgid "Average Scan Duration"
+msgstr "Átlagos vizsgálati idő"
+
+#: src/activity_history/scan_statistics_page.rs:331
+msgid "Mean time per scan"
+msgstr "Vizsgálatonkénti átlagos idő"
+
+#: src/activity_history/scan_statistics_page.rs:342
+msgid "Scan Activity"
+msgstr "Vizsgálati tevékenység"
+
+#: src/activity_history/scan_statistics_page.rs:343
+msgid "Scan trends over the selected timeframe"
+msgstr "Vizsgálati trendek a kiválasztott időszakban"
+
+#: src/activity_history/scan_statistics_page.rs:358
+msgid "Scans"
+msgstr "Vizsgálatok"
+
+#: src/activity_history/scan_statistics_page.rs:358
+msgid "Threats"
+msgstr "Fenyegetések"
+
+#: src/activity_history/scan_statistics_page.rs:363
+msgid "Quick Actions"
+msgstr "Gyorsműveletek"
+
+#: src/activity_history/scan_statistics_page.rs:366
+msgid "Quick Scan"
+msgstr "Gyors vizsgálat"
+
+#: src/activity_history/scan_statistics_page.rs:367
+msgid "Scan your home directory"
+msgstr "Saját mappa vizsgálata"
+
+#: src/activity_history/scan_statistics_page.rs:374
+msgid "View Scan Logs"
+msgstr "Vizsgálati naplók megtekintése"
+
+#: src/activity_history/scan_statistics_page.rs:375
+msgid "See detailed scan history"
+msgstr "Részletes vizsgálati előzmények megtekintése"
+
+#: src/activity_history/scan_statistics_page.rs:392
+msgid "Day"
+msgstr "Nap"
+
+#: src/activity_history/scan_statistics_page.rs:393
+msgid "Week"
+msgstr "Hét"
+
+#: src/activity_history/scan_statistics_page.rs:394
+msgid "Month"
+msgstr "Hónap"
+
+#: src/activity_history/scan_statistics_page.rs:395
+msgid "All Time"
+msgstr "Teljes időszak"
+
+#: src/activity_history/scan_statistics_page.rs:455
+#, rust-format
+msgid "Failed to load statistics: {error}"
+msgstr "Nem sikerült betölteni a statisztikákat: {error}"
+
+#: src/application_window_shell.rs:63
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:129
+#: src/application_window_shell.rs:140
 msgid "About ClamUI"
 msgstr "A ClamUI névjegye"
 
-#: src/application_window_shell.rs:130
+#: src/application_window_shell.rs:141
 msgid "Quit"
 msgstr "Kilépés"
 
-#: src/application_window_shell.rs:133
+#: src/application_window_shell.rs:144
 msgid "Menu"
 msgstr "Menü"
 
-#: src/application_window_shell.rs:152
+#: src/application_window_shell.rs:163
 msgid "translator-credits"
 msgstr "Kálmán „KAMI” Szalai"
 
-#: src/application_window_shell.rs:206
+#: src/application_window_shell.rs:217
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:261
-#: src/malware_scan/scan_progress_page.rs:289
+#: src/application_window_shell.rs:294
+#: src/malware_scan/scan_progress_page.rs:303
 msgid "Scan"
 msgstr "Vizsgálat"
 
-#: src/application_window_shell.rs:268
-#: src/virus_database/database_update_page.rs:408
+#: src/application_window_shell.rs:301
+#: src/virus_database/database_update_page.rs:471
 msgid "Database"
 msgstr "Adatbázis"
 
-#: src/application_window_shell.rs:275
+#: src/application_window_shell.rs:308
+msgid "Logs"
+msgstr "Naplók"
+
+#: src/application_window_shell.rs:315
 msgid "Components"
 msgstr "Összetevők"
 
-#: src/application_window_shell.rs:282
+#: src/application_window_shell.rs:322
 #: src/file_quarantine/quarantine_entries_page.rs:115
 #: src/malware_scan/detected_threat_row.rs:109
 #: src/malware_scan/scan_results_dialog.rs:194
 msgid "Quarantine"
 msgstr "Karanténba helyezés"
+
+#: src/application_window_shell.rs:329
+#: src/malware_scan/scan_results_dialog.rs:319
+msgid "Statistics"
+msgstr "Statisztikák"
 
 #: src/clamav_components/clamav_component_row.rs:42
 msgid "Virus Scanner"
@@ -94,13 +538,6 @@ msgstr "A clamdscan a gyorsabb vizsgálathoz a clamd démont használja."
 msgid "clamd is the ClamAV daemon for faster scans."
 msgstr "A clamd a ClamAV démona a gyorsabb vizsgálatokhoz."
 
-#: src/clamav_components/clamav_component_row.rs:73
-#: src/malware_scan/scan_progress_page.rs:251
-#: src/virus_database/database_update_page.rs:273
-#: src/virus_database/database_update_page.rs:280
-msgid "Checking…"
-msgstr "Ellenőrzés…"
-
 #: src/clamav_components/clamav_component_row.rs:74
 msgid "Installed"
 msgstr "Telepítve"
@@ -114,7 +551,7 @@ msgid "Stopped"
 msgstr "Leállítva"
 
 #: src/clamav_components/clamav_component_row.rs:77
-#: src/virus_database/database_update_page.rs:266
+#: src/virus_database/database_update_page.rs:278
 msgid "Not installed"
 msgstr "Nincs telepítve"
 
@@ -126,10 +563,6 @@ msgstr "Ismeretlen"
 #, rust-format
 msgid "{distribution} (this system)"
 msgstr ""
-
-#: src/clamav_components/clamav_component_row.rs:126
-msgid "Copy"
-msgstr "Másolás"
 
 #: src/clamav_components/component_status_page.rs:64
 #: src/clamav_components/component_status_page.rs:67
@@ -145,7 +578,7 @@ msgstr ""
 "csomagokat és nem indít szolgáltatásokat az Ön nevében."
 
 #: src/clamav_components/component_status_page.rs:72
-#: src/virus_database/database_update_page.rs:415
+#: src/virus_database/database_update_page.rs:478
 msgid "Refresh status"
 msgstr "Állapot frissítése"
 
@@ -200,13 +633,6 @@ msgstr ""
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:89
-#: src/malware_scan/scan_progress_page.rs:526
-#: src/malware_scan/scan_results_dialog.rs:193
-#: src/virus_database/database_update_page.rs:466
-msgid "Cancel"
-msgstr "Mégse"
-
 #: src/file_quarantine/quarantine_entries_page.rs:90
 #: src/file_quarantine/quarantine_entry_row.rs:54
 msgid "Delete"
@@ -245,75 +671,75 @@ msgstr ""
 msgid "Copy Path"
 msgstr "Elérési út másolása"
 
-#: src/malware_scan/scan_progress_page.rs:107
+#: src/malware_scan/scan_progress_page.rs:121
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:110
+#: src/malware_scan/scan_progress_page.rs:124
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:114
+#: src/malware_scan/scan_progress_page.rs:128
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:118
+#: src/malware_scan/scan_progress_page.rs:132
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:123
+#: src/malware_scan/scan_progress_page.rs:137
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:135
+#: src/malware_scan/scan_progress_page.rs:149
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr "A vizsgálati cél nem létezik, vagy érvénytelen NUL bájtot tartalmaz"
 
-#: src/malware_scan/scan_progress_page.rs:138
+#: src/malware_scan/scan_progress_page.rs:152
 msgid "Scan target is not a regular file or directory"
 msgstr "A vizsgálati cél nem szabályos fájl vagy könyvtár"
 
-#: src/malware_scan/scan_progress_page.rs:143
+#: src/malware_scan/scan_progress_page.rs:157
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:150
+#: src/malware_scan/scan_progress_page.rs:164
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:154
+#: src/malware_scan/scan_progress_page.rs:168
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:162
+#: src/malware_scan/scan_progress_page.rs:176
 msgid "No files could be scanned"
 msgstr "Egyetlen fájl sem volt megvizsgálható"
 
-#: src/malware_scan/scan_progress_page.rs:168
+#: src/malware_scan/scan_progress_page.rs:182
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:180
+#: src/malware_scan/scan_progress_page.rs:194
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] "{count} fájl nem volt elérhető"
 msgstr[1] "{count} fájl nem volt elérhető"
 
-#: src/malware_scan/scan_progress_page.rs:186
+#: src/malware_scan/scan_progress_page.rs:200
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] "{count} fájl nem volt olvasható"
 msgstr[1] "{count} fájl nem volt olvasható"
 
-#: src/malware_scan/scan_progress_page.rs:192
+#: src/malware_scan/scan_progress_page.rs:206
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -328,49 +754,34 @@ msgstr[1] ""
 "{count} nem végzetes figyelmeztetés történt a vizsgálat során; egyes fájlok "
 "csak részben lettek megvizsgálva"
 
-#: src/malware_scan/scan_progress_page.rs:253
+#: src/malware_scan/scan_progress_page.rs:267
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:256
+#: src/malware_scan/scan_progress_page.rs:270
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:271
+#: src/malware_scan/scan_progress_page.rs:285
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:290
+#: src/malware_scan/scan_progress_page.rs:304
 msgid "Scanning…"
 msgstr "Vizsgálat folyamatban…"
 
-#: src/malware_scan/scan_progress_page.rs:291
+#: src/malware_scan/scan_progress_page.rs:305
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:292
-#: src/malware_scan/scan_results_dialog.rs:52
-msgid "Scan cancelled by user"
-msgstr "A felhasználó megszakította a vizsgálatot"
-
-#: src/malware_scan/scan_progress_page.rs:294
+#: src/malware_scan/scan_progress_page.rs:308
 #: src/malware_scan/scan_results_dialog.rs:90
 #: src/malware_scan/scan_results_dialog.rs:345
 msgid "Threats found"
 msgstr "Talált fenyegetések"
 
-#: src/malware_scan/scan_progress_page.rs:297
-#: src/malware_scan/scan_results_dialog.rs:51
-msgid "The scan did not finish cleanly"
-msgstr ""
-
-#: src/malware_scan/scan_progress_page.rs:299
-#: src/malware_scan/scan_results_dialog.rs:50
-msgid "No threats found"
-msgstr ""
-
-#: src/malware_scan/scan_progress_page.rs:307
+#: src/malware_scan/scan_progress_page.rs:321
 #: src/malware_scan/scan_results_dialog.rs:68
 #, rust-format
 msgid "{count} threat found"
@@ -378,60 +789,61 @@ msgid_plural "{count} threats found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:314
+#: src/malware_scan/scan_progress_page.rs:328
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "{count} fájl ellenőrizve"
 msgstr[1] "{count} fájl ellenőrizve"
 
-#: src/malware_scan/scan_progress_page.rs:333
+#: src/malware_scan/scan_progress_page.rs:347
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:468
+#: src/malware_scan/scan_progress_page.rs:519
 msgid "Scan Targets"
 msgstr "Vizsgálati célok"
 
-#: src/malware_scan/scan_progress_page.rs:469
+#: src/malware_scan/scan_progress_page.rs:520
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:477
+#: src/malware_scan/scan_progress_page.rs:528
 msgid "Add Files"
 msgstr "Fájlok hozzáadása"
 
-#: src/malware_scan/scan_progress_page.rs:484
+#: src/malware_scan/scan_progress_page.rs:535
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:496
+#: src/malware_scan/scan_progress_page.rs:547
 msgid "No targets added"
 msgstr "Nincs hozzáadott cél"
 
-#: src/malware_scan/scan_progress_page.rs:509
+#: src/malware_scan/scan_progress_page.rs:560
 msgid "Start Scan"
 msgstr "Vizsgálat indítása"
 
-#: src/malware_scan/scan_progress_page.rs:519
+#: src/malware_scan/scan_progress_page.rs:570
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:581
+#: src/malware_scan/scan_progress_page.rs:632
 msgid "View Results"
 msgstr "Eredmények megtekintése"
 
-#: src/malware_scan/scan_progress_page.rs:645
+#: src/malware_scan/scan_progress_page.rs:700
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:660
+#: src/malware_scan/scan_progress_page.rs:715
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:49
-msgid "Threats Detected"
-msgstr "Fenyegetés észlelve"
+#: src/malware_scan/scan_progress_page.rs:801
+#, rust-format
+msgid "The scan could not be added to the history: {error}"
+msgstr ""
 
 #: src/malware_scan/scan_results_dialog.rs:80
 #: src/malware_scan/scan_results_dialog.rs:331
@@ -469,10 +881,6 @@ msgstr ""
 #: src/malware_scan/scan_results_dialog.rs:287
 msgid "Copy Results"
 msgstr ""
-
-#: src/malware_scan/scan_results_dialog.rs:319
-msgid "Statistics"
-msgstr "Statisztikák"
 
 #: src/malware_scan/scan_results_dialog.rs:352
 msgid "Not accessible"
@@ -531,127 +939,123 @@ msgstr ""
 msgid "Export"
 msgstr "Exportálás"
 
-#: src/virus_database/database_update_page.rs:87
+#: src/virus_database/database_update_page.rs:99
 msgid "Active"
 msgstr "Aktív"
 
-#: src/virus_database/database_update_page.rs:88
+#: src/virus_database/database_update_page.rs:100
 msgid "Scheduled by a systemd timer"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:89
+#: src/virus_database/database_update_page.rs:101
 msgid "Installed but stopped"
 msgstr "Telepítve, de leállítva"
 
-#: src/virus_database/database_update_page.rs:91
+#: src/virus_database/database_update_page.rs:103
 msgid "No freshclam service detected; updates run manually"
 msgstr "Nem található freshclam szolgáltatás; a frissítések kézzel futnak"
 
-#: src/virus_database/database_update_page.rs:102
+#: src/virus_database/database_update_page.rs:114
 #, rust-format
 msgid "{count} day old"
 msgid_plural "{count} days old"
 msgstr[0] "{count} napos"
 msgstr[1] "{count} napos"
 
-#: src/virus_database/database_update_page.rs:108
+#: src/virus_database/database_update_page.rs:120
 msgid "No readable virus database was found"
 msgstr "Nem található olvasható vírusadatbázis"
 
-#: src/virus_database/database_update_page.rs:127
+#: src/virus_database/database_update_page.rs:139
 msgid ""
 "Authentication cancelled. Database update requires administrator privileges."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:130
+#: src/virus_database/database_update_page.rs:142
 msgid "Authorization failed. Please try again and enter your password."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:133
+#: src/virus_database/database_update_page.rs:145
 msgid "Update rate limited by mirror. Please wait a few minutes and try again."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:136
+#: src/virus_database/database_update_page.rs:148
 msgid ""
 "Update blocked by CDN. This may be due to rate limiting. Please wait and try "
 "again later."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:140
+#: src/virus_database/database_update_page.rs:152
 msgid "ClamAV mirror is currently unavailable. Please try again later."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:143
+#: src/virus_database/database_update_page.rs:155
 msgid "SSL/TLS certificate error. The mirror may have configuration issues."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:146
+#: src/virus_database/database_update_page.rs:158
 msgid "Connection timed out. Please check your network connection."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:149
+#: src/virus_database/database_update_page.rs:161
 msgid "Database is locked. Another freshclam instance may be running."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:152
+#: src/virus_database/database_update_page.rs:164
 msgid ""
 "Permission denied. You may need elevated privileges to update the database."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:155
+#: src/virus_database/database_update_page.rs:167
 msgid "Connection error. Please check your network connection."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:158
+#: src/virus_database/database_update_page.rs:170
 msgid "DNS resolution failed. Please check your network settings."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:164
-#: src/virus_database/database_update_page.rs:391
+#: src/virus_database/database_update_page.rs:176
+#: src/virus_database/database_update_page.rs:454
 msgid "Update failed with an unknown error. Check the logs for details."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:171
+#: src/virus_database/database_update_page.rs:183
 #, rust-format
 msgid "Updated: {databases}"
 msgstr "Frissítve: {databases}"
 
-#: src/virus_database/database_update_page.rs:175
+#: src/virus_database/database_update_page.rs:187
 #, rust-format
 msgid "Already current: {databases}"
 msgstr "Már naprakész: {databases}"
 
-#: src/virus_database/database_update_page.rs:184
+#: src/virus_database/database_update_page.rs:196
 #, rust-format
 msgid "Rate limited: {database}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:187
+#: src/virus_database/database_update_page.rs:199
 #, rust-format
 msgid "Rate limited: {database} until {cooldown}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:204
+#: src/virus_database/database_update_page.rs:216
 msgid "Database update completed"
 msgstr "Az adatbázis frissítése befejeződött"
 
-#: src/virus_database/database_update_page.rs:207
+#: src/virus_database/database_update_page.rs:219
 msgid "Database is already up to date"
 msgstr "Az adatbázis már naprakész"
 
-#: src/virus_database/database_update_page.rs:224
+#: src/virus_database/database_update_page.rs:236
 msgid "Install freshclam before requesting database updates."
 msgstr "Az adatbázis-frissítés kérése előtt telepítse a freshclam programot."
 
-#: src/virus_database/database_update_page.rs:262
+#: src/virus_database/database_update_page.rs:274
 msgid "Checking freshclam…"
 msgstr "freshclam ellenőrzése…"
 
-#: src/virus_database/database_update_page.rs:372
-msgid "Database update cancelled"
-msgstr "Az adatbázis-frissítés megszakítva"
-
-#: src/virus_database/database_update_page.rs:384
+#: src/virus_database/database_update_page.rs:447
 msgid ""
 "The service accepted the signal; it performs the update asynchronously. "
 "Check its logs for completion."
@@ -659,33 +1063,38 @@ msgstr ""
 "A szolgáltatás elfogadta a jelzést; a frissítést aszinkron módon végzi. A "
 "befejezést a naplókban ellenőrizheti."
 
-#: src/virus_database/database_update_page.rs:411
+#: src/virus_database/database_update_page.rs:474
 msgid "Virus definitions"
 msgstr "Vírusdefiníciók"
 
-#: src/virus_database/database_update_page.rs:432
+#: src/virus_database/database_update_page.rs:495
 msgid "Update service"
 msgstr "Frissítési szolgáltatás"
 
-#: src/virus_database/database_update_page.rs:440
+#: src/virus_database/database_update_page.rs:503
 msgid "Database freshness"
 msgstr "Adatbázis frissessége"
 
-#: src/virus_database/database_update_page.rs:450
-#: src/virus_database/database_update_page.rs:459
+#: src/virus_database/database_update_page.rs:513
+#: src/virus_database/database_update_page.rs:522
 msgid "Update database"
 msgstr "Adatbázis frissítése"
 
-#: src/virus_database/database_update_page.rs:451
+#: src/virus_database/database_update_page.rs:514
 msgid ""
 "Updates run through the freshclam system service when one exists, so your "
 "system may ask for authorization."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:459
+#: src/virus_database/database_update_page.rs:522
 msgid "Updating…"
 msgstr "Frissítés…"
 
-#: src/virus_database/database_update_page.rs:487
+#: src/virus_database/database_update_page.rs:550
 msgid "Update log"
 msgstr "Frissítési napló"
+
+#: src/virus_database/database_update_page.rs:659
+#, rust-format
+msgid "The update could not be added to the history: {error}"
+msgstr ""

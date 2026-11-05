@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, rc::Rc};
 
 use gettextrs::gettext;
 use relm4::{
@@ -11,6 +11,11 @@ use relm4::{
 
 use crate::{
     APPLICATION_ID,
+    activity_history::{
+        activity_history_database::ActivityHistory,
+        activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
+        scan_statistics_page::{ScanStatisticsPage, ScanStatisticsPageInput},
+    },
     clamav_components::component_status_page::ComponentStatusPage,
     file_quarantine::{
         quarantine_entries_page::{
@@ -23,17 +28,23 @@ use crate::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
     startup_arguments::StartupRequest,
-    virus_database::database_update_page::DatabaseUpdatePage,
+    virus_database::database_update_page::{DatabaseUpdatePage, DatabaseUpdatePageOutput},
 };
 
 const APPLICATION_DATA_NAME: &str = "clamui";
 
+struct ApplicationPages {
+    _scan_page: Controller<ScanProgressPage>,
+    _quarantine_page: Controller<QuarantineEntriesPage>,
+    _database_page: Controller<DatabaseUpdatePage>,
+    _component_page: Controller<ComponentStatusPage>,
+    _logs_page: Controller<ActivityLogsPage>,
+    _statistics_page: Controller<ScanStatisticsPage>,
+}
+
 enum ShellContent {
     VaultReady {
-        _scan_page: Controller<ScanProgressPage>,
-        _quarantine_page: Controller<QuarantineEntriesPage>,
-        _database_page: Controller<DatabaseUpdatePage>,
-        _component_page: Controller<ComponentStatusPage>,
+        _application_pages: Box<ApplicationPages>,
     },
     VaultUnavailable,
 }
@@ -239,9 +250,24 @@ fn application_pages(
         .launch(quarantine_vault.clone())
         .detach();
     let quarantine_input_sender = quarantine_page.sender().clone();
+    let activity_history = ActivityHistory::at_database_path(data_directory.join("history.db"));
+    let logs_page = ActivityLogsPage::builder()
+        .launch(activity_history.clone())
+        .detach();
+    let logs_input_sender = logs_page.sender().clone();
+    let statistics_page = ScanStatisticsPage::builder()
+        .launch(activity_history.clone())
+        .detach();
+    let statistics_input_sender = statistics_page.sender().clone();
+    let reload_activity_views: Rc<dyn Fn()> = Rc::new(move || {
+        logs_input_sender.emit(ActivityLogsPageInput::ReloadEntriesRequested);
+        statistics_input_sender.emit(ScanStatisticsPageInput::ReloadRequested);
+    });
+    let scan_activity_reload = Rc::clone(&reload_activity_views);
     let scan_page = ScanProgressPage::builder()
         .launch(ScanProgressPageInit {
             quarantine_vault,
+            activity_history: activity_history.clone(),
             file_list_directory: data_directory,
         })
         .connect_receiver(
@@ -250,9 +276,16 @@ fn application_pages(
                     quarantine_input_sender
                         .emit(QuarantineEntriesPageInput::ReloadEntriesRequested);
                 }
+                ScanProgressPageOutput::ActivityRecorded => scan_activity_reload(),
             },
         );
-    let database_page = DatabaseUpdatePage::builder().launch(()).detach();
+    let database_page = DatabaseUpdatePage::builder()
+        .launch(activity_history)
+        .connect_receiver(
+            move |_database_sender, database_output| match database_output {
+                DatabaseUpdatePageOutput::ActivityRecorded => reload_activity_views(),
+            },
+        );
     let component_page = ComponentStatusPage::builder().launch(()).detach();
 
     let navigation_pages = [
@@ -271,6 +304,13 @@ fn application_pages(
             keyboard_accelerator: "<Control>2",
         },
         NavigationPage {
+            page_name: "logs",
+            page_title: gettext("Logs"),
+            page_icon: "document-open-recent-symbolic",
+            page_widget: logs_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>3",
+        },
+        NavigationPage {
             page_name: "components",
             page_title: gettext("Components"),
             page_icon: "emblem-system-symbolic",
@@ -284,6 +324,13 @@ fn application_pages(
             page_widget: quarantine_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>5",
         },
+        NavigationPage {
+            page_name: "statistics",
+            page_title: gettext("Statistics"),
+            page_icon: "applications-science-symbolic",
+            page_widget: statistics_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>6",
+        },
     ];
     let page_stack = navigation_stack(&navigation_pages);
     page_stack.set_visible_child_name(&startup_request.startup_page);
@@ -294,16 +341,28 @@ fn application_pages(
         ));
     }
     register_application_actions(window_root, &page_stack);
+    let quick_scan_action = gio::SimpleAction::new("quick-scan", None);
+    let quick_scan_sender = scan_page.sender().clone();
+    let quick_scan_stack = page_stack.clone();
+    quick_scan_action.connect_activate(move |_activated_action, _parameter| {
+        quick_scan_stack.set_visible_child_name("scan");
+        quick_scan_sender.emit(ScanProgressPageInput::QuickScanRequested);
+    });
+    window_root.add_action(&quick_scan_action);
     window_root.set_content(Some(&adaptive_navigation_layout(
         &sidebar_list,
         &page_stack,
         window_root,
     )));
     ShellContent::VaultReady {
-        _scan_page: scan_page,
-        _quarantine_page: quarantine_page,
-        _database_page: database_page,
-        _component_page: component_page,
+        _application_pages: Box::new(ApplicationPages {
+            _scan_page: scan_page,
+            _quarantine_page: quarantine_page,
+            _database_page: database_page,
+            _component_page: component_page,
+            _logs_page: logs_page,
+            _statistics_page: statistics_page,
+        }),
     }
 }
 

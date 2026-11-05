@@ -1,3 +1,4 @@
+mod activity_history;
 mod application_window_shell;
 mod clamav_components;
 mod file_quarantine;

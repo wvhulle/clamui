@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 08:35+0100\n"
+"POT-Creation-Date: 2026-11-05 08:51+0100\n"
 "PO-Revision-Date: 2026-04-03 19:20+0200\n"
 "Last-Translator: Albano Battistella\n"
 "Language-Team: Italian\n"
@@ -17,50 +17,498 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/application_window_shell.rs:52
+#: src/activity_history/activity_export_formats.rs:10
+msgid "Clean"
+msgstr "Pulito"
+
+#: src/activity_history/activity_export_formats.rs:11
+msgid "Infected"
+msgstr "Infetto"
+
+#: src/activity_history/activity_export_formats.rs:12
+msgid "Error"
+msgstr "Errore"
+
+#: src/activity_history/activity_export_formats.rs:13
+msgid "Cancelled"
+msgstr "Annullato"
+
+#: src/activity_history/activity_export_formats.rs:14
+msgid "Success"
+msgstr "Operazione riuscita"
+
+#: src/activity_history/activity_export_formats.rs:15
+msgid "Up to date"
+msgstr "Aggiornato"
+
+#: src/activity_history/activity_export_formats.rs:16
+msgid "Requested"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:23
+#, rust-format
+msgid "Found {count} threat"
+msgid_plural "Found {count} threats"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/activity_history/activity_export_formats.rs:28
+#: src/malware_scan/scan_progress_page.rs:313
+#: src/malware_scan/scan_results_dialog.rs:50
+msgid "No threats found"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:29
+#: src/malware_scan/scan_progress_page.rs:311
+#: src/malware_scan/scan_results_dialog.rs:51
+msgid "The scan did not finish cleanly"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:30
+#: src/malware_scan/scan_progress_page.rs:306
+#: src/malware_scan/scan_results_dialog.rs:52
+msgid "Scan cancelled by user"
+msgstr "Scansione annullata dall'utente"
+
+#: src/activity_history/activity_export_formats.rs:31
+msgid "Virus definitions updated"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:32
+msgid "Virus definitions are up to date"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:33
+msgid "Update requested from the service"
+msgstr ""
+
+#: src/activity_history/activity_export_formats.rs:34
+msgid "Database update failed"
+msgstr "Aggiornamento del database non riuscito"
+
+#: src/activity_history/activity_export_formats.rs:35
+#: src/virus_database/database_update_page.rs:435
+msgid "Database update cancelled"
+msgstr "Aggiornamento database annullato"
+
+#: src/activity_history/activity_export_formats.rs:88
+msgid "SCAN LOG"
+msgstr "LOG SCANSIONE"
+
+#: src/activity_history/activity_export_formats.rs:90
+msgid "UPDATE LOG"
+msgstr "LOG AGGIORNAMENTO"
+
+#: src/activity_history/activity_export_formats.rs:93
+msgid "Timestamp"
+msgstr "Marca Temporale"
+
+#: src/activity_history/activity_export_formats.rs:96
+msgid "Status"
+msgstr "Stato"
+
+#: src/activity_history/activity_export_formats.rs:101
+msgid "Duration"
+msgstr "Durata"
+
+#: src/activity_history/activity_export_formats.rs:106
+msgid "Summary"
+msgstr "Riepilogo"
+
+#: src/activity_history/activity_export_formats.rs:116
+msgid "Path"
+msgstr "Percorso"
+
+#: src/activity_history/activity_export_formats.rs:125
+msgid "Full Output"
+msgstr "Output completo"
+
+#: src/activity_history/activity_logs_page.rs:128
+msgid "Select a log entry to view details."
+msgstr "Seleziona una voce di registro per visualizzarne i dettagli."
+
+#: src/activity_history/activity_logs_page.rs:147
+msgid "Clear All Logs?"
+msgstr "Cancellare tutti i registri?"
+
+#: src/activity_history/activity_logs_page.rs:149
+msgid ""
+"This will permanently delete all historical logs. This action cannot be "
+"undone."
+msgstr ""
+"Questa operazione eliminerà definitivamente tutti i registri storici. "
+"L'azione non può essere annullata."
+
+#: src/activity_history/activity_logs_page.rs:152
+#: src/file_quarantine/quarantine_entries_page.rs:89
+#: src/malware_scan/scan_progress_page.rs:577
+#: src/malware_scan/scan_results_dialog.rs:193
+#: src/virus_database/database_update_page.rs:529
+msgid "Cancel"
+msgstr "Annulla"
+
+#: src/activity_history/activity_logs_page.rs:153
+#: src/activity_history/activity_logs_page.rs:271
+msgid "Clear All"
+msgstr "Cancella tutto"
+
+#: src/activity_history/activity_logs_page.rs:211
+#: src/activity_history/activity_logs_page.rs:225
+msgid "Historical Logs"
+msgstr "Registri storici"
+
+#: src/activity_history/activity_logs_page.rs:231
+msgid "Previous scan and update operations"
+msgstr "Operazioni di scansione e aggiornamento precedenti"
+
+#: src/activity_history/activity_logs_page.rs:237
+#: src/activity_history/activity_logs_page.rs:380
+#: src/activity_history/scan_statistics_page.rs:234
+msgid "Refresh"
+msgstr "Aggiorna"
+
+#: src/activity_history/activity_logs_page.rs:245
+msgid "Export All"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:256
+msgid "Export CSV"
+msgstr "Esporta CSV"
+
+#: src/activity_history/activity_logs_page.rs:262
+msgid "Export JSON"
+msgstr "Esporta JSON"
+
+#: src/activity_history/activity_logs_page.rs:304
+msgid "No historical logs yet."
+msgstr "Nessun registro storico disponibile."
+
+#: src/activity_history/activity_logs_page.rs:321
+msgid "Log Details"
+msgstr "Dettagli del registro"
+
+#: src/activity_history/activity_logs_page.rs:326
+#: src/activity_history/activity_logs_page.rs:388
+#: src/clamav_components/clamav_component_row.rs:126
+msgid "Copy"
+msgstr "Copia"
+
+#: src/activity_history/activity_logs_page.rs:335
+#: src/activity_history/activity_logs_page.rs:396
+msgid "Export Text"
+msgstr "Esporta testo"
+
+#: src/activity_history/activity_logs_page.rs:346
+#: src/activity_history/activity_logs_page.rs:360
+msgid "ClamAV Daemon"
+msgstr "Demone ClamAV"
+
+#: src/activity_history/activity_logs_page.rs:373
+msgid "Live Updates"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:425
+#: src/clamav_components/clamav_component_row.rs:73
+#: src/malware_scan/scan_progress_page.rs:265
+#: src/virus_database/database_update_page.rs:285
+#: src/virus_database/database_update_page.rs:292
+msgid "Checking…"
+msgstr "Controllo in corso…"
+
+#: src/activity_history/activity_logs_page.rs:479
+msgid "Log details copied to clipboard"
+msgstr "Dettagli del registro copiati negli appunti"
+
+#: src/activity_history/activity_logs_page.rs:501
+msgid "Daemon logs copied to clipboard"
+msgstr "Registri del demone copiati negli appunti"
+
+#: src/activity_history/activity_logs_page.rs:535
+#, rust-format
+msgid "Failed to load historical logs: {error}"
+msgstr "Impossibile caricare i registri storici: {error}"
+
+#: src/activity_history/activity_logs_page.rs:542
+msgid "Historical logs cleared."
+msgstr "Registri storici cancellati."
+
+#: src/activity_history/activity_logs_page.rs:545
+#, rust-format
+msgid "Failed to clear logs: {error}"
+msgstr "Impossibile cancellare i registri: {error}"
+
+#: src/activity_history/activity_logs_page.rs:557
+msgid "System journal"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:561
+msgid "Daemon log file not found."
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:566
+msgid "Exported."
+msgstr ""
+
+#
+#: src/activity_history/scan_activity_chart.rs:82
+#, rust-format
+msgid "{count} scan"
+msgid_plural "{count} scans"
+msgstr[0] "{count} scansione"
+msgstr[1] "{count} scansioni"
+
+#
+#: src/activity_history/scan_activity_chart.rs:88
+#, rust-format
+msgid "{count} threat"
+msgid_plural "{count} threats"
+msgstr[0] "{count} minaccia"
+msgstr[1] "{count} minacce"
+
+#: src/activity_history/scan_statistics_page.rs:72
+msgid "Protected"
+msgstr "Protetto"
+
+#: src/activity_history/scan_statistics_page.rs:73
+msgid "At Risk"
+msgstr "A rischio"
+
+#: src/activity_history/scan_statistics_page.rs:74
+msgid "Unprotected"
+msgstr "Non protetto"
+
+#: src/activity_history/scan_statistics_page.rs:95
+msgid "No scans performed yet"
+msgstr "Nessuna scansione ancora eseguita"
+
+#: src/activity_history/scan_statistics_page.rs:96
+msgid "Last scan was over 30 days ago"
+msgstr "L'ultima scansione risale a oltre 30 giorni fa"
+
+#: src/activity_history/scan_statistics_page.rs:97
+msgid "Last scan was over a week ago"
+msgstr "L'ultima scansione risale a oltre una settimana fa"
+
+#: src/activity_history/scan_statistics_page.rs:99
+msgid "Virus definitions are over 7 days old"
+msgstr "Le definizioni dei virus risalgono a oltre 7 giorni fa"
+
+#: src/activity_history/scan_statistics_page.rs:101
+msgid "Virus definitions are over 1 day old"
+msgstr "Le definizioni dei virus risalgono a oltre 1 giorno fa"
+
+#: src/activity_history/scan_statistics_page.rs:102
+msgid "System is protected"
+msgstr "Il sistema è protetto"
+
+#: src/activity_history/scan_statistics_page.rs:108
+msgid "less than an hour ago"
+msgstr "meno di un'ora fa"
+
+#
+#: src/activity_history/scan_statistics_page.rs:112
+#, rust-format
+msgid "{count} hour ago"
+msgid_plural "{count} hours ago"
+msgstr[0] "{count} ora fa"
+msgstr[1] "{count} ore fa"
+
+#
+#: src/activity_history/scan_statistics_page.rs:116
+#, rust-format
+msgid "{count} day ago"
+msgid_plural "{count} days ago"
+msgstr[0] "{count} giorno fa"
+msgstr[1] "{count} giorni fa"
+
+#: src/activity_history/scan_statistics_page.rs:156
+msgid "No scans recorded"
+msgstr "Nessuna scansione registrata"
+
+#: src/activity_history/scan_statistics_page.rs:161
+#, rust-format
+msgid "Statistics for: {range}"
+msgstr "Statistiche per: {range}"
+
+#: src/activity_history/scan_statistics_page.rs:229
+msgid "Protection Status"
+msgstr "Stato della protezione"
+
+#: src/activity_history/scan_statistics_page.rs:230
+msgid "Based on scans run from ClamUI and the age of the virus definitions"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:241
+msgid "System Status"
+msgstr "Stato del sistema"
+
+#: src/activity_history/scan_statistics_page.rs:259
+msgid "Last Scan"
+msgstr "Ultima scansione"
+
+#: src/activity_history/scan_statistics_page.rs:270
+msgid "Timeframe"
+msgstr "Intervallo temporale"
+
+#: src/activity_history/scan_statistics_page.rs:271
+msgid "Select the time period for statistics"
+msgstr ""
+
+#: src/activity_history/scan_statistics_page.rs:281
+msgid "Scan Statistics"
+msgstr "Statistiche di scansione"
+
+#: src/activity_history/scan_statistics_page.rs:286
+msgid "Total Scans"
+msgstr "Scansioni totali"
+
+#: src/activity_history/scan_statistics_page.rs:287
+msgid "Number of scans performed"
+msgstr "Numero di scansioni eseguite"
+
+#: src/activity_history/scan_statistics_page.rs:297
+msgid "Files Scanned"
+msgstr "File sottoposti a scansione"
+
+#: src/activity_history/scan_statistics_page.rs:298
+msgid "Total files checked"
+msgstr "Totale dei file controllati"
+
+#: src/activity_history/scan_statistics_page.rs:308
+#: src/malware_scan/scan_results_dialog.rs:49
+msgid "Threats Detected"
+msgstr "Minacce rilevate"
+
+#: src/activity_history/scan_statistics_page.rs:309
+msgid "Malware and suspicious files found"
+msgstr "Malware e file sospetti rilevati"
+
+#: src/activity_history/scan_statistics_page.rs:319
+msgid "Clean Scans"
+msgstr "Scansioni pulite"
+
+#: src/activity_history/scan_statistics_page.rs:320
+msgid "Scans with no threats found"
+msgstr "Scansioni senza minacce rilevate"
+
+#: src/activity_history/scan_statistics_page.rs:330
+msgid "Average Scan Duration"
+msgstr "Durata media della scansione"
+
+#: src/activity_history/scan_statistics_page.rs:331
+msgid "Mean time per scan"
+msgstr "Tempo medio per scansione"
+
+#: src/activity_history/scan_statistics_page.rs:342
+msgid "Scan Activity"
+msgstr "Attività di scansione"
+
+#: src/activity_history/scan_statistics_page.rs:343
+msgid "Scan trends over the selected timeframe"
+msgstr "Andamento delle scansioni nell'intervallo temporale selezionato"
+
+#: src/activity_history/scan_statistics_page.rs:358
+msgid "Scans"
+msgstr "Scansioni"
+
+#: src/activity_history/scan_statistics_page.rs:358
+msgid "Threats"
+msgstr "Minacce"
+
+#: src/activity_history/scan_statistics_page.rs:363
+msgid "Quick Actions"
+msgstr "Azioni rapide"
+
+#: src/activity_history/scan_statistics_page.rs:366
+msgid "Quick Scan"
+msgstr "Scansione rapida"
+
+#: src/activity_history/scan_statistics_page.rs:367
+msgid "Scan your home directory"
+msgstr "Esegui la scansione della tua directory home"
+
+#: src/activity_history/scan_statistics_page.rs:374
+msgid "View Scan Logs"
+msgstr "Visualizza i registri di scansione"
+
+#: src/activity_history/scan_statistics_page.rs:375
+msgid "See detailed scan history"
+msgstr "Visualizza la cronologia dettagliata delle scansioni"
+
+#: src/activity_history/scan_statistics_page.rs:392
+msgid "Day"
+msgstr "Giorno"
+
+#: src/activity_history/scan_statistics_page.rs:393
+msgid "Week"
+msgstr "Settimana"
+
+#: src/activity_history/scan_statistics_page.rs:394
+msgid "Month"
+msgstr "Mese"
+
+#: src/activity_history/scan_statistics_page.rs:395
+msgid "All Time"
+msgstr "Sempre"
+
+#: src/activity_history/scan_statistics_page.rs:455
+#, rust-format
+msgid "Failed to load statistics: {error}"
+msgstr "Impossibile caricare le statistiche: {error}"
+
+#: src/application_window_shell.rs:63
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:129
+#: src/application_window_shell.rs:140
 msgid "About ClamUI"
 msgstr "Informazioni su ClamUI"
 
-#: src/application_window_shell.rs:130
+#: src/application_window_shell.rs:141
 msgid "Quit"
 msgstr "Esci"
 
-#: src/application_window_shell.rs:133
+#: src/application_window_shell.rs:144
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:152
+#: src/application_window_shell.rs:163
 msgid "translator-credits"
 msgstr "Albano Battistella <albanobattistella@gmail.com>"
 
-#: src/application_window_shell.rs:206
+#: src/application_window_shell.rs:217
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:261
-#: src/malware_scan/scan_progress_page.rs:289
+#: src/application_window_shell.rs:294
+#: src/malware_scan/scan_progress_page.rs:303
 msgid "Scan"
 msgstr "Scansione"
 
-#: src/application_window_shell.rs:268
-#: src/virus_database/database_update_page.rs:408
+#: src/application_window_shell.rs:301
+#: src/virus_database/database_update_page.rs:471
 msgid "Database"
 msgstr "Database"
 
-#: src/application_window_shell.rs:275
+#: src/application_window_shell.rs:308
+msgid "Logs"
+msgstr "Registri"
+
+#: src/application_window_shell.rs:315
 msgid "Components"
 msgstr "Componenti"
 
-#: src/application_window_shell.rs:282
+#: src/application_window_shell.rs:322
 #: src/file_quarantine/quarantine_entries_page.rs:115
 #: src/malware_scan/detected_threat_row.rs:109
 #: src/malware_scan/scan_results_dialog.rs:194
 msgid "Quarantine"
 msgstr "Quarantena"
+
+#: src/application_window_shell.rs:329
+#: src/malware_scan/scan_results_dialog.rs:319
+msgid "Statistics"
+msgstr "Statistiche"
 
 #: src/clamav_components/clamav_component_row.rs:42
 msgid "Virus Scanner"
@@ -94,13 +542,6 @@ msgstr "clamdscan usa il demone clamd per scansioni più rapide."
 msgid "clamd is the ClamAV daemon for faster scans."
 msgstr "clamd è il demone ClamAV per scansioni più rapide."
 
-#: src/clamav_components/clamav_component_row.rs:73
-#: src/malware_scan/scan_progress_page.rs:251
-#: src/virus_database/database_update_page.rs:273
-#: src/virus_database/database_update_page.rs:280
-msgid "Checking…"
-msgstr "Controllo in corso…"
-
 #: src/clamav_components/clamav_component_row.rs:74
 msgid "Installed"
 msgstr "Installato"
@@ -114,7 +555,7 @@ msgid "Stopped"
 msgstr "Fermato"
 
 #: src/clamav_components/clamav_component_row.rs:77
-#: src/virus_database/database_update_page.rs:266
+#: src/virus_database/database_update_page.rs:278
 msgid "Not installed"
 msgstr "Non installato"
 
@@ -126,10 +567,6 @@ msgstr "Sconosciuto"
 #, rust-format
 msgid "{distribution} (this system)"
 msgstr ""
-
-#: src/clamav_components/clamav_component_row.rs:126
-msgid "Copy"
-msgstr "Copia"
 
 #: src/clamav_components/component_status_page.rs:64
 #: src/clamav_components/component_status_page.rs:67
@@ -145,7 +582,7 @@ msgstr ""
 "mai pacchetti né avvia servizi per te."
 
 #: src/clamav_components/component_status_page.rs:72
-#: src/virus_database/database_update_page.rs:415
+#: src/virus_database/database_update_page.rs:478
 msgid "Refresh status"
 msgstr "Aggiorna stato"
 
@@ -199,13 +636,6 @@ msgstr ""
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:89
-#: src/malware_scan/scan_progress_page.rs:526
-#: src/malware_scan/scan_results_dialog.rs:193
-#: src/virus_database/database_update_page.rs:466
-msgid "Cancel"
-msgstr "Annulla"
-
 #: src/file_quarantine/quarantine_entries_page.rs:90
 #: src/file_quarantine/quarantine_entry_row.rs:54
 msgid "Delete"
@@ -244,65 +674,65 @@ msgstr ""
 msgid "Copy Path"
 msgstr "Copia percorso"
 
-#: src/malware_scan/scan_progress_page.rs:107
+#: src/malware_scan/scan_progress_page.rs:121
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:110
+#: src/malware_scan/scan_progress_page.rs:124
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:114
+#: src/malware_scan/scan_progress_page.rs:128
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:118
+#: src/malware_scan/scan_progress_page.rs:132
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:123
+#: src/malware_scan/scan_progress_page.rs:137
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:135
+#: src/malware_scan/scan_progress_page.rs:149
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr ""
 "La destinazione della scansione non esiste o contiene un byte NUL non valido"
 
-#: src/malware_scan/scan_progress_page.rs:138
+#: src/malware_scan/scan_progress_page.rs:152
 msgid "Scan target is not a regular file or directory"
 msgstr "La destinazione della scansione non è un file o una directory regolare"
 
-#: src/malware_scan/scan_progress_page.rs:143
+#: src/malware_scan/scan_progress_page.rs:157
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:150
+#: src/malware_scan/scan_progress_page.rs:164
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:154
+#: src/malware_scan/scan_progress_page.rs:168
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
 #
-#: src/malware_scan/scan_progress_page.rs:162
+#: src/malware_scan/scan_progress_page.rs:176
 msgid "No files could be scanned"
 msgstr "Non è stato possibile analizzare alcun file"
 
-#: src/malware_scan/scan_progress_page.rs:168
+#: src/malware_scan/scan_progress_page.rs:182
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
 #
 #
-#: src/malware_scan/scan_progress_page.rs:180
+#: src/malware_scan/scan_progress_page.rs:194
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
@@ -311,7 +741,7 @@ msgstr[1] "Impossibile accedere a {count} file"
 
 #
 #
-#: src/malware_scan/scan_progress_page.rs:186
+#: src/malware_scan/scan_progress_page.rs:200
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
@@ -319,7 +749,7 @@ msgstr[0] "Impossibile leggere {count} file"
 msgstr[1] "Impossibile leggere {count} file"
 
 #
-#: src/malware_scan/scan_progress_page.rs:192
+#: src/malware_scan/scan_progress_page.rs:206
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -334,49 +764,34 @@ msgstr[1] ""
 "{count} avvisi non fatali durante la scansione; alcuni file potrebbero "
 "essere stati sottoposti solo a una scansione parziale"
 
-#: src/malware_scan/scan_progress_page.rs:253
+#: src/malware_scan/scan_progress_page.rs:267
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:256
+#: src/malware_scan/scan_progress_page.rs:270
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:271
+#: src/malware_scan/scan_progress_page.rs:285
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:290
+#: src/malware_scan/scan_progress_page.rs:304
 msgid "Scanning…"
 msgstr "Scansione in corso…"
 
-#: src/malware_scan/scan_progress_page.rs:291
+#: src/malware_scan/scan_progress_page.rs:305
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:292
-#: src/malware_scan/scan_results_dialog.rs:52
-msgid "Scan cancelled by user"
-msgstr "Scansione annullata dall'utente"
-
-#: src/malware_scan/scan_progress_page.rs:294
+#: src/malware_scan/scan_progress_page.rs:308
 #: src/malware_scan/scan_results_dialog.rs:90
 #: src/malware_scan/scan_results_dialog.rs:345
 msgid "Threats found"
 msgstr "Minacce trovate"
 
-#: src/malware_scan/scan_progress_page.rs:297
-#: src/malware_scan/scan_results_dialog.rs:51
-msgid "The scan did not finish cleanly"
-msgstr ""
-
-#: src/malware_scan/scan_progress_page.rs:299
-#: src/malware_scan/scan_results_dialog.rs:50
-msgid "No threats found"
-msgstr ""
-
-#: src/malware_scan/scan_progress_page.rs:307
+#: src/malware_scan/scan_progress_page.rs:321
 #: src/malware_scan/scan_results_dialog.rs:68
 #, rust-format
 msgid "{count} threat found"
@@ -384,60 +799,61 @@ msgid_plural "{count} threats found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:314
+#: src/malware_scan/scan_progress_page.rs:328
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] "{count} file analizzato"
 msgstr[1] "{count} file analizzati"
 
-#: src/malware_scan/scan_progress_page.rs:333
+#: src/malware_scan/scan_progress_page.rs:347
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:468
+#: src/malware_scan/scan_progress_page.rs:519
 msgid "Scan Targets"
 msgstr "Target di scansione"
 
-#: src/malware_scan/scan_progress_page.rs:469
+#: src/malware_scan/scan_progress_page.rs:520
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:477
+#: src/malware_scan/scan_progress_page.rs:528
 msgid "Add Files"
 msgstr "Aggiungi file"
 
-#: src/malware_scan/scan_progress_page.rs:484
+#: src/malware_scan/scan_progress_page.rs:535
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:496
+#: src/malware_scan/scan_progress_page.rs:547
 msgid "No targets added"
 msgstr "Nessun target aggiunto"
 
-#: src/malware_scan/scan_progress_page.rs:509
+#: src/malware_scan/scan_progress_page.rs:560
 msgid "Start Scan"
 msgstr "Avvia scansione"
 
-#: src/malware_scan/scan_progress_page.rs:519
+#: src/malware_scan/scan_progress_page.rs:570
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:581
+#: src/malware_scan/scan_progress_page.rs:632
 msgid "View Results"
 msgstr "Visualizza risultati"
 
-#: src/malware_scan/scan_progress_page.rs:645
+#: src/malware_scan/scan_progress_page.rs:700
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:660
+#: src/malware_scan/scan_progress_page.rs:715
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:49
-msgid "Threats Detected"
-msgstr "Minacce rilevate"
+#: src/malware_scan/scan_progress_page.rs:801
+#, rust-format
+msgid "The scan could not be added to the history: {error}"
+msgstr ""
 
 #: src/malware_scan/scan_results_dialog.rs:80
 #: src/malware_scan/scan_results_dialog.rs:331
@@ -476,10 +892,6 @@ msgstr ""
 #: src/malware_scan/scan_results_dialog.rs:287
 msgid "Copy Results"
 msgstr ""
-
-#: src/malware_scan/scan_results_dialog.rs:319
-msgid "Statistics"
-msgstr "Statistiche"
 
 #: src/malware_scan/scan_results_dialog.rs:352
 msgid "Not accessible"
@@ -538,130 +950,126 @@ msgstr ""
 msgid "Export"
 msgstr "Esporta"
 
-#: src/virus_database/database_update_page.rs:87
+#: src/virus_database/database_update_page.rs:99
 msgid "Active"
 msgstr "Attivo"
 
-#: src/virus_database/database_update_page.rs:88
+#: src/virus_database/database_update_page.rs:100
 msgid "Scheduled by a systemd timer"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:89
+#: src/virus_database/database_update_page.rs:101
 msgid "Installed but stopped"
 msgstr "Installato ma arrestato"
 
-#: src/virus_database/database_update_page.rs:91
+#: src/virus_database/database_update_page.rs:103
 msgid "No freshclam service detected; updates run manually"
 msgstr ""
 "Nessun servizio freshclam rilevato; gli aggiornamenti vengono eseguiti "
 "manualmente"
 
 #
-#: src/virus_database/database_update_page.rs:102
+#: src/virus_database/database_update_page.rs:114
 #, rust-format
 msgid "{count} day old"
 msgid_plural "{count} days old"
 msgstr[0] "di {count} giorno"
 msgstr[1] "di {count} giorni"
 
-#: src/virus_database/database_update_page.rs:108
+#: src/virus_database/database_update_page.rs:120
 msgid "No readable virus database was found"
 msgstr "Nessun database antivirus leggibile trovato"
 
-#: src/virus_database/database_update_page.rs:127
+#: src/virus_database/database_update_page.rs:139
 msgid ""
 "Authentication cancelled. Database update requires administrator privileges."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:130
+#: src/virus_database/database_update_page.rs:142
 msgid "Authorization failed. Please try again and enter your password."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:133
+#: src/virus_database/database_update_page.rs:145
 msgid "Update rate limited by mirror. Please wait a few minutes and try again."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:136
+#: src/virus_database/database_update_page.rs:148
 msgid ""
 "Update blocked by CDN. This may be due to rate limiting. Please wait and try "
 "again later."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:140
+#: src/virus_database/database_update_page.rs:152
 msgid "ClamAV mirror is currently unavailable. Please try again later."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:143
+#: src/virus_database/database_update_page.rs:155
 msgid "SSL/TLS certificate error. The mirror may have configuration issues."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:146
+#: src/virus_database/database_update_page.rs:158
 msgid "Connection timed out. Please check your network connection."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:149
+#: src/virus_database/database_update_page.rs:161
 msgid "Database is locked. Another freshclam instance may be running."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:152
+#: src/virus_database/database_update_page.rs:164
 msgid ""
 "Permission denied. You may need elevated privileges to update the database."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:155
+#: src/virus_database/database_update_page.rs:167
 msgid "Connection error. Please check your network connection."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:158
+#: src/virus_database/database_update_page.rs:170
 msgid "DNS resolution failed. Please check your network settings."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:164
-#: src/virus_database/database_update_page.rs:391
+#: src/virus_database/database_update_page.rs:176
+#: src/virus_database/database_update_page.rs:454
 msgid "Update failed with an unknown error. Check the logs for details."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:171
+#: src/virus_database/database_update_page.rs:183
 #, rust-format
 msgid "Updated: {databases}"
 msgstr "Aggiornato: {databases}"
 
-#: src/virus_database/database_update_page.rs:175
+#: src/virus_database/database_update_page.rs:187
 #, rust-format
 msgid "Already current: {databases}"
 msgstr "Già aggiornato: {databases}"
 
-#: src/virus_database/database_update_page.rs:184
+#: src/virus_database/database_update_page.rs:196
 #, rust-format
 msgid "Rate limited: {database}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:187
+#: src/virus_database/database_update_page.rs:199
 #, rust-format
 msgid "Rate limited: {database} until {cooldown}"
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:204
+#: src/virus_database/database_update_page.rs:216
 msgid "Database update completed"
 msgstr "Aggiornamento del database completato"
 
-#: src/virus_database/database_update_page.rs:207
+#: src/virus_database/database_update_page.rs:219
 msgid "Database is already up to date"
 msgstr "Database già aggiornato"
 
-#: src/virus_database/database_update_page.rs:224
+#: src/virus_database/database_update_page.rs:236
 msgid "Install freshclam before requesting database updates."
 msgstr "Installa freshclam prima di richiedere aggiornamenti del database."
 
-#: src/virus_database/database_update_page.rs:262
+#: src/virus_database/database_update_page.rs:274
 msgid "Checking freshclam…"
 msgstr "Controllo di freshclam…"
 
-#: src/virus_database/database_update_page.rs:372
-msgid "Database update cancelled"
-msgstr "Aggiornamento database annullato"
-
-#: src/virus_database/database_update_page.rs:384
+#: src/virus_database/database_update_page.rs:447
 msgid ""
 "The service accepted the signal; it performs the update asynchronously. "
 "Check its logs for completion."
@@ -669,33 +1077,38 @@ msgstr ""
 "Il servizio ha accettato il segnale; esegue l'aggiornamento in modo "
 "asincrono. Verifica i registri per il completamento."
 
-#: src/virus_database/database_update_page.rs:411
+#: src/virus_database/database_update_page.rs:474
 msgid "Virus definitions"
 msgstr "Definizioni antivirus"
 
-#: src/virus_database/database_update_page.rs:432
+#: src/virus_database/database_update_page.rs:495
 msgid "Update service"
 msgstr "Servizio di aggiornamento"
 
-#: src/virus_database/database_update_page.rs:440
+#: src/virus_database/database_update_page.rs:503
 msgid "Database freshness"
 msgstr "Aggiornamento del database"
 
-#: src/virus_database/database_update_page.rs:450
-#: src/virus_database/database_update_page.rs:459
+#: src/virus_database/database_update_page.rs:513
+#: src/virus_database/database_update_page.rs:522
 msgid "Update database"
 msgstr "Aggiorna database"
 
-#: src/virus_database/database_update_page.rs:451
+#: src/virus_database/database_update_page.rs:514
 msgid ""
 "Updates run through the freshclam system service when one exists, so your "
 "system may ask for authorization."
 msgstr ""
 
-#: src/virus_database/database_update_page.rs:459
+#: src/virus_database/database_update_page.rs:522
 msgid "Updating…"
 msgstr "Aggiornamento…"
 
-#: src/virus_database/database_update_page.rs:487
+#: src/virus_database/database_update_page.rs:550
 msgid "Update log"
 msgstr "Registro aggiornamenti"
+
+#: src/virus_database/database_update_page.rs:659
+#, rust-format
+msgid "The update could not be added to the history: {error}"
+msgstr ""

@@ -22,7 +22,7 @@ struct PageCapture {
     scans_fixture_directory: bool,
 }
 
-const PAGE_CAPTURES: [PageCapture; 5] = [
+const PAGE_CAPTURES: [PageCapture; 7] = [
     PageCapture::idle_page("scan", "--page=scan"),
     PageCapture {
         screenshot_name: "scan-result",
@@ -32,6 +32,8 @@ const PAGE_CAPTURES: [PageCapture; 5] = [
     PageCapture::idle_page("database", "--page=database"),
     PageCapture::idle_page("components", "--page=components"),
     PageCapture::idle_page("quarantine", "--page=quarantine"),
+    PageCapture::idle_page("logs", "--page=logs"),
+    PageCapture::idle_page("statistics", "--page=statistics"),
 ];
 
 impl PageCapture {

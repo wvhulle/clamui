@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use futures::{
     StreamExt,
@@ -9,6 +9,9 @@ use gettextrs::{gettext, ngettext};
 use relm4::{Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk};
 
 use crate::{
+    activity_history::activity_history_database::{
+        ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
+    },
     clamav_components::component_availability::{ProgramProbe, probe_program_version},
     malware_scan::{
         scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
@@ -55,6 +58,9 @@ enum DatabaseUpdateState {
 }
 
 pub struct DatabaseUpdatePage {
+    activity_history: ActivityHistory,
+    update_started_at: SystemTime,
+    update_started_instant: Instant,
     host_status: HostStatusView,
     update_state: DatabaseUpdateState,
     observed_exit: ObservedUpdateExit,
@@ -80,6 +86,12 @@ pub enum DatabaseUpdatePageCommand {
     HostStatusLoaded(DatabaseHostStatus),
     UpdateBatchArrived(Vec<DatabaseUpdateEvent>),
     UpdateStreamFinished,
+    ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
+}
+
+#[derive(Debug)]
+pub enum DatabaseUpdatePageOutput {
+    ActivityRecorded,
 }
 
 fn service_description(service_state: FreshclamServiceState) -> String {
@@ -339,6 +351,8 @@ impl DatabaseUpdatePage {
             return;
         };
         let update_plan = plan_database_update(host_status.service_state);
+        self.update_started_at = SystemTime::now();
+        self.update_started_instant = Instant::now();
         self.update_transcript.clear();
         self.transcript_buffer.set_text("");
         self.update_summary.clear();
@@ -363,6 +377,55 @@ impl DatabaseUpdatePage {
                     command_output.emit(DatabaseUpdatePageCommand::UpdateStreamFinished);
                 })
                 .drop_on_shutdown()
+        });
+    }
+
+    fn finished_update_status(&self) -> ActivityStatus {
+        match (&self.update_state, &self.observed_exit) {
+            (DatabaseUpdateState::CancellingUpdate, _any_exit) => ActivityStatus::UpdateCancelled,
+            (
+                _any_state,
+                ObservedUpdateExit::NeverStarted(_) | ObservedUpdateExit::ExitNotObserved,
+            ) => ActivityStatus::UpdateFailed,
+            (
+                DatabaseUpdateState::UpdateRunning {
+                    update_plan: DatabaseUpdatePlan::SignalRunningDaemon { .. },
+                    ..
+                },
+                ObservedUpdateExit::ExitObserved { exit_code: 0 },
+            ) => ActivityStatus::UpdateRequested,
+            (_any_state, ObservedUpdateExit::ExitObserved { exit_code }) => {
+                match interpret_update_exit(&self.update_transcript, *exit_code) {
+                    DatabaseUpdateOutcome::DefinitionsUpdated(_) => ActivityStatus::UpdateApplied,
+                    DatabaseUpdateOutcome::AlreadyCurrent(_) => {
+                        ActivityStatus::UpdateAlreadyCurrent
+                    }
+                    DatabaseUpdateOutcome::UpdateFailed { .. } => ActivityStatus::UpdateFailed,
+                }
+            }
+        }
+    }
+
+    fn record_finished_update(&self, sender: &ComponentSender<Self>) {
+        let new_entry = NewActivityEntry {
+            started_at_unix: self
+                .update_started_at
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |elapsed_time| elapsed_time.as_secs() as i64),
+            activity_status: self.finished_update_status(),
+            activity_targets: String::new(),
+            inspected_file_count: 0,
+            threat_count: 0,
+            duration_millis: self.update_started_instant.elapsed().as_millis() as u64,
+            activity_output: self.update_transcript.clone(),
+        };
+        let activity_history = self.activity_history.clone();
+        let command_sender = sender.command_sender().clone();
+        relm4::spawn(async move {
+            let _page_closed =
+                command_sender.send(DatabaseUpdatePageCommand::ActivityRecordingFinished(
+                    activity_history.record_activity(new_entry).await,
+                ));
         });
     }
 
@@ -396,9 +459,9 @@ impl DatabaseUpdatePage {
 
 #[relm4::component(pub)]
 impl Component for DatabaseUpdatePage {
-    type Init = ();
+    type Init = ActivityHistory;
     type Input = DatabaseUpdatePageInput;
-    type Output = ();
+    type Output = DatabaseUpdatePageOutput;
     type CommandOutput = DatabaseUpdatePageCommand;
 
     view! {
@@ -508,7 +571,7 @@ impl Component for DatabaseUpdatePage {
     }
 
     fn init(
-        _page_init: Self::Init,
+        activity_history: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -519,6 +582,9 @@ impl Component for DatabaseUpdatePage {
             update_transcript: String::new(),
             transcript_buffer: gtk::TextBuffer::new(None),
             update_summary: String::new(),
+            activity_history,
+            update_started_at: SystemTime::now(),
+            update_started_instant: Instant::now(),
         };
         model.refresh_host_status(&sender);
         let widgets = view_output!();
@@ -578,11 +644,21 @@ impl Component for DatabaseUpdatePage {
             }
             DatabaseUpdatePageCommand::UpdateStreamFinished => {
                 self.update_summary = self.finished_update_summary();
+                self.record_finished_update(&sender);
                 self.update_state = DatabaseUpdateState::NoActiveUpdate;
                 root.add_toast(adw::Toast::new(
                     self.update_summary.lines().next().unwrap_or_default(),
                 ));
                 self.refresh_host_status(&sender);
+            }
+            DatabaseUpdatePageCommand::ActivityRecordingFinished(Ok(())) => {
+                let _shell_closed = sender.output(DatabaseUpdatePageOutput::ActivityRecorded);
+            }
+            DatabaseUpdatePageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
+                root.add_toast(adw::Toast::new(
+                    &gettext("The update could not be added to the history: {error}")
+                        .replace("{error}", &recording_failure.to_string()),
+                ));
             }
         }
     }
