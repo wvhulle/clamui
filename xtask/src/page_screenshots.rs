@@ -60,7 +60,7 @@ const QUARANTINE_ALL_CLICKS: [PointerClick; 2] = [
     PointerClick::at(520, 395, "results-quarantined"),
 ];
 
-const PAGE_CAPTURES: [PageCapture; 8] = [
+const PAGE_CAPTURES: [PageCapture; 10] = [
     PageCapture {
         pointer_clicks: &PROFILE_MANAGER_CLICKS,
         ..PageCapture::idle_page("scan", "--page=scan")
@@ -79,6 +79,8 @@ const PAGE_CAPTURES: [PageCapture; 8] = [
         ..PageCapture::idle_page("logs", "--page=logs")
     },
     PageCapture::idle_page("statistics", "--page=statistics"),
+    PageCapture::idle_page("audit", "--page=audit"),
+    PageCapture::idle_page("network", "--page=network"),
     PageCapture {
         pointer_clicks: &PREFERENCE_TAB_CLICKS,
         ..PageCapture::idle_page("preferences", "--page=preferences")

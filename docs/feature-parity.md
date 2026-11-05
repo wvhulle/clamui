@@ -6,8 +6,8 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 - [x] Sidebar icons, using a `gtk::ListBox` with the `navigation-sidebar` style.
 - [x] Pages: Logs, Statistics.
-- [ ] Pages: Audit, Network.
-- [ ] Empty states with `adw::StatusPage`.
+- [x] Pages: Audit, Network.
+- [x] Empty states with `adw::StatusPage`.
 
 ## Scan
 
@@ -62,12 +62,13 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 
 ## Audit
 
-- [ ] System security audit grouped by area, with status and suggested commands.
-- [ ] Deep checks. Review the old `pkexec` use before porting.
+- [x] System security audit grouped by area, with status and suggested commands.
+
+Deep checks are deliberately not run: upstream used `pkexec`, so Lynis and chkrootkit are offered as copy-only commands. The Portmaster API integration is reduced to checking whether the service is active.
 
 ## Network
 
-- [ ] Local socket list, with no upstream screenshot; port from source.
+- [x] Local socket list with search and filter. Public IP lookup and VirusTotal address links are deliberately left out, because they send data to third parties.
 
 ## Profiles
 

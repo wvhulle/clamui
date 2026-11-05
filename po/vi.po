@@ -35,7 +35,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 09:48+0100\n"
+"POT-Creation-Date: 2026-11-05 09:57+0100\n"
 "PO-Revision-Date: 2026-11-03 21:00+0700\n"
 "Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
 "Language-Team: Vietnamese\n"
@@ -50,6 +50,7 @@ msgid "Clean"
 msgstr "Sạch"
 
 #: src/activity_history/activity_export_formats.rs:11
+#: src/system_audit/audit_report_model.rs:29
 msgid "Skipped"
 msgstr "Đã bỏ qua"
 
@@ -177,7 +178,7 @@ msgstr ""
 "Thao tác này sẽ xóa vĩnh viễn toàn bộ nhật ký lịch sử và không thể hoàn tác."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:458
+#: src/application_window_shell.rs:480
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:743
@@ -206,6 +207,7 @@ msgstr "Các lượt quét và cập nhật trước đây"
 #: src/activity_history/activity_logs_page.rs:380
 #: src/activity_history/scan_statistics_page.rs:234
 #: src/file_quarantine/quarantine_entries_page.rs:272
+#: src/network_sockets/network_sockets_page.rs:212
 msgid "Refresh"
 msgstr "Làm mới"
 
@@ -232,6 +234,7 @@ msgstr "Chi tiết nhật ký"
 #: src/activity_history/activity_logs_page.rs:326
 #: src/activity_history/activity_logs_page.rs:388
 #: src/clamav_components/clamav_component_row.rs:126
+#: src/system_audit/audit_check_row.rs:45
 msgid "Copy"
 msgstr "Sao chép"
 
@@ -242,6 +245,7 @@ msgstr "Xuất văn bản"
 
 #: src/activity_history/activity_logs_page.rs:346
 #: src/activity_history/activity_logs_page.rs:360
+#: src/system_audit/clamav_health_checks.rs:310
 msgid "ClamAV Daemon"
 msgstr "Dịch vụ ClamAV"
 
@@ -583,7 +587,7 @@ msgid "Quit completely"
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:286
-#: src/application_window_shell.rs:460
+#: src/application_window_shell.rs:482
 msgid "Minimize to tray"
 msgstr "Thu nhỏ xuống khay hệ thống"
 
@@ -687,12 +691,12 @@ msgid "/path/to/exclude or *.tmp"
 msgstr "/đường/dẫn/cần/loại/trừ hoặc *.tmp"
 
 #: src/application_settings/preferences_dialog.rs:518
-#: src/application_window_shell.rs:154
+#: src/application_window_shell.rs:158
 msgid "Preferences"
 msgstr "Tùy chọn"
 
 #: src/application_settings/preferences_dialog.rs:526
-#: src/application_window_shell.rs:331
+#: src/application_window_shell.rs:337
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Cơ sở dữ liệu"
@@ -717,64 +721,72 @@ msgstr "Quét thời gian thực"
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_window_shell.rs:77
+#: src/application_window_shell.rs:81
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:155
+#: src/application_window_shell.rs:159
 msgid "About ClamUI"
 msgstr "Giới thiệu về ClamUI"
 
-#: src/application_window_shell.rs:156 src/application_window_shell.rs:459
+#: src/application_window_shell.rs:160 src/application_window_shell.rs:481
 #: src/desktop_integration/system_tray_menu.rs:49
 msgid "Quit"
 msgstr "Thoát"
 
-#: src/application_window_shell.rs:159
+#: src/application_window_shell.rs:163
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:178
+#: src/application_window_shell.rs:182
 msgid "translator-credits"
 msgstr "dinhkarate"
 
-#: src/application_window_shell.rs:237
+#: src/application_window_shell.rs:241
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:324
+#: src/application_window_shell.rs:330
 #: src/malware_scan/scan_progress_page.rs:356
 msgid "Scan"
 msgstr "Quét"
 
-#: src/application_window_shell.rs:338
+#: src/application_window_shell.rs:344
 msgid "Logs"
 msgstr "Nhật ký"
 
-#: src/application_window_shell.rs:345
+#: src/application_window_shell.rs:351
 msgid "Components"
 msgstr "Thành phần"
 
-#: src/application_window_shell.rs:352
+#: src/application_window_shell.rs:358
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Khu cách ly"
 
-#: src/application_window_shell.rs:359
+#: src/application_window_shell.rs:365
 #: src/malware_scan/scan_results_dialog.rs:332
 msgid "Statistics"
 msgstr "Thống kê"
 
-#: src/application_window_shell.rs:453
+#: src/application_window_shell.rs:372
+msgid "Audit"
+msgstr "Kiểm tra bảo mật"
+
+#: src/application_window_shell.rs:379
+msgid "Network"
+msgstr "Mạng"
+
+#: src/application_window_shell.rs:475
 msgid "Close ClamUI?"
 msgstr "Đóng ClamUI?"
 
-#: src/application_window_shell.rs:455
+#: src/application_window_shell.rs:477
 msgid "Keep ClamUI running in the system tray, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:544
+#: src/application_window_shell.rs:566
 msgid "The quarantine database could not be locked"
 msgstr ""
 
@@ -828,6 +840,7 @@ msgid "Not installed"
 msgstr "Chưa cài đặt"
 
 #: src/clamav_components/clamav_component_row.rs:78
+#: src/system_audit/audit_report_model.rs:28
 msgid "Unknown"
 msgstr "Không xác định"
 
@@ -855,6 +868,7 @@ msgid "Refresh status"
 msgstr "Làm mới trạng thái"
 
 #: src/clamav_components/component_status_page.rs:128
+#: src/system_audit/system_audit_page.rs:260
 msgid "Command copied to clipboard"
 msgstr "Đã sao chép lệnh vào bộ nhớ tạm"
 
@@ -978,7 +992,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Khôi phục"
 
-#: src/main.rs:66
+#: src/main.rs:68
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -1296,6 +1310,133 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
+#: src/network_sockets/network_socket_row.rs:32
+#: src/network_sockets/network_sockets_page.rs:236
+msgid "Listening and bound"
+msgstr "Đang lắng nghe và đã liên kết"
+
+#: src/network_sockets/network_socket_row.rs:34
+msgid "Connection"
+msgstr "Kết nối"
+
+#: src/network_sockets/network_socket_row.rs:40
+msgid "Process information unavailable"
+msgstr "Không có thông tin tiến trình"
+
+#: src/network_sockets/network_socket_row.rs:47
+#, rust-format
+msgid "PID {pid}"
+msgstr "PID {pid}"
+
+#: src/network_sockets/network_socket_row.rs:61
+#, rust-format
+msgid "Copy {label}"
+msgstr "Sao chép {label}"
+
+#: src/network_sockets/network_socket_row.rs:127
+msgid "Local address"
+msgstr "Địa chỉ cục bộ"
+
+#: src/network_sockets/network_socket_row.rs:133
+msgid "Remote address"
+msgstr "Địa chỉ từ xa"
+
+#: src/network_sockets/network_sockets_page.rs:62
+msgid "Network socket listing timed out. Try again."
+msgstr "Quá thời gian chờ khi liệt kê socket mạng. Hãy thử lại."
+
+#: src/network_sockets/network_sockets_page.rs:65
+msgid "Network socket listing could not be completed safely. Try again."
+msgstr ""
+"Không thể hoàn tất việc liệt kê socket mạng một cách an toàn. Hãy thử lại."
+
+#: src/network_sockets/network_sockets_page.rs:68
+msgid ""
+"Network information is unavailable. Check that the system socket tool is "
+"installed and try again."
+msgstr ""
+"Không có thông tin mạng. Hãy kiểm tra xem công cụ socket của hệ thống đã "
+"được cài đặt chưa rồi thử lại."
+
+#: src/network_sockets/network_sockets_page.rs:131
+msgid "Loading network connections…"
+msgstr "Đang tải các kết nối mạng…"
+
+#: src/network_sockets/network_sockets_page.rs:139
+msgid "No socket records could be read from this snapshot."
+msgstr "Không đọc được bản ghi socket nào từ ảnh chụp này."
+
+#: src/network_sockets/network_sockets_page.rs:144
+msgid "No network sockets were found in this snapshot."
+msgstr "Không tìm thấy socket mạng nào trong ảnh chụp này."
+
+#: src/network_sockets/network_sockets_page.rs:147
+msgid "No sockets match the current filters."
+msgstr "Không có socket nào khớp với bộ lọc hiện tại."
+
+#: src/network_sockets/network_sockets_page.rs:157
+msgid "The socket list was limited. This snapshot may be incomplete."
+msgstr "Danh sách socket đã bị giới hạn. Ảnh chụp này có thể không đầy đủ."
+
+#: src/network_sockets/network_sockets_page.rs:162
+msgid "Some socket records could not be read. This snapshot may be incomplete."
+msgstr ""
+"Không đọc được một số bản ghi socket. Ảnh chụp này có thể không đầy đủ."
+
+#: src/network_sockets/network_sockets_page.rs:173
+#, rust-format
+msgid "Captured at {time}"
+msgstr "Chụp lúc {time}"
+
+#: src/network_sockets/network_sockets_page.rs:183
+#, rust-format
+msgid "Showing {shown} of {count} matching socket"
+msgid_plural "Showing {shown} of {count} matching sockets"
+msgstr[0] "Đang hiển thị {shown}/{count} socket khớp"
+
+#: src/network_sockets/network_sockets_page.rs:207
+msgid "Network Connections"
+msgstr "Kết nối mạng"
+
+#: src/network_sockets/network_sockets_page.rs:208
+msgid ""
+"View the current listening ports and socket peers from one local snapshot."
+msgstr ""
+"Xem các cổng đang lắng nghe và các đầu kết nối socket hiện tại từ một ảnh "
+"chụp cục bộ."
+
+#: src/network_sockets/network_sockets_page.rs:226
+msgid "Search address, port, process, or PID"
+msgstr "Tìm địa chỉ, cổng, tiến trình hoặc PID"
+
+#: src/network_sockets/network_sockets_page.rs:233
+msgid "Network socket filter"
+msgstr "Bộ lọc socket mạng"
+
+#: src/network_sockets/network_sockets_page.rs:235
+msgid "All"
+msgstr "Tất cả"
+
+#: src/network_sockets/network_sockets_page.rs:237
+msgid "Connections"
+msgstr "Kết nối"
+
+#: src/network_sockets/network_sockets_page.rs:250
+msgid ""
+"Process ownership depends on system permissions. Unavailable process "
+"information does not mean that no process owns the socket."
+msgstr ""
+"Việc xác định tiến trình sở hữu phụ thuộc vào quyền hệ thống. Không có thông "
+"tin tiến trình không có nghĩa là socket không thuộc tiến trình nào."
+
+#: src/network_sockets/network_sockets_page.rs:305
+msgid "Load More"
+msgstr "Tải thêm"
+
+#: src/network_sockets/network_sockets_page.rs:381
+msgid "Address copied to clipboard"
+msgstr "Đã sao chép địa chỉ vào bộ nhớ tạm"
+
 #: src/scan_profiles/profile_editor_dialog.rs:118
 msgid "Profile name is required"
 msgstr "Cần nhập tên hồ sơ quét"
@@ -1595,6 +1736,724 @@ msgstr ""
 #: src/scheduled_scans/schedule_preferences_page.rs:323
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
+
+#: src/system_audit/audit_check_row.rs:67
+msgid "Learn more"
+msgstr "Tìm hiểu thêm"
+
+#: src/system_audit/audit_check_row.rs:68
+msgid "Open in browser"
+msgstr "Mở trong trình duyệt"
+
+#: src/system_audit/audit_check_row.rs:101
+#: src/system_audit/audit_report_model.rs:30
+msgid "Checking"
+msgstr "Đang kiểm tra"
+
+#: src/system_audit/audit_report_model.rs:25
+#: src/system_audit/system_audit_page.rs:181
+msgid "Pass"
+msgstr "Đạt"
+
+#: src/system_audit/audit_report_model.rs:26
+#: src/system_audit/system_audit_page.rs:166
+msgid "Warning"
+msgstr "Cảnh báo"
+
+#: src/system_audit/audit_report_model.rs:27
+msgid "Fail"
+msgstr "Không đạt"
+
+#: src/system_audit/audit_report_model.rs:81
+msgid "ClamAV Health"
+msgstr "Tình trạng ClamAV"
+
+#: src/system_audit/audit_report_model.rs:82
+msgid "Firewall"
+msgstr "Tường lửa"
+
+#: src/system_audit/audit_report_model.rs:83
+msgid "Access Control"
+msgstr "Kiểm soát truy cập"
+
+#: src/system_audit/audit_report_model.rs:84
+#: src/system_audit/clamav_health_checks.rs:341
+#: src/system_audit/security_audit_checks.rs:270
+msgid "Automatic Updates"
+msgstr "Cập nhật tự động"
+
+#: src/system_audit/audit_report_model.rs:85
+msgid "Intrusion Detection"
+msgstr "Phát hiện xâm nhập"
+
+#: src/system_audit/audit_report_model.rs:86
+msgid "SSH Security"
+msgstr "Bảo mật SSH"
+
+#: src/system_audit/audit_report_model.rs:87
+#: src/system_audit/security_audit_checks.rs:719
+msgid "Portmaster"
+msgstr "Portmaster"
+
+#: src/system_audit/audit_report_model.rs:88
+msgid "Deep scans"
+msgstr "Quét chuyên sâu"
+
+#: src/system_audit/clamav_health_checks.rs:134
+#, rust-format
+msgid "Database is {days} day old (built {date})"
+msgid_plural "Database is {days} days old (built {date})"
+msgstr[0] "Cơ sở dữ liệu đã {days} ngày tuổi (tạo ngày {date})"
+
+#: src/system_audit/clamav_health_checks.rs:143
+msgid "Virus Database"
+msgstr ""
+
+#: src/system_audit/clamav_health_checks.rs:152
+#, rust-format
+msgid "Up to date ({days} day old, built {date})"
+msgid_plural "Up to date ({days} days old, built {date})"
+msgstr[0] "Đã cập nhật ({days} ngày tuổi, tạo ngày {date})"
+
+#: src/system_audit/clamav_health_checks.rs:167
+msgid "Update virus database to ensure protection"
+msgstr "Cập nhật cơ sở dữ liệu virus để đảm bảo được bảo vệ"
+
+#: src/system_audit/clamav_health_checks.rs:178
+msgid "Database is critically outdated. Update immediately."
+msgstr "Cơ sở dữ liệu đã lỗi thời nghiêm trọng. Hãy cập nhật ngay."
+
+#: src/system_audit/clamav_health_checks.rs:184
+msgid "Database files exist but age could not be determined"
+msgstr "Đã có tệp cơ sở dữ liệu nhưng không xác định được tuổi của chúng"
+
+#: src/system_audit/clamav_health_checks.rs:189
+msgid "No virus database found"
+msgstr "Không tìm thấy cơ sở dữ liệu virus"
+
+#: src/system_audit/clamav_health_checks.rs:191
+msgid "Download virus database"
+msgstr "Tải xuống cơ sở dữ liệu virus"
+
+#: src/system_audit/clamav_health_checks.rs:262
+#: src/system_audit/clamav_health_checks.rs:283
+#: src/system_audit/clamav_health_checks.rs:292
+msgid "ClamAV Installation"
+msgstr ""
+
+#: src/system_audit/clamav_health_checks.rs:264
+msgid "ClamAV is not installed"
+msgstr "ClamAV chưa được cài đặt"
+
+#: src/system_audit/clamav_health_checks.rs:266
+msgid "Install ClamAV to enable virus scanning"
+msgstr "Cài đặt ClamAV để có thể quét virus"
+
+#: src/system_audit/clamav_health_checks.rs:285
+#, rust-format
+msgid "Installed: {version}"
+msgstr "Đã cài đặt: {version}"
+
+#: src/system_audit/clamav_health_checks.rs:315
+#, rust-format
+msgid "Service {name} is running"
+msgstr "Dịch vụ {name} đang chạy"
+
+#: src/system_audit/clamav_health_checks.rs:320
+msgid "Daemon is responding"
+msgstr "Dịch vụ đang phản hồi"
+
+#: src/system_audit/clamav_health_checks.rs:325
+msgid "ClamAV daemon is not running"
+msgstr "Dịch vụ ClamAV không chạy"
+
+#: src/system_audit/clamav_health_checks.rs:327
+msgid "Start the daemon for faster scanning"
+msgstr "Khởi động dịch vụ để quét nhanh hơn"
+
+#: src/system_audit/clamav_health_checks.rs:347
+msgid "Freshclam service is active"
+msgstr "Dịch vụ Freshclam đang hoạt động"
+
+#: src/system_audit/clamav_health_checks.rs:355
+#: src/system_audit/security_audit_checks.rs:272
+msgid "Could not determine automatic update status"
+msgstr "Không thể xác định trạng thái cập nhật tự động"
+
+#: src/system_audit/clamav_health_checks.rs:362
+msgid "Freshclam automatic update service is not running"
+msgstr "Dịch vụ cập nhật tự động Freshclam không chạy"
+
+#: src/system_audit/clamav_health_checks.rs:364
+msgid "Enable automatic database updates"
+msgstr "Bật cập nhật cơ sở dữ liệu tự động"
+
+#: src/system_audit/firewall_audit_checks.rs:206
+msgid "UFW Firewall"
+msgstr "Tường lửa UFW"
+
+#: src/system_audit/firewall_audit_checks.rs:215
+msgid ""
+"UFW is active; the default incoming policy is deny. Listed rules may allow "
+"exceptions."
+msgstr ""
+"UFW đang hoạt động; chính sách mặc định cho kết nối đến là chặn (deny). Các "
+"quy tắc được liệt kê có thể cho phép ngoại lệ."
+
+#: src/system_audit/firewall_audit_checks.rs:226
+msgid ""
+"UFW is active; the default incoming policy is reject. Listed rules may allow "
+"exceptions."
+msgstr ""
+"UFW đang hoạt động; chính sách mặc định cho kết nối đến là từ chối (reject). "
+"Các quy tắc được liệt kê có thể cho phép ngoại lệ."
+
+#: src/system_audit/firewall_audit_checks.rs:236
+msgid "UFW is active; the default incoming policy is deny."
+msgstr ""
+"UFW đang hoạt động; chính sách mặc định cho kết nối đến là chặn (deny)."
+
+#: src/system_audit/firewall_audit_checks.rs:244
+msgid "UFW is active; the default incoming policy is reject."
+msgstr ""
+"UFW đang hoạt động; chính sách mặc định cho kết nối đến là từ chối (reject)."
+
+#: src/system_audit/firewall_audit_checks.rs:252
+msgid "UFW is active, but the default incoming policy allows traffic."
+msgstr ""
+"UFW đang hoạt động nhưng chính sách mặc định cho kết nối đến lại cho phép "
+"lưu lượng đi qua."
+
+#: src/system_audit/firewall_audit_checks.rs:260
+msgid "UFW is active, but its default incoming policy could not be verified."
+msgstr ""
+"UFW đang hoạt động nhưng không thể xác minh chính sách mặc định cho kết nối "
+"đến."
+
+#: src/system_audit/firewall_audit_checks.rs:265
+msgid "UFW reports inactive."
+msgstr "UFW cho biết đang không hoạt động."
+
+#: src/system_audit/firewall_audit_checks.rs:267
+#: src/system_audit/firewall_audit_checks.rs:730
+msgid "Enable the firewall"
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:272
+msgid "UFW status could not be inspected safely."
+msgstr "Không thể kiểm tra trạng thái UFW một cách an toàn."
+
+#: src/system_audit/firewall_audit_checks.rs:278
+#: src/system_audit/firewall_audit_checks.rs:320
+#: src/system_audit/firewall_audit_checks.rs:538
+#: src/system_audit/firewall_audit_checks.rs:641
+#: src/system_audit/firewall_audit_checks.rs:674
+#: src/system_audit/security_audit_checks.rs:767
+#: src/system_audit/security_audit_checks.rs:799
+#, rust-format
+msgid "{name} is not installed"
+msgstr "{name} chưa được cài đặt"
+
+#: src/system_audit/firewall_audit_checks.rs:304
+msgid "Firewalld"
+msgstr "Firewalld"
+
+#: src/system_audit/firewall_audit_checks.rs:310
+msgid ""
+"Firewalld owns its D-Bus name; readiness and firewall policy were not "
+"queried."
+msgstr ""
+"Firewalld đang giữ tên D-Bus của nó; chưa truy vấn trạng thái sẵn sàng và "
+"chính sách tường lửa."
+
+#: src/system_audit/firewall_audit_checks.rs:327
+msgid ""
+"No Firewalld D-Bus owner was observed; this does not establish kernel "
+"firewall policy."
+msgstr ""
+"Không thấy tiến trình nào giữ tên D-Bus của Firewalld; điều này không đủ để "
+"xác định chính sách tường lửa của nhân hệ điều hành."
+
+#: src/system_audit/firewall_audit_checks.rs:335
+msgid ""
+"Firewalld ownership could not be verified; readiness and firewall policy "
+"were not queried."
+msgstr ""
+"Không thể xác minh Firewalld có đang giữ tên D-Bus hay không; chưa truy vấn "
+"trạng thái sẵn sàng và chính sách tường lửa."
+
+#: src/system_audit/firewall_audit_checks.rs:525
+msgid "nftables (native rules)"
+msgstr "nftables (quy tắc gốc)"
+
+#: src/system_audit/firewall_audit_checks.rs:530
+msgid ""
+"nftables input policy coverage could not be verified for both IPv4 and IPv6"
+msgstr ""
+"Không thể xác minh phạm vi chính sách lưu lượng vào của nftables cho cả IPv4 "
+"và IPv6"
+
+#: src/system_audit/firewall_audit_checks.rs:547
+msgid ""
+"nftables has restrictive default input policies for IPv4 and IPv6; "
+"individual rules may allow exceptions."
+msgstr ""
+"nftables có chính sách mặc định hạn chế cho lưu lượng vào trên IPv4 và IPv6; "
+"từng quy tắc riêng lẻ có thể cho phép ngoại lệ."
+
+#: src/system_audit/firewall_audit_checks.rs:555
+msgid ""
+"nftables reports a permissive default input policy; remaining coverage may "
+"be incomplete"
+msgstr ""
+"nftables báo cáo chính sách mặc định cho lưu lượng vào là cho phép; phạm vi "
+"kiểm tra còn lại có thể chưa đầy đủ"
+
+#: src/system_audit/firewall_audit_checks.rs:623
+msgid "iptables (IPv4)"
+msgstr "iptables (IPv4)"
+
+#: src/system_audit/firewall_audit_checks.rs:629
+msgid ""
+"iptables has a restrictive INPUT default policy; individual rules may allow "
+"exceptions."
+msgstr ""
+"iptables có chính sách mặc định hạn chế trên chuỗi INPUT; từng quy tắc riêng "
+"lẻ có thể cho phép ngoại lệ."
+
+#: src/system_audit/firewall_audit_checks.rs:636
+msgid "iptables has a permissive INPUT default policy"
+msgstr "iptables có chính sách mặc định cho phép trên chuỗi INPUT"
+
+#: src/system_audit/firewall_audit_checks.rs:649
+msgid "iptables INPUT policy could not be verified"
+msgstr "Không thể xác minh chính sách chuỗi INPUT của iptables"
+
+#: src/system_audit/firewall_audit_checks.rs:656
+msgid "iptables (IPv6)"
+msgstr "iptables (IPv6)"
+
+#: src/system_audit/firewall_audit_checks.rs:662
+msgid ""
+"ip6tables has a restrictive INPUT default policy; individual rules may allow "
+"exceptions."
+msgstr ""
+"ip6tables có chính sách mặc định hạn chế trên chuỗi INPUT; từng quy tắc "
+"riêng lẻ có thể cho phép ngoại lệ."
+
+#: src/system_audit/firewall_audit_checks.rs:669
+msgid "ip6tables has a permissive INPUT default policy"
+msgstr "ip6tables có chính sách mặc định cho phép trên chuỗi INPUT"
+
+#: src/system_audit/firewall_audit_checks.rs:682
+msgid "ip6tables INPUT policy could not be verified"
+msgstr "Không thể xác minh chính sách chuỗi INPUT của ip6tables"
+
+#: src/system_audit/firewall_audit_checks.rs:695
+msgid "Firewall manager overlap"
+msgstr "Các trình quản lý tường lửa chồng chéo"
+
+#: src/system_audit/firewall_audit_checks.rs:698
+msgid ""
+"UFW is active while Firewalld owns its D-Bus name; their rule interaction "
+"was not evaluated."
+msgstr ""
+"UFW đang hoạt động trong khi Firewalld đang giữ tên D-Bus của nó; tương tác "
+"giữa các quy tắc của hai bên chưa được đánh giá."
+
+#: src/system_audit/firewall_audit_checks.rs:708
+msgid "Firewall Service"
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:716
+msgid "The NixOS firewall service is active; allowed ports were not evaluated."
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:722
+#, rust-format
+msgid "Service {name} is active; its rules were not inspected."
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:728
+msgid ""
+"No known firewall service is active; rules may still be loaded another way."
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:738
+msgid "Firewall services could not be listed without systemd."
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:766
+#: src/system_audit/firewall_audit_checks.rs:804
+msgid "Open Ports"
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:772
+#, rust-format
+msgid "{count} port listening, risky ports: {ports}"
+msgid_plural "{count} ports listening, risky ports: {ports}"
+msgstr[0] "{count} cổng đang lắng nghe, các cổng rủi ro: {ports}"
+
+#: src/system_audit/firewall_audit_checks.rs:779
+msgid "Review if these services need to be exposed"
+msgstr "Xem xét liệu các dịch vụ này có thật sự cần được mở ra ngoài hay không"
+
+#: src/system_audit/firewall_audit_checks.rs:785
+#, rust-format
+msgid "{count} port listening"
+msgid_plural "{count} ports listening"
+msgstr[0] "{count} cổng đang lắng nghe"
+
+#: src/system_audit/firewall_audit_checks.rs:791
+msgid "Review open ports and close unnecessary services"
+msgstr "Xem lại các cổng đang mở và tắt các dịch vụ không cần thiết"
+
+#: src/system_audit/firewall_audit_checks.rs:796
+msgid "No open ports detected"
+msgstr "Không phát hiện cổng nào đang mở"
+
+#: src/system_audit/firewall_audit_checks.rs:807
+msgid ""
+"Network socket listing is unavailable. Check that the system socket tool is "
+"installed and try again."
+msgstr ""
+"Không thể liệt kê socket mạng. Hãy kiểm tra xem công cụ socket của hệ thống "
+"đã được cài đặt chưa rồi thử lại."
+
+#: src/system_audit/security_audit_checks.rs:91
+msgid "AppArmor"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:97
+msgid "AppArmor is enabled"
+msgstr "AppArmor đã bật"
+
+#: src/system_audit/security_audit_checks.rs:103
+#: src/system_audit/security_audit_checks.rs:109
+msgid "AppArmor module is loaded but not enabled"
+msgstr "Mô-đun AppArmor đã được nạp nhưng chưa bật"
+
+#: src/system_audit/security_audit_checks.rs:111
+msgid "Enable AppArmor for application sandboxing"
+msgstr "Bật AppArmor để chạy ứng dụng trong môi trường cô lập"
+
+#: src/system_audit/security_audit_checks.rs:117
+msgid "SELinux"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:123
+msgid "SELinux is enforcing"
+msgstr "SELinux đang ở chế độ thực thi (enforcing)"
+
+#: src/system_audit/security_audit_checks.rs:128
+msgid "SELinux is in permissive mode"
+msgstr "SELinux đang ở chế độ cho phép (permissive)"
+
+#: src/system_audit/security_audit_checks.rs:131
+msgid "Consider switching to enforcing mode for stronger protection"
+msgstr "Nên cân nhắc chuyển sang chế độ thực thi (enforcing) để bảo vệ tốt hơn"
+
+#: src/system_audit/security_audit_checks.rs:137
+#: src/system_audit/security_audit_checks.rs:143
+msgid "SELinux is disabled"
+msgstr "SELinux đã tắt"
+
+#: src/system_audit/security_audit_checks.rs:145
+msgid "Enable SELinux for mandatory access control"
+msgstr "Bật SELinux để kiểm soát truy cập bắt buộc"
+
+#: src/system_audit/security_audit_checks.rs:149
+msgid "SELinux mode could not be determined"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:166
+msgid "MAC Framework"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:168
+msgid "No mandatory access control framework detected"
+msgstr "Không phát hiện cơ chế kiểm soát truy cập bắt buộc nào"
+
+#: src/system_audit/security_audit_checks.rs:170
+msgid "Consider enabling AppArmor or SELinux"
+msgstr "Nên cân nhắc bật AppArmor hoặc SELinux"
+
+#: src/system_audit/security_audit_checks.rs:215
+#: src/system_audit/security_audit_checks.rs:221
+msgid "Unattended Upgrades"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:217
+msgid "Automatic security updates are enabled"
+msgstr "Cập nhật bảo mật tự động đã bật"
+
+#: src/system_audit/security_audit_checks.rs:223
+msgid "Unattended upgrades is installed but disabled"
+msgstr "Unattended upgrades đã được cài đặt nhưng đang tắt"
+
+#: src/system_audit/security_audit_checks.rs:225
+msgid "Enable automatic security updates"
+msgstr "Bật cập nhật bảo mật tự động"
+
+#: src/system_audit/security_audit_checks.rs:229
+#: src/system_audit/security_audit_checks.rs:235
+msgid "DNF Automatic"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:231
+msgid "DNF automatic updates are enabled"
+msgstr "Cập nhật tự động của DNF đã bật"
+
+#: src/system_audit/security_audit_checks.rs:237
+msgid "DNF automatic is installed but timer is not active"
+msgstr "DNF automatic đã được cài đặt nhưng bộ hẹn giờ chưa hoạt động"
+
+#: src/system_audit/security_audit_checks.rs:239
+#: src/system_audit/security_audit_checks.rs:252
+#: src/system_audit/security_audit_checks.rs:264
+msgid "Enable automatic updates"
+msgstr "Bật cập nhật tự động"
+
+#: src/system_audit/security_audit_checks.rs:243
+#: src/system_audit/security_audit_checks.rs:248
+msgid "rpm-ostree Automatic"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:245
+msgid "rpm-ostree automatic updates are enabled"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:250
+msgid "rpm-ostree automatic update timer is not active"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:255
+#: src/system_audit/security_audit_checks.rs:260
+msgid "NixOS Automatic Upgrades"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:257
+msgid "The NixOS upgrade timer is active"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:262
+msgid "The NixOS upgrade timer is not active"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:274
+msgid "Configure automatic security updates"
+msgstr "Cấu hình cập nhật bảo mật tự động"
+
+#: src/system_audit/security_audit_checks.rs:333
+msgid "Pending Reboot"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:335
+msgid "System reboot required to apply updates"
+msgstr "Cần khởi động lại hệ thống để áp dụng bản cập nhật"
+
+#: src/system_audit/security_audit_checks.rs:338
+msgid "Reboot the system to apply pending security updates"
+msgstr "Khởi động lại hệ thống để áp dụng các bản cập nhật bảo mật đang chờ"
+
+#: src/system_audit/security_audit_checks.rs:386
+msgid "fail2ban is active and protecting services"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:387
+msgid "CrowdSec is active with community threat intelligence"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:393
+msgid "Start fail2ban to protect against brute force attacks"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:394
+msgid "Start CrowdSec for collaborative intrusion prevention"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:422
+#, rust-format
+msgid "{name} is installed but not running"
+msgstr "{name} đã được cài đặt nhưng không chạy"
+
+#: src/system_audit/security_audit_checks.rs:454
+msgid "Intrusion Prevention"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:456
+msgid "No intrusion detection system found"
+msgstr "Không tìm thấy hệ thống phát hiện xâm nhập"
+
+#: src/system_audit/security_audit_checks.rs:459
+msgid "Install fail2ban or CrowdSec to protect against attacks"
+msgstr "Cài đặt fail2ban hoặc CrowdSec để bảo vệ trước các cuộc tấn công"
+
+#: src/system_audit/security_audit_checks.rs:537
+msgid "Root Login"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:545
+#, rust-format
+msgid "Root login: {value}"
+msgstr "Đăng nhập root: {value}"
+
+#: src/system_audit/security_audit_checks.rs:551
+#, rust-format
+msgid "Root login is allowed ({value})"
+msgstr "Đăng nhập root đang được cho phép ({value})"
+
+#: src/system_audit/security_audit_checks.rs:553
+msgid "Disable root SSH login for security"
+msgstr "Tắt đăng nhập SSH bằng root để bảo mật"
+
+#: src/system_audit/security_audit_checks.rs:566
+msgid "Password Auth"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:571
+msgid "Password authentication is disabled (key-only)"
+msgstr "Xác thực bằng mật khẩu đã tắt (chỉ dùng khóa)"
+
+#: src/system_audit/security_audit_checks.rs:577
+msgid "Password authentication is enabled"
+msgstr "Xác thực bằng mật khẩu đã bật"
+
+#: src/system_audit/security_audit_checks.rs:580
+msgid "Consider disabling password auth in favor of SSH keys"
+msgstr "Nên cân nhắc tắt xác thực bằng mật khẩu và chuyển sang dùng khóa SSH"
+
+#: src/system_audit/security_audit_checks.rs:594
+msgid "X11 Forwarding"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:599
+msgid "X11 forwarding is disabled"
+msgstr "Chuyển tiếp X11 đã tắt"
+
+#: src/system_audit/security_audit_checks.rs:605
+msgid "X11 forwarding is enabled"
+msgstr "Chuyển tiếp X11 đã bật"
+
+#: src/system_audit/security_audit_checks.rs:607
+msgid "Disable X11 forwarding to reduce attack surface"
+msgstr "Tắt chuyển tiếp X11 để thu hẹp bề mặt tấn công"
+
+#: src/system_audit/security_audit_checks.rs:638
+#: src/system_audit/security_audit_checks.rs:655
+msgid "SSH Configuration"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:641
+msgid ""
+"The SSH configuration includes other files that were not evaluated; the "
+"settings below may be overridden."
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:657
+msgid "Could not read SSH configuration"
+msgstr "Không thể đọc cấu hình SSH"
+
+#: src/system_audit/security_audit_checks.rs:684
+#: src/system_audit/security_audit_checks.rs:694
+#: src/system_audit/security_audit_checks.rs:702
+msgid "SSH Server"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:686
+msgid "SSH server status could not be determined"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:696
+msgid "SSH server is not running (no remote attack surface)"
+msgstr "Máy chủ SSH không chạy (không có bề mặt tấn công từ xa)"
+
+#: src/system_audit/security_audit_checks.rs:704
+msgid "SSH server is running"
+msgstr "Máy chủ SSH đang chạy"
+
+#: src/system_audit/security_audit_checks.rs:724
+msgid "The Portmaster service is active"
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:730
+msgid "Portmaster is installed but not running"
+msgstr "Portmaster đã được cài đặt nhưng không chạy"
+
+#: src/system_audit/security_audit_checks.rs:733
+msgid "Start the Portmaster service to enable network protection"
+msgstr "Khởi động dịch vụ Portmaster để bật bảo vệ mạng"
+
+#: src/system_audit/security_audit_checks.rs:743
+msgid "Not detected — optional network monitor and application firewall"
+msgstr "Không phát hiện — trình giám sát mạng và tường lửa ứng dụng tùy chọn"
+
+#: src/system_audit/security_audit_checks.rs:758
+msgid "Lynis needs administrator access, so ClamUI does not run it."
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:761
+msgid "Run 'sudo lynis audit system' for detailed recommendations"
+msgstr "Chạy “sudo lynis audit system” để xem các khuyến nghị chi tiết"
+
+#: src/system_audit/security_audit_checks.rs:770
+#, rust-format
+msgid "Install {name} for comprehensive security auditing"
+msgstr "Cài đặt {name} để kiểm tra bảo mật toàn diện"
+
+#: src/system_audit/security_audit_checks.rs:792
+msgid "chkrootkit needs administrator access, so ClamUI does not run it."
+msgstr ""
+
+#: src/system_audit/security_audit_checks.rs:801
+msgid "Install chkrootkit for rootkit detection"
+msgstr "Cài đặt chkrootkit để phát hiện rootkit"
+
+#: src/system_audit/system_audit_page.rs:49
+msgid "Auditing…"
+msgstr "Đang kiểm tra bảo mật…"
+
+#: src/system_audit/system_audit_page.rs:52
+#, rust-format
+msgid "{count} security issue needs attention"
+msgid_plural "{count} security issues need attention"
+msgstr[0] "{count} vấn đề bảo mật cần chú ý"
+
+#: src/system_audit/system_audit_page.rs:59
+#, rust-format
+msgid "{count} audit check needs review"
+msgid_plural "{count} audit checks need review"
+msgstr[0] "{count} mục kiểm tra bảo mật cần xem lại"
+
+#: src/system_audit/system_audit_page.rs:65
+msgid "Security audit completed"
+msgstr "Đã hoàn tất kiểm tra bảo mật"
+
+#: src/system_audit/system_audit_page.rs:135
+#: src/system_audit/system_audit_page.rs:138
+msgid "System security audit"
+msgstr "Kiểm tra bảo mật hệ thống"
+
+#: src/system_audit/system_audit_page.rs:139
+msgid ""
+"Inspect your security posture and copy recommendations. Audit checks never "
+"change system configuration."
+msgstr ""
+"Đánh giá tình trạng bảo mật và sao chép các khuyến nghị. Các bước kiểm tra "
+"bảo mật không bao giờ thay đổi cấu hình hệ thống."
+
+#: src/system_audit/system_audit_page.rs:143
+msgid "Refresh audit"
+msgstr "Kiểm tra lại"
+
+#: src/system_audit/system_audit_page.rs:196
+msgid "unavailable or skipped"
+msgstr "không khả dụng hoặc đã bỏ qua"
+
+#: src/system_audit/system_audit_page.rs:267
+#, rust-format
+msgid "Could not open documentation: {error}"
+msgstr "Không thể mở tài liệu: {error}"
 
 #: src/text_export_dialog.rs:20
 #, rust-format

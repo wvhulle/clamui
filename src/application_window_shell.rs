@@ -40,8 +40,10 @@ use crate::{
     malware_scan::scan_progress_page::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
+    network_sockets::network_sockets_page::NetworkSocketsPage,
     scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
+    system_audit::system_audit_page::SystemAuditPage,
     virus_database::database_update_page::{
         DatabaseUpdatePage, DatabaseUpdatePageInput, DatabaseUpdatePageOutput,
     },
@@ -58,6 +60,8 @@ struct ApplicationPages {
     _component_page: Controller<ComponentStatusPage>,
     _logs_page: Controller<ActivityLogsPage>,
     _statistics_page: Controller<ScanStatisticsPage>,
+    _audit_page: Controller<SystemAuditPage>,
+    _network_page: Controller<NetworkSocketsPage>,
 }
 
 enum ShellContent {
@@ -317,6 +321,8 @@ fn application_pages(
             },
         );
     let component_page = ComponentStatusPage::builder().launch(()).detach();
+    let audit_page = SystemAuditPage::builder().launch(()).detach();
+    let network_page = NetworkSocketsPage::builder().launch(()).detach();
 
     let navigation_pages = [
         NavigationPage {
@@ -360,6 +366,20 @@ fn application_pages(
             page_icon: "applications-science-symbolic",
             page_widget: statistics_page.widget().upcast_ref(),
             keyboard_accelerator: "<Control>6",
+        },
+        NavigationPage {
+            page_name: "audit",
+            page_title: gettext("Audit"),
+            page_icon: "channel-secure-symbolic",
+            page_widget: audit_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>7",
+        },
+        NavigationPage {
+            page_name: "network",
+            page_title: gettext("Network"),
+            page_icon: "network-workgroup-symbolic",
+            page_widget: network_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>8",
         },
     ];
     let page_stack = navigation_stack(&navigation_pages);
@@ -429,6 +449,8 @@ fn application_pages(
             _component_page: component_page,
             _logs_page: logs_page,
             _statistics_page: statistics_page,
+            _audit_page: audit_page,
+            _network_page: network_page,
         }),
     }
 }
