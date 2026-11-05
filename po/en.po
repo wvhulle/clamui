@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 08:51+0100\n"
+"POT-Creation-Date: 2026-11-05 08:54+0100\n"
 "PO-Revision-Date: 2026-10-20 10:21+0200\n"
 "Last-Translator: ClamUI Contributors\n"
 "Language-Team: English\n"
@@ -139,7 +139,8 @@ msgstr ""
 "undone."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/file_quarantine/quarantine_entries_page.rs:89
+#: src/file_quarantine/quarantine_entries_page.rs:173
+#: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:577
 #: src/malware_scan/scan_results_dialog.rs:193
 #: src/virus_database/database_update_page.rs:529
@@ -163,6 +164,7 @@ msgstr "Previous scan and update operations"
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
 #: src/activity_history/scan_statistics_page.rs:234
+#: src/file_quarantine/quarantine_entries_page.rs:272
 msgid "Refresh"
 msgstr "Refresh"
 
@@ -494,7 +496,6 @@ msgid "Components"
 msgstr "Components"
 
 #: src/application_window_shell.rs:322
-#: src/file_quarantine/quarantine_entries_page.rs:115
 #: src/malware_scan/detected_threat_row.rs:109
 #: src/malware_scan/scan_results_dialog.rs:194
 msgid "Quarantine"
@@ -585,22 +586,22 @@ msgstr "Refresh status"
 msgid "Command copied to clipboard"
 msgstr "Command copied to clipboard"
 
-#: src/file_quarantine/quarantine_entries_page.rs:19
+#: src/file_quarantine/quarantine_entries_page.rs:23
 msgid "File hash mismatch — file may be corrupted"
 msgstr "File hash mismatch — file may be corrupted"
 
-#: src/file_quarantine/quarantine_entries_page.rs:22
+#: src/file_quarantine/quarantine_entries_page.rs:26
 msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:26
+#: src/file_quarantine/quarantine_entries_page.rs:30
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr "Quarantine entry not found: {id}"
 
-#: src/file_quarantine/quarantine_entries_page.rs:29
+#: src/file_quarantine/quarantine_entries_page.rs:33
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
@@ -608,7 +609,7 @@ msgstr ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
 
-#: src/file_quarantine/quarantine_entries_page.rs:37
+#: src/file_quarantine/quarantine_entries_page.rs:41
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
@@ -617,27 +618,80 @@ msgstr ""
 "Failed to record quarantine entry in database. Rollback also failed: "
 "{error}. File may be orphaned at: {path}"
 
-#: src/file_quarantine/quarantine_entries_page.rs:46
+#: src/file_quarantine/quarantine_entries_page.rs:50
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:86
-msgid "Delete Quarantined File?"
+#: src/file_quarantine/quarantine_entries_page.rs:141
+#, rust-format
+msgid "{count} item"
+msgid_plural "{count} items"
+msgstr[0] "{count} item"
+msgstr[1] "{count} items"
+
+#: src/file_quarantine/quarantine_entries_page.rs:163
+msgid "Clear Old Items?"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:87
-msgid "The file will be permanently deleted."
-msgstr ""
+#: src/file_quarantine/quarantine_entries_page.rs:166
+#, rust-format
+msgid ""
+"{count} quarantined file older than 30 days will be permanently deleted."
+msgid_plural ""
+"{count} quarantined files older than 30 days will be permanently deleted."
+msgstr[0] ""
+msgstr[1] ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:90
+#: src/file_quarantine/quarantine_entries_page.rs:174
+#: src/file_quarantine/quarantine_entries_page.rs:190
 #: src/file_quarantine/quarantine_entry_row.rs:54
 msgid "Delete"
 msgstr "Delete"
 
-#: src/file_quarantine/quarantine_entries_page.rs:131
+#: src/file_quarantine/quarantine_entries_page.rs:186
+msgid "Delete Quarantined File?"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:187
+msgid "The file will be permanently deleted."
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:213
+msgid "Quarantine Storage"
+msgstr "Quarantine Storage"
+
+#: src/file_quarantine/quarantine_entries_page.rs:214
+msgid "Secure storage for isolated threats"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:217
+msgid "Total Size"
+msgstr "Total Size"
+
+#: src/file_quarantine/quarantine_entries_page.rs:249
+msgid "Quarantined Files"
+msgstr "Quarantined Files"
+
+#: src/file_quarantine/quarantine_entries_page.rs:256
+msgid "Detected threats isolated from your system"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:261
+msgid "Search by threat name or path"
+msgstr "Search by threat name or path"
+
+#: src/file_quarantine/quarantine_entries_page.rs:279
+msgid "Clear Old Items"
+msgstr "Clear Old Items"
+
+#: src/file_quarantine/quarantine_entries_page.rs:296
 msgid "Quarantine is empty"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:297
+msgid "Threats you quarantine will appear here"
 msgstr ""
 
 #: src/file_quarantine/quarantine_entry_row.rs:46

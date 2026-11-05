@@ -55,10 +55,10 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 ## Quarantine
 
 - [x] List, restore and delete, including files blocked by on-access scanning.
-- [ ] Storage summary: total size and item count.
-- [ ] Search with `gtk::SearchEntry`.
-- [ ] Refresh.
-- [ ] Clear Old Items.
+- [x] Storage summary: total size and item count.
+- [x] Search with `gtk::SearchEntry`.
+- [x] Refresh.
+- [x] Clear Old Items, after 30 days and with confirmation.
 
 ## Audit
 

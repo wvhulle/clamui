@@ -35,7 +35,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 08:51+0100\n"
+"POT-Creation-Date: 2026-11-05 08:54+0100\n"
 "PO-Revision-Date: 2026-11-03 21:00+0700\n"
 "Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
 "Language-Team: Vietnamese\n"
@@ -166,7 +166,8 @@ msgstr ""
 "Thao tác này sẽ xóa vĩnh viễn toàn bộ nhật ký lịch sử và không thể hoàn tác."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/file_quarantine/quarantine_entries_page.rs:89
+#: src/file_quarantine/quarantine_entries_page.rs:173
+#: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:577
 #: src/malware_scan/scan_results_dialog.rs:193
 #: src/virus_database/database_update_page.rs:529
@@ -190,6 +191,7 @@ msgstr "Các lượt quét và cập nhật trước đây"
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
 #: src/activity_history/scan_statistics_page.rs:234
+#: src/file_quarantine/quarantine_entries_page.rs:272
 msgid "Refresh"
 msgstr "Làm mới"
 
@@ -517,7 +519,6 @@ msgid "Components"
 msgstr "Thành phần"
 
 #: src/application_window_shell.rs:322
-#: src/file_quarantine/quarantine_entries_page.rs:115
 #: src/malware_scan/detected_threat_row.rs:109
 #: src/malware_scan/scan_results_dialog.rs:194
 msgid "Quarantine"
@@ -608,22 +609,22 @@ msgstr "Làm mới trạng thái"
 msgid "Command copied to clipboard"
 msgstr "Đã sao chép lệnh vào bộ nhớ tạm"
 
-#: src/file_quarantine/quarantine_entries_page.rs:19
+#: src/file_quarantine/quarantine_entries_page.rs:23
 msgid "File hash mismatch — file may be corrupted"
 msgstr "Mã băm của tệp không khớp — tệp có thể đã bị hỏng"
 
-#: src/file_quarantine/quarantine_entries_page.rs:22
+#: src/file_quarantine/quarantine_entries_page.rs:26
 msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:26
+#: src/file_quarantine/quarantine_entries_page.rs:30
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr "Không tìm thấy mục trong khu cách ly: {id}"
 
-#: src/file_quarantine/quarantine_entries_page.rs:29
+#: src/file_quarantine/quarantine_entries_page.rs:33
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
@@ -631,7 +632,7 @@ msgstr ""
 "Không thể ghi mục cách ly vào cơ sở dữ liệu. Tệp đã được khôi phục về vị trí "
 "ban đầu."
 
-#: src/file_quarantine/quarantine_entries_page.rs:37
+#: src/file_quarantine/quarantine_entries_page.rs:41
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
@@ -640,27 +641,78 @@ msgstr ""
 "Không thể ghi mục cách ly vào cơ sở dữ liệu. Hoàn tác cũng thất bại: "
 "{error}. Tệp có thể bị bỏ lại tại: {path}"
 
-#: src/file_quarantine/quarantine_entries_page.rs:46
+#: src/file_quarantine/quarantine_entries_page.rs:50
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:86
-msgid "Delete Quarantined File?"
+#: src/file_quarantine/quarantine_entries_page.rs:141
+#, rust-format
+msgid "{count} item"
+msgid_plural "{count} items"
+msgstr[0] "{count} mục"
+
+#: src/file_quarantine/quarantine_entries_page.rs:163
+msgid "Clear Old Items?"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:87
-msgid "The file will be permanently deleted."
-msgstr ""
+#: src/file_quarantine/quarantine_entries_page.rs:166
+#, rust-format
+msgid ""
+"{count} quarantined file older than 30 days will be permanently deleted."
+msgid_plural ""
+"{count} quarantined files older than 30 days will be permanently deleted."
+msgstr[0] ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:90
+#: src/file_quarantine/quarantine_entries_page.rs:174
+#: src/file_quarantine/quarantine_entries_page.rs:190
 #: src/file_quarantine/quarantine_entry_row.rs:54
 msgid "Delete"
 msgstr "Xóa"
 
-#: src/file_quarantine/quarantine_entries_page.rs:131
+#: src/file_quarantine/quarantine_entries_page.rs:186
+msgid "Delete Quarantined File?"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:187
+msgid "The file will be permanently deleted."
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:213
+msgid "Quarantine Storage"
+msgstr "Lưu trữ khu cách ly"
+
+#: src/file_quarantine/quarantine_entries_page.rs:214
+msgid "Secure storage for isolated threats"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:217
+msgid "Total Size"
+msgstr "Tổng dung lượng"
+
+#: src/file_quarantine/quarantine_entries_page.rs:249
+msgid "Quarantined Files"
+msgstr "Tệp đã cách ly"
+
+#: src/file_quarantine/quarantine_entries_page.rs:256
+msgid "Detected threats isolated from your system"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:261
+msgid "Search by threat name or path"
+msgstr "Tìm theo tên mối đe dọa hoặc đường dẫn"
+
+#: src/file_quarantine/quarantine_entries_page.rs:279
+msgid "Clear Old Items"
+msgstr "Xóa các mục cũ"
+
+#: src/file_quarantine/quarantine_entries_page.rs:296
 msgid "Quarantine is empty"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:297
+msgid "Threats you quarantine will appear here"
 msgstr ""
 
 #: src/file_quarantine/quarantine_entry_row.rs:46
