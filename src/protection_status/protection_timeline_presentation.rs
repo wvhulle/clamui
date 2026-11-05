@@ -575,7 +575,7 @@ pub fn coverage_summary(protection_evidence: &ProtectionEvidence) -> String {
     if coverage_parts.is_empty() {
         gettext("Files are only checked when you scan them")
     } else {
-        coverage_parts.join("; ")
+        coverage_parts.join("\n")
     }
 }
 
@@ -721,7 +721,7 @@ mod protection_timeline_presentation_tests {
         );
         assert_eq!(
             coverage_summary(&protection_evidence),
-            "/home/user/Downloads blocked on access; /tmp, /var/tmp scanned on a schedule"
+            "/home/user/Downloads blocked on access\n/tmp, /var/tmp scanned on a schedule"
         );
     }
 

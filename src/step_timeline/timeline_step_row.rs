@@ -191,11 +191,9 @@ impl FactoryComponent for TimelineStepRow {
                 set_visible: !self.is_running(),
             },
 
-            add_prefix = &gtk::Spinner {
+            add_prefix = &adw::Spinner {
                 #[watch]
                 set_visible: self.is_running(),
-                #[watch]
-                set_spinning: self.is_running(),
             },
 
             add_suffix = &gtk::Button {

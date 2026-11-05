@@ -13,6 +13,7 @@ use crate::{
         quarantine_entry_row::{QuarantineEntryRow, QuarantineEntryRowOutput},
         quarantine_file_moves::QuarantineMoveFailure,
     },
+    loading_indicators::{FirstLoad, loading_placeholder_stack},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     shared_page_widget_templates::ClampedPage,
 };
@@ -87,6 +88,7 @@ pub struct QuarantineEntriesPage {
     search_text: String,
     entry_rows: FactoryVecDeque<QuarantineEntryRow>,
     status_message: String,
+    first_load: FirstLoad,
 }
 
 #[derive(Debug)]
@@ -290,11 +292,10 @@ impl Component for QuarantineEntriesPage {
                     add_css_class: "boxed-list",
                     set_selection_mode: gtk::SelectionMode::None,
                     #[wrap(Some)]
-                    set_placeholder = &adw::StatusPage {
-                        add_css_class: "compact",
-                        set_icon_name: Some("security-high-symbolic"),
-                        set_title: &gettext("Quarantine is empty"),
-                        set_description: Some(&gettext("Threats you quarantine will appear here")),
+                    #[local_ref]
+                    set_placeholder = placeholder_stack -> gtk::Stack {
+                        #[watch]
+                        set_visible_child_name: model.first_load.shown_page_name(),
                     },
                 },
             },
@@ -322,9 +323,19 @@ impl Component for QuarantineEntriesPage {
             search_text: String::new(),
             entry_rows,
             status_message: String::new(),
+            first_load: FirstLoad::StillLoading,
         };
         model.reload_entries(&sender);
         let entry_list = model.entry_rows.widget();
+        let placeholder_stack = &loading_placeholder_stack(
+            &gettext("Loading quarantine…"),
+            &adw::StatusPage::builder()
+                .css_classes(["compact"])
+                .icon_name("security-high-symbolic")
+                .title(gettext("Quarantine is empty"))
+                .description(gettext("Threats you quarantine will appear here"))
+                .build(),
+        );
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -395,10 +406,12 @@ impl Component for QuarantineEntriesPage {
     ) {
         match page_command {
             QuarantineEntriesPageCommand::EntriesLoaded(Ok(listed_entries)) => {
+                self.first_load = FirstLoad::LoadFinished;
                 self.listed_entries = listed_entries;
                 self.show_matching_entries();
             }
             QuarantineEntriesPageCommand::EntriesLoaded(Err(load_failure)) => {
+                self.first_load = FirstLoad::LoadFinished;
                 self.status_message = describe_quarantine_failure(&load_failure);
             }
             QuarantineEntriesPageCommand::EntryOperationFinished(operation_outcome) => {

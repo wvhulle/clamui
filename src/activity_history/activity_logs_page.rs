@@ -19,6 +19,7 @@ use crate::{
         activity_history_database::{ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure},
         daemon_log_reader::{DaemonLogContents, read_daemon_log},
     },
+    loading_indicators::{FirstLoad, loading_placeholder_stack},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     text_export_dialog::{TextExportOutcome, describe_export_failure, save_text_with_dialog},
 };
@@ -45,6 +46,7 @@ pub struct ActivityLogsPage {
     daemon_source_text: String,
     daemon_log_refresh: DaemonLogRefresh,
     history_notice: String,
+    first_load: FirstLoad,
 }
 
 #[derive(Debug)]
@@ -298,10 +300,10 @@ impl Component for ActivityLogsPage {
                                 set_valign: gtk::Align::Start,
                                 set_selection_mode: gtk::SelectionMode::Single,
                                 #[wrap(Some)]
-                                set_placeholder = &adw::StatusPage {
-                                    add_css_class: "compact",
-                                    set_icon_name: Some("document-open-recent-symbolic"),
-                                    set_title: &gettext("No historical logs yet."),
+                                #[local_ref]
+                                set_placeholder = placeholder_stack -> gtk::Stack {
+                                    #[watch]
+                                    set_visible_child_name: model.first_load.shown_page_name(),
                                 },
                                 connect_row_activated[sender] => move |_entry_list, activated_row| {
                                     sender.input(ActivityLogsPageInput::EntryActivated {
@@ -425,11 +427,20 @@ impl Component for ActivityLogsPage {
             daemon_source_text: gettext("Checking…"),
             daemon_log_refresh: DaemonLogRefresh::ManualRefresh,
             history_notice: String::new(),
+            first_load: FirstLoad::StillLoading,
         };
         model.select_entry(SelectedEntryView::NoEntrySelected);
         model.reload_entries(&sender);
         model.refresh_daemon_log(&sender);
         let entry_list = model.entry_rows.widget();
+        let placeholder_stack = &loading_placeholder_stack(
+            &gettext("Loading history…"),
+            &adw::StatusPage::builder()
+                .css_classes(["compact"])
+                .icon_name("document-open-recent-symbolic")
+                .title(gettext("No historical logs yet."))
+                .build(),
+        );
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -522,6 +533,7 @@ impl Component for ActivityLogsPage {
     ) {
         match page_command {
             ActivityLogsPageCommand::EntriesLoaded(Ok(listed_entries)) => {
+                self.first_load = FirstLoad::LoadFinished;
                 self.history_notice.clear();
                 let mut entry_rows_guard = self.entry_rows.guard();
                 entry_rows_guard.clear();
@@ -532,6 +544,7 @@ impl Component for ActivityLogsPage {
                 self.listed_entries = listed_entries;
             }
             ActivityLogsPageCommand::EntriesLoaded(Err(load_failure)) => {
+                self.first_load = FirstLoad::LoadFinished;
                 self.history_notice = gettext("Failed to load historical logs: {error}")
                     .replace("{error}", &load_failure.to_string());
             }

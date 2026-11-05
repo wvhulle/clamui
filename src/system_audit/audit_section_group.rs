@@ -1,3 +1,4 @@
+use gettextrs::gettext;
 use relm4::{
     FactorySender, adw,
     adw::prelude::*,
@@ -5,9 +6,12 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::system_audit::{
-    audit_check_row::{audit_check_row, checking_placeholder_row},
-    audit_report_model::{AuditCategory, AuditSection},
+use crate::{
+    loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
+    system_audit::{
+        audit_check_row::{audit_check_row, checking_placeholder_row},
+        audit_report_model::{AuditCategory, AuditSection, AuditStatus},
+    },
 };
 
 pub struct AuditSectionGroup {
@@ -64,14 +68,21 @@ impl FactoryComponent for AuditSectionGroup {
         adw::PreferencesGroup {
             set_title: &self.audit_section.audit_category.section_title(),
             #[wrap(Some)]
-            set_header_suffix = &gtk::Image {
-                set_valign: gtk::Align::Center,
+            set_header_suffix = &gtk::Stack {
+              set_valign: gtk::Align::Center,
+              add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                set_tooltip_text: Some(&gettext("Checking")),
+              },
+              add_named[Some(IDLE_PAGE_NAME)] = &gtk::Image {
                 #[watch]
                 set_icon_name: Some(self.audit_section.overall_status().status_icon_name()),
                 #[watch]
                 set_tooltip_text: Some(&self.audit_section.overall_status().status_label()),
                 #[watch]
                 set_css_classes: &[self.audit_section.overall_status().status_style_class()],
+              },
+              #[watch]
+              set_visible_child_name: busy_page_name(self.audit_section.overall_status() == AuditStatus::CheckInProgress),
             },
         }
     }

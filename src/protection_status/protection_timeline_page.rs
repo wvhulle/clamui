@@ -10,6 +10,10 @@ use crate::{
     clamav_components::distribution_install_guides::{
         DistributionFamily, detect_distribution_family,
     },
+    loading_indicators::{
+        BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
+        busy_page_name, loading_status_page,
+    },
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         protection_evidence::{
@@ -75,17 +79,25 @@ pub enum ProtectionTimelinePageCommand {
     },
 }
 
-pub fn headline_text(unresolved_detections: usize, coverage_summary: &str) -> String {
+pub fn decision_headline(unresolved_detections: usize) -> String {
     if unresolved_detections == 0 {
-        return coverage_summary.to_owned();
+        return gettext("Nothing needs your decision");
     }
     ngettext(
-        "{count} detection needs your decision. {coverage}",
-        "{count} detections need your decision. {coverage}",
+        "{count} detection needs your decision",
+        "{count} detections need your decision",
         u32::try_from(unresolved_detections).unwrap_or(u32::MAX),
     )
     .replace("{count}", &unresolved_detections.to_string())
-    .replace("{coverage}", coverage_summary)
+}
+
+pub fn shown_coverage_text(coverage_summary: &str, home_directory: &str) -> String {
+    if home_directory.is_empty() || home_directory == "/" {
+        return coverage_summary.to_owned();
+    }
+    coverage_summary
+        .replace(&format!("{home_directory}/"), "~/")
+        .replace(&format!("{home_directory},"), "~,")
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -124,6 +136,13 @@ pub fn unit_run_toast_text(
 }
 
 impl ProtectionTimelinePage {
+    const fn first_load(&self) -> FirstLoad {
+        match self.gathered_evidence {
+            GatheredEvidence::NotGatheredYet => FirstLoad::StillLoading,
+            GatheredEvidence::Gathered(_) => FirstLoad::LoadFinished,
+        }
+    }
+
     fn start_evidence_refresh(&mut self, sender: &ComponentSender<Self>) {
         if self.evidence_refresh != EvidenceRefresh::NothingRunning {
             self.evidence_refresh = EvidenceRefresh::GatheringThenAgain;
@@ -216,21 +235,50 @@ impl Component for ProtectionTimelinePage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
-            set_child = &adw::PreferencesPage {
+            set_child = &gtk::Stack {
+            #[local_ref]
+            add_named[Some(LOADING_PAGE_NAME)] = protection_loading_page -> adw::StatusPage {},
+            add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
                     #[watch]
-                    set_title: &gtk::glib::markup_escape_text(&headline_text(model.unresolved_detections, &model.coverage_summary)),
+                    set_title: &gtk::glib::markup_escape_text(&decision_headline(model.unresolved_detections)),
+                    #[watch]
+                    set_description: Some(&gtk::glib::markup_escape_text(&shown_coverage_text(
+                        &model.coverage_summary,
+                        &gtk::glib::home_dir().to_string_lossy(),
+                    ))),
                     #[wrap(Some)]
-                    set_header_suffix = &gtk::Button {
-                        set_icon_name: "view-refresh-symbolic",
-                        set_tooltip_text: Some(&gettext("Check again")),
+                    set_header_suffix = &gtk::Box {
+                        set_spacing: 6,
                         set_valign: gtk::Align::Center,
-                        add_css_class: "flat",
-                        connect_clicked => ProtectionTimelinePageInput::RefreshRequested,
+                        gtk::Button {
+                            set_label: &gettext("Review"),
+                            set_action_name: Some("win.show-page"),
+                            set_action_target_value: Some(&"detections".to_variant()),
+                            add_css_class: "suggested-action",
+                            #[watch]
+                            set_visible: model.unresolved_detections > 0,
+                        },
+                        gtk::Stack {
+                            add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
+                                set_icon_name: "view-refresh-symbolic",
+                                set_tooltip_text: Some(&gettext("Check again")),
+                                add_css_class: "flat",
+                                connect_clicked => ProtectionTimelinePageInput::RefreshRequested,
+                            },
+                            add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                                set_tooltip_text: Some(&gettext("Checking")),
+                            },
+                            #[watch]
+                            set_visible_child_name: busy_page_name(model.evidence_refresh != EvidenceRefresh::NothingRunning),
+                        },
                     },
                 },
 
                 add: timeline_group,
+            },
+            #[watch]
+            set_visible_child_name: model.first_load().shown_page_name(),
             },
         }
     }
@@ -257,6 +305,7 @@ impl Component for ProtectionTimelinePage {
         };
         let timeline_group = model.timeline_rows.widget().clone();
         let timeline_group = &timeline_group;
+        let protection_loading_page = &loading_status_page(&gettext("Checking your protection…"));
         let widgets = view_output!();
         sender.command(|command_sender, shutdown_receiver| {
             shutdown_receiver
@@ -360,11 +409,20 @@ mod protection_timeline_page_tests {
     }
 
     #[test]
-    fn unresolved_detections_come_before_coverage() {
-        assert_eq!(headline_text(0, "Downloads blocked"), "Downloads blocked");
+    fn the_headline_counts_open_decisions() {
+        assert_eq!(decision_headline(0), "Nothing needs your decision");
+        assert_eq!(decision_headline(2), "2 detections need your decision");
+    }
+
+    #[test]
+    fn coverage_lines_shorten_the_home_folder() {
         assert_eq!(
-            headline_text(2, "Downloads blocked"),
-            "2 detections need your decision. Downloads blocked"
+            shown_coverage_text("/home/user/Downloads blocked on access", "/home/user"),
+            "~/Downloads blocked on access"
+        );
+        assert_eq!(
+            shown_coverage_text("/home/username/Downloads blocked", "/home/user"),
+            "/home/username/Downloads blocked"
         );
     }
 }

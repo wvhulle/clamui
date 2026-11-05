@@ -96,12 +96,13 @@ fn guidance_row(
 }
 
 pub fn checking_placeholder_row() -> gtk::Widget {
-    adw::ActionRow::builder()
+    let checking_row = adw::ActionRow::builder()
         .use_markup(false)
-        .title(gettext("Checking"))
+        .title(gettext("Checking…"))
         .css_classes(["dim-label"])
-        .build()
-        .upcast()
+        .build();
+    checking_row.add_prefix(&adw::Spinner::new());
+    checking_row.upcast()
 }
 
 pub fn audit_check_row(

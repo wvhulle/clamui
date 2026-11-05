@@ -291,11 +291,10 @@ impl Component for VirusTotalLookupDialog {
                                 set_label: &sanitize_scanner_line(&model.file_path.to_string_lossy()),
                             },
 
-                            gtk::Spinner {
+                            adw::Spinner {
+                                set_height_request: 32,
                                 #[watch]
                                 set_visible: model.lookup_is_running(),
-                                #[watch]
-                                set_spinning: model.lookup_is_running(),
                             },
 
                             gtk::Label {

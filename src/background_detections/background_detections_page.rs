@@ -39,6 +39,7 @@ use crate::{
         quarantine_entries_page::describe_quarantine_failure,
         quarantine_entry_database::QuarantineVault,
     },
+    loading_indicators::FirstLoad,
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     step_timeline::{
         timeline_step_model::{TimelineStepAction, TimelineStepRequest},
@@ -89,6 +90,8 @@ pub struct BackgroundDetectionsPage {
     list_rows: Vec<adw::ActionRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow>,
     list_group: adw::PreferencesGroup,
+    first_load: FirstLoad,
+    first_load_spinner: adw::Spinner,
     view_stack: gtk::Stack,
 }
 
@@ -355,6 +358,9 @@ impl BackgroundDetectionsPage {
             JournalAccess::FollowingFailed { failure_text } => {
                 gettext("Reading the system journal stopped: {error}")
                     .replace("{error}", &sanitize_scanner_line(failure_text))
+            }
+            JournalAccess::FollowingJournal if self.first_load == FirstLoad::StillLoading => {
+                gettext("Loading detections…")
             }
             JournalAccess::FollowingJournal if self.displayed_detections.is_empty() => {
                 gettext("Nothing has been detected in the background.")
@@ -625,6 +631,7 @@ impl Component for BackgroundDetectionsPage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let first_load_spinner = adw::Spinner::new();
         let incident_rows = FactoryVecDeque::builder()
             .launch(adw::PreferencesGroup::default())
             .forward(
@@ -633,6 +640,7 @@ impl Component for BackgroundDetectionsPage {
             );
         let list_group = adw::PreferencesGroup::builder()
             .title(gettext("Detections"))
+            .header_suffix(&first_load_spinner)
             .build();
         let view_stack = gtk::Stack::new();
         let model = Self {
@@ -650,6 +658,8 @@ impl Component for BackgroundDetectionsPage {
             list_rows: Vec::new(),
             incident_rows,
             list_group: list_group.clone(),
+            first_load: FirstLoad::StillLoading,
+            first_load_spinner,
             view_stack: view_stack.clone(),
         };
         let stack_widget = &view_stack;
@@ -741,6 +751,8 @@ impl Component for BackgroundDetectionsPage {
                     )));
             }
             BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections) => {
+                self.first_load = FirstLoad::LoadFinished;
+                self.first_load_spinner.set_visible(false);
                 self.displayed_detections = displayed_detections;
                 self.list_group
                     .set_description(Some(&gtk::glib::markup_escape_text(

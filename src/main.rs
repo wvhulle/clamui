@@ -8,6 +8,7 @@ mod file_process_lock;
 mod file_quarantine;
 #[cfg(test)]
 mod host_verification_tests;
+mod loading_indicators;
 mod malware_scan;
 mod protection_status;
 mod scan_profiles;

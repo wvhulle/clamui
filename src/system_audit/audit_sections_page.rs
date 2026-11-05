@@ -8,6 +8,7 @@ use crate::{
     clamav_components::distribution_install_guides::{
         DistributionFamily, detect_distribution_family,
     },
+    loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     system_audit::{
         audit_report_model::{AuditCategory, AuditSection},
@@ -20,6 +21,7 @@ pub struct AuditSectionsPage {
     section_groups: FactoryVecDeque<AuditSectionGroup>,
     audited_categories: &'static [AuditCategory],
     distribution_family: DistributionFamily,
+    running_checks: usize,
 }
 
 pub struct AuditSectionsPageInit {
@@ -48,18 +50,13 @@ impl AuditSectionsPage {
             .unwrap_or_default()
     }
 
-    fn start_section_audit(&self, sender: &ComponentSender<Self>) {
+    fn start_section_audit(&mut self, sender: &ComponentSender<Self>) {
         let distribution_family = self.distribution_family;
+        self.running_checks += self.audited_categories.len();
         self.audited_categories
             .iter()
             .copied()
             .for_each(|audit_category| {
-                self.section_groups.send(
-                    self.section_position(audit_category),
-                    AuditSectionGroupInput::SectionChanged(AuditSection::awaiting_checks(
-                        audit_category,
-                    )),
-                );
                 sender.oneshot_command(async move {
                     AuditSectionsPageCommand::SectionFinished(
                         gather_audit_section(audit_category, distribution_family).await,
@@ -105,12 +102,19 @@ impl Component for AuditSectionsPage {
                     set_title: &gtk::glib::markup_escape_text(&page_init.page_title),
                     set_description: Some(&gtk::glib::markup_escape_text(&page_init.page_description)),
                     #[wrap(Some)]
-                    set_header_suffix = &gtk::Button {
-                        set_icon_name: "view-refresh-symbolic",
-                        set_tooltip_text: Some(&gettext("Check again")),
+                    set_header_suffix = &gtk::Stack {
                         set_valign: gtk::Align::Center,
-                        add_css_class: "flat",
-                        connect_clicked => AuditSectionsPageInput::RefreshRequested,
+                        add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
+                            set_icon_name: "view-refresh-symbolic",
+                            set_tooltip_text: Some(&gettext("Check again")),
+                            add_css_class: "flat",
+                            connect_clicked => AuditSectionsPageInput::RefreshRequested,
+                        },
+                        add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                            set_tooltip_text: Some(&gettext("Checking")),
+                        },
+                        #[watch]
+                        set_visible_child_name: busy_page_name(model.running_checks > 0),
                     },
                 },
             },
@@ -132,6 +136,7 @@ impl Component for AuditSectionsPage {
             section_groups,
             audited_categories: page_init.audited_categories,
             distribution_family: detect_distribution_family(),
+            running_checks: 0,
         };
         let sections_preferences_page = &model.section_groups.widget().clone();
         let widgets = view_output!();
@@ -185,6 +190,7 @@ impl Component for AuditSectionsPage {
     ) {
         match page_command {
             AuditSectionsPageCommand::SectionFinished(audit_section) => {
+                self.running_checks = self.running_checks.saturating_sub(1);
                 self.section_groups.send(
                     self.section_position(audit_section.audit_category),
                     AuditSectionGroupInput::SectionChanged(audit_section),

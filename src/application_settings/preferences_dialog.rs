@@ -325,8 +325,14 @@ fn confirm_live_change(
         let applied_values = new_values.clone();
         let refreshed_live_tuning = live_tuning.clone();
         relm4::spawn_local(async move {
-            toast_on_dialog(&applying_row, &gettext("Applying, and restarting ClamAV…"));
+            let applying_spinner = adw::Spinner::builder()
+                .tooltip_text(gettext("Applying, and restarting ClamAV"))
+                .build();
+            applying_row.add_suffix(&applying_spinner);
+            applying_row.set_sensitive(false);
             let change_outcome = relm4::spawn(apply_live_change(applied_key, applied_values)).await;
+            applying_row.remove(&applying_spinner);
+            applying_row.set_sensitive(true);
             toast_on_dialog(
                 &applying_row,
                 &change_outcome.map_or_else(
