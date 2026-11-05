@@ -20,6 +20,9 @@ use crate::{
     application_settings::preferences_dialog::{
         CLOSE_ACTION_KEY, application_settings, present_preferences_dialog,
     },
+    background_detections::background_detections_page::{
+        BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageOutput,
+    },
     clamav_components::component_status_page::ComponentStatusPage,
     desktop_integration::{
         device_mount_scans::watch_device_mounts,
@@ -40,7 +43,7 @@ use crate::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
     protection_status::protection_timeline_page::{
-        ProtectionTimelinePage, ProtectionTimelinePageOutput,
+        ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
     },
     scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
@@ -62,6 +65,7 @@ struct ApplicationPages {
     _component_page: Controller<ComponentStatusPage>,
     _logs_page: Controller<ActivityLogsPage>,
     _protection_page: Controller<ProtectionTimelinePage>,
+    _detections_page: Controller<BackgroundDetectionsPage>,
     _database_dialog: adw::Dialog,
 }
 
@@ -290,7 +294,10 @@ fn application_pages(
         .launch(quarantine_vault.clone())
         .detach();
     let quarantine_input_sender = quarantine_page.sender().clone();
+    let detection_quarantine_sender = quarantine_page.sender().clone();
     let activity_history = ActivityHistory::at_database_path(data_directory.join("history.db"));
+    let detections_history = activity_history.clone();
+    let detections_vault = quarantine_vault.clone();
     let logs_page = ActivityLogsPage::builder()
         .launch(activity_history.clone())
         .detach();
@@ -343,6 +350,28 @@ fn application_pages(
                 }
             },
         );
+    let protection_input_sender = protection_page.sender().clone();
+    let detections_page = BackgroundDetectionsPage::builder()
+        .launch(BackgroundDetectionsPageInit {
+            activity_history: detections_history,
+            quarantine_vault: detections_vault,
+        })
+        .connect_receiver(
+            move |_detections_sender, detections_output| match detections_output {
+                BackgroundDetectionsPageOutput::UnresolvedCountChanged(unresolved_detections) => {
+                    protection_input_sender.emit(
+                        ProtectionTimelinePageInput::UnresolvedDetectionsChanged(
+                            unresolved_detections,
+                        ),
+                    );
+                }
+                BackgroundDetectionsPageOutput::QuarantineEntriesChanged => {
+                    detection_quarantine_sender
+                        .emit(QuarantineEntriesPageInput::ReloadEntriesRequested);
+                }
+                BackgroundDetectionsPageOutput::DetectionsOpened(_opened_detections) => {}
+            },
+        );
 
     let navigation_pages = [
         NavigationPage {
@@ -353,32 +382,39 @@ fn application_pages(
             keyboard_accelerator: "<Control>1",
         },
         NavigationPage {
+            page_name: "detections",
+            page_title: gettext("Detections"),
+            page_icon: "dialog-warning-symbolic",
+            page_widget: detections_page.widget().upcast_ref(),
+            keyboard_accelerator: "<Control>2",
+        },
+        NavigationPage {
             page_name: SCAN_PAGE_NAME,
             page_title: gettext("Scan"),
             page_icon: "system-search-symbolic",
             page_widget: scan_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>2",
+            keyboard_accelerator: "<Control>3",
         },
         NavigationPage {
             page_name: "logs",
             page_title: gettext("Logs"),
             page_icon: "document-open-recent-symbolic",
             page_widget: logs_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>3",
+            keyboard_accelerator: "<Control>4",
         },
         NavigationPage {
             page_name: "components",
             page_title: gettext("Components"),
             page_icon: "emblem-system-symbolic",
             page_widget: component_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>4",
+            keyboard_accelerator: "<Control>5",
         },
         NavigationPage {
             page_name: "quarantine",
             page_title: gettext("Quarantine"),
             page_icon: "folder-symbolic",
             page_widget: quarantine_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>5",
+            keyboard_accelerator: "<Control>6",
         },
     ];
     let page_stack = navigation_stack(&navigation_pages);
@@ -450,6 +486,7 @@ fn application_pages(
             _component_page: component_page,
             _logs_page: logs_page,
             _protection_page: protection_page,
+            _detections_page: detections_page,
             _database_dialog: database_dialog,
         }),
     }

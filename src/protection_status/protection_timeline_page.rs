@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use gettextrs::gettext;
+use gettextrs::{gettext, ngettext};
 use relm4::{
     Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, gtk::gio,
     prelude::FactoryVecDeque,
@@ -42,11 +42,13 @@ pub struct ProtectionTimelinePage {
     distribution_family: DistributionFamily,
     evidence_refresh: EvidenceRefresh,
     coverage_summary: String,
+    unresolved_detections: usize,
 }
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageInput {
     RefreshRequested,
+    UnresolvedDetectionsChanged(usize),
     StepRequested(TimelineStepRequest),
     GuidanceRequested(AuditGuidanceRequest),
     DocumentationOpenFailed(String),
@@ -63,6 +65,19 @@ pub enum ProtectionTimelinePageCommand {
     SectionFinished(AuditSection),
     WatchedUnitChanged,
     UnitRunFinished(UnitStartOutcome),
+}
+
+pub fn headline_text(unresolved_detections: usize, coverage_summary: &str) -> String {
+    if unresolved_detections == 0 {
+        return coverage_summary.to_owned();
+    }
+    ngettext(
+        "{count} detection needs your decision. {coverage}",
+        "{count} detections need your decision. {coverage}",
+        u32::try_from(unresolved_detections).unwrap_or(u32::MAX),
+    )
+    .replace("{count}", &unresolved_detections.to_string())
+    .replace("{coverage}", coverage_summary)
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -133,7 +148,7 @@ impl ProtectionTimelinePage {
                 .for_each(|positioned_step| {
                     self.timeline_rows.send(
                         positioned_step.0,
-                        TimelineStepRowInput::StepChanged(positioned_step.1),
+                        TimelineStepRowInput::StepChanged(Box::new(positioned_step.1)),
                     );
                 });
         } else {
@@ -167,6 +182,11 @@ impl ProtectionTimelinePage {
                 });
             }
             TimelineStepAction::OpenSchedulePreferences => present_preferences_dialog(),
+            TimelineStepAction::QuarantineIncident
+            | TimelineStepAction::AskIncidentDeletion
+            | TimelineStepAction::DeleteIncidentFile
+            | TimelineStepAction::CancelIncidentDeletion
+            | TimelineStepAction::DismissIncident => {}
         }
     }
 
@@ -208,7 +228,7 @@ impl Component for ProtectionTimelinePage {
                 add = &adw::PreferencesGroup {
                     set_title: &gettext("Protection"),
                     #[watch]
-                    set_description: Some(&gtk::glib::markup_escape_text(&model.coverage_summary)),
+                    set_description: Some(&gtk::glib::markup_escape_text(&headline_text(model.unresolved_detections, &model.coverage_summary))),
                     #[wrap(Some)]
                     set_header_suffix = &gtk::Button {
                         set_icon_name: "view-refresh-symbolic",
@@ -247,6 +267,7 @@ impl Component for ProtectionTimelinePage {
             distribution_family: detect_distribution_family(),
             evidence_refresh: EvidenceRefresh::NothingRunning,
             coverage_summary: gettext("Checking…"),
+            unresolved_detections: 0,
         };
         let protection_preferences_page = &model.section_groups.widget().clone();
         let timeline_group = model.timeline_rows.widget().clone();
@@ -277,6 +298,9 @@ impl Component for ProtectionTimelinePage {
         root: &Self::Root,
     ) {
         match page_input {
+            ProtectionTimelinePageInput::UnresolvedDetectionsChanged(unresolved_detections) => {
+                self.unresolved_detections = unresolved_detections;
+            }
             ProtectionTimelinePageInput::RefreshRequested => {
                 self.start_evidence_refresh(&sender);
                 self.start_section_audit(&sender);
@@ -334,5 +358,19 @@ impl Component for ProtectionTimelinePage {
                 self.start_evidence_refresh(&sender);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod protection_timeline_page_tests {
+    use super::*;
+
+    #[test]
+    fn unresolved_detections_come_before_coverage() {
+        assert_eq!(headline_text(0, "Downloads blocked"), "Downloads blocked");
+        assert_eq!(
+            headline_text(2, "Downloads blocked"),
+            "2 detections need your decision. Downloads blocked"
+        );
     }
 }

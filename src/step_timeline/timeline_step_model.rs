@@ -39,6 +39,11 @@ pub enum TimelineStepAction {
     UpdateSignatures,
     RunScheduledScan { service_unit: &'static str },
     OpenSchedulePreferences,
+    QuarantineIncident,
+    AskIncidentDeletion,
+    DeleteIncidentFile,
+    CancelIncidentDeletion,
+    DismissIncident,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,6 +54,14 @@ pub enum StepActionSlot {
         chosen_action: TimelineStepAction,
         action_suggested: bool,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StepChoiceRow {
+    pub choice_description: String,
+    pub choice_label: String,
+    pub chosen_action: TimelineStepAction,
+    pub choice_destructive: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -65,6 +78,7 @@ pub struct TimelineStep {
     pub status_text: String,
     pub evidence_rows: Vec<StepEvidenceRow>,
     pub guidance_commands: Vec<String>,
+    pub choice_rows: Vec<StepChoiceRow>,
     pub action_slot: StepActionSlot,
 }
 

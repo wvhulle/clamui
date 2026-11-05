@@ -24,6 +24,22 @@ const HISTORY_SCHEMA: &str = "
         duration_millis INTEGER NOT NULL,
         activity_output TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS background_detections (
+        detection_id INTEGER PRIMARY KEY,
+        file_path BLOB NOT NULL,
+        signature_name TEXT NOT NULL,
+        found_on_access INTEGER NOT NULL,
+        found_by_schedule INTEGER NOT NULL,
+        first_seen_unix INTEGER NOT NULL,
+        last_seen_unix INTEGER NOT NULL,
+        sighting_count INTEGER NOT NULL,
+        resolution TEXT NOT NULL,
+        resolved_at_unix INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS detection_journal_position (
+        position_row INTEGER PRIMARY KEY,
+        journal_cursor TEXT NOT NULL
+    );
 ";
 const ENTRY_COLUMNS: &str = "entry_id, started_at_unix, activity_status, activity_targets, \
                              inspected_file_count, threat_count, duration_millis, activity_output";
@@ -149,12 +165,12 @@ impl ActivityHistory {
         Self { database_path }
     }
 
-    async fn lock_history(&self) -> Result<ProcessFileLock, ActivityHistoryFailure> {
+    pub(crate) async fn lock_history(&self) -> Result<ProcessFileLock, ActivityHistoryFailure> {
         let lock_path = self.database_path.with_extension("lock");
         Ok(spawn_blocking(move || wait_for_file_lock(&lock_path)).await??)
     }
 
-    async fn open_connection(&self) -> Result<Connection, ActivityHistoryFailure> {
+    pub(crate) async fn open_connection(&self) -> Result<Connection, ActivityHistoryFailure> {
         let pinned_path = self.database_path.clone();
         spawn_blocking(move || pin_database_file(&pinned_path)).await??;
         let database_text_path = self

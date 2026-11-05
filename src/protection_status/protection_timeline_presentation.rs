@@ -53,6 +53,7 @@ fn no_guidance_step(
         status_text,
         evidence_rows: Vec::new(),
         guidance_commands: Vec::new(),
+        choice_rows: Vec::new(),
         action_slot: StepActionSlot::NoAction,
     }
 }

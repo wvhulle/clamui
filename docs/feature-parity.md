@@ -5,7 +5,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 ## Shell
 
 - [x] Sidebar icons, using a `gtk::ListBox` with the `navigation-sidebar` style.
-- [x] Pages: Protection, which replaces Audit and Statistics and opens first, and Logs.
+- [x] Pages: Protection, which replaces Audit and Statistics and opens first, Detections and Logs.
 - [x] Empty states with `adw::StatusPage`.
 
 ## Scan

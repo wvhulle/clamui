@@ -7,7 +7,8 @@ use relm4::{
 };
 
 use crate::step_timeline::timeline_step_model::{
-    StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, TimelineStepRequest,
+    StepActionSlot, StepChoiceRow, StepEvidenceRow, StepNodeState, TimelineStep,
+    TimelineStepRequest,
 };
 
 pub struct TimelineStepRow {
@@ -18,7 +19,7 @@ pub struct TimelineStepRow {
 
 #[derive(Debug)]
 pub enum TimelineStepRowInput {
-    StepChanged(TimelineStep),
+    StepChanged(Box<TimelineStep>),
     ActionButtonClicked,
 }
 
@@ -82,6 +83,31 @@ fn guidance_command_row(
     command_row
 }
 
+fn choice_row(
+    step_choice: &StepChoiceRow,
+    sender: &FactorySender<TimelineStepRow>,
+) -> adw::ActionRow {
+    let choice_button = gtk::Button::builder()
+        .label(&step_choice.choice_label)
+        .valign(gtk::Align::Center)
+        .build();
+    if step_choice.choice_destructive {
+        choice_button.add_css_class("destructive-action");
+    }
+    let chosen_action = step_choice.chosen_action;
+    let row_sender = sender.clone();
+    choice_button.connect_clicked(move |_clicked_button| {
+        let _parent_gone = row_sender.output(TimelineStepRequest::ActionChosen(chosen_action));
+    });
+    let choice_row = adw::ActionRow::builder()
+        .use_markup(false)
+        .title(&step_choice.choice_description)
+        .title_lines(0)
+        .build();
+    choice_row.add_suffix(&choice_button);
+    choice_row
+}
+
 impl TimelineStepRow {
     fn replace_displayed_rows(
         &mut self,
@@ -97,7 +123,13 @@ impl TimelineStepRow {
             .guidance_commands
             .iter()
             .map(|guidance_command| guidance_command_row(guidance_command, sender));
-        self.displayed_rows = evidence_rows
+        let choice_rows = self
+            .timeline_step
+            .choice_rows
+            .iter()
+            .map(|step_choice| choice_row(step_choice, sender));
+        self.displayed_rows = choice_rows
+            .chain(evidence_rows)
             .chain(command_rows)
             .chain(std::iter::once(wrapped_text_row(
                 &self.timeline_step.mechanism_details,
@@ -222,7 +254,7 @@ impl FactoryComponent for TimelineStepRow {
                     widgets.expander_row.set_expanded(true);
                 }
                 self.previously_needed_attention = needs_attention;
-                self.timeline_step = timeline_step;
+                self.timeline_step = *timeline_step;
                 self.replace_displayed_rows(&widgets.expander_row, &sender);
             }
             TimelineStepRowInput::ActionButtonClicked => {

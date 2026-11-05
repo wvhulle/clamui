@@ -1,0 +1,640 @@
+use std::{
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+use futures::StreamExt;
+use gettextrs::gettext;
+use relm4::{
+    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+};
+use tokio::task::spawn_blocking;
+
+use crate::{
+    activity_history::activity_history_database::ActivityHistory,
+    background_detections::{
+        detected_file_state::{DetectedFileState, inspect_detected_file},
+        detection_history_store::DetectionResolution,
+        detection_journal_follower::{
+            DetectionJournalEvent, JournalStartPosition, detection_journal_events,
+        },
+        detection_journal_records::JournalDetectionRecord,
+        incident_timeline_presentation::{
+            DeletionPrompt, DisplayedDetection, detection_needs_attention, detection_summary_text,
+            displayed_file_name, displayed_file_path, incident_timeline,
+        },
+    },
+    clamav_components::distribution_install_guides::{
+        DistributionFamily, detect_distribution_family,
+    },
+    file_quarantine::{
+        quarantine_entries_page::describe_quarantine_failure,
+        quarantine_entry_database::QuarantineVault,
+    },
+    malware_scan::scanner_output_parser::sanitize_scanner_line,
+    step_timeline::{
+        timeline_step_model::{TimelineStepAction, TimelineStepRequest},
+        timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
+    },
+};
+
+const JOURNAL_BATCH_SIZE: usize = 256;
+const LIST_VIEW_NAME: &str = "list";
+const INCIDENT_VIEW_NAME: &str = "incident";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum JournalAccess {
+    FollowingJournal,
+    JournalUnreadable,
+    FollowingFailed { failure_text: String },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OpenedIncident {
+    NoIncidentOpen,
+    IncidentOpen { detection_id: i64 },
+}
+
+pub struct BackgroundDetectionsPage {
+    activity_history: ActivityHistory,
+    quarantine_vault: QuarantineVault,
+    distribution_family: DistributionFamily,
+    displayed_detections: Vec<DisplayedDetection>,
+    journal_access: JournalAccess,
+    opened_incident: OpenedIncident,
+    deletion_prompt: DeletionPrompt,
+    list_rows: Vec<adw::ActionRow>,
+    incident_rows: FactoryVecDeque<TimelineStepRow>,
+    list_group: adw::PreferencesGroup,
+    view_stack: gtk::Stack,
+}
+
+pub struct BackgroundDetectionsPageInit {
+    pub activity_history: ActivityHistory,
+    pub quarantine_vault: QuarantineVault,
+}
+
+#[derive(Debug)]
+pub enum BackgroundDetectionsPageInput {
+    ReloadRequested,
+    IncidentOpened(i64),
+    BackToListRequested,
+    StepRequested(TimelineStepRequest),
+}
+
+#[derive(Debug)]
+pub enum BackgroundDetectionsPageOutput {
+    UnresolvedCountChanged(usize),
+    QuarantineEntriesChanged,
+    DetectionsOpened(Vec<JournalDetectionRecord>),
+}
+
+#[derive(Debug)]
+pub enum BackgroundDetectionsPageCommand {
+    DetectionsRecorded(Vec<JournalDetectionRecord>),
+    JournalAccessChanged(JournalAccess),
+    DetectionsLoaded(Vec<DisplayedDetection>),
+    LoadingFailed(String),
+    IncidentActionFinished {
+        action_outcome: Result<IncidentActionEffect, String>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IncidentActionEffect {
+    QuarantineChanged,
+    OnlyHistoryChanged,
+}
+
+fn current_unix_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed_time| {
+            i64::try_from(elapsed_time.as_secs()).unwrap_or_default()
+        })
+}
+
+fn plain_text_toast(toast_text: &str) -> adw::Toast {
+    adw::Toast::builder()
+        .title(toast_text)
+        .use_markup(false)
+        .build()
+}
+
+fn split_journal_batch(
+    journal_events: Vec<DetectionJournalEvent>,
+) -> (Vec<JournalDetectionRecord>, String, Vec<JournalAccess>) {
+    journal_events.into_iter().fold(
+        (Vec::new(), String::new(), Vec::new()),
+        |(mut detection_records, mut last_cursor, mut access_changes), journal_event| {
+            match journal_event {
+                DetectionJournalEvent::DetectionObserved {
+                    detection_record,
+                    journal_cursor,
+                } => {
+                    detection_records.push(detection_record);
+                    last_cursor = journal_cursor;
+                }
+                DetectionJournalEvent::JournalUnreadable => {
+                    access_changes.push(JournalAccess::JournalUnreadable);
+                }
+                DetectionJournalEvent::FollowingStopped { failure_text } => {
+                    access_changes.push(JournalAccess::FollowingFailed { failure_text });
+                }
+            }
+            (detection_records, last_cursor, access_changes)
+        },
+    )
+}
+
+async fn follow_detection_journal(
+    activity_history: ActivityHistory,
+    command_sender: relm4::Sender<BackgroundDetectionsPageCommand>,
+) {
+    let start_position = match activity_history.saved_journal_cursor().await {
+        Ok(Some(journal_cursor)) => JournalStartPosition::AfterCursor { journal_cursor },
+        Ok(None) | Err(_) => JournalStartPosition::FromOldestEntry,
+    };
+    let mut event_batches =
+        Box::pin(detection_journal_events(start_position).ready_chunks(JOURNAL_BATCH_SIZE));
+    while let Some(journal_events) = event_batches.next().await {
+        let (detection_records, last_cursor, access_changes) = split_journal_batch(journal_events);
+        access_changes.into_iter().for_each(|access_change| {
+            command_sender.emit(BackgroundDetectionsPageCommand::JournalAccessChanged(
+                access_change,
+            ));
+        });
+        if detection_records.is_empty() {
+            continue;
+        }
+        match activity_history
+            .record_detection_batch(&detection_records, &last_cursor)
+            .await
+        {
+            Ok(newly_opened) => {
+                command_sender.emit(BackgroundDetectionsPageCommand::DetectionsRecorded(
+                    newly_opened,
+                ));
+            }
+            Err(recording_failure) => {
+                command_sender.emit(BackgroundDetectionsPageCommand::LoadingFailed(
+                    recording_failure.to_string(),
+                ));
+            }
+        }
+    }
+}
+
+async fn load_displayed_detections(
+    activity_history: ActivityHistory,
+) -> BackgroundDetectionsPageCommand {
+    let stored_detections = match activity_history.list_detections().await {
+        Ok(stored_detections) => stored_detections,
+        Err(listing_failure) => {
+            return BackgroundDetectionsPageCommand::LoadingFailed(listing_failure.to_string());
+        }
+    };
+    let displayed_detections = spawn_blocking(move || {
+        stored_detections
+            .into_iter()
+            .map(|stored_detection| DisplayedDetection {
+                file_state: inspect_detected_file(&stored_detection.file_path),
+                stored_detection,
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .unwrap_or_default();
+    BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections)
+}
+
+async fn delete_detected_file(file_path: PathBuf) -> Result<(), String> {
+    spawn_blocking(move || match inspect_detected_file(&file_path) {
+        DetectedFileState::NoLongerThere => Ok(()),
+        DetectedFileState::OwnedByOtherUser | DetectedFileState::StateUnknown => {
+            Err(gettext("This file can't be deleted from here"))
+        }
+        DetectedFileState::BlockedInPlace | DetectedFileState::ReadableInPlace => {
+            fs::remove_file(&file_path).map_err(|removal_failure| removal_failure.to_string())
+        }
+    })
+    .await
+    .map_err(|join_failure| join_failure.to_string())?
+}
+
+impl BackgroundDetectionsPage {
+    fn start_reload(&self, sender: &ComponentSender<Self>) {
+        let activity_history = self.activity_history.clone();
+        sender.oneshot_command(load_displayed_detections(activity_history));
+    }
+
+    fn opened_detection(&self) -> Option<&DisplayedDetection> {
+        let OpenedIncident::IncidentOpen { detection_id } = self.opened_incident else {
+            return None;
+        };
+        self.displayed_detections
+            .iter()
+            .find(|displayed_detection| {
+                displayed_detection.stored_detection.detection_id == detection_id
+            })
+    }
+
+    fn list_description(&self) -> String {
+        match &self.journal_access {
+            JournalAccess::JournalUnreadable => gettext(
+                "ClamUI can't read the system journal, so new background detections won't appear \
+                 here. This does not mean nothing was found. Add your user to the systemd-journal \
+                 group.",
+            ),
+            JournalAccess::FollowingFailed { failure_text } => {
+                gettext("Reading the system journal stopped: {error}")
+                    .replace("{error}", &sanitize_scanner_line(failure_text))
+            }
+            JournalAccess::FollowingJournal if self.displayed_detections.is_empty() => {
+                gettext("Nothing has been detected in the background.")
+            }
+            JournalAccess::FollowingJournal => {
+                gettext("What on-access scanning and scheduled scans have found.")
+            }
+        }
+    }
+
+    fn rebuild_list_rows(&mut self, sender: &ComponentSender<Self>) {
+        self.list_rows
+            .drain(..)
+            .for_each(|list_row| self.list_group.remove(&list_row));
+        let mut sorted_detections = self.displayed_detections.iter().collect::<Vec<_>>();
+        sorted_detections
+            .sort_by_key(|displayed_detection| !detection_needs_attention(displayed_detection));
+        self.list_rows = sorted_detections
+            .into_iter()
+            .map(|displayed_detection| {
+                let detection_id = displayed_detection.stored_detection.detection_id;
+                let list_row = adw::ActionRow::builder()
+                    .use_markup(false)
+                    .title(displayed_file_name(&displayed_detection.stored_detection))
+                    .subtitle(detection_summary_text(displayed_detection))
+                    .subtitle_lines(0)
+                    .tooltip_text(displayed_file_path(&displayed_detection.stored_detection))
+                    .activatable(true)
+                    .build();
+                let needs_attention = detection_needs_attention(displayed_detection);
+                list_row.add_prefix(
+                    &gtk::Image::builder()
+                        .icon_name(if needs_attention {
+                            "dialog-warning-symbolic"
+                        } else {
+                            "object-select-symbolic"
+                        })
+                        .css_classes([if needs_attention {
+                            "warning"
+                        } else {
+                            "success"
+                        }])
+                        .build(),
+                );
+                list_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+                let row_sender = sender.clone();
+                list_row.connect_activated(move |_activated_row| {
+                    row_sender.input(BackgroundDetectionsPageInput::IncidentOpened(detection_id));
+                });
+                self.list_group.add(&list_row);
+                list_row
+            })
+            .collect();
+    }
+
+    fn show_opened_incident(&mut self) {
+        let Some(displayed_detection) = self.opened_detection().cloned() else {
+            self.opened_incident = OpenedIncident::NoIncidentOpen;
+            self.incident_rows.guard().clear();
+            self.view_stack.set_visible_child_name(LIST_VIEW_NAME);
+            return;
+        };
+        let incident_steps = incident_timeline(
+            &displayed_detection,
+            self.deletion_prompt,
+            self.distribution_family,
+        );
+        if self.incident_rows.len() == incident_steps.len() {
+            incident_steps
+                .into_iter()
+                .enumerate()
+                .for_each(|positioned_step| {
+                    self.incident_rows.send(
+                        positioned_step.0,
+                        TimelineStepRowInput::StepChanged(Box::new(positioned_step.1)),
+                    );
+                });
+        } else {
+            let mut row_guard = self.incident_rows.guard();
+            row_guard.clear();
+            incident_steps.into_iter().for_each(|timeline_step| {
+                row_guard.push_back(timeline_step);
+            });
+        }
+        self.view_stack.set_visible_child_name(INCIDENT_VIEW_NAME);
+    }
+
+    fn resolve_in_background(
+        &self,
+        sender: &ComponentSender<Self>,
+        displayed_detection: &DisplayedDetection,
+        chosen_action: TimelineStepAction,
+    ) {
+        let activity_history = self.activity_history.clone();
+        let quarantine_vault = self.quarantine_vault.clone();
+        let stored_detection = displayed_detection.stored_detection.clone();
+        sender.oneshot_command(async move {
+            let action_outcome = async {
+                let (resolution, action_effect) = match chosen_action {
+                    TimelineStepAction::QuarantineIncident => {
+                        quarantine_vault
+                            .move_file_into_quarantine(
+                                &stored_detection.file_path,
+                                &stored_detection.signature_name,
+                            )
+                            .await
+                            .map_err(|move_failure| describe_quarantine_failure(&move_failure))?;
+                        (
+                            DetectionResolution::MovedToQuarantine,
+                            IncidentActionEffect::QuarantineChanged,
+                        )
+                    }
+                    TimelineStepAction::DeleteIncidentFile => {
+                        delete_detected_file(stored_detection.file_path.clone()).await?;
+                        (
+                            DetectionResolution::DeletedByUser,
+                            IncidentActionEffect::OnlyHistoryChanged,
+                        )
+                    }
+                    _dismissed => (
+                        DetectionResolution::DismissedByUser,
+                        IncidentActionEffect::OnlyHistoryChanged,
+                    ),
+                };
+                activity_history
+                    .resolve_detection(
+                        stored_detection.detection_id,
+                        resolution,
+                        current_unix_seconds(),
+                    )
+                    .await
+                    .map_err(|resolving_failure| resolving_failure.to_string())?;
+                Ok(action_effect)
+            }
+            .await;
+            BackgroundDetectionsPageCommand::IncidentActionFinished { action_outcome }
+        });
+    }
+
+    fn run_incident_action(
+        &mut self,
+        chosen_action: TimelineStepAction,
+        sender: &ComponentSender<Self>,
+    ) {
+        match chosen_action {
+            TimelineStepAction::AskIncidentDeletion => {
+                self.deletion_prompt = DeletionPrompt::AwaitingAnswer;
+                self.show_opened_incident();
+            }
+            TimelineStepAction::CancelIncidentDeletion => {
+                self.deletion_prompt = DeletionPrompt::NotAsked;
+                self.show_opened_incident();
+            }
+            TimelineStepAction::QuarantineIncident
+            | TimelineStepAction::DeleteIncidentFile
+            | TimelineStepAction::DismissIncident => {
+                self.deletion_prompt = DeletionPrompt::NotAsked;
+                if let Some(displayed_detection) = self.opened_detection().cloned() {
+                    self.resolve_in_background(sender, &displayed_detection, chosen_action);
+                }
+            }
+            TimelineStepAction::UpdateSignatures
+            | TimelineStepAction::RunScheduledScan { .. }
+            | TimelineStepAction::OpenSchedulePreferences => {}
+        }
+    }
+}
+
+#[relm4::component(pub)]
+impl Component for BackgroundDetectionsPage {
+    type Init = BackgroundDetectionsPageInit;
+    type Input = BackgroundDetectionsPageInput;
+    type Output = BackgroundDetectionsPageOutput;
+    type CommandOutput = BackgroundDetectionsPageCommand;
+
+    view! {
+        adw::ToastOverlay {
+            #[wrap(Some)]
+            #[local_ref]
+            set_child = stack_widget -> gtk::Stack {
+                set_transition_type: gtk::StackTransitionType::Crossfade,
+
+                add_named[Some(LIST_VIEW_NAME)] = &adw::PreferencesPage {
+                    set_title: &gettext("Detections"),
+                    add: list_group_widget,
+                },
+
+                add_named[Some(INCIDENT_VIEW_NAME)] = &adw::PreferencesPage {
+                    set_title: &gettext("Detection"),
+
+                    add = &adw::PreferencesGroup {
+                        #[watch]
+                        set_title: &gtk::glib::markup_escape_text(&model.opened_detection().map_or_else(String::new, |displayed_detection| displayed_file_name(&displayed_detection.stored_detection))),
+                        #[wrap(Some)]
+                        set_header_suffix = &gtk::Button {
+                            set_icon_name: "go-previous-symbolic",
+                            set_tooltip_text: Some(&gettext("Back to detections")),
+                            set_valign: gtk::Align::Center,
+                            add_css_class: "flat",
+                            connect_clicked => BackgroundDetectionsPageInput::BackToListRequested,
+                        },
+                    },
+
+                    add: incident_group_widget,
+                },
+            },
+        }
+    }
+
+    fn init(
+        page_init: Self::Init,
+        root: Self::Root,
+        sender: ComponentSender<Self>,
+    ) -> ComponentParts<Self> {
+        let incident_rows = FactoryVecDeque::builder()
+            .launch(adw::PreferencesGroup::default())
+            .forward(
+                sender.input_sender(),
+                BackgroundDetectionsPageInput::StepRequested,
+            );
+        let list_group = adw::PreferencesGroup::builder()
+            .title(gettext("Detections"))
+            .build();
+        let view_stack = gtk::Stack::new();
+        let model = Self {
+            activity_history: page_init.activity_history.clone(),
+            quarantine_vault: page_init.quarantine_vault,
+            distribution_family: detect_distribution_family(),
+            displayed_detections: Vec::new(),
+            journal_access: JournalAccess::FollowingJournal,
+            opened_incident: OpenedIncident::NoIncidentOpen,
+            deletion_prompt: DeletionPrompt::NotAsked,
+            list_rows: Vec::new(),
+            incident_rows,
+            list_group: list_group.clone(),
+            view_stack: view_stack.clone(),
+        };
+        let stack_widget = &view_stack;
+        let list_group_widget = &list_group;
+        let incident_group = model.incident_rows.widget().clone();
+        let incident_group_widget = &incident_group;
+        let widgets = view_output!();
+        model
+            .list_group
+            .set_description(Some(&gtk::glib::markup_escape_text(
+                &model.list_description(),
+            )));
+        let followed_history = page_init.activity_history;
+        sender.command(|command_sender, shutdown_receiver| {
+            shutdown_receiver
+                .register(follow_detection_journal(followed_history, command_sender))
+                .drop_on_shutdown()
+        });
+        let visibility_sender = sender.clone();
+        root.connect_map(move |_mapped_page| {
+            visibility_sender.input(BackgroundDetectionsPageInput::ReloadRequested);
+        });
+        model.start_reload(&sender);
+        ComponentParts { model, widgets }
+    }
+
+    fn update(
+        &mut self,
+        page_input: BackgroundDetectionsPageInput,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match page_input {
+            BackgroundDetectionsPageInput::ReloadRequested => self.start_reload(&sender),
+            BackgroundDetectionsPageInput::IncidentOpened(detection_id) => {
+                self.opened_incident = OpenedIncident::IncidentOpen { detection_id };
+                self.deletion_prompt = DeletionPrompt::NotAsked;
+                self.show_opened_incident();
+            }
+            BackgroundDetectionsPageInput::BackToListRequested => {
+                self.opened_incident = OpenedIncident::NoIncidentOpen;
+                self.deletion_prompt = DeletionPrompt::NotAsked;
+                self.incident_rows.guard().clear();
+                self.view_stack.set_visible_child_name(LIST_VIEW_NAME);
+            }
+            BackgroundDetectionsPageInput::StepRequested(TimelineStepRequest::CopyRequested(
+                copied_text,
+            )) => {
+                root.clipboard().set_text(&copied_text);
+                root.add_toast(adw::Toast::new(&gettext("Copied to clipboard")));
+            }
+            BackgroundDetectionsPageInput::StepRequested(TimelineStepRequest::ActionChosen(
+                chosen_action,
+            )) => self.run_incident_action(chosen_action, &sender),
+        }
+    }
+
+    fn update_cmd(
+        &mut self,
+        page_command: BackgroundDetectionsPageCommand,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match page_command {
+            BackgroundDetectionsPageCommand::DetectionsRecorded(newly_opened) => {
+                if !newly_opened.is_empty() {
+                    let _shell_closed = sender.output(
+                        BackgroundDetectionsPageOutput::DetectionsOpened(newly_opened),
+                    );
+                }
+                self.start_reload(&sender);
+            }
+            BackgroundDetectionsPageCommand::JournalAccessChanged(journal_access) => {
+                self.journal_access = journal_access;
+                self.list_group
+                    .set_description(Some(&gtk::glib::markup_escape_text(
+                        &self.list_description(),
+                    )));
+            }
+            BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections) => {
+                self.displayed_detections = displayed_detections;
+                self.list_group
+                    .set_description(Some(&gtk::glib::markup_escape_text(
+                        &self.list_description(),
+                    )));
+                self.rebuild_list_rows(&sender);
+                if self.opened_incident != OpenedIncident::NoIncidentOpen {
+                    self.show_opened_incident();
+                }
+                let _shell_closed =
+                    sender.output(BackgroundDetectionsPageOutput::UnresolvedCountChanged(
+                        self.displayed_detections
+                            .iter()
+                            .filter(|displayed_detection| {
+                                detection_needs_attention(displayed_detection)
+                            })
+                            .count(),
+                    ));
+            }
+            BackgroundDetectionsPageCommand::LoadingFailed(failure_text) => {
+                root.add_toast(plain_text_toast(
+                    &gettext("Detections could not be read: {error}")
+                        .replace("{error}", &sanitize_scanner_line(&failure_text)),
+                ));
+            }
+            BackgroundDetectionsPageCommand::IncidentActionFinished { action_outcome } => {
+                match action_outcome {
+                    Ok(IncidentActionEffect::QuarantineChanged) => {
+                        let _shell_closed =
+                            sender.output(BackgroundDetectionsPageOutput::QuarantineEntriesChanged);
+                    }
+                    Ok(IncidentActionEffect::OnlyHistoryChanged) => {}
+                    Err(failure_text) => {
+                        root.add_toast(plain_text_toast(&sanitize_scanner_line(&failure_text)));
+                    }
+                }
+                self.start_reload(&sender);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod background_detections_page_tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::background_detections::detection_journal_records::DetectionSource;
+
+    #[test]
+    fn a_journal_batch_keeps_the_last_cursor_and_reports_access_problems() {
+        let detection_record = JournalDetectionRecord {
+            observed_at_unix: 1,
+            detection_source: DetectionSource::OnAccessScanner,
+            file_path: PathBuf::from("/tmp/file"),
+            signature_name: "Win.Test-1".to_owned(),
+        };
+        let (detection_records, last_cursor, access_changes) = split_journal_batch(vec![
+            DetectionJournalEvent::DetectionObserved {
+                detection_record: detection_record.clone(),
+                journal_cursor: "cursor-a".to_owned(),
+            },
+            DetectionJournalEvent::DetectionObserved {
+                detection_record,
+                journal_cursor: "cursor-b".to_owned(),
+            },
+            DetectionJournalEvent::JournalUnreadable,
+        ]);
+        assert_eq!(detection_records.len(), 2);
+        assert_eq!(last_cursor, "cursor-b");
+        assert_eq!(access_changes, vec![JournalAccess::JournalUnreadable]);
+    }
+}

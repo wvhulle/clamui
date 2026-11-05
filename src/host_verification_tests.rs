@@ -9,7 +9,17 @@ use std::{
 use futures::{StreamExt, future::ready, stream};
 
 use crate::{
+    activity_history::activity_history_database::ActivityHistory,
     application_settings::scan_exclusion_rules::ScanExclusions,
+    background_detections::{
+        detected_file_state::{DetectedFileState, inspect_detected_file},
+        detection_history_store::DetectionResolution,
+        detection_journal_follower::{
+            DetectionJournalEvent, JournalStartPosition, detection_journal_events,
+        },
+        incident_timeline_presentation::{DeletionPrompt, DisplayedDetection, incident_timeline},
+    },
+    clamav_components::distribution_install_guides::DistributionFamily,
     file_quarantine::quarantine_entry_database::QuarantineVault,
     malware_scan::{
         eicar_test_file::eicar_test_bytes,
@@ -299,5 +309,112 @@ async fn host_status_probes_read_the_real_system() {
     println!(
         "distribution: {:?}",
         crate::clamav_components::distribution_install_guides::detect_distribution_family()
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs a real ClamAV host with OnAccessPrevention on ~/Downloads"]
+async fn host_background_detection_flows_from_journal_to_quarantine() {
+    let home_directory = PathBuf::from(std::env::var_os("HOME").expect("home directory"));
+    let eicar_path = home_directory
+        .join("Downloads")
+        .join(format!("clamui-detection-{}.txt", std::process::id()));
+    let verification_root =
+        tempfile::tempdir_in(&home_directory).expect("verification root on the same filesystem");
+    let activity_history =
+        ActivityHistory::at_database_path(verification_root.path().join("history.db"));
+
+    let mut journal_events = Box::pin(detection_journal_events(
+        JournalStartPosition::FromOldestEntry,
+    ));
+    while tokio::time::timeout(Duration::from_secs(3), journal_events.next())
+        .await
+        .is_ok()
+    {}
+
+    fs::write(&eicar_path, eicar_test_bytes()).expect("write into Downloads");
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let _refused_read = fs::read(&eicar_path);
+    assert_eq!(
+        inspect_detected_file(&eicar_path),
+        DetectedFileState::BlockedInPlace,
+        "on-access prevention must be blocking this file"
+    );
+
+    let mut matching_records = Vec::new();
+    let mut last_cursor = String::new();
+    while let Ok(Some(journal_event)) =
+        tokio::time::timeout(Duration::from_secs(5), journal_events.next()).await
+    {
+        if let DetectionJournalEvent::DetectionObserved {
+            detection_record,
+            journal_cursor,
+        } = journal_event
+            && detection_record.file_path == eicar_path
+        {
+            matching_records.push(detection_record);
+            last_cursor = journal_cursor;
+        }
+    }
+    println!(
+        "live journal lines for the file: {}",
+        matching_records.len()
+    );
+    assert!(
+        !matching_records.is_empty(),
+        "the follower must wake up on a new journal entry"
+    );
+
+    let newly_opened = activity_history
+        .record_detection_batch(&matching_records, &last_cursor)
+        .await
+        .expect("recorded");
+    assert_eq!(newly_opened.len(), 1, "one notification for the file");
+    let stored_detections = activity_history.list_detections().await.expect("listed");
+    assert_eq!(stored_detections.len(), 1, "one row for the file");
+    let stored_detection = stored_detections[0].clone();
+    assert_eq!(stored_detection.signature_name, "Eicar-Test-Signature");
+    assert!(stored_detection.found_on_access);
+    assert_eq!(
+        stored_detection.sighting_count,
+        i64::try_from(matching_records.len()).expect("line count")
+    );
+
+    let incident_steps = incident_timeline(
+        &DisplayedDetection {
+            stored_detection: stored_detection.clone(),
+            file_state: inspect_detected_file(&eicar_path),
+        },
+        DeletionPrompt::NotAsked,
+        DistributionFamily::NixosFamily,
+    );
+    incident_steps.iter().for_each(|incident_step| {
+        println!(
+            "{:?} | {} | {}",
+            incident_step.node_state, incident_step.step_title, incident_step.status_text
+        );
+    });
+
+    let quarantine_vault = open_host_vault(&verification_root.path().join("vault")).await;
+    let moved_record = quarantine_vault
+        .move_file_into_quarantine(&eicar_path, &stored_detection.signature_name)
+        .await
+        .expect("blocked file quarantined");
+    assert_eq!(moved_record.threat_name, "Eicar-Test-Signature");
+    assert_eq!(
+        inspect_detected_file(&eicar_path),
+        DetectedFileState::NoLongerThere
+    );
+    activity_history
+        .resolve_detection(
+            stored_detection.detection_id,
+            DetectionResolution::MovedToQuarantine,
+            stored_detection.last_seen_unix + 1,
+        )
+        .await
+        .expect("resolved");
+    assert_eq!(
+        activity_history.list_detections().await.expect("listed")[0].resolution,
+        DetectionResolution::MovedToQuarantine
     );
 }

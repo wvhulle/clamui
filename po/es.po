@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 13:06+0100\n"
+"POT-Creation-Date: 2026-11-05 13:18+0100\n"
 "PO-Revision-Date: 2026-04-27 19:42-0400\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -153,7 +153,8 @@ msgstr ""
 "no se puede deshacer."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:480
+#: src/application_window_shell.rs:517
+#: src/background_detections/incident_timeline_presentation.rs:238
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:743
@@ -207,7 +208,7 @@ msgstr "Detalles del registro"
 #: src/activity_history/activity_logs_page.rs:326
 #: src/activity_history/activity_logs_page.rs:388
 #: src/clamav_components/clamav_component_row.rs:126
-#: src/step_timeline/timeline_step_row.rs:69
+#: src/step_timeline/timeline_step_row.rs:70
 #: src/system_audit/audit_check_row.rs:45
 msgid "Copy"
 msgstr "Copiar"
@@ -229,7 +230,7 @@ msgstr ""
 #: src/activity_history/activity_logs_page.rs:425
 #: src/clamav_components/clamav_component_row.rs:73
 #: src/malware_scan/scan_progress_page.rs:318
-#: src/protection_status/protection_timeline_page.rs:249
+#: src/protection_status/protection_timeline_page.rs:269
 #: src/scheduled_scans/schedule_preferences_page.rs:220
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
@@ -359,7 +360,7 @@ msgid "Quit completely"
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:286
-#: src/application_window_shell.rs:482
+#: src/application_window_shell.rs:519
 msgid "Minimize to tray"
 msgstr "Minimizar a la bandeja del sistema"
 
@@ -463,7 +464,7 @@ msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude o *.tmp"
 
 #: src/application_settings/preferences_dialog.rs:518
-#: src/application_window_shell.rs:173
+#: src/application_window_shell.rs:177
 msgid "Preferences"
 msgstr "Preferencias"
 
@@ -492,70 +493,319 @@ msgstr "En acceso"
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_window_shell.rs:82
+#: src/application_window_shell.rs:86
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:159
+#: src/application_window_shell.rs:163
 msgid "Update signatures"
 msgstr ""
 
-#: src/application_window_shell.rs:174
+#: src/application_window_shell.rs:178
 msgid "About ClamUI"
 msgstr "Acerca de ClamUI"
 
-#: src/application_window_shell.rs:175 src/application_window_shell.rs:481
+#: src/application_window_shell.rs:179 src/application_window_shell.rs:518
 #: src/desktop_integration/system_tray_menu.rs:49
 msgid "Quit"
 msgstr "Salir"
 
-#: src/application_window_shell.rs:178
+#: src/application_window_shell.rs:182
 msgid "Menu"
 msgstr "Menú"
 
-#: src/application_window_shell.rs:197
+#: src/application_window_shell.rs:201
 msgid "translator-credits"
 msgstr "translator-credits"
 
-#: src/application_window_shell.rs:256
+#: src/application_window_shell.rs:260
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:350
-#: src/protection_status/protection_timeline_page.rs:206
-#: src/protection_status/protection_timeline_page.rs:209
+#: src/application_window_shell.rs:379
+#: src/protection_status/protection_timeline_page.rs:226
+#: src/protection_status/protection_timeline_page.rs:229
 msgid "Protection"
 msgstr ""
 
-#: src/application_window_shell.rs:357
+#: src/application_window_shell.rs:386
+#: src/background_detections/background_detections_page.rs:436
+#: src/background_detections/background_detections_page.rs:474
+msgid "Detections"
+msgstr ""
+
+#: src/application_window_shell.rs:393
 #: src/malware_scan/scan_progress_page.rs:356
 msgid "Scan"
 msgstr "Escanear"
 
-#: src/application_window_shell.rs:364
+#: src/application_window_shell.rs:400
 msgid "Logs"
 msgstr "Registros"
 
-#: src/application_window_shell.rs:371
+#: src/application_window_shell.rs:407
 msgid "Components"
 msgstr "Componentes"
 
-#: src/application_window_shell.rs:378
+#: src/application_window_shell.rs:414
+#: src/background_detections/incident_timeline_presentation.rs:246
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Cuarentena"
 
-#: src/application_window_shell.rs:475
+#: src/application_window_shell.rs:512
 msgid "Close ClamUI?"
 msgstr "¿Cerrar ClamUI?"
 
-#: src/application_window_shell.rs:477
+#: src/application_window_shell.rs:514
 msgid "Keep ClamUI running in the system tray, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:566
+#: src/application_window_shell.rs:603
 msgid "The quarantine database could not be locked"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:216
+msgid "This file can't be deleted from here"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:246
+msgid ""
+"ClamUI can't read the system journal, so new background detections won't "
+"appear here. This does not mean nothing was found. Add your user to the "
+"systemd-journal group."
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:251
+#, rust-format
+msgid "Reading the system journal stopped: {error}"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:255
+msgid "Nothing has been detected in the background."
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:258
+msgid "What on-access scanning and scheduled scans have found."
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:441
+msgid "Detection"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:449
+msgid "Back to detections"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:537
+msgid "Copied to clipboard"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:589
+#, rust-format
+msgid "Detections could not be read: {error}"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:57
+msgid "Restored from quarantine"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:59
+msgid "Moved to quarantine"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:60
+msgid "Deleted"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:61
+msgid "Kept by you"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:63
+msgid "Blocked, needs a decision"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:64
+msgid "Not blocked, needs a decision"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:65
+msgid "Belongs to another user"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:66
+msgid "No longer there"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:67
+msgid "File could not be checked"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:77
+#, rust-format
+msgid "{signature} (test file) · {state}"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:81
+#, rust-format
+msgid "{signature} · {state}"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:117
+msgid "On-access scanning and the scheduled scan"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:118
+msgid "On-access scanning"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:119
+msgid "The scheduled scan"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:127
+msgid "File"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:128
+msgid "Found by"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:130
+msgid "Last seen"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:134
+msgid "Times seen"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:139
+msgid "Detected"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:142
+msgid ""
+"This signature matches the harmless EICAR test pattern, which exists to "
+"check that detection works."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:147
+msgid ""
+"ClamAV matched this file against a signature. A match is strong evidence, "
+"but false positives happen, especially with packed or administrative tools."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:152
+#, rust-format
+msgid "{signature}, first seen {time}"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:167
+msgid "Opening this file is refused, which is why it won't open"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:171
+msgid "The file is no longer there"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:178
+msgid "Not blocked: the scheduled scan found it, and it can still be opened"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:183
+msgid "Not blocked right now: it can still be opened"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:187
+msgid "Could not check whether the file is blocked"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:191
+msgid "Blocked"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:193
+msgid ""
+"With on-access prevention, the kernel refuses to open a detected file in a "
+"watched folder. The file stays where it is until you decide what to do with "
+"it."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:222
+msgid "Stop asking about this file"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:223
+#: src/background_detections/incident_timeline_presentation.rs:258
+msgid "Keep"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:231
+msgid "Delete this file permanently? This can't be undone."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:232
+msgid "Delete Permanently"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:237
+msgid "Go back without deleting"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:245
+msgid "Move it somewhere safe. You can restore it later."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:251
+msgid "Remove it for good"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:252
+msgid "Delete…"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:257
+msgid "You know this file is fine"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:272
+msgid "Your decision"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:274
+msgid ""
+"If it's unfamiliar, quarantine it. Keeping a file only stops ClamUI asking: "
+"on-access scanning keeps blocking it until the path is excluded in the "
+"ClamAV configuration, as shown here."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:287
+msgid "This file belongs to another user, so ClamUI can't move or delete it"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:289
+msgid "Choose what happens to this file"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:308
+msgid "Resolved"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:310
+msgid ""
+"A resolved detection opens again if ClamAV finds the same file again later, "
+"for example after you download it a second time."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:318
+msgid "Waiting for your decision"
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:324
+#, rust-format
+msgid "{state}, {time}"
 msgstr ""
 
 #: src/clamav_components/clamav_component_row.rs:42
@@ -636,7 +886,7 @@ msgid "Refresh status"
 msgstr "Actualizar estado"
 
 #: src/clamav_components/component_status_page.rs:128
-#: src/protection_status/protection_timeline_page.rs:294
+#: src/protection_status/protection_timeline_page.rs:318
 msgid "Command copied to clipboard"
 msgstr "Comando copiado al portapapeles"
 
@@ -768,7 +1018,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Restaurar"
 
-#: src/main.rs:71
+#: src/main.rs:72
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -1105,264 +1355,271 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:77
+#: src/protection_status/protection_timeline_page.rs:75
+#, rust-format
+msgid "{count} detection needs your decision. {coverage}"
+msgid_plural "{count} detections need your decision. {coverage}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/protection_status/protection_timeline_page.rs:92
 msgid "The scan finished"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:79
+#: src/protection_status/protection_timeline_page.rs:94
 #, rust-format
 msgid "The scan did not finish cleanly: {result}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:83
+#: src/protection_status/protection_timeline_page.rs:98
 msgid "Starting the scan needs administrator authorization"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:86
+#: src/protection_status/protection_timeline_page.rs:101
 #, rust-format
 msgid "The scan could not be started: {error}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:162
+#: src/protection_status/protection_timeline_page.rs:177
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:215
+#: src/protection_status/protection_timeline_page.rs:235
 msgid "Check again"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:301
+#: src/protection_status/protection_timeline_page.rs:325
 #, rust-format
 msgid "Could not open documentation: {error}"
 msgstr "No se pudo abrir la documentación: {error}"
 
-#: src/protection_status/protection_timeline_presentation.rs:74
+#: src/protection_status/protection_timeline_presentation.rs:75
 msgid "ClamAV installed"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:76
+#: src/protection_status/protection_timeline_presentation.rs:77
 msgid ""
 "ClamAV is the engine that recognizes malware. ClamUI uses the copy installed "
 "on this computer and never bundles its own."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:102
+#: src/protection_status/protection_timeline_presentation.rs:103
 msgid "ClamAV was not found on this computer"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:128
+#: src/protection_status/protection_timeline_presentation.rs:129
 #, rust-format
 msgid "Definitions built {date}, {days} days ago"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:132
+#: src/protection_status/protection_timeline_presentation.rs:133
 msgid "Definitions exist, but their age could not be determined"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:134
+#: src/protection_status/protection_timeline_presentation.rs:135
 msgid "No virus definitions were found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:144
+#: src/protection_status/protection_timeline_presentation.rs:145
 msgid "Its last update failed"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:147
+#: src/protection_status/protection_timeline_presentation.rs:148
 #, rust-format
 msgid "Last updated {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:151
+#: src/protection_status/protection_timeline_presentation.rs:152
 msgid "No completed update recorded yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:189
+#: src/protection_status/protection_timeline_presentation.rs:190
 #, rust-format
 msgid "Updated {hours} hours ago"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:201
+#: src/protection_status/protection_timeline_presentation.rs:202
 msgid "Update Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:206
+#: src/protection_status/protection_timeline_presentation.rs:207
 msgid "Signatures current"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:208
+#: src/protection_status/protection_timeline_presentation.rs:209
 msgid ""
 "Signatures describe known malware, and new ones are published constantly. "
 "Old signatures miss recent threats even when everything else is running."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:221
+#: src/protection_status/protection_timeline_presentation.rs:222
 msgid "Daemon running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:223
+#: src/protection_status/protection_timeline_presentation.rs:224
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:237
+#: src/protection_status/protection_timeline_presentation.rs:238
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:245
+#: src/protection_status/protection_timeline_presentation.rs:246
 msgid "clamd is answering"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:256
-#: src/protection_status/protection_timeline_presentation.rs:321
+#: src/protection_status/protection_timeline_presentation.rs:257
+#: src/protection_status/protection_timeline_presentation.rs:322
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:268
+#: src/protection_status/protection_timeline_presentation.rs:269
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:280
+#: src/protection_status/protection_timeline_presentation.rs:281
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:282
+#: src/protection_status/protection_timeline_presentation.rs:283
 msgid "None configured"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:289
-#: src/protection_status/protection_timeline_presentation.rs:293
+#: src/protection_status/protection_timeline_presentation.rs:290
+#: src/protection_status/protection_timeline_presentation.rs:294
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:290
+#: src/protection_status/protection_timeline_presentation.rs:291
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:304
+#: src/protection_status/protection_timeline_presentation.rs:305
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:306
+#: src/protection_status/protection_timeline_presentation.rs:307
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:313
+#: src/protection_status/protection_timeline_presentation.rs:314
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:317
-#: src/protection_status/protection_timeline_presentation.rs:407
+#: src/protection_status/protection_timeline_presentation.rs:318
+#: src/protection_status/protection_timeline_presentation.rs:408
 msgid "Waiting for the daemon"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:325
+#: src/protection_status/protection_timeline_presentation.rs:326
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:329
+#: src/protection_status/protection_timeline_presentation.rs:330
 msgid "Running, but no watched folders could be read"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:333
+#: src/protection_status/protection_timeline_presentation.rs:334
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:357
+#: src/protection_status/protection_timeline_presentation.rs:358
 #: src/scheduled_scans/schedule_preferences_page.rs:77
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:364
+#: src/protection_status/protection_timeline_presentation.rs:365
 #, rust-format
 msgid "{time}, threats found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:369
+#: src/protection_status/protection_timeline_presentation.rs:370
 #, rust-format
 msgid "{time}, nothing found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:373
+#: src/protection_status/protection_timeline_presentation.rs:374
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:390
+#: src/protection_status/protection_timeline_presentation.rs:391
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:392
+#: src/protection_status/protection_timeline_presentation.rs:393
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:412
+#: src/protection_status/protection_timeline_presentation.rs:413
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:417
+#: src/protection_status/protection_timeline_presentation.rs:418
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:422
+#: src/protection_status/protection_timeline_presentation.rs:423
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:427
+#: src/protection_status/protection_timeline_presentation.rs:428
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:428
+#: src/protection_status/protection_timeline_presentation.rs:429
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:431
+#: src/protection_status/protection_timeline_presentation.rs:432
 msgid "Run Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:442
+#: src/protection_status/protection_timeline_presentation.rs:443
 msgid "Scheduled by ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:450
+#: src/protection_status/protection_timeline_presentation.rs:451
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:458
+#: src/protection_status/protection_timeline_presentation.rs:459
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:472
+#: src/protection_status/protection_timeline_presentation.rs:473
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:474
+#: src/protection_status/protection_timeline_presentation.rs:475
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:485
+#: src/protection_status/protection_timeline_presentation.rs:486
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:487
+#: src/protection_status/protection_timeline_presentation.rs:488
 msgid "Scheduled scans set up in ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:494
+#: src/protection_status/protection_timeline_presentation.rs:495
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:507
+#: src/protection_status/protection_timeline_presentation.rs:508
 msgid "Files are only checked when you scan them"
 msgstr ""
 

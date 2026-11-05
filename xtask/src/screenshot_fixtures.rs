@@ -57,6 +57,47 @@ fn seed_quarantine_database(session_root: &Path) -> Result<(), TaskFailure> {
     }
 }
 
+fn seed_detection_history(session_root: &Path) -> Result<(), TaskFailure> {
+    let application_data = session_root.join("data/clamui");
+    let downloads_directory = session_root.join("home/Downloads");
+    fs::create_dir_all(&downloads_directory)?;
+    let unresolved_path = downloads_directory.join("invoice.pdf.exe");
+    let scheduled_path = downloads_directory.join("setup-helper.bin");
+    fs::write(&unresolved_path, b"fixture")?;
+    fs::write(&scheduled_path, b"fixture")?;
+    let mut sqlite_process = Command::new("sqlite3")
+        .arg(application_data.join("history.db"))
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|start_failure| TaskFailure::ToolNotStarted {
+            tool_name: "sqlite3",
+            start_failure,
+        })?;
+    if let Some(mut sqlite_input) = sqlite_process.stdin.take() {
+        sqlite_input.write_all(
+            include_str!("../assets/detections-seed.sql")
+                .replace(
+                    "@UNRESOLVED_PATH@",
+                    &sql_text_literal(&unresolved_path.to_string_lossy()),
+                )
+                .replace(
+                    "@SCHEDULED_PATH@",
+                    &sql_text_literal(&scheduled_path.to_string_lossy()),
+                )
+                .as_bytes(),
+        )?;
+    }
+    let exit_status = sqlite_process.wait()?;
+    if exit_status.success() {
+        Ok(())
+    } else {
+        Err(TaskFailure::ToolFailed {
+            tool_name: "sqlite3",
+            exit_status,
+        })
+    }
+}
+
 fn install_fixture_programs(session_root: &Path) -> Result<PathBuf, TaskFailure> {
     let fixture_directory = session_root.join("fixture-programs");
     fs::create_dir_all(&fixture_directory)?;
@@ -69,6 +110,7 @@ fn install_fixture_programs(session_root: &Path) -> Result<PathBuf, TaskFailure>
 
 pub fn prepare_screenshot_fixtures(session_root: &Path) -> Result<ScreenshotFixtures, TaskFailure> {
     seed_quarantine_database(session_root)?;
+    seed_detection_history(session_root)?;
     let scan_directory = session_root.join("scan");
     fs::create_dir_all(&scan_directory)?;
     SCAN_FIXTURE_NAMES

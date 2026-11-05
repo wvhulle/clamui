@@ -1,6 +1,7 @@
 mod activity_history;
 mod application_settings;
 mod application_window_shell;
+mod background_detections;
 mod clamav_components;
 mod desktop_integration;
 mod file_process_lock;
