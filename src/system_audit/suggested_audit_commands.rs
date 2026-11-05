@@ -1,37 +1,15 @@
 use crate::clamav_components::distribution_install_guides::DistributionFamily;
 
 pub const FRESHCLAM_UPDATE_COMMAND: &str = "sudo freshclam";
-pub const LYNIS_AUDIT_COMMAND: &str = "sudo lynis audit system";
-pub const CHKROOTKIT_SCAN_COMMAND: &str = "sudo chkrootkit -q";
-pub const UFW_STATUS_COMMAND: &str = "sudo ufw status verbose";
-pub const UFW_ENABLE_COMMAND: &str = "sudo ufw enable";
-pub const FIREWALLD_STATUS_COMMAND: &str = "sudo firewall-cmd --list-all";
-pub const NFTABLES_RULESET_COMMAND: &str = "sudo nft list ruleset";
-pub const IPTABLES_RULESET_COMMAND: &str = "sudo iptables-save";
-pub const IP6TABLES_RULESET_COMMAND: &str = "sudo ip6tables-save";
-pub const SSHD_EFFECTIVE_CONFIG_COMMAND: &str = "sudo sshd -T";
-pub const UNATTENDED_RECONFIGURE_COMMAND: &str = "sudo dpkg-reconfigure unattended-upgrades";
-pub const DNF_AUTOMATIC_ENABLE_COMMAND: &str = "sudo systemctl enable --now dnf-automatic.timer";
-pub const RPM_OSTREE_AUTOMATIC_ENABLE_COMMAND: &str =
-    "sudo systemctl enable --now rpm-ostreed-automatic.timer";
-
-const SSHD_CONFIG_EDIT_COMMAND: &str = "sudoedit /etc/ssh/sshd_config";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SuggestedRemedy {
     ClamavDaemonStart,
     FreshclamUpdatesEnable,
     FirewallServiceEnable,
-    AutomaticUpdatesEnable,
     IntrusionPreventionInstall,
     Fail2banServiceStart,
     CrowdsecServiceStart,
-    PortmasterServiceStart,
-    LynisProgramInstall,
-    ChkrootkitProgramInstall,
-    SshRootLoginDisable,
-    SshPasswordLoginDisable,
-    SshX11ForwardingDisable,
 }
 
 fn non_nixos_or_option(
@@ -77,13 +55,6 @@ pub fn suggested_command(
             NixosFamily => Some("networking.firewall.enable = true;"),
             UnrecognizedFamily => None,
         },
-        SuggestedRemedy::AutomaticUpdatesEnable => match distribution_family {
-            DebianFamily => Some("sudo apt install unattended-upgrades"),
-            FedoraWorkstation => Some("sudo dnf install dnf-automatic"),
-            FedoraAtomic => Some(RPM_OSTREE_AUTOMATIC_ENABLE_COMMAND),
-            NixosFamily => Some("system.autoUpgrade.enable = true;"),
-            ArchFamily | UnrecognizedFamily => None,
-        },
         SuggestedRemedy::IntrusionPreventionInstall => match distribution_family {
             DebianFamily => Some("sudo apt install fail2ban"),
             FedoraWorkstation => Some("sudo dnf install fail2ban"),
@@ -102,40 +73,6 @@ pub fn suggested_command(
             "services.crowdsec.enable = true;",
             "sudo systemctl start crowdsec",
         ),
-        SuggestedRemedy::PortmasterServiceStart => non_nixos_or_option(
-            distribution_family,
-            "services.portmaster.enable = true;",
-            "sudo systemctl start portmaster",
-        ),
-        SuggestedRemedy::LynisProgramInstall => match distribution_family {
-            DebianFamily => Some("sudo apt install lynis"),
-            FedoraWorkstation => Some("sudo dnf install lynis"),
-            FedoraAtomic => Some("sudo rpm-ostree install lynis\nsudo systemctl reboot"),
-            ArchFamily => Some("sudo pacman -S lynis"),
-            NixosFamily => Some("environment.systemPackages = [ pkgs.lynis ];"),
-            UnrecognizedFamily => None,
-        },
-        SuggestedRemedy::ChkrootkitProgramInstall => match distribution_family {
-            DebianFamily => Some("sudo apt install chkrootkit"),
-            FedoraWorkstation => Some("sudo dnf install chkrootkit"),
-            FedoraAtomic => Some("sudo rpm-ostree install chkrootkit\nsudo systemctl reboot"),
-            ArchFamily | NixosFamily | UnrecognizedFamily => None,
-        },
-        SuggestedRemedy::SshRootLoginDisable => non_nixos_or_option(
-            distribution_family,
-            "services.openssh.settings.PermitRootLogin = \"no\";",
-            SSHD_CONFIG_EDIT_COMMAND,
-        ),
-        SuggestedRemedy::SshPasswordLoginDisable => non_nixos_or_option(
-            distribution_family,
-            "services.openssh.settings.PasswordAuthentication = false;",
-            SSHD_CONFIG_EDIT_COMMAND,
-        ),
-        SuggestedRemedy::SshX11ForwardingDisable => non_nixos_or_option(
-            distribution_family,
-            "services.openssh.settings.X11Forwarding = false;",
-            SSHD_CONFIG_EDIT_COMMAND,
-        ),
     }
 }
 
@@ -143,20 +80,13 @@ pub fn suggested_command(
 mod suggested_audit_commands_tests {
     use super::*;
 
-    const ALL_REMEDIES: [SuggestedRemedy; 13] = [
+    const ALL_REMEDIES: [SuggestedRemedy; 6] = [
         SuggestedRemedy::ClamavDaemonStart,
         SuggestedRemedy::FreshclamUpdatesEnable,
         SuggestedRemedy::FirewallServiceEnable,
-        SuggestedRemedy::AutomaticUpdatesEnable,
         SuggestedRemedy::IntrusionPreventionInstall,
         SuggestedRemedy::Fail2banServiceStart,
         SuggestedRemedy::CrowdsecServiceStart,
-        SuggestedRemedy::PortmasterServiceStart,
-        SuggestedRemedy::LynisProgramInstall,
-        SuggestedRemedy::ChkrootkitProgramInstall,
-        SuggestedRemedy::SshRootLoginDisable,
-        SuggestedRemedy::SshPasswordLoginDisable,
-        SuggestedRemedy::SshX11ForwardingDisable,
     ];
 
     fn remedies_for(distribution_family: DistributionFamily) -> Vec<&'static str> {
@@ -215,23 +145,5 @@ mod suggested_audit_commands_tests {
             .for_each(|generic_command| {
                 assert!(!generic_command.contains("install"), "{generic_command}");
             });
-    }
-
-    #[test]
-    fn removed_or_unpackaged_tools_have_no_install_suggestion() {
-        assert_eq!(
-            suggested_command(
-                SuggestedRemedy::ChkrootkitProgramInstall,
-                DistributionFamily::NixosFamily
-            ),
-            None
-        );
-        assert_eq!(
-            suggested_command(
-                SuggestedRemedy::ChkrootkitProgramInstall,
-                DistributionFamily::ArchFamily
-            ),
-            None
-        );
     }
 }

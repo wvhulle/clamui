@@ -7,18 +7,8 @@ use std::{
     process::ExitCode,
 };
 
-pub const FIXTURE_PROGRAM_NAMES: [&str; 5] = ["clamscan", "clamdscan", "freshclam", "clamd", "ss"];
+pub const FIXTURE_PROGRAM_NAMES: [&str; 4] = ["clamscan", "clamdscan", "freshclam", "clamd"];
 const FIXTURE_VERSION_BANNER: &str = "ClamAV 1.5.4/28173/Tue Nov  3 07:27:52 2026";
-const FIXTURE_SOCKET_LISTING: &str = "\
-tcp LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:* users:((\"systemd-resolve\",pid=812,fd=15))
-tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:((\"sshd\",pid=1204,fd=3))
-tcp LISTEN 0 128 [::]:22 [::]:* users:((\"sshd\",pid=1204,fd=4))
-udp UNCONN 0 0 0.0.0.0:5353 0.0.0.0:* users:((\"avahi<b>daemon\",pid=990,fd=12))
-tcp ESTAB 0 0 192.0.2.35:48812 198.51.100.7:443 users:((\"firefox\",pid=2210,fd=88),(\"socket \
-                                      process\",pid=2211,fd=31))
-tcp ESTAB 0 0 [2001:db8::35]:52210 [2001:db8::80]:443
-tcp TIME-WAIT 0 0 192.0.2.35:48790 198.51.100.7:443
-";
 const DETECTED_NAME_MARKER: &[u8] = b"eicar";
 const DETECTION_REPORT_SUFFIX: &[u8] = b": Eicar-Test-Signature FOUND\n";
 const CLEAN_REPORT_SUFFIX: &[u8] = b": OK\n";
@@ -106,15 +96,7 @@ fn fixture_scan_report(program_arguments: &[OsString]) -> io::Result<FixtureScan
 
 pub fn run_fixture_program() -> ExitCode {
     let program_arguments = env::args_os().skip(1).collect::<Vec<_>>();
-    let fixture_report = if invoked_program_name().as_deref() == Some("ss") {
-        Ok(FixtureScanReport {
-            report_bytes: FIXTURE_SOCKET_LISTING.as_bytes().to_vec(),
-            threat_found: false,
-        })
-    } else {
-        fixture_scan_report(&program_arguments)
-    };
-    match fixture_report.and_then(|scan_report| {
+    match fixture_scan_report(&program_arguments).and_then(|scan_report| {
         io::stdout().write_all(&scan_report.report_bytes)?;
         Ok(scan_report.threat_found)
     }) {

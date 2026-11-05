@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 11:27+0100\n"
+"POT-Creation-Date: 2026-11-05 11:48+0100\n"
 "PO-Revision-Date: 2026-08-09 00:00-0300\n"
 "Last-Translator: ClamUI Contributors\n"
 "Language-Team: Brazilian Portuguese <pt_BR@li.org>\n"
@@ -152,7 +152,7 @@ msgstr ""
 "pode ser desfeita."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:480
+#: src/application_window_shell.rs:454
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:743
@@ -179,9 +179,7 @@ msgstr "Operações anteriores de verificação e atualização"
 
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
-#: src/activity_history/scan_statistics_page.rs:251
 #: src/file_quarantine/quarantine_entries_page.rs:272
-#: src/network_sockets/network_sockets_page.rs:212
 msgid "Refresh"
 msgstr "Atualizar"
 
@@ -271,225 +269,6 @@ msgstr ""
 msgid "Exported."
 msgstr ""
 
-#: src/activity_history/scan_activity_chart.rs:82
-#, rust-format
-msgid "{count} scan"
-msgid_plural "{count} scans"
-msgstr[0] "{count} verificação"
-msgstr[1] "{count} verificações"
-
-#: src/activity_history/scan_activity_chart.rs:88
-#, rust-format
-msgid "{count} threat"
-msgid_plural "{count} threats"
-msgstr[0] "{count} ameaça"
-msgstr[1] "{count} ameaças"
-
-#: src/activity_history/scan_statistics_page.rs:75
-msgid "Protected"
-msgstr "Protegido"
-
-#: src/activity_history/scan_statistics_page.rs:76
-msgid "At Risk"
-msgstr "Em risco"
-
-#: src/activity_history/scan_statistics_page.rs:77
-msgid "Unprotected"
-msgstr "Desprotegido"
-
-#: src/activity_history/scan_statistics_page.rs:98
-msgid "No scans performed yet"
-msgstr "Nenhuma verificação realizada ainda"
-
-#: src/activity_history/scan_statistics_page.rs:99
-msgid "Last scan was over 30 days ago"
-msgstr "A última verificação foi há mais de 30 dias"
-
-#: src/activity_history/scan_statistics_page.rs:100
-msgid "Last scan was over a week ago"
-msgstr "A última verificação foi há mais de uma semana"
-
-#: src/activity_history/scan_statistics_page.rs:102
-msgid "Virus definitions are over 7 days old"
-msgstr "As definições de vírus têm mais de 7 dias"
-
-#: src/activity_history/scan_statistics_page.rs:104
-msgid "Virus definitions are over 1 day old"
-msgstr "As definições de vírus estão desatualizadas há mais de 1 dia"
-
-#: src/activity_history/scan_statistics_page.rs:105
-msgid "System is protected"
-msgstr "O sistema está protegido"
-
-#: src/activity_history/scan_statistics_page.rs:111
-msgid "less than an hour ago"
-msgstr "há menos de uma hora"
-
-#: src/activity_history/scan_statistics_page.rs:115
-#, rust-format
-msgid "{count} hour ago"
-msgid_plural "{count} hours ago"
-msgstr[0] "há {count} hora"
-msgstr[1] "há {count} horas"
-
-#: src/activity_history/scan_statistics_page.rs:119
-#, rust-format
-msgid "{count} day ago"
-msgid_plural "{count} days ago"
-msgstr[0] "há {count} dia"
-msgstr[1] "há {count} dias"
-
-#: src/activity_history/scan_statistics_page.rs:158
-msgid "No scans recorded"
-msgstr "Nenhuma verificação registrada"
-
-#: src/activity_history/scan_statistics_page.rs:169
-#, rust-format
-msgid "{moment}, by clamdscan.service"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:172
-#, rust-format
-msgid "{moment}, by clamdscan.service, which found threats"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:178
-#, rust-format
-msgid "Statistics for: {range}"
-msgstr "Estatísticas de: {range}"
-
-#: src/activity_history/scan_statistics_page.rs:246
-msgid "Protection Status"
-msgstr "Status da proteção"
-
-#: src/activity_history/scan_statistics_page.rs:247
-msgid ""
-"Based on scans run from ClamUI or clamdscan.service, and the age of the "
-"virus definitions"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:258
-msgid "System Status"
-msgstr "Status do sistema"
-
-#: src/activity_history/scan_statistics_page.rs:276
-msgid "Last Scan"
-msgstr "Última verificação"
-
-#: src/activity_history/scan_statistics_page.rs:287
-msgid "Timeframe"
-msgstr "Período"
-
-#: src/activity_history/scan_statistics_page.rs:288
-msgid "Select the time period for statistics"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:298
-msgid "Scan Statistics"
-msgstr "Estatísticas de verificação"
-
-#: src/activity_history/scan_statistics_page.rs:303
-msgid "Total Scans"
-msgstr "Total de verificações"
-
-#: src/activity_history/scan_statistics_page.rs:304
-msgid "Number of scans performed"
-msgstr "Número de verificações realizadas"
-
-#: src/activity_history/scan_statistics_page.rs:314
-msgid "Files Scanned"
-msgstr "Arquivos verificados"
-
-#: src/activity_history/scan_statistics_page.rs:315
-msgid "Total files checked"
-msgstr "Total de arquivos verificados"
-
-#: src/activity_history/scan_statistics_page.rs:325
-#: src/malware_scan/scan_progress_page.rs:508
-#: src/malware_scan/scan_results_dialog.rs:54
-#: src/scheduled_scans/headless_scheduled_scan.rs:241
-msgid "Threats Detected"
-msgstr "Ameaças detectadas"
-
-#: src/activity_history/scan_statistics_page.rs:326
-msgid "Malware and suspicious files found"
-msgstr "Malware e arquivos suspeitos encontrados"
-
-#: src/activity_history/scan_statistics_page.rs:336
-msgid "Clean Scans"
-msgstr "Verificações sem ameaças"
-
-#: src/activity_history/scan_statistics_page.rs:337
-msgid "Scans with no threats found"
-msgstr "Verificações sem ameaças encontradas"
-
-#: src/activity_history/scan_statistics_page.rs:347
-msgid "Average Scan Duration"
-msgstr "Duração média da verificação"
-
-#: src/activity_history/scan_statistics_page.rs:348
-msgid "Mean time per scan"
-msgstr "Tempo médio por verificação"
-
-#: src/activity_history/scan_statistics_page.rs:359
-msgid "Scan Activity"
-msgstr "Atividade de verificação"
-
-#: src/activity_history/scan_statistics_page.rs:360
-msgid "Scan trends over the selected timeframe"
-msgstr "Tendências de verificação no período selecionado"
-
-#: src/activity_history/scan_statistics_page.rs:375
-msgid "Scans"
-msgstr "Verificações"
-
-#: src/activity_history/scan_statistics_page.rs:375
-msgid "Threats"
-msgstr "Ameaças"
-
-#: src/activity_history/scan_statistics_page.rs:380
-msgid "Quick Actions"
-msgstr "Ações rápidas"
-
-#: src/activity_history/scan_statistics_page.rs:383
-#: src/desktop_integration/system_tray_menu.rs:46
-#: src/scan_profiles/scan_profile_store.rs:56
-msgid "Quick Scan"
-msgstr "Verificação rápida"
-
-#: src/activity_history/scan_statistics_page.rs:384
-msgid "Scan your home directory"
-msgstr "Verificar seu diretório pessoal"
-
-#: src/activity_history/scan_statistics_page.rs:391
-msgid "View Scan Logs"
-msgstr "Ver registros de verificação"
-
-#: src/activity_history/scan_statistics_page.rs:392
-msgid "See detailed scan history"
-msgstr "Consultar o histórico detalhado de verificações"
-
-#: src/activity_history/scan_statistics_page.rs:409
-msgid "Day"
-msgstr "Dia"
-
-#: src/activity_history/scan_statistics_page.rs:410
-msgid "Week"
-msgstr "Semana"
-
-#: src/activity_history/scan_statistics_page.rs:411
-msgid "Month"
-msgstr "Mês"
-
-#: src/activity_history/scan_statistics_page.rs:412
-msgid "All Time"
-msgstr "Todo o período"
-
-#: src/activity_history/scan_statistics_page.rs:475
-#, rust-format
-msgid "Failed to load statistics: {error}"
-msgstr "Falha ao carregar as estatísticas: {error}"
-
 #: src/application_settings/preferences_dialog.rs:133
 msgid "Node.js dependencies"
 msgstr "Dependências do Node.js"
@@ -578,7 +357,7 @@ msgid "Quit completely"
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:286
-#: src/application_window_shell.rs:482
+#: src/application_window_shell.rs:456
 msgid "Minimize to tray"
 msgstr "Minimizar para bandeja"
 
@@ -682,12 +461,12 @@ msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude ou *.tmp"
 
 #: src/application_settings/preferences_dialog.rs:518
-#: src/application_window_shell.rs:158
+#: src/application_window_shell.rs:154
 msgid "Preferences"
 msgstr "Preferências"
 
 #: src/application_settings/preferences_dialog.rs:526
-#: src/application_window_shell.rs:337
+#: src/application_window_shell.rs:327
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Banco de dados"
@@ -712,72 +491,63 @@ msgstr "Acesso em tempo real"
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_window_shell.rs:81
+#: src/application_window_shell.rs:77
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:159
+#: src/application_window_shell.rs:155
 msgid "About ClamUI"
 msgstr "Sobre o ClamUI"
 
-#: src/application_window_shell.rs:160 src/application_window_shell.rs:481
+#: src/application_window_shell.rs:156 src/application_window_shell.rs:455
 #: src/desktop_integration/system_tray_menu.rs:49
 msgid "Quit"
 msgstr "Sair"
 
-#: src/application_window_shell.rs:163
+#: src/application_window_shell.rs:159
 msgid "Menu"
 msgstr "Menu"
 
-#: src/application_window_shell.rs:182
+#: src/application_window_shell.rs:178
 msgid "translator-credits"
 msgstr "translator-credits"
 
-#: src/application_window_shell.rs:241
+#: src/application_window_shell.rs:237
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:330
+#: src/application_window_shell.rs:320
 #: src/malware_scan/scan_progress_page.rs:356
 msgid "Scan"
 msgstr "Verificação"
 
-#: src/application_window_shell.rs:344
+#: src/application_window_shell.rs:334
 msgid "Logs"
 msgstr "Registros"
 
-#: src/application_window_shell.rs:351
+#: src/application_window_shell.rs:341
 msgid "Components"
 msgstr "Componentes"
 
-#: src/application_window_shell.rs:358
+#: src/application_window_shell.rs:348
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Quarentena"
 
-#: src/application_window_shell.rs:365
-#: src/malware_scan/scan_results_dialog.rs:332
-msgid "Statistics"
-msgstr "Estatísticas"
-
-#: src/application_window_shell.rs:372
+#: src/application_window_shell.rs:355
 msgid "Audit"
 msgstr "Auditoria"
 
-#: src/application_window_shell.rs:379
-msgid "Network"
-msgstr "Rede"
-
-#: src/application_window_shell.rs:475
+#: src/application_window_shell.rs:449
 msgid "Close ClamUI?"
 msgstr "Fechar o ClamUI?"
 
-#: src/application_window_shell.rs:477
+#: src/application_window_shell.rs:451
 msgid "Keep ClamUI running in the system tray, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:566
+#: src/application_window_shell.rs:540
 msgid "The quarantine database could not be locked"
 msgstr ""
 
@@ -866,6 +636,11 @@ msgstr "Comando copiado para a área de transferência"
 #: src/desktop_integration/system_tray_menu.rs:45
 msgid "Show ClamUI"
 msgstr ""
+
+#: src/desktop_integration/system_tray_menu.rs:46
+#: src/scan_profiles/scan_profile_store.rs:56
+msgid "Quick Scan"
+msgstr "Verificação rápida"
 
 #: src/desktop_integration/system_tray_menu.rs:47
 msgid "Update Definitions"
@@ -985,7 +760,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Restaurar"
 
-#: src/main.rs:68
+#: src/main.rs:67
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -1159,6 +934,12 @@ msgstr ""
 msgid "No Profile (Manual)"
 msgstr "Nenhum perfil (manual)"
 
+#: src/malware_scan/scan_progress_page.rs:508
+#: src/malware_scan/scan_results_dialog.rs:54
+#: src/scheduled_scans/headless_scheduled_scan.rs:241
+msgid "Threats Detected"
+msgstr "Ameaças detectadas"
+
 #: src/malware_scan/scan_progress_page.rs:656
 msgid "Scan Profile"
 msgstr "Perfil de verificação"
@@ -1260,6 +1041,10 @@ msgstr ""
 msgid "Copy Results"
 msgstr ""
 
+#: src/malware_scan/scan_results_dialog.rs:332
+msgid "Statistics"
+msgstr "Estatísticas"
+
 #: src/malware_scan/scan_results_dialog.rs:365
 msgid "Not accessible"
 msgstr "Inacessível"
@@ -1311,139 +1096,6 @@ msgstr ""
 #: src/malware_scan/scanner_output_parser.rs:317
 msgid "Blocked by on-access scanning"
 msgstr ""
-
-#: src/network_sockets/network_socket_row.rs:32
-#: src/network_sockets/network_sockets_page.rs:236
-msgid "Listening and bound"
-msgstr "Escutando e vinculado"
-
-#: src/network_sockets/network_socket_row.rs:34
-msgid "Connection"
-msgstr "Conexão"
-
-#: src/network_sockets/network_socket_row.rs:40
-msgid "Process information unavailable"
-msgstr "Informações do processo indisponíveis"
-
-#: src/network_sockets/network_socket_row.rs:47
-#, rust-format
-msgid "PID {pid}"
-msgstr "PID {pid}"
-
-#: src/network_sockets/network_socket_row.rs:61
-#, rust-format
-msgid "Copy {label}"
-msgstr "Copiar {label}"
-
-#: src/network_sockets/network_socket_row.rs:127
-msgid "Local address"
-msgstr "Endereço local"
-
-#: src/network_sockets/network_socket_row.rs:133
-msgid "Remote address"
-msgstr "Endereço remoto"
-
-#: src/network_sockets/network_sockets_page.rs:62
-msgid "Network socket listing timed out. Try again."
-msgstr ""
-"A listagem de soquetes de rede excedeu o tempo limite. Tente novamente."
-
-#: src/network_sockets/network_sockets_page.rs:65
-msgid "Network socket listing could not be completed safely. Try again."
-msgstr ""
-"Não foi possível concluir com segurança a listagem de soquetes de rede. "
-"Tente novamente."
-
-#: src/network_sockets/network_sockets_page.rs:68
-msgid ""
-"Network information is unavailable. Check that the system socket tool is "
-"installed and try again."
-msgstr ""
-"As informações de rede estão indisponíveis. Verifique se a ferramenta de "
-"soquete do sistema está instalada e tente novamente."
-
-#: src/network_sockets/network_sockets_page.rs:131
-msgid "Loading network connections…"
-msgstr "Carregando conexões de rede…"
-
-#: src/network_sockets/network_sockets_page.rs:139
-msgid "No socket records could be read from this snapshot."
-msgstr "Não foi possível ler nenhum registro de soquete deste instantâneo."
-
-#: src/network_sockets/network_sockets_page.rs:144
-msgid "No network sockets were found in this snapshot."
-msgstr "Nenhum soquete de rede foi encontrado neste instantâneo."
-
-#: src/network_sockets/network_sockets_page.rs:147
-msgid "No sockets match the current filters."
-msgstr "Nenhum soquete corresponde aos filtros atuais."
-
-#: src/network_sockets/network_sockets_page.rs:157
-msgid "The socket list was limited. This snapshot may be incomplete."
-msgstr ""
-"A lista de soquetes foi limitada. Este instantâneo pode estar incompleto."
-
-#: src/network_sockets/network_sockets_page.rs:162
-msgid "Some socket records could not be read. This snapshot may be incomplete."
-msgstr ""
-"Não foi possível ler alguns registros de soquete. Este instantâneo pode "
-"estar incompleto."
-
-#: src/network_sockets/network_sockets_page.rs:173
-#, rust-format
-msgid "Captured at {time}"
-msgstr "Capturado em {time}"
-
-#: src/network_sockets/network_sockets_page.rs:183
-#, rust-format
-msgid "Showing {shown} of {count} matching socket"
-msgid_plural "Showing {shown} of {count} matching sockets"
-msgstr[0] "Exibindo {shown} de {count} soquete correspondente"
-msgstr[1] "Exibindo {shown} de {count} soquetes correspondentes"
-
-#: src/network_sockets/network_sockets_page.rs:207
-msgid "Network Connections"
-msgstr "Conexões de rede"
-
-#: src/network_sockets/network_sockets_page.rs:208
-msgid ""
-"View the current listening ports and socket peers from one local snapshot."
-msgstr ""
-"Veja as portas de escuta e os pares de soquete atuais a partir de um único "
-"instantâneo local."
-
-#: src/network_sockets/network_sockets_page.rs:226
-msgid "Search address, port, process, or PID"
-msgstr "Pesquisar endereço, porta, processo ou PID"
-
-#: src/network_sockets/network_sockets_page.rs:233
-msgid "Network socket filter"
-msgstr "Filtro de soquetes de rede"
-
-#: src/network_sockets/network_sockets_page.rs:235
-msgid "All"
-msgstr "Todos"
-
-#: src/network_sockets/network_sockets_page.rs:237
-msgid "Connections"
-msgstr "Conexões"
-
-#: src/network_sockets/network_sockets_page.rs:250
-msgid ""
-"Process ownership depends on system permissions. Unavailable process "
-"information does not mean that no process owns the socket."
-msgstr ""
-"A associação de processos depende das permissões do sistema. A "
-"indisponibilidade de informações sobre o processo não significa que nenhum "
-"processo seja proprietário do soquete."
-
-#: src/network_sockets/network_sockets_page.rs:305
-msgid "Load More"
-msgstr "Carregar mais"
-
-#: src/network_sockets/network_sockets_page.rs:381
-msgid "Address copied to clipboard"
-msgstr "Endereço copiado para a área de transferência"
 
 #: src/scan_profiles/profile_editor_dialog.rs:118
 msgid "Profile name is required"
@@ -1778,40 +1430,21 @@ msgstr "Aviso"
 msgid "Fail"
 msgstr "Falhou"
 
-#: src/system_audit/audit_report_model.rs:81
+#: src/system_audit/audit_report_model.rs:73
 msgid "ClamAV Health"
 msgstr "Saúde do ClamAV"
 
-#: src/system_audit/audit_report_model.rs:82
+#: src/system_audit/audit_report_model.rs:74
 msgid "Firewall"
 msgstr "Firewall"
 
-#: src/system_audit/audit_report_model.rs:83
+#: src/system_audit/audit_report_model.rs:75
 msgid "Access Control"
 msgstr "Controle de acesso"
 
-#: src/system_audit/audit_report_model.rs:84
-#: src/system_audit/clamav_health_checks.rs:341
-#: src/system_audit/security_audit_checks.rs:270
-msgid "Automatic Updates"
-msgstr "Atualizações automáticas"
-
-#: src/system_audit/audit_report_model.rs:85
+#: src/system_audit/audit_report_model.rs:76
 msgid "Intrusion Detection"
 msgstr "Detecção de intrusão"
-
-#: src/system_audit/audit_report_model.rs:86
-msgid "SSH Security"
-msgstr "Segurança SSH"
-
-#: src/system_audit/audit_report_model.rs:87
-#: src/system_audit/security_audit_checks.rs:719
-msgid "Portmaster"
-msgstr "Portmaster"
-
-#: src/system_audit/audit_report_model.rs:88
-msgid "Deep scans"
-msgstr "Verificações profundas"
 
 #: src/system_audit/clamav_health_checks.rs:134
 #, rust-format
@@ -1889,12 +1522,15 @@ msgstr "O daemon ClamAV não está em execução"
 msgid "Start the daemon for faster scanning"
 msgstr "Inicie o daemon para uma verificação mais rápida"
 
+#: src/system_audit/clamav_health_checks.rs:341
+msgid "Automatic Updates"
+msgstr "Atualizações automáticas"
+
 #: src/system_audit/clamav_health_checks.rs:347
 msgid "Freshclam service is active"
 msgstr "O serviço Freshclam está ativo"
 
 #: src/system_audit/clamav_health_checks.rs:355
-#: src/system_audit/security_audit_checks.rs:272
 msgid "Could not determine automatic update status"
 msgstr "Não foi possível determinar o status da atualização automática"
 
@@ -1906,524 +1542,122 @@ msgstr "O serviço de atualização automática Freshclam não está em execuç�
 msgid "Enable automatic database updates"
 msgstr "Habilite atualizações automáticas do banco de dados"
 
-#: src/system_audit/firewall_audit_checks.rs:206
-msgid "UFW Firewall"
-msgstr "Firewall UFW"
-
-#: src/system_audit/firewall_audit_checks.rs:215
-msgid ""
-"UFW is active; the default incoming policy is deny. Listed rules may allow "
-"exceptions."
-msgstr ""
-"O UFW está ativo; a política padrão de entrada é negar. As regras listadas "
-"podem permitir exceções."
-
-#: src/system_audit/firewall_audit_checks.rs:226
-msgid ""
-"UFW is active; the default incoming policy is reject. Listed rules may allow "
-"exceptions."
-msgstr ""
-"O UFW está ativo; a política padrão de entrada é rejeitar. As regras "
-"listadas podem permitir exceções."
-
-#: src/system_audit/firewall_audit_checks.rs:236
-msgid "UFW is active; the default incoming policy is deny."
-msgstr "O UFW está ativo; a política padrão de entrada é negar."
-
-#: src/system_audit/firewall_audit_checks.rs:244
-msgid "UFW is active; the default incoming policy is reject."
-msgstr "O UFW está ativo; a política padrão de entrada é rejeitar."
-
-#: src/system_audit/firewall_audit_checks.rs:252
-msgid "UFW is active, but the default incoming policy allows traffic."
-msgstr "O UFW está ativo, mas sua política padrão de entrada permite tráfego."
-
-#: src/system_audit/firewall_audit_checks.rs:260
-msgid "UFW is active, but its default incoming policy could not be verified."
-msgstr ""
-"O UFW está ativo, mas não foi possível verificar sua política padrão de "
-"entrada."
-
-#: src/system_audit/firewall_audit_checks.rs:265
-msgid "UFW reports inactive."
-msgstr "O UFW informa estar inativo."
-
-#: src/system_audit/firewall_audit_checks.rs:267
-#: src/system_audit/firewall_audit_checks.rs:730
-msgid "Enable the firewall"
-msgstr ""
-
-#: src/system_audit/firewall_audit_checks.rs:272
-msgid "UFW status could not be inspected safely."
-msgstr "Não foi possível inspecionar com segurança o status do UFW."
-
-#: src/system_audit/firewall_audit_checks.rs:278
-#: src/system_audit/firewall_audit_checks.rs:320
-#: src/system_audit/firewall_audit_checks.rs:538
-#: src/system_audit/firewall_audit_checks.rs:641
-#: src/system_audit/firewall_audit_checks.rs:674
-#: src/system_audit/security_audit_checks.rs:767
-#: src/system_audit/security_audit_checks.rs:799
-#, rust-format
-msgid "{name} is not installed"
-msgstr "{name} não está instalado"
-
-#: src/system_audit/firewall_audit_checks.rs:304
-msgid "Firewalld"
-msgstr "Firewalld"
-
-#: src/system_audit/firewall_audit_checks.rs:310
-msgid ""
-"Firewalld owns its D-Bus name; readiness and firewall policy were not "
-"queried."
-msgstr ""
-"O Firewalld possui seu nome no D-Bus; sua prontidão e política de firewall "
-"não foram consultadas."
-
-#: src/system_audit/firewall_audit_checks.rs:327
-msgid ""
-"No Firewalld D-Bus owner was observed; this does not establish kernel "
-"firewall policy."
-msgstr ""
-"Nenhum proprietário do Firewalld no D-Bus foi observado; isso não determina "
-"a política de firewall do kernel."
-
-#: src/system_audit/firewall_audit_checks.rs:335
-msgid ""
-"Firewalld ownership could not be verified; readiness and firewall policy "
-"were not queried."
-msgstr ""
-"Não foi possível verificar a propriedade do Firewalld; sua prontidão e "
-"política de firewall não foram consultadas."
-
-#: src/system_audit/firewall_audit_checks.rs:525
-msgid "nftables (native rules)"
-msgstr "nftables (regras nativas)"
-
-#: src/system_audit/firewall_audit_checks.rs:530
-msgid ""
-"nftables input policy coverage could not be verified for both IPv4 and IPv6"
-msgstr ""
-"Não foi possível verificar a cobertura da política de entrada do nftables "
-"para IPv4 e IPv6"
-
-#: src/system_audit/firewall_audit_checks.rs:547
-msgid ""
-"nftables has restrictive default input policies for IPv4 and IPv6; "
-"individual rules may allow exceptions."
-msgstr ""
-"O nftables possui políticas padrão de entrada restritivas para IPv4 e IPv6; "
-"regras individuais podem permitir exceções."
-
-#: src/system_audit/firewall_audit_checks.rs:555
-msgid ""
-"nftables reports a permissive default input policy; remaining coverage may "
-"be incomplete"
-msgstr ""
-"O nftables informa uma política padrão de entrada permissiva; a cobertura "
-"restante pode estar incompleta"
-
-#: src/system_audit/firewall_audit_checks.rs:623
-msgid "iptables (IPv4)"
-msgstr "iptables (IPv4)"
-
-#: src/system_audit/firewall_audit_checks.rs:629
-msgid ""
-"iptables has a restrictive INPUT default policy; individual rules may allow "
-"exceptions."
-msgstr ""
-"O iptables possui uma política padrão INPUT restritiva; regras individuais "
-"podem permitir exceções."
-
-#: src/system_audit/firewall_audit_checks.rs:636
-msgid "iptables has a permissive INPUT default policy"
-msgstr "O iptables possui uma política padrão INPUT permissiva"
-
-#: src/system_audit/firewall_audit_checks.rs:649
-msgid "iptables INPUT policy could not be verified"
-msgstr "Não foi possível verificar a política INPUT do iptables"
-
-#: src/system_audit/firewall_audit_checks.rs:656
-msgid "iptables (IPv6)"
-msgstr "iptables (IPv6)"
-
-#: src/system_audit/firewall_audit_checks.rs:662
-msgid ""
-"ip6tables has a restrictive INPUT default policy; individual rules may allow "
-"exceptions."
-msgstr ""
-"O ip6tables possui uma política padrão INPUT restritiva; regras individuais "
-"podem permitir exceções."
-
-#: src/system_audit/firewall_audit_checks.rs:669
-msgid "ip6tables has a permissive INPUT default policy"
-msgstr "O ip6tables possui uma política padrão INPUT permissiva"
-
-#: src/system_audit/firewall_audit_checks.rs:682
-msgid "ip6tables INPUT policy could not be verified"
-msgstr "Não foi possível verificar a política INPUT do ip6tables"
-
-#: src/system_audit/firewall_audit_checks.rs:695
-msgid "Firewall manager overlap"
-msgstr "Conflito entre gerenciadores de firewall"
-
-#: src/system_audit/firewall_audit_checks.rs:698
-msgid ""
-"UFW is active while Firewalld owns its D-Bus name; their rule interaction "
-"was not evaluated."
-msgstr ""
-"O UFW está ativo enquanto o Firewalld possui seu nome no D-Bus; a interação "
-"entre suas regras não foi avaliada."
-
-#: src/system_audit/firewall_audit_checks.rs:708
+#: src/system_audit/firewall_audit_checks.rs:32
 msgid "Firewall Service"
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:716
+#: src/system_audit/firewall_audit_checks.rs:40
 msgid "The NixOS firewall service is active; allowed ports were not evaluated."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:722
+#: src/system_audit/firewall_audit_checks.rs:46
 #, rust-format
 msgid "Service {name} is active; its rules were not inspected."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:728
+#: src/system_audit/firewall_audit_checks.rs:52
 msgid ""
 "No known firewall service is active; rules may still be loaded another way."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:738
+#: src/system_audit/firewall_audit_checks.rs:54
+msgid "Enable the firewall"
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:62
 msgid "Firewall services could not be listed without systemd."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:766
-#: src/system_audit/firewall_audit_checks.rs:804
-msgid "Open Ports"
-msgstr ""
-
-#: src/system_audit/firewall_audit_checks.rs:772
-#, rust-format
-msgid "{count} port listening, risky ports: {ports}"
-msgid_plural "{count} ports listening, risky ports: {ports}"
-msgstr[0] "{count} porta em escuta, portas de risco: {ports}"
-msgstr[1] "{count} portas em escuta, portas de risco: {ports}"
-
-#: src/system_audit/firewall_audit_checks.rs:779
-msgid "Review if these services need to be exposed"
-msgstr "Revise se esses serviços precisam ser expostos"
-
-#: src/system_audit/firewall_audit_checks.rs:785
-#, rust-format
-msgid "{count} port listening"
-msgid_plural "{count} ports listening"
-msgstr[0] "{count} porta em escuta"
-msgstr[1] "{count} portas em escuta"
-
-#: src/system_audit/firewall_audit_checks.rs:791
-msgid "Review open ports and close unnecessary services"
-msgstr "Revise as portas abertas e feche serviços desnecessários"
-
-#: src/system_audit/firewall_audit_checks.rs:796
-msgid "No open ports detected"
-msgstr "Nenhuma porta aberta detectada"
-
-#: src/system_audit/firewall_audit_checks.rs:807
-msgid ""
-"Network socket listing is unavailable. Check that the system socket tool is "
-"installed and try again."
-msgstr ""
-"A listagem de soquetes de rede está indisponível. Verifique se a ferramenta "
-"de soquetes do sistema está instalada e tente novamente."
-
-#: src/system_audit/security_audit_checks.rs:91
+#: src/system_audit/security_audit_checks.rs:68
 msgid "AppArmor"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:97
+#: src/system_audit/security_audit_checks.rs:74
 msgid "AppArmor is enabled"
 msgstr "AppArmor está ativado"
 
-#: src/system_audit/security_audit_checks.rs:103
-#: src/system_audit/security_audit_checks.rs:109
+#: src/system_audit/security_audit_checks.rs:80
+#: src/system_audit/security_audit_checks.rs:86
 msgid "AppArmor module is loaded but not enabled"
 msgstr "O módulo AppArmor está carregado, mas não ativado"
 
-#: src/system_audit/security_audit_checks.rs:111
+#: src/system_audit/security_audit_checks.rs:88
 msgid "Enable AppArmor for application sandboxing"
 msgstr "Habilite o AppArmor para sandbox de aplicativos"
 
-#: src/system_audit/security_audit_checks.rs:117
+#: src/system_audit/security_audit_checks.rs:94
 msgid "SELinux"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:123
+#: src/system_audit/security_audit_checks.rs:100
 msgid "SELinux is enforcing"
 msgstr "SELinux está aplicando"
 
-#: src/system_audit/security_audit_checks.rs:128
+#: src/system_audit/security_audit_checks.rs:105
 msgid "SELinux is in permissive mode"
 msgstr "SELinux está em modo permissivo"
 
-#: src/system_audit/security_audit_checks.rs:131
+#: src/system_audit/security_audit_checks.rs:108
 msgid "Consider switching to enforcing mode for stronger protection"
 msgstr "Considere mudar para o modo de imposição para uma proteção mais forte"
 
-#: src/system_audit/security_audit_checks.rs:137
-#: src/system_audit/security_audit_checks.rs:143
+#: src/system_audit/security_audit_checks.rs:114
+#: src/system_audit/security_audit_checks.rs:120
 msgid "SELinux is disabled"
 msgstr "SELinux está desabilitado"
 
-#: src/system_audit/security_audit_checks.rs:145
+#: src/system_audit/security_audit_checks.rs:122
 msgid "Enable SELinux for mandatory access control"
 msgstr "Habilite o SELinux para controle de acesso obrigatório"
 
-#: src/system_audit/security_audit_checks.rs:149
+#: src/system_audit/security_audit_checks.rs:126
 msgid "SELinux mode could not be determined"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:166
+#: src/system_audit/security_audit_checks.rs:143
 msgid "MAC Framework"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:168
+#: src/system_audit/security_audit_checks.rs:145
 msgid "No mandatory access control framework detected"
 msgstr "Nenhuma estrutura de controle de acesso obrigatória detectada"
 
-#: src/system_audit/security_audit_checks.rs:170
+#: src/system_audit/security_audit_checks.rs:147
 msgid "Consider enabling AppArmor or SELinux"
 msgstr "Considere ativar o AppArmor ou SELinux"
 
-#: src/system_audit/security_audit_checks.rs:215
-#: src/system_audit/security_audit_checks.rs:221
-msgid "Unattended Upgrades"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:217
-msgid "Automatic security updates are enabled"
-msgstr "As atualizações automáticas de segurança estão habilitadas"
-
-#: src/system_audit/security_audit_checks.rs:223
-msgid "Unattended upgrades is installed but disabled"
-msgstr "As atualizações autônomas estão instaladas, mas desabilitadas"
-
-#: src/system_audit/security_audit_checks.rs:225
-msgid "Enable automatic security updates"
-msgstr "Habilite atualizações automáticas de segurança"
-
-#: src/system_audit/security_audit_checks.rs:229
-#: src/system_audit/security_audit_checks.rs:235
-msgid "DNF Automatic"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:231
-msgid "DNF automatic updates are enabled"
-msgstr "As atualizações automáticas DNF estão ativadas"
-
-#: src/system_audit/security_audit_checks.rs:237
-msgid "DNF automatic is installed but timer is not active"
-msgstr "O DNF automático está instalado, mas o temporizador não está ativo"
-
-#: src/system_audit/security_audit_checks.rs:239
-#: src/system_audit/security_audit_checks.rs:252
-#: src/system_audit/security_audit_checks.rs:264
-msgid "Enable automatic updates"
-msgstr "Habilite atualizações automáticas"
-
-#: src/system_audit/security_audit_checks.rs:243
-#: src/system_audit/security_audit_checks.rs:248
-msgid "rpm-ostree Automatic"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:245
-msgid "rpm-ostree automatic updates are enabled"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:250
-msgid "rpm-ostree automatic update timer is not active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:255
-#: src/system_audit/security_audit_checks.rs:260
-msgid "NixOS Automatic Upgrades"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:257
-msgid "The NixOS upgrade timer is active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:262
-msgid "The NixOS upgrade timer is not active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:274
-msgid "Configure automatic security updates"
-msgstr "Configurar atualizações automáticas de segurança"
-
-#: src/system_audit/security_audit_checks.rs:333
-msgid "Pending Reboot"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:335
-msgid "System reboot required to apply updates"
-msgstr "Reinicialização do sistema necessária para aplicar atualizações"
-
-#: src/system_audit/security_audit_checks.rs:338
-msgid "Reboot the system to apply pending security updates"
-msgstr "Reinicie o sistema para aplicar as atualizações de segurança pendentes"
-
-#: src/system_audit/security_audit_checks.rs:386
+#: src/system_audit/security_audit_checks.rs:198
 msgid "fail2ban is active and protecting services"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:387
+#: src/system_audit/security_audit_checks.rs:199
 msgid "CrowdSec is active with community threat intelligence"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:393
+#: src/system_audit/security_audit_checks.rs:205
 msgid "Start fail2ban to protect against brute force attacks"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:394
+#: src/system_audit/security_audit_checks.rs:206
 msgid "Start CrowdSec for collaborative intrusion prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:422
+#: src/system_audit/security_audit_checks.rs:234
 #, rust-format
 msgid "{name} is installed but not running"
 msgstr "{name} está instalado, mas não está em execução"
 
-#: src/system_audit/security_audit_checks.rs:454
+#: src/system_audit/security_audit_checks.rs:266
 msgid "Intrusion Prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:456
+#: src/system_audit/security_audit_checks.rs:268
 msgid "No intrusion detection system found"
 msgstr "Nenhum sistema de detecção de intrusão encontrado"
 
-#: src/system_audit/security_audit_checks.rs:459
+#: src/system_audit/security_audit_checks.rs:271
 msgid "Install fail2ban or CrowdSec to protect against attacks"
 msgstr "Instale o fail2ban ou o CrowdSec para proteger contra ataques"
-
-#: src/system_audit/security_audit_checks.rs:537
-msgid "Root Login"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:545
-#, rust-format
-msgid "Root login: {value}"
-msgstr "Login raiz: {value}"
-
-#: src/system_audit/security_audit_checks.rs:551
-#, rust-format
-msgid "Root login is allowed ({value})"
-msgstr "O login de root é permitido ({value})"
-
-#: src/system_audit/security_audit_checks.rs:553
-msgid "Disable root SSH login for security"
-msgstr "Desative o login SSH root para segurança"
-
-#: src/system_audit/security_audit_checks.rs:566
-msgid "Password Auth"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:571
-msgid "Password authentication is disabled (key-only)"
-msgstr "A autenticação por senha está desativada (somente chave)"
-
-#: src/system_audit/security_audit_checks.rs:577
-msgid "Password authentication is enabled"
-msgstr "A autenticação por senha está habilitada"
-
-#: src/system_audit/security_audit_checks.rs:580
-msgid "Consider disabling password auth in favor of SSH keys"
-msgstr "Considere desativar a autenticação por senha em favor de chaves SSH"
-
-#: src/system_audit/security_audit_checks.rs:594
-msgid "X11 Forwarding"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:599
-msgid "X11 forwarding is disabled"
-msgstr "O encaminhamento X11 está desabilitado"
-
-#: src/system_audit/security_audit_checks.rs:605
-msgid "X11 forwarding is enabled"
-msgstr "O encaminhamento X11 está ativado"
-
-#: src/system_audit/security_audit_checks.rs:607
-msgid "Disable X11 forwarding to reduce attack surface"
-msgstr "Desative o encaminhamento X11 para reduzir a superfície de ataque"
-
-#: src/system_audit/security_audit_checks.rs:638
-#: src/system_audit/security_audit_checks.rs:655
-msgid "SSH Configuration"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:641
-msgid ""
-"The SSH configuration includes other files that were not evaluated; the "
-"settings below may be overridden."
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:657
-msgid "Could not read SSH configuration"
-msgstr "Não foi possível ler a configuração SSH"
-
-#: src/system_audit/security_audit_checks.rs:684
-#: src/system_audit/security_audit_checks.rs:694
-#: src/system_audit/security_audit_checks.rs:702
-msgid "SSH Server"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:686
-msgid "SSH server status could not be determined"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:696
-msgid "SSH server is not running (no remote attack surface)"
-msgstr "O servidor SSH não está em execução (sem superfície de ataque remoto)"
-
-#: src/system_audit/security_audit_checks.rs:704
-msgid "SSH server is running"
-msgstr "O servidor SSH está em execução"
-
-#: src/system_audit/security_audit_checks.rs:724
-msgid "The Portmaster service is active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:730
-msgid "Portmaster is installed but not running"
-msgstr "Portmaster está instalado, mas não está funcionando"
-
-#: src/system_audit/security_audit_checks.rs:733
-msgid "Start the Portmaster service to enable network protection"
-msgstr "Inicie o serviço Portmaster para habilitar a proteção de rede"
-
-#: src/system_audit/security_audit_checks.rs:743
-msgid "Not detected — optional network monitor and application firewall"
-msgstr "Não detectado — monitor de rede e firewall de aplicativos opcionais"
-
-#: src/system_audit/security_audit_checks.rs:758
-msgid "Lynis needs administrator access, so ClamUI does not run it."
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:761
-msgid "Run 'sudo lynis audit system' for detailed recommendations"
-msgstr "Execute 'sudo lynis audit system' para obter recomendações detalhadas"
-
-#: src/system_audit/security_audit_checks.rs:770
-#, rust-format
-msgid "Install {name} for comprehensive security auditing"
-msgstr "Instale {name} para uma auditoria de segurança abrangente"
-
-#: src/system_audit/security_audit_checks.rs:792
-msgid "chkrootkit needs administrator access, so ClamUI does not run it."
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:801
-msgid "Install chkrootkit for rootkit detection"
-msgstr "Instale o chkrootkit para detecção de rootkit"
 
 #: src/system_audit/system_audit_page.rs:49
 msgid "Auditing…"
@@ -2795,3 +2029,512 @@ msgid ""
 msgstr ""
 "Plano gratuito: 4 solicitações por minuto, 500 por dia. É possível verificar "
 "arquivos de até 650 MB."
+
+#, rust-format
+#~ msgid "{count} scan"
+#~ msgid_plural "{count} scans"
+#~ msgstr[0] "{count} verificação"
+#~ msgstr[1] "{count} verificações"
+
+#, rust-format
+#~ msgid "{count} threat"
+#~ msgid_plural "{count} threats"
+#~ msgstr[0] "{count} ameaça"
+#~ msgstr[1] "{count} ameaças"
+
+#~ msgid "Protected"
+#~ msgstr "Protegido"
+
+#~ msgid "At Risk"
+#~ msgstr "Em risco"
+
+#~ msgid "Unprotected"
+#~ msgstr "Desprotegido"
+
+#~ msgid "No scans performed yet"
+#~ msgstr "Nenhuma verificação realizada ainda"
+
+#~ msgid "Last scan was over 30 days ago"
+#~ msgstr "A última verificação foi há mais de 30 dias"
+
+#~ msgid "Last scan was over a week ago"
+#~ msgstr "A última verificação foi há mais de uma semana"
+
+#~ msgid "Virus definitions are over 7 days old"
+#~ msgstr "As definições de vírus têm mais de 7 dias"
+
+#~ msgid "Virus definitions are over 1 day old"
+#~ msgstr "As definições de vírus estão desatualizadas há mais de 1 dia"
+
+#~ msgid "System is protected"
+#~ msgstr "O sistema está protegido"
+
+#~ msgid "less than an hour ago"
+#~ msgstr "há menos de uma hora"
+
+#, rust-format
+#~ msgid "{count} hour ago"
+#~ msgid_plural "{count} hours ago"
+#~ msgstr[0] "há {count} hora"
+#~ msgstr[1] "há {count} horas"
+
+#, rust-format
+#~ msgid "{count} day ago"
+#~ msgid_plural "{count} days ago"
+#~ msgstr[0] "há {count} dia"
+#~ msgstr[1] "há {count} dias"
+
+#~ msgid "No scans recorded"
+#~ msgstr "Nenhuma verificação registrada"
+
+#, rust-format
+#~ msgid "Statistics for: {range}"
+#~ msgstr "Estatísticas de: {range}"
+
+#~ msgid "Protection Status"
+#~ msgstr "Status da proteção"
+
+#~ msgid "System Status"
+#~ msgstr "Status do sistema"
+
+#~ msgid "Last Scan"
+#~ msgstr "Última verificação"
+
+#~ msgid "Timeframe"
+#~ msgstr "Período"
+
+#~ msgid "Scan Statistics"
+#~ msgstr "Estatísticas de verificação"
+
+#~ msgid "Total Scans"
+#~ msgstr "Total de verificações"
+
+#~ msgid "Number of scans performed"
+#~ msgstr "Número de verificações realizadas"
+
+#~ msgid "Files Scanned"
+#~ msgstr "Arquivos verificados"
+
+#~ msgid "Total files checked"
+#~ msgstr "Total de arquivos verificados"
+
+#~ msgid "Malware and suspicious files found"
+#~ msgstr "Malware e arquivos suspeitos encontrados"
+
+#~ msgid "Clean Scans"
+#~ msgstr "Verificações sem ameaças"
+
+#~ msgid "Scans with no threats found"
+#~ msgstr "Verificações sem ameaças encontradas"
+
+#~ msgid "Average Scan Duration"
+#~ msgstr "Duração média da verificação"
+
+#~ msgid "Mean time per scan"
+#~ msgstr "Tempo médio por verificação"
+
+#~ msgid "Scan Activity"
+#~ msgstr "Atividade de verificação"
+
+#~ msgid "Scan trends over the selected timeframe"
+#~ msgstr "Tendências de verificação no período selecionado"
+
+#~ msgid "Scans"
+#~ msgstr "Verificações"
+
+#~ msgid "Threats"
+#~ msgstr "Ameaças"
+
+#~ msgid "Quick Actions"
+#~ msgstr "Ações rápidas"
+
+#~ msgid "Scan your home directory"
+#~ msgstr "Verificar seu diretório pessoal"
+
+#~ msgid "View Scan Logs"
+#~ msgstr "Ver registros de verificação"
+
+#~ msgid "See detailed scan history"
+#~ msgstr "Consultar o histórico detalhado de verificações"
+
+#~ msgid "Day"
+#~ msgstr "Dia"
+
+#~ msgid "Week"
+#~ msgstr "Semana"
+
+#~ msgid "Month"
+#~ msgstr "Mês"
+
+#~ msgid "All Time"
+#~ msgstr "Todo o período"
+
+#, rust-format
+#~ msgid "Failed to load statistics: {error}"
+#~ msgstr "Falha ao carregar as estatísticas: {error}"
+
+#~ msgid "Network"
+#~ msgstr "Rede"
+
+#~ msgid "Listening and bound"
+#~ msgstr "Escutando e vinculado"
+
+#~ msgid "Connection"
+#~ msgstr "Conexão"
+
+#~ msgid "Process information unavailable"
+#~ msgstr "Informações do processo indisponíveis"
+
+#, rust-format
+#~ msgid "PID {pid}"
+#~ msgstr "PID {pid}"
+
+#, rust-format
+#~ msgid "Copy {label}"
+#~ msgstr "Copiar {label}"
+
+#~ msgid "Local address"
+#~ msgstr "Endereço local"
+
+#~ msgid "Remote address"
+#~ msgstr "Endereço remoto"
+
+#~ msgid "Network socket listing timed out. Try again."
+#~ msgstr ""
+#~ "A listagem de soquetes de rede excedeu o tempo limite. Tente novamente."
+
+#~ msgid "Network socket listing could not be completed safely. Try again."
+#~ msgstr ""
+#~ "Não foi possível concluir com segurança a listagem de soquetes de rede. "
+#~ "Tente novamente."
+
+#~ msgid ""
+#~ "Network information is unavailable. Check that the system socket tool is "
+#~ "installed and try again."
+#~ msgstr ""
+#~ "As informações de rede estão indisponíveis. Verifique se a ferramenta de "
+#~ "soquete do sistema está instalada e tente novamente."
+
+#~ msgid "Loading network connections…"
+#~ msgstr "Carregando conexões de rede…"
+
+#~ msgid "No socket records could be read from this snapshot."
+#~ msgstr "Não foi possível ler nenhum registro de soquete deste instantâneo."
+
+#~ msgid "No network sockets were found in this snapshot."
+#~ msgstr "Nenhum soquete de rede foi encontrado neste instantâneo."
+
+#~ msgid "No sockets match the current filters."
+#~ msgstr "Nenhum soquete corresponde aos filtros atuais."
+
+#~ msgid "The socket list was limited. This snapshot may be incomplete."
+#~ msgstr ""
+#~ "A lista de soquetes foi limitada. Este instantâneo pode estar incompleto."
+
+#~ msgid ""
+#~ "Some socket records could not be read. This snapshot may be incomplete."
+#~ msgstr ""
+#~ "Não foi possível ler alguns registros de soquete. Este instantâneo pode "
+#~ "estar incompleto."
+
+#, rust-format
+#~ msgid "Captured at {time}"
+#~ msgstr "Capturado em {time}"
+
+#, rust-format
+#~ msgid "Showing {shown} of {count} matching socket"
+#~ msgid_plural "Showing {shown} of {count} matching sockets"
+#~ msgstr[0] "Exibindo {shown} de {count} soquete correspondente"
+#~ msgstr[1] "Exibindo {shown} de {count} soquetes correspondentes"
+
+#~ msgid "Network Connections"
+#~ msgstr "Conexões de rede"
+
+#~ msgid ""
+#~ "View the current listening ports and socket peers from one local snapshot."
+#~ msgstr ""
+#~ "Veja as portas de escuta e os pares de soquete atuais a partir de um "
+#~ "único instantâneo local."
+
+#~ msgid "Search address, port, process, or PID"
+#~ msgstr "Pesquisar endereço, porta, processo ou PID"
+
+#~ msgid "Network socket filter"
+#~ msgstr "Filtro de soquetes de rede"
+
+#~ msgid "All"
+#~ msgstr "Todos"
+
+#~ msgid "Connections"
+#~ msgstr "Conexões"
+
+#~ msgid ""
+#~ "Process ownership depends on system permissions. Unavailable process "
+#~ "information does not mean that no process owns the socket."
+#~ msgstr ""
+#~ "A associação de processos depende das permissões do sistema. A "
+#~ "indisponibilidade de informações sobre o processo não significa que "
+#~ "nenhum processo seja proprietário do soquete."
+
+#~ msgid "Load More"
+#~ msgstr "Carregar mais"
+
+#~ msgid "Address copied to clipboard"
+#~ msgstr "Endereço copiado para a área de transferência"
+
+#~ msgid "SSH Security"
+#~ msgstr "Segurança SSH"
+
+#~ msgid "Portmaster"
+#~ msgstr "Portmaster"
+
+#~ msgid "Deep scans"
+#~ msgstr "Verificações profundas"
+
+#~ msgid "UFW Firewall"
+#~ msgstr "Firewall UFW"
+
+#~ msgid ""
+#~ "UFW is active; the default incoming policy is deny. Listed rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "O UFW está ativo; a política padrão de entrada é negar. As regras "
+#~ "listadas podem permitir exceções."
+
+#~ msgid ""
+#~ "UFW is active; the default incoming policy is reject. Listed rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "O UFW está ativo; a política padrão de entrada é rejeitar. As regras "
+#~ "listadas podem permitir exceções."
+
+#~ msgid "UFW is active; the default incoming policy is deny."
+#~ msgstr "O UFW está ativo; a política padrão de entrada é negar."
+
+#~ msgid "UFW is active; the default incoming policy is reject."
+#~ msgstr "O UFW está ativo; a política padrão de entrada é rejeitar."
+
+#~ msgid "UFW is active, but the default incoming policy allows traffic."
+#~ msgstr ""
+#~ "O UFW está ativo, mas sua política padrão de entrada permite tráfego."
+
+#~ msgid ""
+#~ "UFW is active, but its default incoming policy could not be verified."
+#~ msgstr ""
+#~ "O UFW está ativo, mas não foi possível verificar sua política padrão de "
+#~ "entrada."
+
+#~ msgid "UFW reports inactive."
+#~ msgstr "O UFW informa estar inativo."
+
+#~ msgid "UFW status could not be inspected safely."
+#~ msgstr "Não foi possível inspecionar com segurança o status do UFW."
+
+#, rust-format
+#~ msgid "{name} is not installed"
+#~ msgstr "{name} não está instalado"
+
+#~ msgid "Firewalld"
+#~ msgstr "Firewalld"
+
+#~ msgid ""
+#~ "Firewalld owns its D-Bus name; readiness and firewall policy were not "
+#~ "queried."
+#~ msgstr ""
+#~ "O Firewalld possui seu nome no D-Bus; sua prontidão e política de "
+#~ "firewall não foram consultadas."
+
+#~ msgid ""
+#~ "No Firewalld D-Bus owner was observed; this does not establish kernel "
+#~ "firewall policy."
+#~ msgstr ""
+#~ "Nenhum proprietário do Firewalld no D-Bus foi observado; isso não "
+#~ "determina a política de firewall do kernel."
+
+#~ msgid ""
+#~ "Firewalld ownership could not be verified; readiness and firewall policy "
+#~ "were not queried."
+#~ msgstr ""
+#~ "Não foi possível verificar a propriedade do Firewalld; sua prontidão e "
+#~ "política de firewall não foram consultadas."
+
+#~ msgid "nftables (native rules)"
+#~ msgstr "nftables (regras nativas)"
+
+#~ msgid ""
+#~ "nftables input policy coverage could not be verified for both IPv4 and "
+#~ "IPv6"
+#~ msgstr ""
+#~ "Não foi possível verificar a cobertura da política de entrada do nftables "
+#~ "para IPv4 e IPv6"
+
+#~ msgid ""
+#~ "nftables has restrictive default input policies for IPv4 and IPv6; "
+#~ "individual rules may allow exceptions."
+#~ msgstr ""
+#~ "O nftables possui políticas padrão de entrada restritivas para IPv4 e "
+#~ "IPv6; regras individuais podem permitir exceções."
+
+#~ msgid ""
+#~ "nftables reports a permissive default input policy; remaining coverage "
+#~ "may be incomplete"
+#~ msgstr ""
+#~ "O nftables informa uma política padrão de entrada permissiva; a cobertura "
+#~ "restante pode estar incompleta"
+
+#~ msgid "iptables (IPv4)"
+#~ msgstr "iptables (IPv4)"
+
+#~ msgid ""
+#~ "iptables has a restrictive INPUT default policy; individual rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "O iptables possui uma política padrão INPUT restritiva; regras "
+#~ "individuais podem permitir exceções."
+
+#~ msgid "iptables has a permissive INPUT default policy"
+#~ msgstr "O iptables possui uma política padrão INPUT permissiva"
+
+#~ msgid "iptables INPUT policy could not be verified"
+#~ msgstr "Não foi possível verificar a política INPUT do iptables"
+
+#~ msgid "iptables (IPv6)"
+#~ msgstr "iptables (IPv6)"
+
+#~ msgid ""
+#~ "ip6tables has a restrictive INPUT default policy; individual rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "O ip6tables possui uma política padrão INPUT restritiva; regras "
+#~ "individuais podem permitir exceções."
+
+#~ msgid "ip6tables has a permissive INPUT default policy"
+#~ msgstr "O ip6tables possui uma política padrão INPUT permissiva"
+
+#~ msgid "ip6tables INPUT policy could not be verified"
+#~ msgstr "Não foi possível verificar a política INPUT do ip6tables"
+
+#~ msgid "Firewall manager overlap"
+#~ msgstr "Conflito entre gerenciadores de firewall"
+
+#~ msgid ""
+#~ "UFW is active while Firewalld owns its D-Bus name; their rule interaction "
+#~ "was not evaluated."
+#~ msgstr ""
+#~ "O UFW está ativo enquanto o Firewalld possui seu nome no D-Bus; a "
+#~ "interação entre suas regras não foi avaliada."
+
+#, rust-format
+#~ msgid "{count} port listening, risky ports: {ports}"
+#~ msgid_plural "{count} ports listening, risky ports: {ports}"
+#~ msgstr[0] "{count} porta em escuta, portas de risco: {ports}"
+#~ msgstr[1] "{count} portas em escuta, portas de risco: {ports}"
+
+#~ msgid "Review if these services need to be exposed"
+#~ msgstr "Revise se esses serviços precisam ser expostos"
+
+#, rust-format
+#~ msgid "{count} port listening"
+#~ msgid_plural "{count} ports listening"
+#~ msgstr[0] "{count} porta em escuta"
+#~ msgstr[1] "{count} portas em escuta"
+
+#~ msgid "Review open ports and close unnecessary services"
+#~ msgstr "Revise as portas abertas e feche serviços desnecessários"
+
+#~ msgid "No open ports detected"
+#~ msgstr "Nenhuma porta aberta detectada"
+
+#~ msgid ""
+#~ "Network socket listing is unavailable. Check that the system socket tool "
+#~ "is installed and try again."
+#~ msgstr ""
+#~ "A listagem de soquetes de rede está indisponível. Verifique se a "
+#~ "ferramenta de soquetes do sistema está instalada e tente novamente."
+
+#~ msgid "Automatic security updates are enabled"
+#~ msgstr "As atualizações automáticas de segurança estão habilitadas"
+
+#~ msgid "Unattended upgrades is installed but disabled"
+#~ msgstr "As atualizações autônomas estão instaladas, mas desabilitadas"
+
+#~ msgid "Enable automatic security updates"
+#~ msgstr "Habilite atualizações automáticas de segurança"
+
+#~ msgid "DNF automatic updates are enabled"
+#~ msgstr "As atualizações automáticas DNF estão ativadas"
+
+#~ msgid "DNF automatic is installed but timer is not active"
+#~ msgstr "O DNF automático está instalado, mas o temporizador não está ativo"
+
+#~ msgid "Enable automatic updates"
+#~ msgstr "Habilite atualizações automáticas"
+
+#~ msgid "Configure automatic security updates"
+#~ msgstr "Configurar atualizações automáticas de segurança"
+
+#~ msgid "System reboot required to apply updates"
+#~ msgstr "Reinicialização do sistema necessária para aplicar atualizações"
+
+#~ msgid "Reboot the system to apply pending security updates"
+#~ msgstr ""
+#~ "Reinicie o sistema para aplicar as atualizações de segurança pendentes"
+
+#, rust-format
+#~ msgid "Root login: {value}"
+#~ msgstr "Login raiz: {value}"
+
+#, rust-format
+#~ msgid "Root login is allowed ({value})"
+#~ msgstr "O login de root é permitido ({value})"
+
+#~ msgid "Disable root SSH login for security"
+#~ msgstr "Desative o login SSH root para segurança"
+
+#~ msgid "Password authentication is disabled (key-only)"
+#~ msgstr "A autenticação por senha está desativada (somente chave)"
+
+#~ msgid "Password authentication is enabled"
+#~ msgstr "A autenticação por senha está habilitada"
+
+#~ msgid "Consider disabling password auth in favor of SSH keys"
+#~ msgstr "Considere desativar a autenticação por senha em favor de chaves SSH"
+
+#~ msgid "X11 forwarding is disabled"
+#~ msgstr "O encaminhamento X11 está desabilitado"
+
+#~ msgid "X11 forwarding is enabled"
+#~ msgstr "O encaminhamento X11 está ativado"
+
+#~ msgid "Disable X11 forwarding to reduce attack surface"
+#~ msgstr "Desative o encaminhamento X11 para reduzir a superfície de ataque"
+
+#~ msgid "Could not read SSH configuration"
+#~ msgstr "Não foi possível ler a configuração SSH"
+
+#~ msgid "SSH server is not running (no remote attack surface)"
+#~ msgstr ""
+#~ "O servidor SSH não está em execução (sem superfície de ataque remoto)"
+
+#~ msgid "SSH server is running"
+#~ msgstr "O servidor SSH está em execução"
+
+#~ msgid "Portmaster is installed but not running"
+#~ msgstr "Portmaster está instalado, mas não está funcionando"
+
+#~ msgid "Start the Portmaster service to enable network protection"
+#~ msgstr "Inicie o serviço Portmaster para habilitar a proteção de rede"
+
+#~ msgid "Not detected — optional network monitor and application firewall"
+#~ msgstr "Não detectado — monitor de rede e firewall de aplicativos opcionais"
+
+#~ msgid "Run 'sudo lynis audit system' for detailed recommendations"
+#~ msgstr ""
+#~ "Execute 'sudo lynis audit system' para obter recomendações detalhadas"
+
+#, rust-format
+#~ msgid "Install {name} for comprehensive security auditing"
+#~ msgstr "Instale {name} para uma auditoria de segurança abrangente"
+
+#~ msgid "Install chkrootkit for rootkit detection"
+#~ msgstr "Instale o chkrootkit para detecção de rootkit"

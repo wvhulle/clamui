@@ -15,7 +15,6 @@ use crate::{
     activity_history::{
         activity_history_database::ActivityHistory,
         activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
-        scan_statistics_page::{ScanStatisticsPage, ScanStatisticsPageInput},
     },
     application_data_directory,
     application_settings::preferences_dialog::{
@@ -40,7 +39,6 @@ use crate::{
     malware_scan::scan_progress_page::{
         ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
     },
-    network_sockets::network_sockets_page::NetworkSocketsPage,
     scan_profiles::scan_profile_store::ScanProfileStore,
     startup_arguments::StartupRequest,
     system_audit::system_audit_page::SystemAuditPage,
@@ -59,9 +57,7 @@ struct ApplicationPages {
     _database_page: Controller<DatabaseUpdatePage>,
     _component_page: Controller<ComponentStatusPage>,
     _logs_page: Controller<ActivityLogsPage>,
-    _statistics_page: Controller<ScanStatisticsPage>,
     _audit_page: Controller<SystemAuditPage>,
-    _network_page: Controller<NetworkSocketsPage>,
 }
 
 enum ShellContent {
@@ -280,13 +276,8 @@ fn application_pages(
         .launch(activity_history.clone())
         .detach();
     let logs_input_sender = logs_page.sender().clone();
-    let statistics_page = ScanStatisticsPage::builder()
-        .launch(activity_history.clone())
-        .detach();
-    let statistics_input_sender = statistics_page.sender().clone();
     let reload_activity_views: Rc<dyn Fn()> = Rc::new(move || {
         logs_input_sender.emit(ActivityLogsPageInput::ReloadEntriesRequested);
-        statistics_input_sender.emit(ScanStatisticsPageInput::ReloadRequested);
     });
     let scan_activity_reload = Rc::clone(&reload_activity_views);
     let scan_page = ScanProgressPage::builder()
@@ -322,7 +313,6 @@ fn application_pages(
         );
     let component_page = ComponentStatusPage::builder().launch(()).detach();
     let audit_page = SystemAuditPage::builder().launch(()).detach();
-    let network_page = NetworkSocketsPage::builder().launch(()).detach();
 
     let navigation_pages = [
         NavigationPage {
@@ -361,25 +351,11 @@ fn application_pages(
             keyboard_accelerator: "<Control>5",
         },
         NavigationPage {
-            page_name: "statistics",
-            page_title: gettext("Statistics"),
-            page_icon: "applications-science-symbolic",
-            page_widget: statistics_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>6",
-        },
-        NavigationPage {
             page_name: "audit",
             page_title: gettext("Audit"),
             page_icon: "channel-secure-symbolic",
             page_widget: audit_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>7",
-        },
-        NavigationPage {
-            page_name: "network",
-            page_title: gettext("Network"),
-            page_icon: "network-workgroup-symbolic",
-            page_widget: network_page.widget().upcast_ref(),
-            keyboard_accelerator: "<Control>8",
+            keyboard_accelerator: "<Control>6",
         },
     ];
     let page_stack = navigation_stack(&navigation_pages);
@@ -448,9 +424,7 @@ fn application_pages(
             _database_page: database_page,
             _component_page: component_page,
             _logs_page: logs_page,
-            _statistics_page: statistics_page,
             _audit_page: audit_page,
-            _network_page: network_page,
         }),
     }
 }

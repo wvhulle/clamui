@@ -8,7 +8,6 @@ mod file_quarantine;
 #[cfg(test)]
 mod host_verification_tests;
 mod malware_scan;
-mod network_sockets;
 mod scan_profiles;
 mod scheduled_scans;
 mod shared_page_widget_templates;

@@ -5,8 +5,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 ## Shell
 
 - [x] Sidebar icons, using a `gtk::ListBox` with the `navigation-sidebar` style.
-- [x] Pages: Logs, Statistics.
-- [x] Pages: Audit, Network.
+- [x] Pages: Logs, Audit.
 - [x] Empty states with `adw::StatusPage`.
 
 ## Scan
@@ -36,10 +35,7 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Statistics
 
-- [x] Protection status and last scan. Failed and cancelled scans don't count as protection. Completed runs of `clamdscan.service` count too, read from the system journal. Other scans run outside ClamUI aren't seen.
-- [x] Timeframe selection: day, week, month, all time.
-- [x] Totals: scans, files, threats, clean scans, average duration.
-- [x] Scan activity trend and quick actions.
+Deliberately removed: its protection status came from scan recency rather than from what the backend is doing, and its totals don't help anyone act.
 
 ## Components
 
@@ -62,13 +58,13 @@ Force update is deliberately not ported: upstream ran a shell script as root.
 
 ## Audit
 
-- [x] System security audit grouped by area, with status and suggested commands.
+- [x] ClamAV health, firewall service, mandatory access control and intrusion prevention, with status and suggested commands.
 
-Deep checks are deliberately not run: upstream used `pkexec`, so Lynis and chkrootkit are offered as copy-only commands. The Portmaster API integration is reduced to checking whether the service is active.
+Only checks related to virus or exploit blocking are kept. SSH settings, open ports, firewall rule parsing, automatic updates, Portmaster, Lynis and chkrootkit are deliberately left out.
 
 ## Network
 
-- [x] Local socket list with search and filter. Public IP lookup and VirusTotal address links are deliberately left out, because they send data to third parties.
+Deliberately removed: a socket list doesn't block anything.
 
 ## Profiles
 

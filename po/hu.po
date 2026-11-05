@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 11:27+0100\n"
+"POT-Creation-Date: 2026-11-05 11:48+0100\n"
 "PO-Revision-Date: 2026-09-13 09:59+0200\n"
 "Last-Translator: Kálmán „KAMI” Szalai <kami911@gmail.com>\n"
 "Language-Team: Hungarian\n"
@@ -152,7 +152,7 @@ msgstr ""
 "vissza."
 
 #: src/activity_history/activity_logs_page.rs:152
-#: src/application_window_shell.rs:480
+#: src/application_window_shell.rs:454
 #: src/file_quarantine/quarantine_entries_page.rs:173
 #: src/file_quarantine/quarantine_entries_page.rs:189
 #: src/malware_scan/scan_progress_page.rs:743
@@ -179,9 +179,7 @@ msgstr "Korábbi vizsgálati és frissítési műveletek"
 
 #: src/activity_history/activity_logs_page.rs:237
 #: src/activity_history/activity_logs_page.rs:380
-#: src/activity_history/scan_statistics_page.rs:251
 #: src/file_quarantine/quarantine_entries_page.rs:272
-#: src/network_sockets/network_sockets_page.rs:212
 msgid "Refresh"
 msgstr "Frissítés"
 
@@ -271,225 +269,6 @@ msgstr ""
 msgid "Exported."
 msgstr ""
 
-#: src/activity_history/scan_activity_chart.rs:82
-#, rust-format
-msgid "{count} scan"
-msgid_plural "{count} scans"
-msgstr[0] "{count} vizsgálat"
-msgstr[1] "{count} vizsgálat"
-
-#: src/activity_history/scan_activity_chart.rs:88
-#, rust-format
-msgid "{count} threat"
-msgid_plural "{count} threats"
-msgstr[0] "{count} fenyegetés"
-msgstr[1] "{count} fenyegetés"
-
-#: src/activity_history/scan_statistics_page.rs:75
-msgid "Protected"
-msgstr "Védett"
-
-#: src/activity_history/scan_statistics_page.rs:76
-msgid "At Risk"
-msgstr "Veszélyeztetett"
-
-#: src/activity_history/scan_statistics_page.rs:77
-msgid "Unprotected"
-msgstr "Nem védett"
-
-#: src/activity_history/scan_statistics_page.rs:98
-msgid "No scans performed yet"
-msgstr "Még nem történt vizsgálat"
-
-#: src/activity_history/scan_statistics_page.rs:99
-msgid "Last scan was over 30 days ago"
-msgstr "Az utolsó vizsgálat több mint 30 napja történt"
-
-#: src/activity_history/scan_statistics_page.rs:100
-msgid "Last scan was over a week ago"
-msgstr "Az utolsó vizsgálat több mint egy hete történt"
-
-#: src/activity_history/scan_statistics_page.rs:102
-msgid "Virus definitions are over 7 days old"
-msgstr "A vírusdefiníciók több mint 7 naposak"
-
-#: src/activity_history/scan_statistics_page.rs:104
-msgid "Virus definitions are over 1 day old"
-msgstr "A vírusdefiníciók több mint 1 naposak"
-
-#: src/activity_history/scan_statistics_page.rs:105
-msgid "System is protected"
-msgstr "A rendszer védett"
-
-#: src/activity_history/scan_statistics_page.rs:111
-msgid "less than an hour ago"
-msgstr "kevesebb mint egy órája"
-
-#: src/activity_history/scan_statistics_page.rs:115
-#, rust-format
-msgid "{count} hour ago"
-msgid_plural "{count} hours ago"
-msgstr[0] "{count} órával ezelőtt"
-msgstr[1] "{count} órával ezelőtt"
-
-#: src/activity_history/scan_statistics_page.rs:119
-#, rust-format
-msgid "{count} day ago"
-msgid_plural "{count} days ago"
-msgstr[0] "{count} nappal ezelőtt"
-msgstr[1] "{count} nappal ezelőtt"
-
-#: src/activity_history/scan_statistics_page.rs:158
-msgid "No scans recorded"
-msgstr "Nincsenek rögzített vizsgálatok"
-
-#: src/activity_history/scan_statistics_page.rs:169
-#, rust-format
-msgid "{moment}, by clamdscan.service"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:172
-#, rust-format
-msgid "{moment}, by clamdscan.service, which found threats"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:178
-#, rust-format
-msgid "Statistics for: {range}"
-msgstr "Statisztikák erre az időszakra: {range}"
-
-#: src/activity_history/scan_statistics_page.rs:246
-msgid "Protection Status"
-msgstr "Védelmi állapot"
-
-#: src/activity_history/scan_statistics_page.rs:247
-msgid ""
-"Based on scans run from ClamUI or clamdscan.service, and the age of the "
-"virus definitions"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:258
-msgid "System Status"
-msgstr "Rendszerállapot"
-
-#: src/activity_history/scan_statistics_page.rs:276
-msgid "Last Scan"
-msgstr "Legutóbbi vizsgálat"
-
-#: src/activity_history/scan_statistics_page.rs:287
-msgid "Timeframe"
-msgstr "Időszak"
-
-#: src/activity_history/scan_statistics_page.rs:288
-msgid "Select the time period for statistics"
-msgstr ""
-
-#: src/activity_history/scan_statistics_page.rs:298
-msgid "Scan Statistics"
-msgstr "Vizsgálati statisztikák"
-
-#: src/activity_history/scan_statistics_page.rs:303
-msgid "Total Scans"
-msgstr "Vizsgálatok összesen"
-
-#: src/activity_history/scan_statistics_page.rs:304
-msgid "Number of scans performed"
-msgstr "Elvégzett vizsgálatok száma"
-
-#: src/activity_history/scan_statistics_page.rs:314
-msgid "Files Scanned"
-msgstr "Vizsgált fájlok"
-
-#: src/activity_history/scan_statistics_page.rs:315
-msgid "Total files checked"
-msgstr "Ellenőrzött fájlok száma"
-
-#: src/activity_history/scan_statistics_page.rs:325
-#: src/malware_scan/scan_progress_page.rs:508
-#: src/malware_scan/scan_results_dialog.rs:54
-#: src/scheduled_scans/headless_scheduled_scan.rs:241
-msgid "Threats Detected"
-msgstr "Fenyegetés észlelve"
-
-#: src/activity_history/scan_statistics_page.rs:326
-msgid "Malware and suspicious files found"
-msgstr "Talált kártevők és gyanús fájlok"
-
-#: src/activity_history/scan_statistics_page.rs:336
-msgid "Clean Scans"
-msgstr "Tiszta vizsgálatok"
-
-#: src/activity_history/scan_statistics_page.rs:337
-msgid "Scans with no threats found"
-msgstr "Fenyegetést nem találó vizsgálatok"
-
-#: src/activity_history/scan_statistics_page.rs:347
-msgid "Average Scan Duration"
-msgstr "Átlagos vizsgálati idő"
-
-#: src/activity_history/scan_statistics_page.rs:348
-msgid "Mean time per scan"
-msgstr "Vizsgálatonkénti átlagos idő"
-
-#: src/activity_history/scan_statistics_page.rs:359
-msgid "Scan Activity"
-msgstr "Vizsgálati tevékenység"
-
-#: src/activity_history/scan_statistics_page.rs:360
-msgid "Scan trends over the selected timeframe"
-msgstr "Vizsgálati trendek a kiválasztott időszakban"
-
-#: src/activity_history/scan_statistics_page.rs:375
-msgid "Scans"
-msgstr "Vizsgálatok"
-
-#: src/activity_history/scan_statistics_page.rs:375
-msgid "Threats"
-msgstr "Fenyegetések"
-
-#: src/activity_history/scan_statistics_page.rs:380
-msgid "Quick Actions"
-msgstr "Gyorsműveletek"
-
-#: src/activity_history/scan_statistics_page.rs:383
-#: src/desktop_integration/system_tray_menu.rs:46
-#: src/scan_profiles/scan_profile_store.rs:56
-msgid "Quick Scan"
-msgstr "Gyors vizsgálat"
-
-#: src/activity_history/scan_statistics_page.rs:384
-msgid "Scan your home directory"
-msgstr "Saját mappa vizsgálata"
-
-#: src/activity_history/scan_statistics_page.rs:391
-msgid "View Scan Logs"
-msgstr "Vizsgálati naplók megtekintése"
-
-#: src/activity_history/scan_statistics_page.rs:392
-msgid "See detailed scan history"
-msgstr "Részletes vizsgálati előzmények megtekintése"
-
-#: src/activity_history/scan_statistics_page.rs:409
-msgid "Day"
-msgstr "Nap"
-
-#: src/activity_history/scan_statistics_page.rs:410
-msgid "Week"
-msgstr "Hét"
-
-#: src/activity_history/scan_statistics_page.rs:411
-msgid "Month"
-msgstr "Hónap"
-
-#: src/activity_history/scan_statistics_page.rs:412
-msgid "All Time"
-msgstr "Teljes időszak"
-
-#: src/activity_history/scan_statistics_page.rs:475
-#, rust-format
-msgid "Failed to load statistics: {error}"
-msgstr "Nem sikerült betölteni a statisztikákat: {error}"
-
 #: src/application_settings/preferences_dialog.rs:133
 msgid "Node.js dependencies"
 msgstr "Node.js-függőségek"
@@ -577,7 +356,7 @@ msgid "Quit completely"
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:286
-#: src/application_window_shell.rs:482
+#: src/application_window_shell.rs:456
 msgid "Minimize to tray"
 msgstr "Kicsinyítés a tálcára"
 
@@ -680,12 +459,12 @@ msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude vagy *.tmp"
 
 #: src/application_settings/preferences_dialog.rs:518
-#: src/application_window_shell.rs:158
+#: src/application_window_shell.rs:154
 msgid "Preferences"
 msgstr "Beállítások"
 
 #: src/application_settings/preferences_dialog.rs:526
-#: src/application_window_shell.rs:337
+#: src/application_window_shell.rs:327
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Adatbázis"
@@ -710,72 +489,63 @@ msgstr "Valós idejű védelem"
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_window_shell.rs:81
+#: src/application_window_shell.rs:77
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:159
+#: src/application_window_shell.rs:155
 msgid "About ClamUI"
 msgstr "A ClamUI névjegye"
 
-#: src/application_window_shell.rs:160 src/application_window_shell.rs:481
+#: src/application_window_shell.rs:156 src/application_window_shell.rs:455
 #: src/desktop_integration/system_tray_menu.rs:49
 msgid "Quit"
 msgstr "Kilépés"
 
-#: src/application_window_shell.rs:163
+#: src/application_window_shell.rs:159
 msgid "Menu"
 msgstr "Menü"
 
-#: src/application_window_shell.rs:182
+#: src/application_window_shell.rs:178
 msgid "translator-credits"
 msgstr "Kálmán „KAMI” Szalai"
 
-#: src/application_window_shell.rs:241
+#: src/application_window_shell.rs:237
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:330
+#: src/application_window_shell.rs:320
 #: src/malware_scan/scan_progress_page.rs:356
 msgid "Scan"
 msgstr "Vizsgálat"
 
-#: src/application_window_shell.rs:344
+#: src/application_window_shell.rs:334
 msgid "Logs"
 msgstr "Naplók"
 
-#: src/application_window_shell.rs:351
+#: src/application_window_shell.rs:341
 msgid "Components"
 msgstr "Összetevők"
 
-#: src/application_window_shell.rs:358
+#: src/application_window_shell.rs:348
 #: src/malware_scan/detected_threat_row.rs:111
 #: src/malware_scan/scan_results_dialog.rs:209
 msgid "Quarantine"
 msgstr "Karanténba helyezés"
 
-#: src/application_window_shell.rs:365
-#: src/malware_scan/scan_results_dialog.rs:332
-msgid "Statistics"
-msgstr "Statisztikák"
-
-#: src/application_window_shell.rs:372
+#: src/application_window_shell.rs:355
 msgid "Audit"
 msgstr "Audit"
 
-#: src/application_window_shell.rs:379
-msgid "Network"
-msgstr "Hálózat"
-
-#: src/application_window_shell.rs:475
+#: src/application_window_shell.rs:449
 msgid "Close ClamUI?"
 msgstr "Bezárja a ClamUI-t?"
 
-#: src/application_window_shell.rs:477
+#: src/application_window_shell.rs:451
 msgid "Keep ClamUI running in the system tray, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:566
+#: src/application_window_shell.rs:540
 msgid "The quarantine database could not be locked"
 msgstr ""
 
@@ -864,6 +634,11 @@ msgstr "A parancs a vágólapra másolva"
 #: src/desktop_integration/system_tray_menu.rs:45
 msgid "Show ClamUI"
 msgstr ""
+
+#: src/desktop_integration/system_tray_menu.rs:46
+#: src/scan_profiles/scan_profile_store.rs:56
+msgid "Quick Scan"
+msgstr "Gyors vizsgálat"
 
 #: src/desktop_integration/system_tray_menu.rs:47
 msgid "Update Definitions"
@@ -984,7 +759,7 @@ msgstr ""
 msgid "Restore"
 msgstr "Visszaállítás"
 
-#: src/main.rs:68
+#: src/main.rs:67
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
@@ -1158,6 +933,12 @@ msgstr ""
 msgid "No Profile (Manual)"
 msgstr "Nincs profil (kézi)"
 
+#: src/malware_scan/scan_progress_page.rs:508
+#: src/malware_scan/scan_results_dialog.rs:54
+#: src/scheduled_scans/headless_scheduled_scan.rs:241
+msgid "Threats Detected"
+msgstr "Fenyegetés észlelve"
+
 #: src/malware_scan/scan_progress_page.rs:656
 msgid "Scan Profile"
 msgstr "Vizsgálati profil"
@@ -1259,6 +1040,10 @@ msgstr ""
 msgid "Copy Results"
 msgstr ""
 
+#: src/malware_scan/scan_results_dialog.rs:332
+msgid "Statistics"
+msgstr "Statisztikák"
+
 #: src/malware_scan/scan_results_dialog.rs:365
 msgid "Not accessible"
 msgstr "Nem hozzáférhető"
@@ -1310,137 +1095,6 @@ msgstr ""
 #: src/malware_scan/scanner_output_parser.rs:317
 msgid "Blocked by on-access scanning"
 msgstr ""
-
-#: src/network_sockets/network_socket_row.rs:32
-#: src/network_sockets/network_sockets_page.rs:236
-msgid "Listening and bound"
-msgstr "Figyelő és kötött"
-
-#: src/network_sockets/network_socket_row.rs:34
-msgid "Connection"
-msgstr "Kapcsolat"
-
-#: src/network_sockets/network_socket_row.rs:40
-msgid "Process information unavailable"
-msgstr "A folyamat adatai nem érhetők el"
-
-#: src/network_sockets/network_socket_row.rs:47
-#, rust-format
-msgid "PID {pid}"
-msgstr "PID: {pid}"
-
-#: src/network_sockets/network_socket_row.rs:61
-#, rust-format
-msgid "Copy {label}"
-msgstr "{label} másolása"
-
-#: src/network_sockets/network_socket_row.rs:127
-msgid "Local address"
-msgstr "Helyi cím"
-
-#: src/network_sockets/network_socket_row.rs:133
-msgid "Remote address"
-msgstr "Távoli cím"
-
-#: src/network_sockets/network_sockets_page.rs:62
-msgid "Network socket listing timed out. Try again."
-msgstr ""
-"A hálózati foglalatok listázása időtúllépés miatt megszakadt. Próbálja újra."
-
-#: src/network_sockets/network_sockets_page.rs:65
-msgid "Network socket listing could not be completed safely. Try again."
-msgstr ""
-"A hálózati foglalatok listázása nem fejezhető be biztonságosan. Próbálja "
-"újra."
-
-#: src/network_sockets/network_sockets_page.rs:68
-msgid ""
-"Network information is unavailable. Check that the system socket tool is "
-"installed and try again."
-msgstr ""
-"A hálózati információk nem érhetők el. Ellenőrizze, hogy a rendszer socket-"
-"eszköze telepítve van-e, majd próbálja újra."
-
-#: src/network_sockets/network_sockets_page.rs:131
-msgid "Loading network connections…"
-msgstr "Hálózati kapcsolatok betöltése…"
-
-#: src/network_sockets/network_sockets_page.rs:139
-msgid "No socket records could be read from this snapshot."
-msgstr "Nem olvasható be socket-rekord ebből a pillanatképből."
-
-#: src/network_sockets/network_sockets_page.rs:144
-msgid "No network sockets were found in this snapshot."
-msgstr "Nem találhatók hálózati socketek ebben a pillanatképben."
-
-#: src/network_sockets/network_sockets_page.rs:147
-msgid "No sockets match the current filters."
-msgstr "Egyetlen socket sem felel meg a jelenlegi szűrőknek."
-
-#: src/network_sockets/network_sockets_page.rs:157
-msgid "The socket list was limited. This snapshot may be incomplete."
-msgstr "A socketlista korlátozott volt. Ez a pillanatkép hiányos lehet."
-
-#: src/network_sockets/network_sockets_page.rs:162
-msgid "Some socket records could not be read. This snapshot may be incomplete."
-msgstr ""
-"Egyes socket-rekordok nem voltak olvashatók. Ez a pillanatkép hiányos lehet."
-
-#: src/network_sockets/network_sockets_page.rs:173
-#, rust-format
-msgid "Captured at {time}"
-msgstr "Rögzítés ideje: {time}"
-
-#: src/network_sockets/network_sockets_page.rs:183
-#, rust-format
-msgid "Showing {shown} of {count} matching socket"
-msgid_plural "Showing {shown} of {count} matching sockets"
-msgstr[0] "{count} egyező socketből {shown} megjelenítése"
-msgstr[1] "{count} egyező socketből {shown} megjelenítése"
-
-#: src/network_sockets/network_sockets_page.rs:207
-msgid "Network Connections"
-msgstr "Hálózati kapcsolatok"
-
-#: src/network_sockets/network_sockets_page.rs:208
-msgid ""
-"View the current listening ports and socket peers from one local snapshot."
-msgstr ""
-"Az aktuális figyelő portok és socket-társak megtekintése egy helyi "
-"pillanatképből."
-
-#: src/network_sockets/network_sockets_page.rs:226
-msgid "Search address, port, process, or PID"
-msgstr "Cím, port, folyamat vagy PID keresése"
-
-#: src/network_sockets/network_sockets_page.rs:233
-msgid "Network socket filter"
-msgstr "Hálózati socket-szűrő"
-
-#: src/network_sockets/network_sockets_page.rs:235
-msgid "All"
-msgstr "Összes"
-
-#: src/network_sockets/network_sockets_page.rs:237
-msgid "Connections"
-msgstr "Kapcsolatok"
-
-#: src/network_sockets/network_sockets_page.rs:250
-msgid ""
-"Process ownership depends on system permissions. Unavailable process "
-"information does not mean that no process owns the socket."
-msgstr ""
-"A folyamat tulajdonjoga a rendszerjogosultságoktól függ. A nem elérhető "
-"folyamatadatok nem jelentik azt, hogy egyetlen folyamat sem birtokolja a "
-"socketet."
-
-#: src/network_sockets/network_sockets_page.rs:305
-msgid "Load More"
-msgstr "Továbbiak betöltése"
-
-#: src/network_sockets/network_sockets_page.rs:381
-msgid "Address copied to clipboard"
-msgstr "A cím a vágólapra másolva"
 
 #: src/scan_profiles/profile_editor_dialog.rs:118
 msgid "Profile name is required"
@@ -1773,40 +1427,21 @@ msgstr "Figyelmeztetés"
 msgid "Fail"
 msgstr "Sikertelen"
 
-#: src/system_audit/audit_report_model.rs:81
+#: src/system_audit/audit_report_model.rs:73
 msgid "ClamAV Health"
 msgstr "ClamAV állapota"
 
-#: src/system_audit/audit_report_model.rs:82
+#: src/system_audit/audit_report_model.rs:74
 msgid "Firewall"
 msgstr "Tűzfal"
 
-#: src/system_audit/audit_report_model.rs:83
+#: src/system_audit/audit_report_model.rs:75
 msgid "Access Control"
 msgstr "Hozzáférés-vezérlés"
 
-#: src/system_audit/audit_report_model.rs:84
-#: src/system_audit/clamav_health_checks.rs:341
-#: src/system_audit/security_audit_checks.rs:270
-msgid "Automatic Updates"
-msgstr "Automatikus frissítések"
-
-#: src/system_audit/audit_report_model.rs:85
+#: src/system_audit/audit_report_model.rs:76
 msgid "Intrusion Detection"
 msgstr "Behatolásészlelés"
-
-#: src/system_audit/audit_report_model.rs:86
-msgid "SSH Security"
-msgstr "SSH-biztonság"
-
-#: src/system_audit/audit_report_model.rs:87
-#: src/system_audit/security_audit_checks.rs:719
-msgid "Portmaster"
-msgstr "Portmaster"
-
-#: src/system_audit/audit_report_model.rs:88
-msgid "Deep scans"
-msgstr "Mély vizsgálatok"
 
 #: src/system_audit/clamav_health_checks.rs:134
 #, rust-format
@@ -1882,12 +1517,15 @@ msgstr "A ClamAV démon nem fut"
 msgid "Start the daemon for faster scanning"
 msgstr "Indítsa el a démont a gyorsabb vizsgálathoz"
 
+#: src/system_audit/clamav_health_checks.rs:341
+msgid "Automatic Updates"
+msgstr "Automatikus frissítések"
+
 #: src/system_audit/clamav_health_checks.rs:347
 msgid "Freshclam service is active"
 msgstr "A freshclam szolgáltatás aktív"
 
 #: src/system_audit/clamav_health_checks.rs:355
-#: src/system_audit/security_audit_checks.rs:272
 msgid "Could not determine automatic update status"
 msgstr "Nem sikerült megállapítani az automatikus frissítés állapotát"
 
@@ -1899,530 +1537,123 @@ msgstr "A freshclam automatikus frissítő szolgáltatás nem fut"
 msgid "Enable automatic database updates"
 msgstr "Automatikus adatbázis-frissítések engedélyezése"
 
-#: src/system_audit/firewall_audit_checks.rs:206
-msgid "UFW Firewall"
-msgstr "UFW tűzfal"
-
-#: src/system_audit/firewall_audit_checks.rs:215
-msgid ""
-"UFW is active; the default incoming policy is deny. Listed rules may allow "
-"exceptions."
-msgstr ""
-"Az UFW aktív; az alapértelmezett bejövő házirend tiltás. A felsorolt "
-"szabályok kivételeket engedélyezhetnek."
-
-#: src/system_audit/firewall_audit_checks.rs:226
-msgid ""
-"UFW is active; the default incoming policy is reject. Listed rules may allow "
-"exceptions."
-msgstr ""
-"Az UFW aktív; az alapértelmezett bejövő házirend elutasítás. A felsorolt "
-"szabályok kivételeket engedélyezhetnek."
-
-#: src/system_audit/firewall_audit_checks.rs:236
-msgid "UFW is active; the default incoming policy is deny."
-msgstr "Az UFW aktív; az alapértelmezett bejövő házirend tiltás."
-
-#: src/system_audit/firewall_audit_checks.rs:244
-msgid "UFW is active; the default incoming policy is reject."
-msgstr "Az UFW aktív; az alapértelmezett bejövő házirend elutasítás."
-
-#: src/system_audit/firewall_audit_checks.rs:252
-msgid "UFW is active, but the default incoming policy allows traffic."
-msgstr ""
-"Az UFW aktív, de az alapértelmezett bejövő házirend engedélyezi a forgalmat."
-
-#: src/system_audit/firewall_audit_checks.rs:260
-msgid "UFW is active, but its default incoming policy could not be verified."
-msgstr ""
-"Az UFW aktív, de az alapértelmezett bejövő házirendje nem volt ellenőrizhető."
-
-#: src/system_audit/firewall_audit_checks.rs:265
-msgid "UFW reports inactive."
-msgstr "Az UFW inaktív állapotot jelez."
-
-#: src/system_audit/firewall_audit_checks.rs:267
-#: src/system_audit/firewall_audit_checks.rs:730
-msgid "Enable the firewall"
-msgstr ""
-
-#: src/system_audit/firewall_audit_checks.rs:272
-msgid "UFW status could not be inspected safely."
-msgstr "Az UFW állapotát nem lehetett biztonságosan ellenőrizni."
-
-#: src/system_audit/firewall_audit_checks.rs:278
-#: src/system_audit/firewall_audit_checks.rs:320
-#: src/system_audit/firewall_audit_checks.rs:538
-#: src/system_audit/firewall_audit_checks.rs:641
-#: src/system_audit/firewall_audit_checks.rs:674
-#: src/system_audit/security_audit_checks.rs:767
-#: src/system_audit/security_audit_checks.rs:799
-#, rust-format
-msgid "{name} is not installed"
-msgstr "A(z) {name} nincs telepítve"
-
-#: src/system_audit/firewall_audit_checks.rs:304
-msgid "Firewalld"
-msgstr "Firewalld"
-
-#: src/system_audit/firewall_audit_checks.rs:310
-msgid ""
-"Firewalld owns its D-Bus name; readiness and firewall policy were not "
-"queried."
-msgstr ""
-"A Firewalld birtokolja a D-Bus-nevét; a készenléti állapotot és a "
-"tűzfalházirendet nem kérdeztük le."
-
-#: src/system_audit/firewall_audit_checks.rs:327
-msgid ""
-"No Firewalld D-Bus owner was observed; this does not establish kernel "
-"firewall policy."
-msgstr ""
-"Nem észleltünk Firewalld D-Bus-tulajdonost; ez nem igazolja a kernel "
-"tűzfalházirendjét."
-
-#: src/system_audit/firewall_audit_checks.rs:335
-msgid ""
-"Firewalld ownership could not be verified; readiness and firewall policy "
-"were not queried."
-msgstr ""
-"A Firewalld tulajdonjoga nem volt ellenőrizhető; a készenléti állapotot és a "
-"tűzfalházirendet nem kérdeztük le."
-
-#: src/system_audit/firewall_audit_checks.rs:525
-msgid "nftables (native rules)"
-msgstr "nftables (natív szabályok)"
-
-#: src/system_audit/firewall_audit_checks.rs:530
-msgid ""
-"nftables input policy coverage could not be verified for both IPv4 and IPv6"
-msgstr ""
-"Az nftables bemeneti házirendjének lefedettsége nem volt ellenőrizhető mind "
-"IPv4, mind IPv6 esetén"
-
-#: src/system_audit/firewall_audit_checks.rs:547
-msgid ""
-"nftables has restrictive default input policies for IPv4 and IPv6; "
-"individual rules may allow exceptions."
-msgstr ""
-"Az nftables korlátozó alapértelmezett bemeneti házirendekkel rendelkezik "
-"IPv4 és IPv6 esetén; az egyes szabályok kivételeket engedélyezhetnek."
-
-#: src/system_audit/firewall_audit_checks.rs:555
-msgid ""
-"nftables reports a permissive default input policy; remaining coverage may "
-"be incomplete"
-msgstr ""
-"Az nftables engedékeny alapértelmezett bemeneti házirendet jelez; a "
-"fennmaradó lefedettség hiányos lehet"
-
-#: src/system_audit/firewall_audit_checks.rs:623
-msgid "iptables (IPv4)"
-msgstr "iptables (IPv4)"
-
-#: src/system_audit/firewall_audit_checks.rs:629
-msgid ""
-"iptables has a restrictive INPUT default policy; individual rules may allow "
-"exceptions."
-msgstr ""
-"Az iptables korlátozó INPUT alapértelmezett házirenddel rendelkezik; az "
-"egyes szabályok kivételeket engedélyezhetnek."
-
-#: src/system_audit/firewall_audit_checks.rs:636
-msgid "iptables has a permissive INPUT default policy"
-msgstr "Az iptables engedékeny INPUT alapértelmezett házirenddel rendelkezik"
-
-#: src/system_audit/firewall_audit_checks.rs:649
-msgid "iptables INPUT policy could not be verified"
-msgstr "Az iptables INPUT házirendje nem volt ellenőrizhető"
-
-#: src/system_audit/firewall_audit_checks.rs:656
-msgid "iptables (IPv6)"
-msgstr "iptables (IPv6)"
-
-#: src/system_audit/firewall_audit_checks.rs:662
-msgid ""
-"ip6tables has a restrictive INPUT default policy; individual rules may allow "
-"exceptions."
-msgstr ""
-"Az ip6tables korlátozó INPUT alapértelmezett házirenddel rendelkezik; az "
-"egyes szabályok kivételeket engedélyezhetnek."
-
-#: src/system_audit/firewall_audit_checks.rs:669
-msgid "ip6tables has a permissive INPUT default policy"
-msgstr "Az ip6tables engedékeny INPUT alapértelmezett házirenddel rendelkezik"
-
-#: src/system_audit/firewall_audit_checks.rs:682
-msgid "ip6tables INPUT policy could not be verified"
-msgstr "Az ip6tables INPUT házirendje nem volt ellenőrizhető"
-
-#: src/system_audit/firewall_audit_checks.rs:695
-msgid "Firewall manager overlap"
-msgstr "Tűzfalkezelők átfedése"
-
-#: src/system_audit/firewall_audit_checks.rs:698
-msgid ""
-"UFW is active while Firewalld owns its D-Bus name; their rule interaction "
-"was not evaluated."
-msgstr ""
-"Az UFW aktív, miközben a Firewalld birtokolja a D-Bus-nevét; a szabályaik "
-"kölcsönhatását nem értékeltük."
-
-#: src/system_audit/firewall_audit_checks.rs:708
+#: src/system_audit/firewall_audit_checks.rs:32
 msgid "Firewall Service"
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:716
+#: src/system_audit/firewall_audit_checks.rs:40
 msgid "The NixOS firewall service is active; allowed ports were not evaluated."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:722
+#: src/system_audit/firewall_audit_checks.rs:46
 #, rust-format
 msgid "Service {name} is active; its rules were not inspected."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:728
+#: src/system_audit/firewall_audit_checks.rs:52
 msgid ""
 "No known firewall service is active; rules may still be loaded another way."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:738
+#: src/system_audit/firewall_audit_checks.rs:54
+msgid "Enable the firewall"
+msgstr ""
+
+#: src/system_audit/firewall_audit_checks.rs:62
 msgid "Firewall services could not be listed without systemd."
 msgstr ""
 
-#: src/system_audit/firewall_audit_checks.rs:766
-#: src/system_audit/firewall_audit_checks.rs:804
-msgid "Open Ports"
-msgstr ""
-
-#: src/system_audit/firewall_audit_checks.rs:772
-#, rust-format
-msgid "{count} port listening, risky ports: {ports}"
-msgid_plural "{count} ports listening, risky ports: {ports}"
-msgstr[0] "{count} port figyel, kockázatos portok: {ports}"
-msgstr[1] "{count} port figyel, kockázatos portok: {ports}"
-
-#: src/system_audit/firewall_audit_checks.rs:779
-msgid "Review if these services need to be exposed"
-msgstr ""
-"Ellenőrizze, hogy ezeket a szolgáltatásokat szükséges-e elérhetővé tenni"
-
-#: src/system_audit/firewall_audit_checks.rs:785
-#, rust-format
-msgid "{count} port listening"
-msgid_plural "{count} ports listening"
-msgstr[0] "{count} port figyel"
-msgstr[1] "{count} port figyel"
-
-#: src/system_audit/firewall_audit_checks.rs:791
-msgid "Review open ports and close unnecessary services"
-msgstr ""
-"Ellenőrizze a nyitott portokat, és zárja le a felesleges szolgáltatásokat"
-
-#: src/system_audit/firewall_audit_checks.rs:796
-msgid "No open ports detected"
-msgstr "Nem található nyitott port"
-
-#: src/system_audit/firewall_audit_checks.rs:807
-msgid ""
-"Network socket listing is unavailable. Check that the system socket tool is "
-"installed and try again."
-msgstr ""
-"A hálózati foglalatok listázása nem érhető el. Ellenőrizze, hogy a rendszer "
-"foglalatkezelő eszköze telepítve van-e, majd próbálja újra."
-
-#: src/system_audit/security_audit_checks.rs:91
+#: src/system_audit/security_audit_checks.rs:68
 msgid "AppArmor"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:97
+#: src/system_audit/security_audit_checks.rs:74
 msgid "AppArmor is enabled"
 msgstr "Az AppArmor engedélyezve van"
 
-#: src/system_audit/security_audit_checks.rs:103
-#: src/system_audit/security_audit_checks.rs:109
+#: src/system_audit/security_audit_checks.rs:80
+#: src/system_audit/security_audit_checks.rs:86
 msgid "AppArmor module is loaded but not enabled"
 msgstr "Az AppArmor modul betöltve, de nincs engedélyezve"
 
-#: src/system_audit/security_audit_checks.rs:111
+#: src/system_audit/security_audit_checks.rs:88
 msgid "Enable AppArmor for application sandboxing"
 msgstr "Engedélyezze az AppArmort az alkalmazások elszigeteléséhez"
 
-#: src/system_audit/security_audit_checks.rs:117
+#: src/system_audit/security_audit_checks.rs:94
 msgid "SELinux"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:123
+#: src/system_audit/security_audit_checks.rs:100
 msgid "SELinux is enforcing"
 msgstr "A SELinux kikényszerítő (enforcing) módban van"
 
-#: src/system_audit/security_audit_checks.rs:128
+#: src/system_audit/security_audit_checks.rs:105
 msgid "SELinux is in permissive mode"
 msgstr "A SELinux megengedő (permissive) módban van"
 
-#: src/system_audit/security_audit_checks.rs:131
+#: src/system_audit/security_audit_checks.rs:108
 msgid "Consider switching to enforcing mode for stronger protection"
 msgstr "Fontolja meg az enforcing módra váltást a fokozott védelem érdekében"
 
-#: src/system_audit/security_audit_checks.rs:137
-#: src/system_audit/security_audit_checks.rs:143
+#: src/system_audit/security_audit_checks.rs:114
+#: src/system_audit/security_audit_checks.rs:120
 msgid "SELinux is disabled"
 msgstr "A SELinux le van tiltva"
 
-#: src/system_audit/security_audit_checks.rs:145
+#: src/system_audit/security_audit_checks.rs:122
 msgid "Enable SELinux for mandatory access control"
 msgstr "Engedélyezze a SELinuxot a kötelező hozzáférés-vezérléshez"
 
-#: src/system_audit/security_audit_checks.rs:149
+#: src/system_audit/security_audit_checks.rs:126
 msgid "SELinux mode could not be determined"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:166
+#: src/system_audit/security_audit_checks.rs:143
 msgid "MAC Framework"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:168
+#: src/system_audit/security_audit_checks.rs:145
 msgid "No mandatory access control framework detected"
 msgstr "Nem található kötelező hozzáférés-vezérlési keretrendszer"
 
-#: src/system_audit/security_audit_checks.rs:170
+#: src/system_audit/security_audit_checks.rs:147
 msgid "Consider enabling AppArmor or SELinux"
 msgstr "Érdemes engedélyezni az AppArmort vagy a SELinuxot"
 
-#: src/system_audit/security_audit_checks.rs:215
-#: src/system_audit/security_audit_checks.rs:221
-msgid "Unattended Upgrades"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:217
-msgid "Automatic security updates are enabled"
-msgstr "Az automatikus biztonsági frissítések engedélyezve vannak"
-
-#: src/system_audit/security_audit_checks.rs:223
-msgid "Unattended upgrades is installed but disabled"
-msgstr "A felügyelet nélküli frissítések telepítve vannak, de le vannak tiltva"
-
-#: src/system_audit/security_audit_checks.rs:225
-msgid "Enable automatic security updates"
-msgstr "Automatikus biztonsági frissítések engedélyezése"
-
-#: src/system_audit/security_audit_checks.rs:229
-#: src/system_audit/security_audit_checks.rs:235
-msgid "DNF Automatic"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:231
-msgid "DNF automatic updates are enabled"
-msgstr "A DNF automatikus frissítései engedélyezve vannak"
-
-#: src/system_audit/security_audit_checks.rs:237
-msgid "DNF automatic is installed but timer is not active"
-msgstr "A DNF automatic telepítve van, de az időzítő nem aktív"
-
-#: src/system_audit/security_audit_checks.rs:239
-#: src/system_audit/security_audit_checks.rs:252
-#: src/system_audit/security_audit_checks.rs:264
-msgid "Enable automatic updates"
-msgstr "Automatikus frissítések engedélyezése"
-
-#: src/system_audit/security_audit_checks.rs:243
-#: src/system_audit/security_audit_checks.rs:248
-msgid "rpm-ostree Automatic"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:245
-msgid "rpm-ostree automatic updates are enabled"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:250
-msgid "rpm-ostree automatic update timer is not active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:255
-#: src/system_audit/security_audit_checks.rs:260
-msgid "NixOS Automatic Upgrades"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:257
-msgid "The NixOS upgrade timer is active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:262
-msgid "The NixOS upgrade timer is not active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:274
-msgid "Configure automatic security updates"
-msgstr "Automatikus biztonsági frissítések beállítása"
-
-#: src/system_audit/security_audit_checks.rs:333
-msgid "Pending Reboot"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:335
-msgid "System reboot required to apply updates"
-msgstr "A frissítések alkalmazásához újra kell indítani a rendszert"
-
-#: src/system_audit/security_audit_checks.rs:338
-msgid "Reboot the system to apply pending security updates"
-msgstr ""
-"Indítsa újra a rendszert a függőben lévő biztonsági frissítések "
-"alkalmazásához"
-
-#: src/system_audit/security_audit_checks.rs:386
+#: src/system_audit/security_audit_checks.rs:198
 msgid "fail2ban is active and protecting services"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:387
+#: src/system_audit/security_audit_checks.rs:199
 msgid "CrowdSec is active with community threat intelligence"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:393
+#: src/system_audit/security_audit_checks.rs:205
 msgid "Start fail2ban to protect against brute force attacks"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:394
+#: src/system_audit/security_audit_checks.rs:206
 msgid "Start CrowdSec for collaborative intrusion prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:422
+#: src/system_audit/security_audit_checks.rs:234
 #, rust-format
 msgid "{name} is installed but not running"
 msgstr "A(z) {name} telepítve van, de nem fut"
 
-#: src/system_audit/security_audit_checks.rs:454
+#: src/system_audit/security_audit_checks.rs:266
 msgid "Intrusion Prevention"
 msgstr ""
 
-#: src/system_audit/security_audit_checks.rs:456
+#: src/system_audit/security_audit_checks.rs:268
 msgid "No intrusion detection system found"
 msgstr "Nem található behatolásészlelő rendszer"
 
-#: src/system_audit/security_audit_checks.rs:459
+#: src/system_audit/security_audit_checks.rs:271
 msgid "Install fail2ban or CrowdSec to protect against attacks"
 msgstr ""
 "Telepítse a fail2ban vagy CrowdSec programot a támadások elleni védelemhez"
-
-#: src/system_audit/security_audit_checks.rs:537
-msgid "Root Login"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:545
-#, rust-format
-msgid "Root login: {value}"
-msgstr "Root bejelentkezés: {value}"
-
-#: src/system_audit/security_audit_checks.rs:551
-#, rust-format
-msgid "Root login is allowed ({value})"
-msgstr "A root bejelentkezés engedélyezett ({value})"
-
-#: src/system_audit/security_audit_checks.rs:553
-msgid "Disable root SSH login for security"
-msgstr "Biztonsági okból tiltsa le a root SSH-bejelentkezést"
-
-#: src/system_audit/security_audit_checks.rs:566
-msgid "Password Auth"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:571
-msgid "Password authentication is disabled (key-only)"
-msgstr "A jelszavas hitelesítés le van tiltva (csak kulcs alapú)"
-
-#: src/system_audit/security_audit_checks.rs:577
-msgid "Password authentication is enabled"
-msgstr "A jelszavas hitelesítés engedélyezve van"
-
-#: src/system_audit/security_audit_checks.rs:580
-msgid "Consider disabling password auth in favor of SSH keys"
-msgstr "Fontolja meg a jelszavas hitelesítés letiltását SSH-kulcsok javára"
-
-#: src/system_audit/security_audit_checks.rs:594
-msgid "X11 Forwarding"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:599
-msgid "X11 forwarding is disabled"
-msgstr "Az X11-továbbítás le van tiltva"
-
-#: src/system_audit/security_audit_checks.rs:605
-msgid "X11 forwarding is enabled"
-msgstr "Az X11-továbbítás engedélyezve van"
-
-#: src/system_audit/security_audit_checks.rs:607
-msgid "Disable X11 forwarding to reduce attack surface"
-msgstr "Tiltsa le az X11-továbbítást a támadási felület csökkentéséhez"
-
-#: src/system_audit/security_audit_checks.rs:638
-#: src/system_audit/security_audit_checks.rs:655
-msgid "SSH Configuration"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:641
-msgid ""
-"The SSH configuration includes other files that were not evaluated; the "
-"settings below may be overridden."
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:657
-msgid "Could not read SSH configuration"
-msgstr "Nem sikerült beolvasni az SSH-beállításokat"
-
-#: src/system_audit/security_audit_checks.rs:684
-#: src/system_audit/security_audit_checks.rs:694
-#: src/system_audit/security_audit_checks.rs:702
-msgid "SSH Server"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:686
-msgid "SSH server status could not be determined"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:696
-msgid "SSH server is not running (no remote attack surface)"
-msgstr "Az SSH-kiszolgáló nem fut (nincs távoli támadási felület)"
-
-#: src/system_audit/security_audit_checks.rs:704
-msgid "SSH server is running"
-msgstr "Az SSH-kiszolgáló fut"
-
-#: src/system_audit/security_audit_checks.rs:724
-msgid "The Portmaster service is active"
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:730
-msgid "Portmaster is installed but not running"
-msgstr "A Portmaster telepítve van, de nem fut"
-
-#: src/system_audit/security_audit_checks.rs:733
-msgid "Start the Portmaster service to enable network protection"
-msgstr ""
-"Indítsa el a Portmaster szolgáltatást a hálózati védelem engedélyezéséhez"
-
-#: src/system_audit/security_audit_checks.rs:743
-msgid "Not detected — optional network monitor and application firewall"
-msgstr "Nem található — opcionális hálózati megfigyelő és alkalmazástűzfal"
-
-#: src/system_audit/security_audit_checks.rs:758
-msgid "Lynis needs administrator access, so ClamUI does not run it."
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:761
-msgid "Run 'sudo lynis audit system' for detailed recommendations"
-msgstr "A részletes javaslatokért futtassa: 'sudo lynis audit system'"
-
-#: src/system_audit/security_audit_checks.rs:770
-#, rust-format
-msgid "Install {name} for comprehensive security auditing"
-msgstr "Telepítse a(z) {name} programot az átfogó biztonsági ellenőrzéshez"
-
-#: src/system_audit/security_audit_checks.rs:792
-msgid "chkrootkit needs administrator access, so ClamUI does not run it."
-msgstr ""
-
-#: src/system_audit/security_audit_checks.rs:801
-msgid "Install chkrootkit for rootkit detection"
-msgstr "Telepítse a chkrootkitet a rootkitek észleléséhez"
 
 #: src/system_audit/system_audit_page.rs:49
 msgid "Auditing…"
@@ -2792,3 +2023,518 @@ msgid ""
 msgstr ""
 "Ingyenes csomag: percenként 4 kérés, naponta 500. Legfeljebb 650 MB méretű "
 "fájlok vizsgálhatók."
+
+#, rust-format
+#~ msgid "{count} scan"
+#~ msgid_plural "{count} scans"
+#~ msgstr[0] "{count} vizsgálat"
+#~ msgstr[1] "{count} vizsgálat"
+
+#, rust-format
+#~ msgid "{count} threat"
+#~ msgid_plural "{count} threats"
+#~ msgstr[0] "{count} fenyegetés"
+#~ msgstr[1] "{count} fenyegetés"
+
+#~ msgid "Protected"
+#~ msgstr "Védett"
+
+#~ msgid "At Risk"
+#~ msgstr "Veszélyeztetett"
+
+#~ msgid "Unprotected"
+#~ msgstr "Nem védett"
+
+#~ msgid "No scans performed yet"
+#~ msgstr "Még nem történt vizsgálat"
+
+#~ msgid "Last scan was over 30 days ago"
+#~ msgstr "Az utolsó vizsgálat több mint 30 napja történt"
+
+#~ msgid "Last scan was over a week ago"
+#~ msgstr "Az utolsó vizsgálat több mint egy hete történt"
+
+#~ msgid "Virus definitions are over 7 days old"
+#~ msgstr "A vírusdefiníciók több mint 7 naposak"
+
+#~ msgid "Virus definitions are over 1 day old"
+#~ msgstr "A vírusdefiníciók több mint 1 naposak"
+
+#~ msgid "System is protected"
+#~ msgstr "A rendszer védett"
+
+#~ msgid "less than an hour ago"
+#~ msgstr "kevesebb mint egy órája"
+
+#, rust-format
+#~ msgid "{count} hour ago"
+#~ msgid_plural "{count} hours ago"
+#~ msgstr[0] "{count} órával ezelőtt"
+#~ msgstr[1] "{count} órával ezelőtt"
+
+#, rust-format
+#~ msgid "{count} day ago"
+#~ msgid_plural "{count} days ago"
+#~ msgstr[0] "{count} nappal ezelőtt"
+#~ msgstr[1] "{count} nappal ezelőtt"
+
+#~ msgid "No scans recorded"
+#~ msgstr "Nincsenek rögzített vizsgálatok"
+
+#, rust-format
+#~ msgid "Statistics for: {range}"
+#~ msgstr "Statisztikák erre az időszakra: {range}"
+
+#~ msgid "Protection Status"
+#~ msgstr "Védelmi állapot"
+
+#~ msgid "System Status"
+#~ msgstr "Rendszerállapot"
+
+#~ msgid "Last Scan"
+#~ msgstr "Legutóbbi vizsgálat"
+
+#~ msgid "Timeframe"
+#~ msgstr "Időszak"
+
+#~ msgid "Scan Statistics"
+#~ msgstr "Vizsgálati statisztikák"
+
+#~ msgid "Total Scans"
+#~ msgstr "Vizsgálatok összesen"
+
+#~ msgid "Number of scans performed"
+#~ msgstr "Elvégzett vizsgálatok száma"
+
+#~ msgid "Files Scanned"
+#~ msgstr "Vizsgált fájlok"
+
+#~ msgid "Total files checked"
+#~ msgstr "Ellenőrzött fájlok száma"
+
+#~ msgid "Malware and suspicious files found"
+#~ msgstr "Talált kártevők és gyanús fájlok"
+
+#~ msgid "Clean Scans"
+#~ msgstr "Tiszta vizsgálatok"
+
+#~ msgid "Scans with no threats found"
+#~ msgstr "Fenyegetést nem találó vizsgálatok"
+
+#~ msgid "Average Scan Duration"
+#~ msgstr "Átlagos vizsgálati idő"
+
+#~ msgid "Mean time per scan"
+#~ msgstr "Vizsgálatonkénti átlagos idő"
+
+#~ msgid "Scan Activity"
+#~ msgstr "Vizsgálati tevékenység"
+
+#~ msgid "Scan trends over the selected timeframe"
+#~ msgstr "Vizsgálati trendek a kiválasztott időszakban"
+
+#~ msgid "Scans"
+#~ msgstr "Vizsgálatok"
+
+#~ msgid "Threats"
+#~ msgstr "Fenyegetések"
+
+#~ msgid "Quick Actions"
+#~ msgstr "Gyorsműveletek"
+
+#~ msgid "Scan your home directory"
+#~ msgstr "Saját mappa vizsgálata"
+
+#~ msgid "View Scan Logs"
+#~ msgstr "Vizsgálati naplók megtekintése"
+
+#~ msgid "See detailed scan history"
+#~ msgstr "Részletes vizsgálati előzmények megtekintése"
+
+#~ msgid "Day"
+#~ msgstr "Nap"
+
+#~ msgid "Week"
+#~ msgstr "Hét"
+
+#~ msgid "Month"
+#~ msgstr "Hónap"
+
+#~ msgid "All Time"
+#~ msgstr "Teljes időszak"
+
+#, rust-format
+#~ msgid "Failed to load statistics: {error}"
+#~ msgstr "Nem sikerült betölteni a statisztikákat: {error}"
+
+#~ msgid "Network"
+#~ msgstr "Hálózat"
+
+#~ msgid "Listening and bound"
+#~ msgstr "Figyelő és kötött"
+
+#~ msgid "Connection"
+#~ msgstr "Kapcsolat"
+
+#~ msgid "Process information unavailable"
+#~ msgstr "A folyamat adatai nem érhetők el"
+
+#, rust-format
+#~ msgid "PID {pid}"
+#~ msgstr "PID: {pid}"
+
+#, rust-format
+#~ msgid "Copy {label}"
+#~ msgstr "{label} másolása"
+
+#~ msgid "Local address"
+#~ msgstr "Helyi cím"
+
+#~ msgid "Remote address"
+#~ msgstr "Távoli cím"
+
+#~ msgid "Network socket listing timed out. Try again."
+#~ msgstr ""
+#~ "A hálózati foglalatok listázása időtúllépés miatt megszakadt. Próbálja "
+#~ "újra."
+
+#~ msgid "Network socket listing could not be completed safely. Try again."
+#~ msgstr ""
+#~ "A hálózati foglalatok listázása nem fejezhető be biztonságosan. Próbálja "
+#~ "újra."
+
+#~ msgid ""
+#~ "Network information is unavailable. Check that the system socket tool is "
+#~ "installed and try again."
+#~ msgstr ""
+#~ "A hálózati információk nem érhetők el. Ellenőrizze, hogy a rendszer "
+#~ "socket-eszköze telepítve van-e, majd próbálja újra."
+
+#~ msgid "Loading network connections…"
+#~ msgstr "Hálózati kapcsolatok betöltése…"
+
+#~ msgid "No socket records could be read from this snapshot."
+#~ msgstr "Nem olvasható be socket-rekord ebből a pillanatképből."
+
+#~ msgid "No network sockets were found in this snapshot."
+#~ msgstr "Nem találhatók hálózati socketek ebben a pillanatképben."
+
+#~ msgid "No sockets match the current filters."
+#~ msgstr "Egyetlen socket sem felel meg a jelenlegi szűrőknek."
+
+#~ msgid "The socket list was limited. This snapshot may be incomplete."
+#~ msgstr "A socketlista korlátozott volt. Ez a pillanatkép hiányos lehet."
+
+#~ msgid ""
+#~ "Some socket records could not be read. This snapshot may be incomplete."
+#~ msgstr ""
+#~ "Egyes socket-rekordok nem voltak olvashatók. Ez a pillanatkép hiányos "
+#~ "lehet."
+
+#, rust-format
+#~ msgid "Captured at {time}"
+#~ msgstr "Rögzítés ideje: {time}"
+
+#, rust-format
+#~ msgid "Showing {shown} of {count} matching socket"
+#~ msgid_plural "Showing {shown} of {count} matching sockets"
+#~ msgstr[0] "{count} egyező socketből {shown} megjelenítése"
+#~ msgstr[1] "{count} egyező socketből {shown} megjelenítése"
+
+#~ msgid "Network Connections"
+#~ msgstr "Hálózati kapcsolatok"
+
+#~ msgid ""
+#~ "View the current listening ports and socket peers from one local snapshot."
+#~ msgstr ""
+#~ "Az aktuális figyelő portok és socket-társak megtekintése egy helyi "
+#~ "pillanatképből."
+
+#~ msgid "Search address, port, process, or PID"
+#~ msgstr "Cím, port, folyamat vagy PID keresése"
+
+#~ msgid "Network socket filter"
+#~ msgstr "Hálózati socket-szűrő"
+
+#~ msgid "All"
+#~ msgstr "Összes"
+
+#~ msgid "Connections"
+#~ msgstr "Kapcsolatok"
+
+#~ msgid ""
+#~ "Process ownership depends on system permissions. Unavailable process "
+#~ "information does not mean that no process owns the socket."
+#~ msgstr ""
+#~ "A folyamat tulajdonjoga a rendszerjogosultságoktól függ. A nem elérhető "
+#~ "folyamatadatok nem jelentik azt, hogy egyetlen folyamat sem birtokolja a "
+#~ "socketet."
+
+#~ msgid "Load More"
+#~ msgstr "Továbbiak betöltése"
+
+#~ msgid "Address copied to clipboard"
+#~ msgstr "A cím a vágólapra másolva"
+
+#~ msgid "SSH Security"
+#~ msgstr "SSH-biztonság"
+
+#~ msgid "Portmaster"
+#~ msgstr "Portmaster"
+
+#~ msgid "Deep scans"
+#~ msgstr "Mély vizsgálatok"
+
+#~ msgid "UFW Firewall"
+#~ msgstr "UFW tűzfal"
+
+#~ msgid ""
+#~ "UFW is active; the default incoming policy is deny. Listed rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "Az UFW aktív; az alapértelmezett bejövő házirend tiltás. A felsorolt "
+#~ "szabályok kivételeket engedélyezhetnek."
+
+#~ msgid ""
+#~ "UFW is active; the default incoming policy is reject. Listed rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "Az UFW aktív; az alapértelmezett bejövő házirend elutasítás. A felsorolt "
+#~ "szabályok kivételeket engedélyezhetnek."
+
+#~ msgid "UFW is active; the default incoming policy is deny."
+#~ msgstr "Az UFW aktív; az alapértelmezett bejövő házirend tiltás."
+
+#~ msgid "UFW is active; the default incoming policy is reject."
+#~ msgstr "Az UFW aktív; az alapértelmezett bejövő házirend elutasítás."
+
+#~ msgid "UFW is active, but the default incoming policy allows traffic."
+#~ msgstr ""
+#~ "Az UFW aktív, de az alapértelmezett bejövő házirend engedélyezi a "
+#~ "forgalmat."
+
+#~ msgid ""
+#~ "UFW is active, but its default incoming policy could not be verified."
+#~ msgstr ""
+#~ "Az UFW aktív, de az alapértelmezett bejövő házirendje nem volt "
+#~ "ellenőrizhető."
+
+#~ msgid "UFW reports inactive."
+#~ msgstr "Az UFW inaktív állapotot jelez."
+
+#~ msgid "UFW status could not be inspected safely."
+#~ msgstr "Az UFW állapotát nem lehetett biztonságosan ellenőrizni."
+
+#, rust-format
+#~ msgid "{name} is not installed"
+#~ msgstr "A(z) {name} nincs telepítve"
+
+#~ msgid "Firewalld"
+#~ msgstr "Firewalld"
+
+#~ msgid ""
+#~ "Firewalld owns its D-Bus name; readiness and firewall policy were not "
+#~ "queried."
+#~ msgstr ""
+#~ "A Firewalld birtokolja a D-Bus-nevét; a készenléti állapotot és a "
+#~ "tűzfalházirendet nem kérdeztük le."
+
+#~ msgid ""
+#~ "No Firewalld D-Bus owner was observed; this does not establish kernel "
+#~ "firewall policy."
+#~ msgstr ""
+#~ "Nem észleltünk Firewalld D-Bus-tulajdonost; ez nem igazolja a kernel "
+#~ "tűzfalházirendjét."
+
+#~ msgid ""
+#~ "Firewalld ownership could not be verified; readiness and firewall policy "
+#~ "were not queried."
+#~ msgstr ""
+#~ "A Firewalld tulajdonjoga nem volt ellenőrizhető; a készenléti állapotot "
+#~ "és a tűzfalházirendet nem kérdeztük le."
+
+#~ msgid "nftables (native rules)"
+#~ msgstr "nftables (natív szabályok)"
+
+#~ msgid ""
+#~ "nftables input policy coverage could not be verified for both IPv4 and "
+#~ "IPv6"
+#~ msgstr ""
+#~ "Az nftables bemeneti házirendjének lefedettsége nem volt ellenőrizhető "
+#~ "mind IPv4, mind IPv6 esetén"
+
+#~ msgid ""
+#~ "nftables has restrictive default input policies for IPv4 and IPv6; "
+#~ "individual rules may allow exceptions."
+#~ msgstr ""
+#~ "Az nftables korlátozó alapértelmezett bemeneti házirendekkel rendelkezik "
+#~ "IPv4 és IPv6 esetén; az egyes szabályok kivételeket engedélyezhetnek."
+
+#~ msgid ""
+#~ "nftables reports a permissive default input policy; remaining coverage "
+#~ "may be incomplete"
+#~ msgstr ""
+#~ "Az nftables engedékeny alapértelmezett bemeneti házirendet jelez; a "
+#~ "fennmaradó lefedettség hiányos lehet"
+
+#~ msgid "iptables (IPv4)"
+#~ msgstr "iptables (IPv4)"
+
+#~ msgid ""
+#~ "iptables has a restrictive INPUT default policy; individual rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "Az iptables korlátozó INPUT alapértelmezett házirenddel rendelkezik; az "
+#~ "egyes szabályok kivételeket engedélyezhetnek."
+
+#~ msgid "iptables has a permissive INPUT default policy"
+#~ msgstr ""
+#~ "Az iptables engedékeny INPUT alapértelmezett házirenddel rendelkezik"
+
+#~ msgid "iptables INPUT policy could not be verified"
+#~ msgstr "Az iptables INPUT házirendje nem volt ellenőrizhető"
+
+#~ msgid "iptables (IPv6)"
+#~ msgstr "iptables (IPv6)"
+
+#~ msgid ""
+#~ "ip6tables has a restrictive INPUT default policy; individual rules may "
+#~ "allow exceptions."
+#~ msgstr ""
+#~ "Az ip6tables korlátozó INPUT alapértelmezett házirenddel rendelkezik; az "
+#~ "egyes szabályok kivételeket engedélyezhetnek."
+
+#~ msgid "ip6tables has a permissive INPUT default policy"
+#~ msgstr ""
+#~ "Az ip6tables engedékeny INPUT alapértelmezett házirenddel rendelkezik"
+
+#~ msgid "ip6tables INPUT policy could not be verified"
+#~ msgstr "Az ip6tables INPUT házirendje nem volt ellenőrizhető"
+
+#~ msgid "Firewall manager overlap"
+#~ msgstr "Tűzfalkezelők átfedése"
+
+#~ msgid ""
+#~ "UFW is active while Firewalld owns its D-Bus name; their rule interaction "
+#~ "was not evaluated."
+#~ msgstr ""
+#~ "Az UFW aktív, miközben a Firewalld birtokolja a D-Bus-nevét; a szabályaik "
+#~ "kölcsönhatását nem értékeltük."
+
+#, rust-format
+#~ msgid "{count} port listening, risky ports: {ports}"
+#~ msgid_plural "{count} ports listening, risky ports: {ports}"
+#~ msgstr[0] "{count} port figyel, kockázatos portok: {ports}"
+#~ msgstr[1] "{count} port figyel, kockázatos portok: {ports}"
+
+#~ msgid "Review if these services need to be exposed"
+#~ msgstr ""
+#~ "Ellenőrizze, hogy ezeket a szolgáltatásokat szükséges-e elérhetővé tenni"
+
+#, rust-format
+#~ msgid "{count} port listening"
+#~ msgid_plural "{count} ports listening"
+#~ msgstr[0] "{count} port figyel"
+#~ msgstr[1] "{count} port figyel"
+
+#~ msgid "Review open ports and close unnecessary services"
+#~ msgstr ""
+#~ "Ellenőrizze a nyitott portokat, és zárja le a felesleges szolgáltatásokat"
+
+#~ msgid "No open ports detected"
+#~ msgstr "Nem található nyitott port"
+
+#~ msgid ""
+#~ "Network socket listing is unavailable. Check that the system socket tool "
+#~ "is installed and try again."
+#~ msgstr ""
+#~ "A hálózati foglalatok listázása nem érhető el. Ellenőrizze, hogy a "
+#~ "rendszer foglalatkezelő eszköze telepítve van-e, majd próbálja újra."
+
+#~ msgid "Automatic security updates are enabled"
+#~ msgstr "Az automatikus biztonsági frissítések engedélyezve vannak"
+
+#~ msgid "Unattended upgrades is installed but disabled"
+#~ msgstr ""
+#~ "A felügyelet nélküli frissítések telepítve vannak, de le vannak tiltva"
+
+#~ msgid "Enable automatic security updates"
+#~ msgstr "Automatikus biztonsági frissítések engedélyezése"
+
+#~ msgid "DNF automatic updates are enabled"
+#~ msgstr "A DNF automatikus frissítései engedélyezve vannak"
+
+#~ msgid "DNF automatic is installed but timer is not active"
+#~ msgstr "A DNF automatic telepítve van, de az időzítő nem aktív"
+
+#~ msgid "Enable automatic updates"
+#~ msgstr "Automatikus frissítések engedélyezése"
+
+#~ msgid "Configure automatic security updates"
+#~ msgstr "Automatikus biztonsági frissítések beállítása"
+
+#~ msgid "System reboot required to apply updates"
+#~ msgstr "A frissítések alkalmazásához újra kell indítani a rendszert"
+
+#~ msgid "Reboot the system to apply pending security updates"
+#~ msgstr ""
+#~ "Indítsa újra a rendszert a függőben lévő biztonsági frissítések "
+#~ "alkalmazásához"
+
+#, rust-format
+#~ msgid "Root login: {value}"
+#~ msgstr "Root bejelentkezés: {value}"
+
+#, rust-format
+#~ msgid "Root login is allowed ({value})"
+#~ msgstr "A root bejelentkezés engedélyezett ({value})"
+
+#~ msgid "Disable root SSH login for security"
+#~ msgstr "Biztonsági okból tiltsa le a root SSH-bejelentkezést"
+
+#~ msgid "Password authentication is disabled (key-only)"
+#~ msgstr "A jelszavas hitelesítés le van tiltva (csak kulcs alapú)"
+
+#~ msgid "Password authentication is enabled"
+#~ msgstr "A jelszavas hitelesítés engedélyezve van"
+
+#~ msgid "Consider disabling password auth in favor of SSH keys"
+#~ msgstr "Fontolja meg a jelszavas hitelesítés letiltását SSH-kulcsok javára"
+
+#~ msgid "X11 forwarding is disabled"
+#~ msgstr "Az X11-továbbítás le van tiltva"
+
+#~ msgid "X11 forwarding is enabled"
+#~ msgstr "Az X11-továbbítás engedélyezve van"
+
+#~ msgid "Disable X11 forwarding to reduce attack surface"
+#~ msgstr "Tiltsa le az X11-továbbítást a támadási felület csökkentéséhez"
+
+#~ msgid "Could not read SSH configuration"
+#~ msgstr "Nem sikerült beolvasni az SSH-beállításokat"
+
+#~ msgid "SSH server is not running (no remote attack surface)"
+#~ msgstr "Az SSH-kiszolgáló nem fut (nincs távoli támadási felület)"
+
+#~ msgid "SSH server is running"
+#~ msgstr "Az SSH-kiszolgáló fut"
+
+#~ msgid "Portmaster is installed but not running"
+#~ msgstr "A Portmaster telepítve van, de nem fut"
+
+#~ msgid "Start the Portmaster service to enable network protection"
+#~ msgstr ""
+#~ "Indítsa el a Portmaster szolgáltatást a hálózati védelem engedélyezéséhez"
+
+#~ msgid "Not detected — optional network monitor and application firewall"
+#~ msgstr "Nem található — opcionális hálózati megfigyelő és alkalmazástűzfal"
+
+#~ msgid "Run 'sudo lynis audit system' for detailed recommendations"
+#~ msgstr "A részletes javaslatokért futtassa: 'sudo lynis audit system'"
+
+#, rust-format
+#~ msgid "Install {name} for comprehensive security auditing"
+#~ msgstr "Telepítse a(z) {name} programot az átfogó biztonsági ellenőrzéshez"
+
+#~ msgid "Install chkrootkit for rootkit detection"
+#~ msgstr "Telepítse a chkrootkitet a rootkitek észleléséhez"

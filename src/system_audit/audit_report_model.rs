@@ -57,22 +57,14 @@ pub enum AuditCategory {
     ClamavHealth,
     FirewallProtection,
     AccessControl,
-    AutomaticUpdates,
     IntrusionDetection,
-    SshSecurity,
-    PortmasterService,
-    DeepScans,
 }
 
-pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 8] = [
+pub const ALL_AUDIT_CATEGORIES: [AuditCategory; 4] = [
     AuditCategory::ClamavHealth,
     AuditCategory::FirewallProtection,
     AuditCategory::AccessControl,
-    AuditCategory::AutomaticUpdates,
     AuditCategory::IntrusionDetection,
-    AuditCategory::SshSecurity,
-    AuditCategory::PortmasterService,
-    AuditCategory::DeepScans,
 ];
 
 impl AuditCategory {
@@ -81,11 +73,7 @@ impl AuditCategory {
             Self::ClamavHealth => gettext("ClamAV Health"),
             Self::FirewallProtection => gettext("Firewall"),
             Self::AccessControl => gettext("Access Control"),
-            Self::AutomaticUpdates => gettext("Automatic Updates"),
             Self::IntrusionDetection => gettext("Intrusion Detection"),
-            Self::SshSecurity => gettext("SSH Security"),
-            Self::PortmasterService => gettext("Portmaster"),
-            Self::DeepScans => gettext("Deep scans"),
         }
     }
 
@@ -268,7 +256,7 @@ mod audit_report_model_tests {
         );
         assert!(
             check_with_status(AuditStatus::CheckSkipped)
-                .with_suggested_commands(["sudo lynis audit system"])
+                .with_suggested_commands(["sudo systemctl start fail2ban"])
                 .expanded_by_default()
         );
         assert!(
@@ -286,7 +274,7 @@ mod audit_report_model_tests {
     #[test]
     fn a_section_without_results_is_still_in_progress() {
         assert_eq!(
-            AuditSection::awaiting_checks(AuditCategory::SshSecurity).overall_status(),
+            AuditSection::awaiting_checks(AuditCategory::AccessControl).overall_status(),
             AuditStatus::CheckInProgress
         );
     }

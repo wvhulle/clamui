@@ -97,10 +97,6 @@ impl ActivityStatus {
             Self::ScanClean | Self::ScanInfected | Self::ScanFailed | Self::ScanCancelled
         )
     }
-
-    pub const fn is_completed_scan(self) -> bool {
-        matches!(self, Self::ScanClean | Self::ScanInfected)
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
