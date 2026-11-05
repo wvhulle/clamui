@@ -16,8 +16,11 @@ const SERVICE_SUCCESS_RESULT: &str = "success";
 const JOB_DONE_RESULT: &str = "done";
 const JOB_REPLACE_MODE: &str = "replace";
 const START_UNIT_METHOD: &str = "StartUnit";
+const KILL_UNIT_METHOD: &str = "KillUnit";
+const KILL_EVERY_PROCESS: &str = "all";
 
 static SYSTEM_BUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
+static USER_BUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UnitState {
@@ -107,6 +110,12 @@ fn first_command_arguments(exec_commands: Vec<ExecCommandRecord>) -> Vec<String>
         .unwrap_or_default()
 }
 
+async fn user_bus() -> zbus::Result<&'static Connection> {
+    USER_BUS_CONNECTION
+        .get_or_try_init(Connection::session)
+        .await
+}
+
 async fn unit_object_path(unit_name: &str) -> zbus::Result<OwnedObjectPath> {
     let system_connection = system_bus().await?;
     SystemdManagerProxy::new(system_connection)
@@ -116,7 +125,14 @@ async fn unit_object_path(unit_name: &str) -> zbus::Result<OwnedObjectPath> {
 }
 
 async fn read_unit_state(unit_path: &OwnedObjectPath) -> zbus::Result<UnitState> {
-    let unit_proxy = SystemdUnitProxy::builder(system_bus().await?)
+    read_unit_state_on(system_bus().await?, unit_path).await
+}
+
+async fn read_unit_state_on(
+    bus_connection: &Connection,
+    unit_path: &OwnedObjectPath,
+) -> zbus::Result<UnitState> {
+    let unit_proxy = SystemdUnitProxy::builder(bus_connection)
         .path(unit_path)?
         .build()
         .await?;
@@ -271,6 +287,88 @@ pub async fn start_system_unit(unit_name: &str) -> UnitStartOutcome {
         .unwrap_or_else(|start_failure| start_failure_outcome(&start_failure))
 }
 
+async fn signal_unit(unit_name: &str, signal_number: i32) -> zbus::Result<()> {
+    let manager_proxy = SystemdManagerProxy::new(system_bus().await?).await?;
+    let _no_reply_body: Option<()> = manager_proxy
+        .inner()
+        .call_with_flags(
+            KILL_UNIT_METHOD,
+            MethodFlags::AllowInteractiveAuth.into(),
+            &(unit_name, KILL_EVERY_PROCESS, signal_number),
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn signal_system_unit(unit_name: &str, signal_number: i32) -> UnitStartOutcome {
+    signal_unit(unit_name, signal_number).await.map_or_else(
+        |signal_failure| start_failure_outcome(&signal_failure),
+        |()| UnitStartOutcome::UnitFinished,
+    )
+}
+
+pub async fn enable_user_timer(timer_unit: &str) -> zbus::Result<()> {
+    let manager_proxy = SystemdManagerProxy::new(user_bus().await?).await?;
+    manager_proxy.reload().await?;
+    let _changed_files = manager_proxy
+        .enable_unit_files(&[timer_unit], false, true)
+        .await?;
+    manager_proxy.reload().await?;
+    let _started_job = manager_proxy
+        .start_unit(timer_unit, JOB_REPLACE_MODE)
+        .await?;
+    Ok(())
+}
+
+pub async fn disable_user_timer(timer_unit: &str) -> zbus::Result<()> {
+    let manager_proxy = SystemdManagerProxy::new(user_bus().await?).await?;
+    let _timer_not_running = manager_proxy.stop_unit(timer_unit, JOB_REPLACE_MODE).await;
+    let _timer_not_enabled = manager_proxy.disable_unit_files(&[timer_unit], false).await;
+    Ok(())
+}
+
+pub async fn reload_user_manager() -> zbus::Result<()> {
+    SystemdManagerProxy::new(user_bus().await?)
+        .await?
+        .reload()
+        .await
+}
+
+async fn read_user_timer_snapshot(timer_unit: &str) -> zbus::Result<TimerUnitSnapshot> {
+    let bus_connection = user_bus().await?;
+    let unit_path = SystemdManagerProxy::new(bus_connection)
+        .await?
+        .load_unit(timer_unit)
+        .await?;
+    let unit_state = read_unit_state_on(bus_connection, &unit_path).await?;
+    if unit_state == UnitState::UnitNotFound {
+        return Ok(TimerUnitSnapshot {
+            unit_state,
+            next_run: UnitTimestamp::NeverRecorded,
+            last_trigger: UnitTimestamp::NeverRecorded,
+        });
+    }
+    let timer_proxy = SystemdTimerProxy::builder(bus_connection)
+        .path(&unit_path)?
+        .build()
+        .await?;
+    Ok(TimerUnitSnapshot {
+        unit_state,
+        next_run: timestamp_from_microseconds(timer_proxy.next_elapse_microseconds().await?),
+        last_trigger: timestamp_from_microseconds(timer_proxy.last_trigger_microseconds().await?),
+    })
+}
+
+pub async fn user_timer_snapshot(timer_unit: &str) -> TimerUnitSnapshot {
+    read_user_timer_snapshot(timer_unit)
+        .await
+        .unwrap_or(TimerUnitSnapshot {
+            unit_state: UnitState::SystemdUnavailable,
+            next_run: UnitTimestamp::NeverRecorded,
+            last_trigger: UnitTimestamp::NeverRecorded,
+        })
+}
+
 async fn active_state_changes_of_unit(
     unit_name: &'static str,
 ) -> zbus::Result<BoxStream<'static, ()>> {
@@ -409,5 +507,11 @@ mod host_systemd_units_tests {
         );
         println!("{:?}", service_unit_snapshot("clamdscan.service").await);
         println!("{:?}", timer_unit_snapshot("clamdscan.timer").await);
+        assert_eq!(
+            user_timer_snapshot("no-such-clamui-unit.timer")
+                .await
+                .unit_state,
+            UnitState::UnitNotFound
+        );
     }
 }

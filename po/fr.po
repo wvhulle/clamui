@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 12:08+0100\n"
+"POT-Creation-Date: 2026-11-05 13:06+0100\n"
 "PO-Revision-Date: 2026-06-30 13:00+0200\n"
 "Last-Translator: Robin GUY <contact@robinguy.fr>\n"
 "Language-Team: French\n"
@@ -230,7 +230,7 @@ msgstr ""
 #: src/clamav_components/clamav_component_row.rs:73
 #: src/malware_scan/scan_progress_page.rs:318
 #: src/protection_status/protection_timeline_page.rs:249
-#: src/scheduled_scans/schedule_preferences_page.rs:221
+#: src/scheduled_scans/schedule_preferences_page.rs:220
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
 #: src/virustotal_lookup/virustotal_preferences_page.rs:98
@@ -343,7 +343,7 @@ msgid "0 means no size limit."
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:268
-#: src/scheduled_scans/schedule_preferences_page.rs:193
+#: src/scheduled_scans/schedule_preferences_page.rs:192
 msgid "Skip on Battery"
 msgstr "Ne pas lancer sur batterie"
 
@@ -1559,118 +1559,114 @@ msgstr ""
 
 #: src/scheduled_scans/schedule_preferences_page.rs:94
 #, rust-format
-msgid "systemctl could not be run: {error}"
+msgid "The timer could not be applied: {error}"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:97
-msgid "Failed to enable the timer."
-msgstr ""
-
-#: src/scheduled_scans/schedule_preferences_page.rs:103
+#: src/scheduled_scans/schedule_preferences_page.rs:102
 msgid "Hourly"
 msgstr "Toutes les heures"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:104
+#: src/scheduled_scans/schedule_preferences_page.rs:103
 msgid "Daily"
 msgstr "Tous les jours"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:105
+#: src/scheduled_scans/schedule_preferences_page.rs:104
 msgid "Weekly"
 msgstr "Toutes les semaines"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:106
+#: src/scheduled_scans/schedule_preferences_page.rs:105
 msgid "Monthly"
 msgstr "Tous les mois"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:113
+#: src/scheduled_scans/schedule_preferences_page.rs:112
 msgid "Monday"
 msgstr "Lundi"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:114
+#: src/scheduled_scans/schedule_preferences_page.rs:113
 msgid "Tuesday"
 msgstr "Mardi"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:115
+#: src/scheduled_scans/schedule_preferences_page.rs:114
 msgid "Wednesday"
 msgstr "Mercredi"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:116
+#: src/scheduled_scans/schedule_preferences_page.rs:115
 msgid "Thursday"
 msgstr "Jeudi"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:117
+#: src/scheduled_scans/schedule_preferences_page.rs:116
 msgid "Friday"
 msgstr "Vendredi"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:118
+#: src/scheduled_scans/schedule_preferences_page.rs:117
 msgid "Saturday"
 msgstr "Samedi"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:119
+#: src/scheduled_scans/schedule_preferences_page.rs:118
 msgid "Sunday"
 msgstr "Dimanche"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:141
+#: src/scheduled_scans/schedule_preferences_page.rs:140
 msgid "Scheduled"
 msgstr "Analyses planifiées"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:145
+#: src/scheduled_scans/schedule_preferences_page.rs:144
 msgid "Scheduled Scans"
 msgstr "Analyses planifiées"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:150
+#: src/scheduled_scans/schedule_preferences_page.rs:149
 msgid "Apply"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:158
+#: src/scheduled_scans/schedule_preferences_page.rs:157
 msgid "Enable Scheduled Scans"
 msgstr "Activer les analyses planifiées"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:163
+#: src/scheduled_scans/schedule_preferences_page.rs:162
 msgid "Scan Frequency"
 msgstr "Fréquence des analyses"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:169
+#: src/scheduled_scans/schedule_preferences_page.rs:168
 msgid "Scan Time (24-hour)"
 msgstr "Heure de l’analyse (format 24 heures)"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:174
+#: src/scheduled_scans/schedule_preferences_page.rs:173
 msgid "Day of Week"
 msgstr "Jour de la semaine"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:175
+#: src/scheduled_scans/schedule_preferences_page.rs:174
 msgid "Used for weekly scans."
 msgstr "Utilisé pour les analyses hebdomadaires."
 
-#: src/scheduled_scans/schedule_preferences_page.rs:181
+#: src/scheduled_scans/schedule_preferences_page.rs:180
 msgid "Day of Month"
 msgstr "Jour du mois"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:182
+#: src/scheduled_scans/schedule_preferences_page.rs:181
 msgid "Used for monthly scans."
 msgstr "Utilisé pour les analyses mensuelles."
 
-#: src/scheduled_scans/schedule_preferences_page.rs:188
+#: src/scheduled_scans/schedule_preferences_page.rs:187
 msgid "Scan Targets (separated by commas; empty scans your home folder)"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:194
+#: src/scheduled_scans/schedule_preferences_page.rs:193
 msgid "Do not start scheduled scans while on battery power."
 msgstr ""
 "Ne pas lancer d’analyses planifiées lorsque l’appareil fonctionne sur "
 "batterie."
 
-#: src/scheduled_scans/schedule_preferences_page.rs:199
+#: src/scheduled_scans/schedule_preferences_page.rs:198
 msgid "Auto-Quarantine"
 msgstr "Mise en quarantaine automatique"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:200
+#: src/scheduled_scans/schedule_preferences_page.rs:199
 msgid ""
 "Automatically quarantine threats found by scheduled scans. While ClamUI is "
 "open, threats are only reported."
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:323
+#: src/scheduled_scans/schedule_preferences_page.rs:322
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 

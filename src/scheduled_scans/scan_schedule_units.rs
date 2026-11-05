@@ -2,10 +2,15 @@ use std::{
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
-    process::Stdio,
 };
 
-use tokio::process::Command;
+use crate::{
+    activity_history::activity_entry_row::formatted_local_time,
+    systemd_bus::host_systemd_units::{
+        TimerUnitSnapshot, UnitState, UnitTimestamp, disable_user_timer, enable_user_timer,
+        reload_user_manager, user_timer_snapshot,
+    },
+};
 
 const SERVICE_FILE_NAME: &str = "clamui-scheduled-scan.service";
 const TIMER_FILE_NAME: &str = "clamui-scheduled-scan.timer";
@@ -57,10 +62,8 @@ pub struct ScanSchedule {
 pub enum ScheduleApplyFailure {
     #[error("the systemd user unit files could not be written: {0}")]
     UnitFilesUnwritable(io::Error),
-    #[error("systemctl could not be run: {0}")]
-    SystemctlUnavailable(io::Error),
-    #[error("systemctl refused the timer")]
-    TimerNotEnabled,
+    #[error("the systemd user manager refused the timer: {0}")]
+    UserManagerFailed(#[from] zbus::Error),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -165,16 +168,6 @@ pub fn current_launcher_path() -> io::Result<PathBuf> {
     ))
 }
 
-async fn run_systemctl(systemctl_arguments: &[&str]) -> io::Result<std::process::Output> {
-    Command::new("systemctl")
-        .arg("--user")
-        .args(systemctl_arguments)
-        .stdin(Stdio::null())
-        .kill_on_drop(true)
-        .output()
-        .await
-}
-
 pub async fn enable_scan_schedule(
     unit_directory: PathBuf,
     scan_schedule: ScanSchedule,
@@ -195,23 +188,12 @@ pub async fn enable_scan_schedule(
             )
         })
         .map_err(ScheduleApplyFailure::UnitFilesUnwritable)?;
-    run_systemctl(&["daemon-reload"])
-        .await
-        .map_err(ScheduleApplyFailure::SystemctlUnavailable)?;
-    let enable_output = run_systemctl(&["enable", "--now", TIMER_FILE_NAME])
-        .await
-        .map_err(ScheduleApplyFailure::SystemctlUnavailable)?;
-    if enable_output.status.success() {
-        Ok(())
-    } else {
-        Err(ScheduleApplyFailure::TimerNotEnabled)
-    }
+    enable_user_timer(TIMER_FILE_NAME).await?;
+    Ok(())
 }
 
 pub async fn disable_scan_schedule(unit_directory: PathBuf) -> Result<(), ScheduleApplyFailure> {
-    let _timer_already_disabled = run_systemctl(&["disable", "--now", TIMER_FILE_NAME])
-        .await
-        .map_err(ScheduleApplyFailure::SystemctlUnavailable)?;
+    disable_user_timer(TIMER_FILE_NAME).await?;
     [SERVICE_FILE_NAME, TIMER_FILE_NAME]
         .iter()
         .try_for_each(
@@ -222,44 +204,25 @@ pub async fn disable_scan_schedule(unit_directory: PathBuf) -> Result<(), Schedu
             },
         )
         .map_err(ScheduleApplyFailure::UnitFilesUnwritable)?;
-    run_systemctl(&["daemon-reload"])
-        .await
-        .map_err(ScheduleApplyFailure::SystemctlUnavailable)?;
+    reload_user_manager().await?;
     Ok(())
 }
 
-pub fn parse_timer_properties(timer_properties: &str) -> ScheduleTimerState {
-    let property_value = |property_name: &str| {
-        timer_properties.lines().find_map(|property_line| {
-            property_line
-                .strip_prefix(property_name)
-                .and_then(|remaining_text| remaining_text.strip_prefix('='))
-        })
-    };
-    if property_value("ActiveState") == Some("active") {
-        ScheduleTimerState::TimerActive {
-            next_run_text: property_value("NextElapseUSecRealtime")
-                .unwrap_or_default()
-                .to_owned(),
-        }
-    } else {
-        ScheduleTimerState::TimerInactive
+pub fn schedule_state_from_timer(timer_snapshot: TimerUnitSnapshot) -> ScheduleTimerState {
+    match timer_snapshot.unit_state {
+        UnitState::UnitActive => ScheduleTimerState::TimerActive {
+            next_run_text: match timer_snapshot.next_run {
+                UnitTimestamp::RecordedAt { unix_seconds } => formatted_local_time(unix_seconds),
+                UnitTimestamp::NeverRecorded => String::new(),
+            },
+        },
+        UnitState::UnitInactive | UnitState::UnitNotFound => ScheduleTimerState::TimerInactive,
+        UnitState::SystemdUnavailable => ScheduleTimerState::SystemdUnavailable,
     }
 }
 
 pub async fn read_schedule_timer_state() -> ScheduleTimerState {
-    match run_systemctl(&[
-        "show",
-        TIMER_FILE_NAME,
-        "--property=ActiveState,NextElapseUSecRealtime",
-    ])
-    .await
-    {
-        Ok(show_output) if show_output.status.success() => {
-            parse_timer_properties(&String::from_utf8_lossy(&show_output.stdout))
-        }
-        _unavailable => ScheduleTimerState::SystemdUnavailable,
-    }
+    schedule_state_from_timer(user_timer_snapshot(TIMER_FILE_NAME).await)
 }
 
 #[cfg(test)]
@@ -333,19 +296,24 @@ mod scan_schedule_units_tests {
     }
 
     #[test]
-    fn timer_properties_report_state_and_next_run() {
+    fn an_inactive_or_missing_timer_is_not_scheduled_but_an_unreachable_manager_is_distinct() {
+        let timer_snapshot_with = |unit_state| TimerUnitSnapshot {
+            unit_state,
+            next_run: UnitTimestamp::NeverRecorded,
+            last_trigger: UnitTimestamp::NeverRecorded,
+        };
         assert_eq!(
-            parse_timer_properties(
-                "NextElapseUSecRealtime=Sun 2026-11-08 02:05:00 CET\nActiveState=active\n"
-            ),
-            ScheduleTimerState::TimerActive {
-                next_run_text: "Sun 2026-11-08 02:05:00 CET".to_owned()
-            }
-        );
-        assert_eq!(
-            parse_timer_properties("ActiveState=inactive\n"),
+            schedule_state_from_timer(timer_snapshot_with(UnitState::UnitNotFound)),
             ScheduleTimerState::TimerInactive
         );
+        assert_eq!(
+            schedule_state_from_timer(timer_snapshot_with(UnitState::SystemdUnavailable)),
+            ScheduleTimerState::SystemdUnavailable
+        );
+        assert!(matches!(
+            schedule_state_from_timer(timer_snapshot_with(UnitState::UnitActive)),
+            ScheduleTimerState::TimerActive { .. }
+        ));
     }
 
     #[test]

@@ -90,11 +90,10 @@ fn describe_apply_failure(apply_failure: &ScheduleApplyFailure) -> String {
             gettext("Error creating systemd files: {error}")
                 .replace("{error}", &unit_failure.to_string())
         }
-        ScheduleApplyFailure::SystemctlUnavailable(systemctl_failure) => {
-            gettext("systemctl could not be run: {error}")
-                .replace("{error}", &systemctl_failure.to_string())
+        ScheduleApplyFailure::UserManagerFailed(manager_failure) => {
+            gettext("The timer could not be applied: {error}")
+                .replace("{error}", &manager_failure.to_string())
         }
-        ScheduleApplyFailure::TimerNotEnabled => gettext("Failed to enable the timer."),
     }
 }
 

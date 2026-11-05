@@ -4,20 +4,19 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use futures::{
-    Stream, StreamExt,
-    future::{Either, ready},
-    stream,
-};
+use futures::{Stream, StreamExt, future::ready, stream};
 use tokio::{process::Command, task::spawn_blocking};
 
 use crate::{
     malware_scan::scanner_process_events::{
         RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
     },
+    systemd_bus::host_systemd_units::{UnitStartOutcome, signal_system_unit, start_system_unit},
     systemd_journal::unit_journal_reader::unit_messages_since,
     virus_database::database_directory_status::FreshclamServiceState,
 };
+
+const UPDATE_NOW_SIGNAL: i32 = 10;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DatabaseUpdatePlan {
@@ -46,33 +45,33 @@ pub fn plan_database_update(service_state: FreshclamServiceState) -> DatabaseUpd
     }
 }
 
-fn update_command_arguments(update_plan: DatabaseUpdatePlan) -> Vec<String> {
-    match update_plan {
-        DatabaseUpdatePlan::SignalRunningDaemon { service_unit } => vec![
-            "systemctl".to_owned(),
-            "kill".to_owned(),
-            "--signal=SIGUSR1".to_owned(),
-            format!("{service_unit}.service"),
-        ],
-        DatabaseUpdatePlan::StartServiceUnit { service_unit } => vec![
-            "systemctl".to_owned(),
-            "start".to_owned(),
-            format!("{service_unit}.service"),
-        ],
-        DatabaseUpdatePlan::RunFreshclamDirectly => {
-            vec!["freshclam".to_owned(), "--verbose".to_owned()]
-        }
-    }
-}
-
-fn build_update_command(update_plan: DatabaseUpdatePlan) -> Command {
-    let command_arguments = update_command_arguments(update_plan);
-    let mut update_command = std::process::Command::new(&command_arguments[0]);
+fn build_freshclam_command() -> Command {
+    let mut update_command = std::process::Command::new("freshclam");
     update_command
-        .args(&command_arguments[1..])
+        .arg("--verbose")
         .stdin(Stdio::null())
         .process_group(0);
     Command::from(update_command)
+}
+
+fn events_from_unit_outcome(start_outcome: UnitStartOutcome) -> Vec<DatabaseUpdateEvent> {
+    let exited_cleanly = DatabaseUpdateEvent::UpdaterExited { exit_code: 0 };
+    let exited_with_failure = DatabaseUpdateEvent::UpdaterExited { exit_code: 1 };
+    match start_outcome {
+        UnitStartOutcome::UnitFinished => vec![exited_cleanly],
+        UnitStartOutcome::JobEnded { job_result } => vec![
+            DatabaseUpdateEvent::UpdateOutputLine(format!("service job ended: {job_result}")),
+            exited_with_failure,
+        ],
+        UnitStartOutcome::AuthorizationRefused => vec![
+            DatabaseUpdateEvent::UpdateOutputLine("access denied".to_owned()),
+            exited_with_failure,
+        ],
+        UnitStartOutcome::BusFailure { failure_text } => vec![
+            DatabaseUpdateEvent::UpdateOutputLine(failure_text),
+            exited_with_failure,
+        ],
+    }
 }
 
 fn lossy_output_line(output_line: &[u8]) -> String {
@@ -113,29 +112,37 @@ pub fn database_update_events(
     update_plan: DatabaseUpdatePlan,
 ) -> impl Stream<Item = DatabaseUpdateEvent> + Send + 'static {
     let started_after = current_unix_seconds();
-    let journal_lines = stream::once(async move {
-        match update_plan {
-            DatabaseUpdatePlan::StartServiceUnit { service_unit } => {
-                service_journal_lines(service_unit, started_after).await
-            }
-            DatabaseUpdatePlan::SignalRunningDaemon { .. }
-            | DatabaseUpdatePlan::RunFreshclamDirectly => Vec::new(),
-        }
-    })
-    .flat_map(stream::iter)
-    .map(DatabaseUpdateEvent::UpdateOutputLine);
-    match scanner_process_events(
-        build_update_command(update_plan),
-        RetainedScannerFiles::NoRetainedFiles,
-    ) {
-        Ok(process_events) => Either::Left(
-            process_events
-                .map(update_event_from_process)
-                .chain(journal_lines),
-        ),
-        Err(start_failure) => Either::Right(stream::once(ready(
-            DatabaseUpdateEvent::UpdaterUnstartable(start_failure),
-        ))),
+    match update_plan {
+        DatabaseUpdatePlan::SignalRunningDaemon { service_unit } => stream::once(async move {
+            events_from_unit_outcome(
+                signal_system_unit(&format!("{service_unit}.service"), UPDATE_NOW_SIGNAL).await,
+            )
+        })
+        .flat_map(stream::iter)
+        .boxed(),
+        DatabaseUpdatePlan::StartServiceUnit { service_unit } => stream::once(async move {
+            let unit_events = events_from_unit_outcome(
+                start_system_unit(&format!("{service_unit}.service")).await,
+            );
+            service_journal_lines(service_unit, started_after)
+                .await
+                .into_iter()
+                .map(DatabaseUpdateEvent::UpdateOutputLine)
+                .chain(unit_events)
+                .collect::<Vec<_>>()
+        })
+        .flat_map(stream::iter)
+        .boxed(),
+        DatabaseUpdatePlan::RunFreshclamDirectly => match scanner_process_events(
+            build_freshclam_command(),
+            RetainedScannerFiles::NoRetainedFiles,
+        ) {
+            Ok(process_events) => process_events.map(update_event_from_process).boxed(),
+            Err(start_failure) => stream::once(ready(DatabaseUpdateEvent::UpdaterUnstartable(
+                start_failure,
+            )))
+            .boxed(),
+        },
     }
 }
 
@@ -168,26 +175,22 @@ mod database_update_events_tests {
     }
 
     #[test]
-    fn no_plan_elevates_freshclam_itself() {
-        [
-            DatabaseUpdatePlan::SignalRunningDaemon {
-                service_unit: "clamav-freshclam",
-            },
-            DatabaseUpdatePlan::StartServiceUnit {
-                service_unit: "clamav-freshclam",
-            },
-            DatabaseUpdatePlan::RunFreshclamDirectly,
-        ]
-        .into_iter()
-        .for_each(|update_plan| {
-            let command_arguments = update_command_arguments(update_plan);
-            assert_ne!(command_arguments[0], "pkexec");
-            assert_ne!(command_arguments[0], "sudo");
-            assert!(
-                !command_arguments
-                    .iter()
-                    .any(|command_argument| command_argument.starts_with("--config-file"))
-            );
-        });
+    fn a_refused_authorization_is_reported_as_a_failed_update() {
+        let refused_events = events_from_unit_outcome(UnitStartOutcome::AuthorizationRefused);
+        assert!(matches!(
+            refused_events.as_slice(),
+            [
+                DatabaseUpdateEvent::UpdateOutputLine(_),
+                DatabaseUpdateEvent::UpdaterExited { exit_code: 1 }
+            ]
+        ));
+    }
+
+    #[test]
+    fn a_finished_unit_is_a_clean_exit() {
+        assert!(matches!(
+            events_from_unit_outcome(UnitStartOutcome::UnitFinished).as_slice(),
+            [DatabaseUpdateEvent::UpdaterExited { exit_code: 0 }]
+        ));
     }
 }

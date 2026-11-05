@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 12:08+0100\n"
+"POT-Creation-Date: 2026-11-05 13:06+0100\n"
 "PO-Revision-Date: 2026-07-22 21:29+0800\n"
 "Last-Translator: Markson Hosben <marksonhosben@proton.me>\n"
 "Language-Team: Chinese <>\n"
@@ -226,7 +226,7 @@ msgstr ""
 #: src/clamav_components/clamav_component_row.rs:73
 #: src/malware_scan/scan_progress_page.rs:318
 #: src/protection_status/protection_timeline_page.rs:249
-#: src/scheduled_scans/schedule_preferences_page.rs:221
+#: src/scheduled_scans/schedule_preferences_page.rs:220
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
 #: src/virustotal_lookup/virustotal_preferences_page.rs:98
@@ -337,7 +337,7 @@ msgid "0 means no size limit."
 msgstr ""
 
 #: src/application_settings/preferences_dialog.rs:268
-#: src/scheduled_scans/schedule_preferences_page.rs:193
+#: src/scheduled_scans/schedule_preferences_page.rs:192
 msgid "Skip on Battery"
 msgstr "使用电池时跳过"
 
@@ -1524,116 +1524,112 @@ msgstr ""
 
 #: src/scheduled_scans/schedule_preferences_page.rs:94
 #, rust-format
-msgid "systemctl could not be run: {error}"
+msgid "The timer could not be applied: {error}"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:97
-msgid "Failed to enable the timer."
-msgstr ""
-
-#: src/scheduled_scans/schedule_preferences_page.rs:103
+#: src/scheduled_scans/schedule_preferences_page.rs:102
 msgid "Hourly"
 msgstr "每小时"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:104
+#: src/scheduled_scans/schedule_preferences_page.rs:103
 msgid "Daily"
 msgstr "每天"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:105
+#: src/scheduled_scans/schedule_preferences_page.rs:104
 msgid "Weekly"
 msgstr "每周"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:106
+#: src/scheduled_scans/schedule_preferences_page.rs:105
 msgid "Monthly"
 msgstr "每月"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:113
+#: src/scheduled_scans/schedule_preferences_page.rs:112
 msgid "Monday"
 msgstr "星期一"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:114
+#: src/scheduled_scans/schedule_preferences_page.rs:113
 msgid "Tuesday"
 msgstr "星期二"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:115
+#: src/scheduled_scans/schedule_preferences_page.rs:114
 msgid "Wednesday"
 msgstr "星期三"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:116
+#: src/scheduled_scans/schedule_preferences_page.rs:115
 msgid "Thursday"
 msgstr "星期四"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:117
+#: src/scheduled_scans/schedule_preferences_page.rs:116
 msgid "Friday"
 msgstr "星期五"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:118
+#: src/scheduled_scans/schedule_preferences_page.rs:117
 msgid "Saturday"
 msgstr "星期六"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:119
+#: src/scheduled_scans/schedule_preferences_page.rs:118
 msgid "Sunday"
 msgstr "星期日"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:141
+#: src/scheduled_scans/schedule_preferences_page.rs:140
 msgid "Scheduled"
 msgstr "定时扫描"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:145
+#: src/scheduled_scans/schedule_preferences_page.rs:144
 msgid "Scheduled Scans"
 msgstr "计划扫描"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:150
+#: src/scheduled_scans/schedule_preferences_page.rs:149
 msgid "Apply"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:158
+#: src/scheduled_scans/schedule_preferences_page.rs:157
 msgid "Enable Scheduled Scans"
 msgstr "启用计划扫描"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:163
+#: src/scheduled_scans/schedule_preferences_page.rs:162
 msgid "Scan Frequency"
 msgstr "扫描频率"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:169
+#: src/scheduled_scans/schedule_preferences_page.rs:168
 msgid "Scan Time (24-hour)"
 msgstr "扫描时间（24 小时制）"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:174
+#: src/scheduled_scans/schedule_preferences_page.rs:173
 msgid "Day of Week"
 msgstr "每周扫描日"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:175
+#: src/scheduled_scans/schedule_preferences_page.rs:174
 msgid "Used for weekly scans."
 msgstr "用于每周扫描。"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:181
+#: src/scheduled_scans/schedule_preferences_page.rs:180
 msgid "Day of Month"
 msgstr "每月扫描日"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:182
+#: src/scheduled_scans/schedule_preferences_page.rs:181
 msgid "Used for monthly scans."
 msgstr "用于每月扫描。"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:188
+#: src/scheduled_scans/schedule_preferences_page.rs:187
 msgid "Scan Targets (separated by commas; empty scans your home folder)"
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:194
+#: src/scheduled_scans/schedule_preferences_page.rs:193
 msgid "Do not start scheduled scans while on battery power."
 msgstr "使用电池供电时，不启动计划扫描。"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:199
+#: src/scheduled_scans/schedule_preferences_page.rs:198
 msgid "Auto-Quarantine"
 msgstr "自动隔离"
 
-#: src/scheduled_scans/schedule_preferences_page.rs:200
+#: src/scheduled_scans/schedule_preferences_page.rs:199
 msgid ""
 "Automatically quarantine threats found by scheduled scans. While ClamUI is "
 "open, threats are only reported."
 msgstr ""
 
-#: src/scheduled_scans/schedule_preferences_page.rs:323
+#: src/scheduled_scans/schedule_preferences_page.rs:322
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 
