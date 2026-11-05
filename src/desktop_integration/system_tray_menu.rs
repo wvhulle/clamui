@@ -2,9 +2,12 @@ use gettextrs::gettext;
 use ksni::menu::StandardItem;
 use relm4::gtk::{gio::prelude::ActionGroupExt, glib};
 
-use crate::APPLICATION_ID;
+use crate::{APPLICATION_ID, background_detections::detection_alerts::OPEN_DETECTIONS_ACTION};
 
-pub struct SystemTrayMenu;
+#[derive(Default)]
+pub struct SystemTrayMenu {
+    pub unresolved_detections: usize,
+}
 
 fn activate_application_action(action_name: &'static str) {
     glib::MainContext::default().invoke(move || {
@@ -36,6 +39,18 @@ impl ksni::Tray for SystemTrayMenu {
         APPLICATION_ID.to_owned()
     }
 
+    fn status(&self) -> ksni::Status {
+        if self.unresolved_detections > 0 {
+            ksni::Status::NeedsAttention
+        } else {
+            ksni::Status::Active
+        }
+    }
+
+    fn attention_icon_name(&self) -> String {
+        "dialog-warning".to_owned()
+    }
+
     fn activate(&mut self, _horizontal: i32, _vertical: i32) {
         activate_application_action("show-window");
     }
@@ -43,6 +58,7 @@ impl ksni::Tray for SystemTrayMenu {
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         vec![
             tray_menu_item(gettext("Show ClamUI"), "show-window"),
+            tray_menu_item(gettext("Show Detections"), OPEN_DETECTIONS_ACTION),
             tray_menu_item(gettext("Quick Scan"), "quick-scan"),
             tray_menu_item(gettext("Update Definitions"), "update-definitions"),
             ksni::MenuItem::Separator,

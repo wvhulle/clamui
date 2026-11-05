@@ -1,12 +1,14 @@
 use std::path::PathBuf;
 
 const STARTUP_PAGE_PREFIX: &str = "--page=";
+const BACKGROUND_ARGUMENT: &str = "--background";
 pub const DEFAULT_STARTUP_PAGE: &str = "protection";
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct StartupRequest {
     pub startup_page: String,
     pub scan_targets: Vec<PathBuf>,
+    pub start_in_background: bool,
 }
 
 pub fn parse_startup_arguments(
@@ -16,8 +18,13 @@ pub fn parse_startup_arguments(
         StartupRequest {
             startup_page: DEFAULT_STARTUP_PAGE.to_owned(),
             scan_targets: Vec::new(),
+            start_in_background: false,
         },
         |mut startup_request, command_line_argument| {
+            if command_line_argument == BACKGROUND_ARGUMENT {
+                startup_request.start_in_background = true;
+                return startup_request;
+            }
             match command_line_argument.strip_prefix(STARTUP_PAGE_PREFIX) {
                 Some(startup_page) => startup_page.clone_into(&mut startup_request.startup_page),
                 None => {
@@ -51,6 +58,7 @@ mod startup_arguments_tests {
             StartupRequest {
                 startup_page: DEFAULT_STARTUP_PAGE.to_owned(),
                 scan_targets: Vec::new(),
+                start_in_background: false,
             }
         );
     }
@@ -62,7 +70,15 @@ mod startup_arguments_tests {
             StartupRequest {
                 startup_page: "quarantine".to_owned(),
                 scan_targets: vec![PathBuf::from("/scan/one"), PathBuf::from("/scan/two")],
+                start_in_background: false,
             }
         );
+    }
+
+    #[test]
+    fn the_background_flag_is_not_mistaken_for_a_scan_target() {
+        let startup_request = parsed_arguments(&["clamui", "--background"]);
+        assert!(startup_request.start_in_background);
+        assert!(startup_request.scan_targets.is_empty());
     }
 }

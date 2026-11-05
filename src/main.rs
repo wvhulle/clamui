@@ -37,7 +37,9 @@ use crate::{
         application_settings, settings_schema_is_installed,
     },
     application_window_shell::ApplicationWindowShell,
-    desktop_integration::running_instance_forwarding::forward_to_running_instance,
+    desktop_integration::running_instance_forwarding::{
+        another_instance_is_running, forward_to_running_instance,
+    },
     scheduled_scans::headless_scheduled_scan::{parse_scheduled_scan_options, run_scheduled_scan},
     startup_arguments::parse_startup_arguments,
 };
@@ -79,13 +81,19 @@ fn main() -> ExitCode {
         return run_scheduled_scan(scan_options);
     }
     let startup_request = parse_startup_arguments(std::env::args());
-    if forward_to_running_instance(&startup_request.scan_targets) {
+    if startup_request.start_in_background && another_instance_is_running() {
+        return ExitCode::SUCCESS;
+    }
+    if !startup_request.start_in_background
+        && forward_to_running_instance(&startup_request.scan_targets)
+    {
         return ExitCode::SUCCESS;
     }
     let application = adw::Application::builder()
         .application_id(APPLICATION_ID)
         .build();
-    let start_hidden = application_settings().boolean("start-in-background");
+    let start_hidden = startup_request.start_in_background
+        || application_settings().boolean("start-in-background");
     relm4::RelmApp::from_app(application)
         .with_args(Vec::new())
         .visible_on_activate(!start_hidden)

@@ -7,15 +7,17 @@ use relm4::{
 
 use crate::{
     application_settings::preferences_dialog::present_preferences_dialog,
+    background_detections::detection_journal_follower::JournalAccess,
     clamav_components::distribution_install_guides::{
         DistributionFamily, detect_distribution_family,
     },
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         protection_evidence::{
-            WATCHED_SERVICE_UNITS, clamui_schedule_is_enabled, gather_protection_evidence,
+            ProtectionEvidence, WATCHED_SERVICE_UNITS, clamui_schedule_is_enabled,
+            detection_notifications_are_enabled, gather_protection_evidence,
         },
-        protection_timeline_presentation::{ProtectionTimeline, protection_timeline},
+        protection_timeline_presentation::{AlertReadiness, protection_timeline},
     },
     step_timeline::{
         timeline_step_model::{TimelineStepAction, TimelineStepRequest},
@@ -43,12 +45,20 @@ pub struct ProtectionTimelinePage {
     evidence_refresh: EvidenceRefresh,
     coverage_summary: String,
     unresolved_detections: usize,
+    journal_access: JournalAccess,
+    gathered_evidence: GatheredEvidence,
+}
+
+enum GatheredEvidence {
+    NotGatheredYet,
+    Gathered(Box<ProtectionEvidence>),
 }
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageInput {
     RefreshRequested,
     UnresolvedDetectionsChanged(usize),
+    JournalAccessChanged(JournalAccess),
     StepRequested(TimelineStepRequest),
     GuidanceRequested(AuditGuidanceRequest),
     DocumentationOpenFailed(String),
@@ -61,7 +71,7 @@ pub enum ProtectionTimelinePageOutput {
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageCommand {
-    TimelineGathered(ProtectionTimeline),
+    EvidenceGathered(Box<ProtectionEvidence>),
     SectionFinished(AuditSection),
     WatchedUnitChanged,
     UnitRunFinished(UnitStartOutcome),
@@ -111,12 +121,10 @@ impl ProtectionTimelinePage {
             return;
         }
         self.evidence_refresh = EvidenceRefresh::GatheringOnce;
-        let distribution_family = self.distribution_family;
         let clamui_schedule_enabled = clamui_schedule_is_enabled();
         sender.oneshot_command(async move {
-            ProtectionTimelinePageCommand::TimelineGathered(protection_timeline(
-                &gather_protection_evidence(clamui_schedule_enabled).await,
-                distribution_family,
+            ProtectionTimelinePageCommand::EvidenceGathered(Box::new(
+                gather_protection_evidence(clamui_schedule_enabled).await,
             ))
         });
     }
@@ -138,7 +146,18 @@ impl ProtectionTimelinePage {
         });
     }
 
-    fn show_timeline(&mut self, gathered_timeline: ProtectionTimeline) {
+    fn show_timeline(&mut self) {
+        let GatheredEvidence::Gathered(protection_evidence) = &self.gathered_evidence else {
+            return;
+        };
+        let gathered_timeline = protection_timeline(
+            protection_evidence,
+            &AlertReadiness {
+                journal_access: self.journal_access.clone(),
+                notifications_enabled: detection_notifications_are_enabled(),
+            },
+            self.distribution_family,
+        );
         self.coverage_summary = gathered_timeline.coverage_summary;
         if self.timeline_rows.len() == gathered_timeline.timeline_steps.len() {
             gathered_timeline
@@ -268,6 +287,8 @@ impl Component for ProtectionTimelinePage {
             evidence_refresh: EvidenceRefresh::NothingRunning,
             coverage_summary: gettext("Checking…"),
             unresolved_detections: 0,
+            journal_access: JournalAccess::FollowingJournal,
+            gathered_evidence: GatheredEvidence::NotGatheredYet,
         };
         let protection_preferences_page = &model.section_groups.widget().clone();
         let timeline_group = model.timeline_rows.widget().clone();
@@ -300,6 +321,10 @@ impl Component for ProtectionTimelinePage {
         match page_input {
             ProtectionTimelinePageInput::UnresolvedDetectionsChanged(unresolved_detections) => {
                 self.unresolved_detections = unresolved_detections;
+            }
+            ProtectionTimelinePageInput::JournalAccessChanged(journal_access) => {
+                self.journal_access = journal_access;
+                self.show_timeline();
             }
             ProtectionTimelinePageInput::RefreshRequested => {
                 self.start_evidence_refresh(&sender);
@@ -336,8 +361,9 @@ impl Component for ProtectionTimelinePage {
         root: &Self::Root,
     ) {
         match page_command {
-            ProtectionTimelinePageCommand::TimelineGathered(gathered_timeline) => {
-                self.show_timeline(gathered_timeline);
+            ProtectionTimelinePageCommand::EvidenceGathered(protection_evidence) => {
+                self.gathered_evidence = GatheredEvidence::Gathered(protection_evidence);
+                self.show_timeline();
                 let refresh_again = self.evidence_refresh == EvidenceRefresh::GatheringThenAgain;
                 self.evidence_refresh = EvidenceRefresh::NothingRunning;
                 if refresh_again {

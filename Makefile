@@ -11,7 +11,7 @@ TRANSLATION_BUILD_DIRECTORY ?= target/locale
 SOURCE_FILES := $(shell find src -name '*.rs' | LC_ALL=C sort)
 LINGUAS := $(shell sed -e '/^[[:space:]]*$$/d' -e '/^\#/d' po/LINGUAS)
 
-.PHONY: build install install-binary install-data install-desktop-entry install-icons install-settings-schema install-translations compile-translations update-translation-template
+.PHONY: build install install-binary install-data install-user-service install-desktop-entry install-icons install-settings-schema install-translations compile-translations update-translation-template
 
 build:
 	$(CARGO) build --release --locked
@@ -21,7 +21,11 @@ install: install-binary install-data
 install-binary:
 	install -Dm755 $(RELEASE_BINARY) $(INSTALL_ROOT)/bin/clamui
 
-install-data: install-desktop-entry install-icons install-settings-schema install-translations
+install-data: install-desktop-entry install-icons install-settings-schema install-translations install-user-service
+
+install-user-service:
+	install -d $(INSTALL_ROOT)/lib/systemd/user
+	sed 's|@BINARY_PATH@|$(PREFIX)/bin/clamui|' data/clamui.service.in > $(INSTALL_ROOT)/lib/systemd/user/clamui.service
 
 install-desktop-entry:
 	install -Dm644 data/$(APPLICATION_ID).desktop.in $(SHARE_DIRECTORY)/applications/$(APPLICATION_ID).desktop

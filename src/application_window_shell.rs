@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, path::PathBuf, rc::Rc};
+use std::{cell::OnceCell, os::unix::ffi::OsStringExt, path::PathBuf, rc::Rc};
 
 use gettextrs::gettext;
 use ksni::TrayMethods;
@@ -20,8 +20,12 @@ use crate::{
     application_settings::preferences_dialog::{
         CLOSE_ACTION_KEY, application_settings, present_preferences_dialog,
     },
-    background_detections::background_detections_page::{
-        BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageOutput,
+    background_detections::{
+        background_detections_page::{
+            BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageInput,
+            BackgroundDetectionsPageOutput,
+        },
+        detection_alerts::{OPEN_DETECTION_ACTION, OPEN_DETECTIONS_ACTION},
     },
     clamav_components::component_status_page::ComponentStatusPage,
     desktop_integration::{
@@ -55,6 +59,7 @@ use crate::{
 const PREFERENCES_STARTUP_PAGE: &str = "preferences";
 const DATABASE_STARTUP_PAGE: &str = "database";
 const SCAN_PAGE_NAME: &str = "scan";
+const DETECTIONS_PAGE_NAME: &str = "detections";
 
 struct ApplicationPages {
     _device_monitor: gio::VolumeMonitor,
@@ -289,6 +294,7 @@ fn application_pages(
     data_directory: PathBuf,
     window_root: &adw::ApplicationWindow,
     startup_request: StartupRequest,
+    running_tray: RunningTray,
 ) -> ShellContent {
     let quarantine_page = QuarantineEntriesPage::builder()
         .launch(quarantine_vault.clone())
@@ -351,6 +357,7 @@ fn application_pages(
             },
         );
     let protection_input_sender = protection_page.sender().clone();
+    let journal_access_sender = protection_page.sender().clone();
     let detections_page = BackgroundDetectionsPage::builder()
         .launch(BackgroundDetectionsPageInit {
             activity_history: detections_history,
@@ -358,18 +365,23 @@ fn application_pages(
         })
         .connect_receiver(
             move |_detections_sender, detections_output| match detections_output {
+                BackgroundDetectionsPageOutput::JournalAccessChanged(journal_access) => {
+                    journal_access_sender.emit(ProtectionTimelinePageInput::JournalAccessChanged(
+                        journal_access,
+                    ));
+                }
                 BackgroundDetectionsPageOutput::UnresolvedCountChanged(unresolved_detections) => {
+                    show_unresolved_detections_in_tray(&running_tray, unresolved_detections);
                     protection_input_sender.emit(
                         ProtectionTimelinePageInput::UnresolvedDetectionsChanged(
                             unresolved_detections,
                         ),
                     );
                 }
-                BackgroundDetectionsPageOutput::QuarantineEntriesChanged => {
+                BackgroundDetectionsPageOutput::QuarantineReloadNeeded => {
                     detection_quarantine_sender
                         .emit(QuarantineEntriesPageInput::ReloadEntriesRequested);
                 }
-                BackgroundDetectionsPageOutput::DetectionsOpened(_opened_detections) => {}
             },
         );
 
@@ -382,7 +394,7 @@ fn application_pages(
             keyboard_accelerator: "<Control>1",
         },
         NavigationPage {
-            page_name: "detections",
+            page_name: DETECTIONS_PAGE_NAME,
             page_title: gettext("Detections"),
             page_icon: "dialog-warning-symbolic",
             page_widget: detections_page.widget().upcast_ref(),
@@ -465,6 +477,31 @@ fn application_pages(
         }
     });
     main_application.add_action(&scan_paths_action);
+    let open_detections_action = gio::SimpleAction::new(OPEN_DETECTIONS_ACTION, None);
+    let open_detections_stack = page_stack.clone();
+    let open_detections_window = window_root.clone();
+    open_detections_action.connect_activate(move |_activated_action, _parameter| {
+        open_detections_stack.set_visible_child_name(DETECTIONS_PAGE_NAME);
+        open_detections_window.present();
+    });
+    main_application.add_action(&open_detections_action);
+    let open_detection_action =
+        gio::SimpleAction::new(OPEN_DETECTION_ACTION, Some(glib::VariantTy::BYTE_STRING));
+    let open_detection_stack = page_stack.clone();
+    let open_detection_window = window_root.clone();
+    let open_detection_sender = detections_page.sender().clone();
+    open_detection_action.connect_activate(move |_activated_action, detected_path| {
+        open_detection_stack.set_visible_child_name(DETECTIONS_PAGE_NAME);
+        open_detection_window.present();
+        if let Some(path_bytes) =
+            detected_path.and_then(|path_variant| path_variant.get::<Vec<u8>>())
+        {
+            open_detection_sender.emit(BackgroundDetectionsPageInput::IncidentRequestedForFile(
+                PathBuf::from(std::ffi::OsString::from_vec(path_bytes)),
+            ));
+        }
+    });
+    main_application.add_action(&open_detection_action);
     let show_window_action = gio::SimpleAction::new(SHOW_WINDOW_ACTION, None);
     let shown_window = window_root.clone();
     show_window_action.connect_activate(move |_activated_action, _parameter| {
@@ -494,14 +531,31 @@ fn application_pages(
 
 type RunningTray = Rc<OnceCell<ksni::Handle<SystemTrayMenu>>>;
 
-fn start_system_tray(window_root: &adw::ApplicationWindow, running_tray: RunningTray) {
+fn show_unresolved_detections_in_tray(running_tray: &RunningTray, unresolved_detections: usize) {
+    if let Some(tray_handle) = running_tray.get().cloned() {
+        relm4::spawn(async move {
+            let _tray_stopped = tray_handle
+                .update(move |tray_menu: &mut SystemTrayMenu| {
+                    tray_menu.unresolved_detections = unresolved_detections;
+                })
+                .await;
+        });
+    }
+}
+
+fn start_system_tray(
+    window_root: &adw::ApplicationWindow,
+    running_tray: RunningTray,
+    start_in_background: bool,
+) {
     let hidden_window = window_root.clone();
     relm4::spawn_local(async move {
-        let tray_outcome = relm4::spawn(async { SystemTrayMenu.spawn().await }).await;
+        let tray_outcome = relm4::spawn(async { SystemTrayMenu::default().spawn().await }).await;
         match tray_outcome {
             Ok(Ok(tray_handle)) => {
                 let _tray_started_once = running_tray.set(tray_handle);
             }
+            _tray_unavailable if start_in_background => {}
             _tray_unavailable => hidden_window.present(),
         }
     });
@@ -511,12 +565,13 @@ fn confirm_close_action(window_root: &adw::ApplicationWindow) {
     let close_dialog = adw::AlertDialog::new(
         Some(&gettext("Close ClamUI?")),
         Some(&gettext(
-            "Keep ClamUI running in the system tray, or quit completely?",
+            "Detection alerts stop while ClamUI isn't running. Keep it running in the background, \
+             or quit completely?",
         )),
     );
     close_dialog.add_response("cancel", &gettext("Cancel"));
     close_dialog.add_response("quit", &gettext("Quit"));
-    close_dialog.add_response("minimize", &gettext("Minimize to tray"));
+    close_dialog.add_response("minimize", &gettext("Keep Running"));
     close_dialog.set_default_response(Some("minimize"));
     close_dialog.set_close_response("cancel");
     let answered_window = window_root.clone();
@@ -528,11 +583,8 @@ fn confirm_close_action(window_root: &adw::ApplicationWindow) {
     close_dialog.present(Some(window_root));
 }
 
-fn handle_window_close(window_root: &adw::ApplicationWindow, running_tray: RunningTray) {
+fn handle_window_close(window_root: &adw::ApplicationWindow) {
     window_root.connect_close_request(move |closed_window| {
-        if running_tray.get().is_none() {
-            return glib::Propagation::Proceed;
-        }
         match application_settings().string(CLOSE_ACTION_KEY).as_str() {
             "minimize" => {
                 closed_window.set_visible(false);
@@ -570,6 +622,8 @@ impl AsyncComponent for ApplicationWindowShell {
         root: Self::Root,
         _sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
+        let running_tray = RunningTray::default();
+        let start_in_background = startup_request.start_in_background;
         let data_directory = application_data_directory();
         let lock_path = data_directory.join("quarantine.lock");
         let vault_lock = relm4::spawn(async move {
@@ -588,6 +642,7 @@ impl AsyncComponent for ApplicationWindowShell {
                 data_directory,
                 &root,
                 startup_request,
+                Rc::clone(&running_tray),
             ),
             (_lock_outcome, Err(vault_failure)) => {
                 let unavailable_page = vault_unavailable_page(&vault_failure);
@@ -609,9 +664,8 @@ impl AsyncComponent for ApplicationWindowShell {
                 ShellContent::VaultUnavailable
             }
         };
-        let running_tray = RunningTray::default();
-        start_system_tray(&root, Rc::clone(&running_tray));
-        handle_window_close(&root, running_tray);
+        start_system_tray(&root, running_tray, start_in_background);
+        handle_window_close(&root);
         AsyncComponentParts {
             model: Self {
                 _shell_content: shell_content,

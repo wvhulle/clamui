@@ -23,6 +23,13 @@ pub enum JournalStartPosition {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum JournalAccess {
+    FollowingJournal,
+    JournalUnreadable,
+    FollowingFailed { failure_text: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DetectionJournalEvent {
     DetectionObserved {
         detection_record: JournalDetectionRecord,

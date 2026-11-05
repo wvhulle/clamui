@@ -21,7 +21,7 @@ use crate::{
     },
     systemd_bus::host_systemd_units::{
         ServiceLastResult, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
-        service_unit_snapshot, timer_unit_snapshot,
+        probe_user_unit_state, service_unit_snapshot, timer_unit_snapshot,
     },
     virus_database::database_directory_status::configured_database_directory,
 };
@@ -55,6 +55,8 @@ const SYSTEM_SCAN_UNITS: [SystemScanUnits; 1] = [SystemScanUnits {
 const THIRD_PARTY_SIGNATURE_EXTENSIONS: [&str; 7] =
     ["ndb", "hdb", "hsb", "ldb", "cdb", "ign2", "yara"];
 const CLAMUI_SCHEDULE_KEY: &str = "schedule-enabled";
+const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
+const BACKGROUND_SERVICE_UNIT: &str = "clamui.service";
 const SECONDS_PER_HOUR: u64 = 3_600;
 
 pub const WATCHED_SERVICE_UNITS: [&str; 10] = [
@@ -169,6 +171,7 @@ pub struct ProtectionEvidence {
     pub daemon_evidence: DaemonEvidence,
     pub on_access_evidence: OnAccessEvidence,
     pub scheduled_scan_evidence: ScheduledScanEvidence,
+    pub background_service_state: UnitState,
 }
 
 pub fn scan_targets_from_arguments(program_arguments: &[String]) -> Vec<String> {
@@ -403,6 +406,10 @@ async fn inspect_scheduled_scan(clamui_schedule_enabled: bool) -> ScheduledScanE
     }
 }
 
+pub fn detection_notifications_are_enabled() -> bool {
+    application_settings().boolean(NOTIFICATIONS_ENABLED_KEY)
+}
+
 pub fn clamui_schedule_is_enabled() -> bool {
     application_settings().boolean(CLAMUI_SCHEDULE_KEY)
 }
@@ -421,6 +428,7 @@ pub async fn gather_protection_evidence(clamui_schedule_enabled: bool) -> Protec
         daemon_evidence: inspect_daemon_evidence().await,
         on_access_evidence: inspect_on_access_evidence().await,
         scheduled_scan_evidence: inspect_scheduled_scan(clamui_schedule_enabled).await,
+        background_service_state: probe_user_unit_state(BACKGROUND_SERVICE_UNIT).await,
     }
 }
 

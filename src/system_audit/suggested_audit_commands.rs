@@ -11,6 +11,7 @@ pub enum SuggestedRemedy {
     OnAccessScanningEnable,
     OnAccessPreventionEnable,
     ScheduledScanEnable,
+    BackgroundAlertsEnable,
 }
 
 fn non_nixos_or_option(
@@ -96,6 +97,11 @@ pub fn suggested_command(
                 None
             }
         },
+        SuggestedRemedy::BackgroundAlertsEnable => non_nixos_or_option(
+            distribution_family,
+            "services.clamui.enable = true;",
+            "systemctl --user enable --now clamui.service",
+        ),
         SuggestedRemedy::ScheduledScanEnable => match distribution_family {
             NixosFamily => Some("services.clamav.scanner.enable = true;"),
             DebianFamily | FedoraWorkstation | FedoraAtomic | ArchFamily | UnrecognizedFamily => {
@@ -109,7 +115,7 @@ pub fn suggested_command(
 mod suggested_audit_commands_tests {
     use super::*;
 
-    const ALL_REMEDIES: [SuggestedRemedy; 9] = [
+    const ALL_REMEDIES: [SuggestedRemedy; 10] = [
         SuggestedRemedy::ClamavDaemonStart,
         SuggestedRemedy::FreshclamUpdatesEnable,
         SuggestedRemedy::FirewallServiceEnable,
@@ -119,6 +125,7 @@ mod suggested_audit_commands_tests {
         SuggestedRemedy::OnAccessScanningEnable,
         SuggestedRemedy::OnAccessPreventionEnable,
         SuggestedRemedy::ScheduledScanEnable,
+        SuggestedRemedy::BackgroundAlertsEnable,
     ];
 
     fn remedies_for(distribution_family: DistributionFamily) -> Vec<&'static str> {

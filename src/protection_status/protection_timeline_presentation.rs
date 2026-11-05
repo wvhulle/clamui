@@ -2,10 +2,12 @@ use gettextrs::gettext;
 
 use crate::{
     activity_history::activity_entry_row::formatted_local_time,
+    background_detections::detection_journal_follower::JournalAccess,
     clamav_components::{
         component_availability::ClamavComponent,
         distribution_install_guides::{DistributionFamily, component_install_guides},
     },
+    malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
@@ -19,13 +21,19 @@ use crate::{
         StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, TimelineStepAction,
     },
     system_audit::suggested_audit_commands::{SuggestedRemedy, suggested_command},
-    systemd_bus::host_systemd_units::{ServiceLastResult, UnitTimestamp},
+    systemd_bus::host_systemd_units::{ServiceLastResult, UnitState, UnitTimestamp},
 };
 
 const DATABASE_FRESH_DAYS: u64 = 3;
 const DATABASE_STALE_DAYS: u64 = 7;
 const THIRD_PARTY_STALE_HOURS: u64 = 48;
 const SCANNER_ERROR_STATUS: i32 = 2;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AlertReadiness {
+    pub journal_access: JournalAccess,
+    pub notifications_enabled: bool,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionTimeline {
@@ -462,6 +470,57 @@ fn scheduled_scan_step(
     }
 }
 
+fn alerts_step(
+    alert_readiness: &AlertReadiness,
+    background_service_state: UnitState,
+    distribution_family: DistributionFamily,
+) -> TimelineStep {
+    let step_title = gettext("Alerts");
+    let mechanism_details = gettext(
+        "ClamUI follows the system journal and notifies you when something is detected. It can \
+         only do that while it is running, so it should run in the background.",
+    );
+    let (node_state, status_text) = match &alert_readiness.journal_access {
+        JournalAccess::JournalUnreadable => (
+            StepNodeState::HasFailed,
+            gettext(
+                "The system journal can't be read. Add your user to the systemd-journal group.",
+            ),
+        ),
+        JournalAccess::FollowingFailed { failure_text } => (
+            StepNodeState::HasFailed,
+            gettext("Reading the system journal stopped: {error}")
+                .replace("{error}", &sanitize_scanner_line(failure_text)),
+        ),
+        JournalAccess::FollowingJournal if !alert_readiness.notifications_enabled => (
+            StepNodeState::NeedsReview,
+            gettext("Notifications are turned off in the preferences"),
+        ),
+        JournalAccess::FollowingJournal if background_service_state != UnitState::UnitActive => (
+            StepNodeState::NeedsReview,
+            gettext(
+                "Alerts stop when you quit ClamUI, because it isn't set up to run in the \
+                 background",
+            ),
+        ),
+        JournalAccess::FollowingJournal => (
+            StepNodeState::Completed,
+            gettext("Running in the background and following the journal"),
+        ),
+    };
+    TimelineStep {
+        guidance_commands: if alert_readiness.journal_access == JournalAccess::FollowingJournal
+            && alert_readiness.notifications_enabled
+            && background_service_state != UnitState::UnitActive
+        {
+            remedy_commands(SuggestedRemedy::BackgroundAlertsEnable, distribution_family)
+        } else {
+            Vec::new()
+        },
+        ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
+    }
+}
+
 fn on_access_coverage(on_access_evidence: &OnAccessEvidence) -> Option<String> {
     if on_access_evidence.on_access_scanner != OnAccessScanner::MonitorRunning
         || on_access_evidence.watched_paths.is_empty()
@@ -513,6 +572,7 @@ pub fn coverage_summary(protection_evidence: &ProtectionEvidence) -> String {
 
 pub fn protection_timeline(
     protection_evidence: &ProtectionEvidence,
+    alert_readiness: &AlertReadiness,
     distribution_family: DistributionFamily,
 ) -> ProtectionTimeline {
     let daemon_answering = daemon_is_answering(&protection_evidence.daemon_evidence);
@@ -533,6 +593,11 @@ pub fn protection_timeline(
             scheduled_scan_step(
                 &protection_evidence.scheduled_scan_evidence,
                 daemon_answering,
+                distribution_family,
+            ),
+            alerts_step(
+                alert_readiness,
+                protection_evidence.background_service_state,
                 distribution_family,
             ),
         ],
@@ -581,15 +646,27 @@ mod protection_timeline_presentation_tests {
                 last_result: ServiceLastResult::ResultSucceeded,
                 last_completed_run: ServiceRunHistory::NoCompletedRun,
             },
+            background_service_state: UnitState::UnitActive,
+        }
+    }
+
+    fn ready_alerts() -> AlertReadiness {
+        AlertReadiness {
+            journal_access: JournalAccess::FollowingJournal,
+            notifications_enabled: true,
         }
     }
 
     fn step_states(protection_evidence: &ProtectionEvidence) -> Vec<StepNodeState> {
-        protection_timeline(protection_evidence, DistributionFamily::NixosFamily)
-            .timeline_steps
-            .iter()
-            .map(|timeline_step| timeline_step.node_state)
-            .collect()
+        protection_timeline(
+            protection_evidence,
+            &ready_alerts(),
+            DistributionFamily::NixosFamily,
+        )
+        .timeline_steps
+        .iter()
+        .map(|timeline_step| timeline_step.node_state)
+        .collect()
     }
 
     #[tokio::test]
@@ -597,6 +674,7 @@ mod protection_timeline_presentation_tests {
     async fn host_timeline_reports_the_real_backend() {
         let host_timeline = protection_timeline(
             &crate::protection_status::protection_evidence::gather_protection_evidence(false).await,
+            &ready_alerts(),
             crate::clamav_components::distribution_install_guides::detect_distribution_family(),
         );
         println!("{}", host_timeline.coverage_summary);
@@ -650,6 +728,7 @@ mod protection_timeline_presentation_tests {
                 StepNodeState::HasFailed,
                 StepNodeState::AwaitingEarlier,
                 StepNodeState::AwaitingEarlier,
+                StepNodeState::Completed,
             ]
         );
         assert_eq!(
@@ -721,6 +800,50 @@ mod protection_timeline_presentation_tests {
         assert_eq!(
             step_states(&failed_updater)[SIGNATURE_POSITION],
             StepNodeState::NeedsReview
+        );
+    }
+
+    fn alert_step_state(
+        alert_readiness: &AlertReadiness,
+        background_service_state: UnitState,
+    ) -> StepNodeState {
+        alerts_step(
+            alert_readiness,
+            background_service_state,
+            DistributionFamily::NixosFamily,
+        )
+        .node_state
+    }
+
+    #[test]
+    fn alerts_are_only_complete_when_they_will_actually_fire() {
+        assert_eq!(
+            alert_step_state(&ready_alerts(), UnitState::UnitActive),
+            StepNodeState::Completed
+        );
+        assert_eq!(
+            alert_step_state(&ready_alerts(), UnitState::UnitNotFound),
+            StepNodeState::NeedsReview
+        );
+        assert_eq!(
+            alert_step_state(
+                &AlertReadiness {
+                    notifications_enabled: false,
+                    ..ready_alerts()
+                },
+                UnitState::UnitActive
+            ),
+            StepNodeState::NeedsReview
+        );
+        assert_eq!(
+            alert_step_state(
+                &AlertReadiness {
+                    journal_access: JournalAccess::JournalUnreadable,
+                    ..ready_alerts()
+                },
+                UnitState::UnitActive
+            ),
+            StepNodeState::HasFailed
         );
     }
 

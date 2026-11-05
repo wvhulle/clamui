@@ -56,6 +56,11 @@ fn running_instance_exists(session_bus: &gio::DBusConnection) -> bool {
         .is_some_and(|name_reply| name_reply.0)
 }
 
+pub fn another_instance_is_running() -> bool {
+    gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
+        .is_ok_and(|session_bus| running_instance_exists(&session_bus))
+}
+
 pub fn forward_to_running_instance(scan_targets: &[PathBuf]) -> bool {
     let Ok(session_bus) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
         return false;

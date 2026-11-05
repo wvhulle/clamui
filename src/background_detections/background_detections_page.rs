@@ -15,9 +15,10 @@ use crate::{
     activity_history::activity_history_database::ActivityHistory,
     background_detections::{
         detected_file_state::{DetectedFileState, inspect_detected_file},
+        detection_alerts::{JournalReplay, plan_detection_alerts, send_detection_alerts},
         detection_history_store::DetectionResolution,
         detection_journal_follower::{
-            DetectionJournalEvent, JournalStartPosition, detection_journal_events,
+            DetectionJournalEvent, JournalAccess, JournalStartPosition, detection_journal_events,
         },
         detection_journal_records::JournalDetectionRecord,
         incident_timeline_presentation::{
@@ -43,17 +44,16 @@ const JOURNAL_BATCH_SIZE: usize = 256;
 const LIST_VIEW_NAME: &str = "list";
 const INCIDENT_VIEW_NAME: &str = "incident";
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum JournalAccess {
-    FollowingJournal,
-    JournalUnreadable,
-    FollowingFailed { failure_text: String },
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OpenedIncident {
     NoIncidentOpen,
     IncidentOpen { detection_id: i64 },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum AwaitedIncident {
+    NothingAwaited,
+    FileAwaited { file_path: PathBuf },
 }
 
 pub struct BackgroundDetectionsPage {
@@ -63,6 +63,8 @@ pub struct BackgroundDetectionsPage {
     displayed_detections: Vec<DisplayedDetection>,
     journal_access: JournalAccess,
     opened_incident: OpenedIncident,
+    awaited_incident: AwaitedIncident,
+    application_started_unix: i64,
     deletion_prompt: DeletionPrompt,
     list_rows: Vec<adw::ActionRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow>,
@@ -79,6 +81,7 @@ pub struct BackgroundDetectionsPageInit {
 pub enum BackgroundDetectionsPageInput {
     ReloadRequested,
     IncidentOpened(i64),
+    IncidentRequestedForFile(PathBuf),
     BackToListRequested,
     StepRequested(TimelineStepRequest),
 }
@@ -86,13 +89,16 @@ pub enum BackgroundDetectionsPageInput {
 #[derive(Debug)]
 pub enum BackgroundDetectionsPageOutput {
     UnresolvedCountChanged(usize),
-    QuarantineEntriesChanged,
-    DetectionsOpened(Vec<JournalDetectionRecord>),
+    QuarantineReloadNeeded,
+    JournalAccessChanged(JournalAccess),
 }
 
 #[derive(Debug)]
 pub enum BackgroundDetectionsPageCommand {
-    DetectionsRecorded(Vec<JournalDetectionRecord>),
+    DetectionsRecorded {
+        newly_opened: Vec<JournalDetectionRecord>,
+        journal_replay: JournalReplay,
+    },
     JournalAccessChanged(JournalAccess),
     DetectionsLoaded(Vec<DisplayedDetection>),
     LoadingFailed(String),
@@ -152,9 +158,15 @@ async fn follow_detection_journal(
     activity_history: ActivityHistory,
     command_sender: relm4::Sender<BackgroundDetectionsPageCommand>,
 ) {
-    let start_position = match activity_history.saved_journal_cursor().await {
-        Ok(Some(journal_cursor)) => JournalStartPosition::AfterCursor { journal_cursor },
-        Ok(None) | Err(_) => JournalStartPosition::FromOldestEntry,
+    let (start_position, journal_replay) = match activity_history.saved_journal_cursor().await {
+        Ok(Some(journal_cursor)) => (
+            JournalStartPosition::AfterCursor { journal_cursor },
+            JournalReplay::AfterSavedCursor,
+        ),
+        Ok(None) | Err(_) => (
+            JournalStartPosition::FromOldestEntry,
+            JournalReplay::FirstImport,
+        ),
     };
     let mut event_batches =
         Box::pin(detection_journal_events(start_position).ready_chunks(JOURNAL_BATCH_SIZE));
@@ -173,9 +185,10 @@ async fn follow_detection_journal(
             .await
         {
             Ok(newly_opened) => {
-                command_sender.emit(BackgroundDetectionsPageCommand::DetectionsRecorded(
+                command_sender.emit(BackgroundDetectionsPageCommand::DetectionsRecorded {
                     newly_opened,
-                ));
+                    journal_replay,
+                });
             }
             Err(recording_failure) => {
                 command_sender.emit(BackgroundDetectionsPageCommand::LoadingFailed(
@@ -337,6 +350,25 @@ impl BackgroundDetectionsPage {
         self.view_stack.set_visible_child_name(INCIDENT_VIEW_NAME);
     }
 
+    fn open_awaited_incident(&mut self) {
+        let AwaitedIncident::FileAwaited { file_path } = &self.awaited_incident else {
+            return;
+        };
+        if let Some(displayed_detection) =
+            self.displayed_detections
+                .iter()
+                .find(|displayed_detection| {
+                    displayed_detection.stored_detection.file_path == *file_path
+                })
+        {
+            self.opened_incident = OpenedIncident::IncidentOpen {
+                detection_id: displayed_detection.stored_detection.detection_id,
+            };
+            self.deletion_prompt = DeletionPrompt::NotAsked;
+        }
+        self.awaited_incident = AwaitedIncident::NothingAwaited;
+    }
+
     fn resolve_in_background(
         &self,
         sender: &ComponentSender<Self>,
@@ -481,6 +513,8 @@ impl Component for BackgroundDetectionsPage {
             displayed_detections: Vec::new(),
             journal_access: JournalAccess::FollowingJournal,
             opened_incident: OpenedIncident::NoIncidentOpen,
+            awaited_incident: AwaitedIncident::NothingAwaited,
+            application_started_unix: current_unix_seconds(),
             deletion_prompt: DeletionPrompt::NotAsked,
             list_rows: Vec::new(),
             incident_rows,
@@ -524,6 +558,10 @@ impl Component for BackgroundDetectionsPage {
                 self.deletion_prompt = DeletionPrompt::NotAsked;
                 self.show_opened_incident();
             }
+            BackgroundDetectionsPageInput::IncidentRequestedForFile(file_path) => {
+                self.awaited_incident = AwaitedIncident::FileAwaited { file_path };
+                self.start_reload(&sender);
+            }
             BackgroundDetectionsPageInput::BackToListRequested => {
                 self.opened_incident = OpenedIncident::NoIncidentOpen;
                 self.deletion_prompt = DeletionPrompt::NotAsked;
@@ -549,16 +587,22 @@ impl Component for BackgroundDetectionsPage {
         root: &Self::Root,
     ) {
         match page_command {
-            BackgroundDetectionsPageCommand::DetectionsRecorded(newly_opened) => {
-                if !newly_opened.is_empty() {
-                    let _shell_closed = sender.output(
-                        BackgroundDetectionsPageOutput::DetectionsOpened(newly_opened),
-                    );
-                }
+            BackgroundDetectionsPageCommand::DetectionsRecorded {
+                newly_opened,
+                journal_replay,
+            } => {
+                send_detection_alerts(&plan_detection_alerts(
+                    &newly_opened,
+                    journal_replay,
+                    self.application_started_unix,
+                ));
                 self.start_reload(&sender);
             }
             BackgroundDetectionsPageCommand::JournalAccessChanged(journal_access) => {
-                self.journal_access = journal_access;
+                self.journal_access = journal_access.clone();
+                let _shell_closed = sender.output(
+                    BackgroundDetectionsPageOutput::JournalAccessChanged(journal_access),
+                );
                 self.list_group
                     .set_description(Some(&gtk::glib::markup_escape_text(
                         &self.list_description(),
@@ -571,6 +615,7 @@ impl Component for BackgroundDetectionsPage {
                         &self.list_description(),
                     )));
                 self.rebuild_list_rows(&sender);
+                self.open_awaited_incident();
                 if self.opened_incident != OpenedIncident::NoIncidentOpen {
                     self.show_opened_incident();
                 }
@@ -594,7 +639,7 @@ impl Component for BackgroundDetectionsPage {
                 match action_outcome {
                     Ok(IncidentActionEffect::QuarantineChanged) => {
                         let _shell_closed =
-                            sender.output(BackgroundDetectionsPageOutput::QuarantineEntriesChanged);
+                            sender.output(BackgroundDetectionsPageOutput::QuarantineReloadNeeded);
                     }
                     Ok(IncidentActionEffect::OnlyHistoryChanged) => {}
                     Err(failure_text) => {

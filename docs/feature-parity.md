@@ -89,7 +89,8 @@ Debug logs and the in-app language picker are deliberately not ported: this fork
 
 ## Desktop integration
 
-- [x] Tray with `ksni`.
+- [x] Tray with `ksni`, showing an attention state for unresolved detections.
+- [x] Alerts for background detections, and one summary of what was missed while ClamUI wasn't running.
 - [x] Notifications with `gio::Notification`, and over D-Bus from scheduled scans.
 - [x] A second launch forwards its paths to the running window.
 - [x] File manager actions for Nautilus, Nemo and Dolphin. Scan only, with no VirusTotal action.

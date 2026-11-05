@@ -1,0 +1,12 @@
+[Unit]
+Description=ClamUI detection alerts
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=@BINARY_PATH@ --background
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

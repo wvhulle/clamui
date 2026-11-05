@@ -4,6 +4,14 @@ A native GTK desktop frontend for host-installed ClamAV, built with Relm4 and li
 
 This is a hard fork of [ClamUI](https://github.com/linx-systems/clamui). ClamAV itself is not bundled: `clamdscan` or `clamscan` must be on `PATH`.
 
+## NixOS and Home Manager
+
+The flake exports `nixosModules.default` and `homeManagerModules.default`. Either one runs ClamUI in the background, so detections raise alerts. Enable one per user. Neither configures ClamAV itself.
+
+```nix
+services.clamui.enable = true;
+```
+
 ## Develop
 
 ```sh

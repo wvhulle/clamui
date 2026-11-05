@@ -359,6 +359,18 @@ async fn read_user_timer_snapshot(timer_unit: &str) -> zbus::Result<TimerUnitSna
     })
 }
 
+pub async fn probe_user_unit_state(unit_name: &str) -> UnitState {
+    let read_state = async {
+        let bus_connection = user_bus().await?;
+        let unit_path = SystemdManagerProxy::new(bus_connection)
+            .await?
+            .load_unit(unit_name)
+            .await?;
+        read_unit_state_on(bus_connection, &unit_path).await
+    };
+    read_state.await.unwrap_or(UnitState::SystemdUnavailable)
+}
+
 pub async fn user_timer_snapshot(timer_unit: &str) -> TimerUnitSnapshot {
     read_user_timer_snapshot(timer_unit)
         .await

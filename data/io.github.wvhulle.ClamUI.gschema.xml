@@ -13,7 +13,7 @@
         <choice value="minimize"/>
         <choice value="ask"/>
       </choices>
-      <default>"quit"</default>
+      <default>"ask"</default>
     </key>
     <key name="start-in-background" type="b">
       <default>false</default>
