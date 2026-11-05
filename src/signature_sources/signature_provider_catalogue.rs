@@ -105,7 +105,10 @@ pub fn provider_of_signature_file(file_name: &str) -> &'static str {
 }
 
 pub fn hide_addresses_in_text(log_text: &str) -> String {
-    Regex::new(r"[A-Za-z][A-Za-z0-9+.-]*://\S+").map_or_else(
+    Regex::new(
+        r"(?i)[a-z][a-z0-9+.-]*://\S+|\burl\s*[:=]\s*\S+|\b(?:GET|HEAD|POST)\s+/\S+|\S*/files/exports/\S*",
+    )
+    .map_or_else(
         |_invalid_pattern| HIDDEN_ADDRESS_TEXT.to_owned(),
         |address_pattern| {
             address_pattern
@@ -214,6 +217,33 @@ mod signature_provider_catalogue_tests {
             "ERROR: [address hidden] failed"
         );
         assert_eq!(hide_addresses_in_text("nothing to hide"), "nothing to hide");
+    }
+
+    #[test]
+    fn addresses_without_a_scheme_are_hidden_too() {
+        assert_eq!(
+            hide_addresses_in_text(
+                "HTTPSConnectionPool(host='urlhaus-api.abuse.ch', port=443): Max retries exceeded \
+                 with url: /v2/files/exports/SECRETKEY/urlhaus_clamav.ndb.sha256 (Caused by \
+                 NameResolutionError)"
+            ),
+            "HTTPSConnectionPool(host='urlhaus-api.abuse.ch', port=443): Max retries exceeded \
+             with [address hidden] (Caused by NameResolutionError)"
+        );
+        assert_eq!(
+            hide_addresses_in_text("\"GET /v2/SECRETKEY/urlhaus_clamav.ndb HTTP/1.1\" 403"),
+            "\"[address hidden] HTTP/1.1\" 403"
+        );
+        assert_eq!(
+            hide_addresses_in_text("fetch /v2/files/exports/SECRETKEY/urlhaus_clamav.ndb done"),
+            "fetch [address hidden] done"
+        );
+    }
+
+    #[test]
+    fn traceback_source_lines_stay_readable() {
+        let traceback_line = "raise MaxRetryError(_pool, url, reason) from reason";
+        assert_eq!(hide_addresses_in_text(traceback_line), traceback_line);
     }
 
     #[test]
