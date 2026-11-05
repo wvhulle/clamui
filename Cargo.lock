@@ -557,6 +557,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clamui-settings-helper"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "clang-sys"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

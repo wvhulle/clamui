@@ -12,6 +12,15 @@ The flake exports `nixosModules.default` and `homeManagerModules.default`. Eithe
 services.clamui.enable = true;
 ```
 
+Optionally, let ClamUI change chosen `clamd` settings at runtime. Each change shows what will happen and asks for administrator authorization. Settings that run commands or change identity are refused, and changes that leave ClamAV unhealthy are rolled back. Changes live outside your Nix files until you copy them over.
+
+```nix
+services.clamui.liveTuning = {
+  enable = true;
+  allowedSettings = [ "OnAccessMaxFileSize" ];
+};
+```
+
 ## Develop
 
 ```sh

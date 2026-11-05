@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ClamUI 0.5.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 13:41+0100\n"
+"POT-Creation-Date: 2026-11-05 13:50+0100\n"
 "PO-Revision-Date: 2026-06-30 13:00+0200\n"
 "Last-Translator: Robin GUY <contact@robinguy.fr>\n"
 "Language-Team: French\n"
@@ -153,6 +153,7 @@ msgstr ""
 "Cette action est irréversible."
 
 #: src/activity_history/activity_logs_page.rs:152
+#: src/application_settings/preferences_dialog.rs:258
 #: src/application_window_shell.rs:561
 #: src/background_detections/incident_timeline_presentation.rs:314
 #: src/file_quarantine/quarantine_entries_page.rs:173
@@ -207,6 +208,7 @@ msgstr "Détails du journal"
 
 #: src/activity_history/activity_logs_page.rs:326
 #: src/activity_history/activity_logs_page.rs:388
+#: src/application_settings/preferences_dialog.rs:344
 #: src/step_timeline/timeline_step_row.rs:70
 #: src/system_audit/audit_check_row.rs:45
 msgid "Copy"
@@ -270,244 +272,315 @@ msgstr ""
 msgid "Exported."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:140
+#: src/application_settings/live_settings_client.rs:141
+#, rust-format
+msgid ""
+"{key}\n"
+"Now: {current}\n"
+"New: {new}"
+msgstr ""
+
+#: src/application_settings/live_settings_client.rs:149
+msgid ""
+"This reduces what ClamAV protects. Only continue if you mean to do that."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:146
 msgid "Node.js dependencies"
 msgstr "Dépendances Node.js"
 
-#: src/application_settings/preferences_dialog.rs:141
+#: src/application_settings/preferences_dialog.rs:147
 msgid "Git repository data"
 msgstr "Données du dépôt Git"
 
-#: src/application_settings/preferences_dialog.rs:142
+#: src/application_settings/preferences_dialog.rs:148
 msgid "Python virtual environment"
 msgstr "Environnement virtuel Python"
 
-#: src/application_settings/preferences_dialog.rs:143
+#: src/application_settings/preferences_dialog.rs:149
 msgid "Build output directory"
 msgstr "Répertoire de sortie de compilation"
 
-#: src/application_settings/preferences_dialog.rs:144
+#: src/application_settings/preferences_dialog.rs:150
 msgid "Distribution output directory"
 msgstr "Répertoire de sortie de distribution"
 
-#: src/application_settings/preferences_dialog.rs:145
+#: src/application_settings/preferences_dialog.rs:151
 msgid "Python bytecode cache"
 msgstr "Cache de code intermédiaire Python"
 
-#: src/application_settings/preferences_dialog.rs:167
+#: src/application_settings/preferences_dialog.rs:175
 msgid ""
 "This setting runs commands or changes who ClamAV runs as, so ClamUI never "
 "offers to change it"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:180
+#: src/application_settings/preferences_dialog.rs:188
 msgid "Copied. Add it to your configuration to apply it."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:199
+#: src/application_settings/preferences_dialog.rs:228
+msgid ""
+"Applied. It lasts until you remove it, and your system configuration doesn't "
+"know about it yet."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:232
+msgid ""
+"ClamAV didn't come back healthy with that value, so the previous settings "
+"were restored."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:236
+#, rust-format
+msgid "The change was not made: {error}"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:250
+msgid "Change this setting?"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:262
+msgid "Reduce Protection"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:264
+#: src/scheduled_scans/schedule_preferences_page.rs:194
+msgid "Apply"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:278
+msgid "Applying, and restarting ClamAV…"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:294
+msgid "Change Settings"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:296
+msgid ""
+"Unlock to change the settings your system allows at runtime. Unlocking "
+"grants nothing by itself: each change shows what will happen and asks for "
+"administrator authorization. It locks again after two minutes."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:336
+msgid "Changes your system configuration doesn't know about"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:370
 msgid ""
 "Managed outside ClamUI. Applying copies the change instead of making it."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:243
+#: src/application_settings/preferences_dialog.rs:427
 msgid "No settings in this section"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:283
+#: src/application_settings/preferences_dialog.rs:468
 msgid "Configuration file not found"
 msgstr "Fichier de configuration introuvable"
 
-#: src/application_settings/preferences_dialog.rs:294
+#: src/application_settings/preferences_dialog.rs:492
 msgid "File Manager Integration"
 msgstr "Intégration du gestionnaire de fichiers"
 
-#: src/application_settings/preferences_dialog.rs:296
+#: src/application_settings/preferences_dialog.rs:494
 msgid "Add context menu actions for supported file managers."
 msgstr ""
 "Ajouter des actions au menu contextuel des gestionnaires de fichiers pris en "
 "charge."
 
-#: src/application_settings/preferences_dialog.rs:326
+#: src/application_settings/preferences_dialog.rs:524
 #: src/malware_scan/scan_progress_page.rs:939
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:328
+#: src/application_settings/preferences_dialog.rs:526
 msgid ""
 "Automatically scan removable and external drives when they are connected."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:332
+#: src/application_settings/preferences_dialog.rs:530
 msgid "Enable Device Auto-Scan"
 msgstr "Activer l’analyse automatique des périphériques"
 
-#: src/application_settings/preferences_dialog.rs:339
+#: src/application_settings/preferences_dialog.rs:537
 msgid "Max Device Size (GB)"
 msgstr "Taille maximale des périphériques (Go)"
 
-#: src/application_settings/preferences_dialog.rs:340
+#: src/application_settings/preferences_dialog.rs:538
 msgid "0 means no size limit."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:359
+#: src/application_settings/preferences_dialog.rs:557
 #: src/scheduled_scans/schedule_preferences_page.rs:237
 msgid "Skip on Battery"
 msgstr "Ne pas lancer sur batterie"
 
-#: src/application_settings/preferences_dialog.rs:370
+#: src/application_settings/preferences_dialog.rs:568
 msgid "Window Behavior"
 msgstr "Comportement de la fenêtre"
 
-#: src/application_settings/preferences_dialog.rs:372
+#: src/application_settings/preferences_dialog.rs:570
 msgid "Running in the background needs a desktop with a system tray."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:376
+#: src/application_settings/preferences_dialog.rs:574
 msgid "Quit completely"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:377
+#: src/application_settings/preferences_dialog.rs:575
 msgid "Minimize to tray"
 msgstr "Réduire dans la zone de notification"
 
-#: src/application_settings/preferences_dialog.rs:378
+#: src/application_settings/preferences_dialog.rs:576
 msgid "Always ask"
 msgstr "Toujours demander"
 
-#: src/application_settings/preferences_dialog.rs:381
+#: src/application_settings/preferences_dialog.rs:579
 msgid "When closing window"
 msgstr "À la fermeture de la fenêtre"
 
-#: src/application_settings/preferences_dialog.rs:400
+#: src/application_settings/preferences_dialog.rs:598
 msgid "Start in System Tray"
 msgstr "Démarrer dans la zone de notification"
 
-#: src/application_settings/preferences_dialog.rs:402
+#: src/application_settings/preferences_dialog.rs:600
 msgid "Launch in the background and show only the tray icon."
 msgstr ""
 "Lancer l’application en arrière-plan et n’afficher que son icône dans la "
 "zone de notification."
 
-#: src/application_settings/preferences_dialog.rs:410
+#: src/application_settings/preferences_dialog.rs:608
 msgid "Desktop Notifications"
 msgstr "Notifications de bureau"
 
-#: src/application_settings/preferences_dialog.rs:412
+#: src/application_settings/preferences_dialog.rs:610
 msgid ""
 "Notify about finished scans and updates while the window is not in focus."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:424
+#: src/application_settings/preferences_dialog.rs:622
 msgid "Behavior"
 msgstr "Comportement"
 
-#: src/application_settings/preferences_dialog.rs:428
+#: src/application_settings/preferences_dialog.rs:626
 msgid "Scan Behavior"
 msgstr "Comportement de l’analyse"
 
-#: src/application_settings/preferences_dialog.rs:429
+#: src/application_settings/preferences_dialog.rs:627
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:432
+#: src/application_settings/preferences_dialog.rs:630
 msgid "Show Live Scan Progress"
 msgstr "Afficher la progression de l’analyse en temps réel"
 
-#: src/application_settings/preferences_dialog.rs:433
+#: src/application_settings/preferences_dialog.rs:631
 msgid "Display files being scanned in real time."
 msgstr "Afficher les fichiers en cours d’analyse en temps réel."
 
-#: src/application_settings/preferences_dialog.rs:440
+#: src/application_settings/preferences_dialog.rs:638
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:441
+#: src/application_settings/preferences_dialog.rs:639
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:442
+#: src/application_settings/preferences_dialog.rs:640
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:445
+#: src/application_settings/preferences_dialog.rs:643
 msgid "Scan Backend"
 msgstr "Moteur d’analyse"
 
-#: src/application_settings/preferences_dialog.rs:447
+#: src/application_settings/preferences_dialog.rs:645
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:510
+#: src/application_settings/preferences_dialog.rs:708
 #: src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr "Supprimer"
 
-#: src/application_settings/preferences_dialog.rs:543
+#: src/application_settings/preferences_dialog.rs:741
 #: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr "Exclusions"
 
-#: src/application_settings/preferences_dialog.rs:556
+#: src/application_settings/preferences_dialog.rs:754
 msgid ""
 "These apply to scans started from ClamUI. They don't change what on-access "
 "scanning or a system scan timer checks."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:559
+#: src/application_settings/preferences_dialog.rs:757
 msgid "Preset Exclusions"
 msgstr "Exclusions prédéfinies"
 
-#: src/application_settings/preferences_dialog.rs:561
+#: src/application_settings/preferences_dialog.rs:759
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 "Répertoires courants à exclure de l’analyse. Les modifications sont "
 "enregistrées immédiatement."
 
-#: src/application_settings/preferences_dialog.rs:566
+#: src/application_settings/preferences_dialog.rs:764
 msgid "Custom Exclusions"
 msgstr "Exclusions personnalisées"
 
-#: src/application_settings/preferences_dialog.rs:568
+#: src/application_settings/preferences_dialog.rs:766
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:572
+#: src/application_settings/preferences_dialog.rs:770
 msgid "/path/to/exclude or *.tmp"
 msgstr "/path/to/exclude ou *.tmp"
 
-#: src/application_settings/preferences_dialog.rs:613
+#: src/application_settings/preferences_dialog.rs:810
+#: src/application_settings/preferences_dialog.rs:817
+msgid "Unlock"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:815
+msgid "Lock"
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:866
 #: src/application_window_shell.rs:180
 msgid "Preferences"
 msgstr "Préférences"
 
-#: src/application_settings/preferences_dialog.rs:621
+#: src/application_settings/preferences_dialog.rs:874
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr "Base virale"
 
-#: src/application_settings/preferences_dialog.rs:623
+#: src/application_settings/preferences_dialog.rs:876
 msgid "freshclam settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:630
+#: src/application_settings/preferences_dialog.rs:884
 msgid "Scanner"
 msgstr "Analyseur"
 
-#: src/application_settings/preferences_dialog.rs:632
+#: src/application_settings/preferences_dialog.rs:886
 msgid "clamd settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:638
+#: src/application_settings/preferences_dialog.rs:893
 msgid "On-Access"
 msgstr "Analyse à l’accès"
 
-#: src/application_settings/preferences_dialog.rs:640
+#: src/application_settings/preferences_dialog.rs:895
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/application_settings/setting_provenance.rs:124
+#: src/application_settings/setting_provenance.rs:127
 #, rust-format
 msgid ""
 "{path} is generated by your NixOS configuration, so ClamUI can't change it. "
@@ -515,7 +588,7 @@ msgid ""
 "configuration, then rebuild."
 msgstr ""
 
-#: src/application_settings/setting_provenance.rs:128
+#: src/application_settings/setting_provenance.rs:131
 #, rust-format
 msgid ""
 "{path} belongs to the system, so ClamUI can't change it. Edit a value and "
@@ -1927,10 +2000,6 @@ msgstr "Analyses planifiées"
 #: src/scheduled_scans/schedule_preferences_page.rs:187
 msgid "Scheduled Scans"
 msgstr "Analyses planifiées"
-
-#: src/scheduled_scans/schedule_preferences_page.rs:194
-msgid "Apply"
-msgstr ""
 
 #: src/scheduled_scans/schedule_preferences_page.rs:202
 msgid "Enable Scheduled Scans"

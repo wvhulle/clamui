@@ -1,6 +1,7 @@
 use std::{fs, path::Path};
 
-const CLAMD_CONFIG_PATHS: [&str; 3] = [
+const CLAMD_CONFIG_PATHS: [&str; 4] = [
+    "/run/clamui/clamd.conf",
     "/etc/clamav/clamd.conf",
     "/etc/clamd.d/scan.conf",
     "/etc/clamd.conf",

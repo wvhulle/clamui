@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use gettextrs::gettext;
 use relm4::{
     Component, ComponentController, adw,
@@ -12,6 +14,10 @@ use crate::{
         clamav_host_config::{
             ConfigSetting, HostConfigView, is_on_access_setting, read_clamd_config,
             read_freshclam_config,
+        },
+        live_settings_client::{
+            ChangeEffect, LiveChangeOutcome, LiveTuningState, apply_live_change,
+            change_confirmation_text, change_effect, read_live_tuning_state,
         },
         scan_exclusion_rules::{ExclusionEntry, ExclusionKind, PRESET_DIRECTORY_NAMES},
         setting_provenance::{
@@ -30,7 +36,7 @@ use crate::{
     },
     malware_scan::{
         scanner_command_builder::ScannerBackendPreference,
-        scanner_output_parser::sanitize_scanner_line,
+        scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
     },
     scheduled_scans::{
         scan_schedule_units::current_launcher_path,
@@ -147,6 +153,8 @@ fn preset_description(exclusion_pattern: &str) -> String {
     }
 }
 
+const UNLOCK_SECONDS: u32 = 120;
+
 fn lock_indicator(tooltip_text: &str) -> gtk::Image {
     gtk::Image::builder()
         .icon_name("changes-prevent-symbolic")
@@ -182,12 +190,175 @@ fn show_snippet_copied(edited_row: &adw::EntryRow, copied_snippet: &str) {
     }
 }
 
+#[derive(Clone)]
+struct LiveTuningControls {
+    unlock_toggle: gtk::ToggleButton,
+    tuning_state: Rc<RefCell<LiveTuningState>>,
+}
+
+impl LiveTuningControls {
+    fn allows_live_change(&self, setting_key: &str) -> bool {
+        self.unlock_toggle.is_active()
+            && self
+                .tuning_state
+                .borrow()
+                .tunable_settings
+                .iter()
+                .any(|tunable_key| tunable_key == setting_key)
+    }
+}
+
+fn toast_on_dialog(shown_widget: &impl IsA<gtk::Widget>, toast_text: &str) {
+    if let Some(preferences_dialog) = shown_widget
+        .ancestor(adw::PreferencesDialog::static_type())
+        .and_downcast::<adw::PreferencesDialog>()
+    {
+        preferences_dialog.add_toast(
+            adw::Toast::builder()
+                .title(toast_text)
+                .use_markup(false)
+                .build(),
+        );
+    }
+}
+
+fn describe_live_change_outcome(change_outcome: &LiveChangeOutcome) -> String {
+    match change_outcome {
+        LiveChangeOutcome::SettingsApplied => gettext(
+            "Applied. It lasts until you remove it, and your system configuration doesn't know \
+             about it yet.",
+        ),
+        LiveChangeOutcome::PreviousRestored => gettext(
+            "ClamAV didn't come back healthy with that value, so the previous settings were \
+             restored.",
+        ),
+        LiveChangeOutcome::NothingChanged { failure_text } => {
+            gettext("The change was not made: {error}")
+                .replace("{error}", &sanitize_scanner_line(failure_text))
+        }
+    }
+}
+
+fn confirm_live_change(
+    edited_row: &adw::EntryRow,
+    setting_key: String,
+    current_values: Vec<String>,
+    new_values: Vec<String>,
+) {
+    let effect = change_effect(&setting_key, &current_values, &new_values);
+    let confirmation_dialog = adw::AlertDialog::new(
+        Some(&gettext("Change this setting?")),
+        Some(&change_confirmation_text(
+            &setting_key,
+            &current_values,
+            &new_values,
+            effect,
+        )),
+    );
+    confirmation_dialog.add_response("cancel", &gettext("Cancel"));
+    confirmation_dialog.add_response(
+        "apply",
+        &if effect == ChangeEffect::WeakensProtection {
+            gettext("Reduce Protection")
+        } else {
+            gettext("Apply")
+        },
+    );
+    if effect == ChangeEffect::WeakensProtection {
+        confirmation_dialog.set_response_appearance("apply", adw::ResponseAppearance::Destructive);
+    }
+    confirmation_dialog.set_default_response(Some("cancel"));
+    confirmation_dialog.set_close_response("cancel");
+    let answered_row = edited_row.clone();
+    confirmation_dialog.connect_response(Some("apply"), move |_dialog, _response| {
+        let applying_row = answered_row.clone();
+        let applied_key = setting_key.clone();
+        let applied_values = new_values.clone();
+        relm4::spawn_local(async move {
+            toast_on_dialog(&applying_row, &gettext("Applying, and restarting ClamAV…"));
+            let change_outcome = relm4::spawn(apply_live_change(applied_key, applied_values)).await;
+            toast_on_dialog(
+                &applying_row,
+                &change_outcome.map_or_else(
+                    |task_failure| task_failure.to_string(),
+                    |change_outcome| describe_live_change_outcome(&change_outcome),
+                ),
+            );
+        });
+    });
+    confirmation_dialog.present(Some(edited_row));
+}
+
+fn live_tuning_group(unlock_toggle: &gtk::ToggleButton) -> adw::PreferencesGroup {
+    let tuning_group = adw::PreferencesGroup::builder()
+        .title(gettext("Change Settings"))
+        .description(gettext(
+            "Unlock to change the settings your system allows at runtime. Unlocking grants \
+             nothing by itself: each change shows what will happen and asks for administrator \
+             authorization. It locks again after two minutes.",
+        ))
+        .visible(false)
+        .build();
+    tuning_group.set_header_suffix(Some(unlock_toggle));
+    tuning_group
+}
+
+fn drift_snippet_row(
+    active_overrides: &[(String, String)],
+    config_kind: ClamavConfigKind,
+    config_file_owner: ConfigFileOwner,
+) -> adw::ActionRow {
+    let mut override_keys = active_overrides
+        .iter()
+        .map(|active_override| active_override.0.as_str())
+        .collect::<Vec<_>>();
+    override_keys.dedup();
+    let drift_snippet = override_keys
+        .iter()
+        .map(|override_key| {
+            let override_values = active_overrides
+                .iter()
+                .filter(|active_override| active_override.0 == *override_key)
+                .map(|active_override| active_override.1.clone())
+                .collect::<Vec<_>>();
+            change_snippet(
+                config_file_owner,
+                config_kind,
+                override_key,
+                &override_values,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let drift_row = adw::ActionRow::builder()
+        .use_markup(false)
+        .title(gettext(
+            "Changes your system configuration doesn't know about",
+        ))
+        .subtitle(sanitize_scanner_text(&drift_snippet))
+        .subtitle_selectable(true)
+        .subtitle_lines(0)
+        .build();
+    let copy_button = gtk::Button::builder()
+        .icon_name("edit-copy-symbolic")
+        .tooltip_text(gettext("Copy"))
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    copy_button.connect_clicked(move |clicked_button| {
+        clicked_button.clipboard().set_text(&drift_snippet);
+    });
+    drift_row.add_suffix(&copy_button);
+    drift_row
+}
+
 fn snippet_setting_row(
     config_setting: &ConfigSetting,
     sibling_values: Vec<String>,
     value_position: usize,
     config_kind: ClamavConfigKind,
     config_file_owner: ConfigFileOwner,
+    live_tuning: Option<LiveTuningControls>,
 ) -> gtk::Widget {
     let setting_key = sanitize_scanner_line(&config_setting.setting_key);
     let setting_row = adw::EntryRow::builder()
@@ -203,10 +374,22 @@ fn snippet_setting_row(
         if let Some(edited_value) = edited_values.get_mut(value_position) {
             *edited_value = sanitize_scanner_line(&edited_row.text());
         }
-        show_snippet_copied(
-            edited_row,
-            &change_snippet(config_file_owner, config_kind, &setting_key, &edited_values),
-        );
+        if live_tuning
+            .as_ref()
+            .is_some_and(|live_tuning| live_tuning.allows_live_change(&setting_key))
+        {
+            confirm_live_change(
+                edited_row,
+                setting_key.clone(),
+                sibling_values.clone(),
+                edited_values,
+            );
+        } else {
+            show_snippet_copied(
+                edited_row,
+                &change_snippet(config_file_owner, config_kind, &setting_key, &edited_values),
+            );
+        }
     });
     setting_row.upcast()
 }
@@ -217,6 +400,7 @@ fn host_config_page(
     group_title: String,
     config_kind: ClamavConfigKind,
     host_config: HostConfigView,
+    live_tuning: Option<LiveTuningControls>,
     shows_setting: impl Fn(&ConfigSetting) -> bool,
 ) -> adw::PreferencesPage {
     let config_page = adw::PreferencesPage::builder()
@@ -271,6 +455,7 @@ fn host_config_page(
                             value_position,
                             config_kind,
                             config_file_owner,
+                            live_tuning.clone(),
                         )
                     }
                 };
@@ -284,6 +469,19 @@ fn host_config_page(
                     .build(),
             );
         }
+    }
+    if let Some(live_tuning) = &live_tuning {
+        let tuning_group = live_tuning_group(&live_tuning.unlock_toggle);
+        let tuning_state = live_tuning.tuning_state.borrow();
+        tuning_group.set_visible(!tuning_state.tunable_settings.is_empty());
+        if !tuning_state.active_overrides.is_empty() {
+            tuning_group.add(&drift_snippet_row(
+                &tuning_state.active_overrides,
+                config_kind,
+                ConfigFileOwner::NixOsConfiguration,
+            ));
+        }
+        config_page.add(&tuning_group);
     }
     config_page.add(&config_group);
     config_page
@@ -607,7 +805,62 @@ fn exclusions_page(settings: &gio::Settings) -> adw::PreferencesPage {
     exclusions_page
 }
 
+fn new_unlock_toggle() -> gtk::ToggleButton {
+    let unlock_toggle = gtk::ToggleButton::builder()
+        .label(gettext("Unlock"))
+        .valign(gtk::Align::Center)
+        .build();
+    unlock_toggle.connect_toggled(|toggled_button| {
+        toggled_button.set_label(&if toggled_button.is_active() {
+            gettext("Lock")
+        } else {
+            gettext("Unlock")
+        });
+        if toggled_button.is_active() {
+            let relocked_button = toggled_button.downgrade();
+            glib::timeout_add_seconds_local_once(UNLOCK_SECONDS, move || {
+                if let Some(relocked_button) = relocked_button.upgrade() {
+                    relocked_button.set_active(false);
+                }
+            });
+        }
+    });
+    unlock_toggle
+}
+
+fn present_with_live_tuning(tuning_state: LiveTuningState) {
+    let tuning_state = Rc::new(RefCell::new(tuning_state));
+    let scanner_toggle = new_unlock_toggle();
+    let on_access_toggle = new_unlock_toggle();
+    scanner_toggle
+        .bind_property("active", &on_access_toggle, "active")
+        .bidirectional()
+        .build();
+    present_preferences_with_controls(
+        LiveTuningControls {
+            unlock_toggle: scanner_toggle,
+            tuning_state: Rc::clone(&tuning_state),
+        },
+        LiveTuningControls {
+            unlock_toggle: on_access_toggle,
+            tuning_state,
+        },
+    );
+}
+
 pub fn present_preferences_dialog() {
+    relm4::spawn_local(async {
+        let tuning_state = relm4::spawn(read_live_tuning_state())
+            .await
+            .unwrap_or_default();
+        present_with_live_tuning(tuning_state);
+    });
+}
+
+fn present_preferences_with_controls(
+    scanner_tuning: LiveTuningControls,
+    on_access_tuning: LiveTuningControls,
+) {
     let settings = application_settings();
     let preferences_dialog = adw::PreferencesDialog::builder()
         .title(gettext("Preferences"))
@@ -623,6 +876,7 @@ pub fn present_preferences_dialog() {
         gettext("freshclam settings"),
         ClamavConfigKind::FreshclamUpdaterConfig,
         read_freshclam_config(),
+        None,
         |_config_setting| true,
     ));
     let clamd_config = read_clamd_config();
@@ -632,6 +886,7 @@ pub fn present_preferences_dialog() {
         gettext("clamd settings"),
         ClamavConfigKind::ClamdDaemonConfig,
         clamd_config.clone(),
+        Some(scanner_tuning),
         |config_setting| !is_on_access_setting(config_setting),
     ));
     preferences_dialog.add(&host_config_page(
@@ -640,6 +895,7 @@ pub fn present_preferences_dialog() {
         gettext("On-access scanning settings"),
         ClamavConfigKind::ClamdDaemonConfig,
         clamd_config,
+        Some(on_access_tuning),
         is_on_access_setting,
     ));
     let virustotal_page = ServiceKeyPreferencesPage::builder()

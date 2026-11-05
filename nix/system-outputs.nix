@@ -89,6 +89,42 @@ let
     }
   );
 
+  settingsHelperArgs = {
+    inherit src;
+    pname = "clamui-settings-helper";
+    version = "0.1.0";
+    cargoExtraArgs = "--locked --package clamui-settings-helper";
+    strictDeps = true;
+    meta = {
+      description = "Validates and applies runtime ClamAV setting changes for ClamUI";
+      license = lib.licenses.mit;
+      mainProgram = "clamui-settings-helper";
+      platforms = lib.platforms.linux;
+    };
+  };
+
+  settingsHelperArtifacts = craneLib.buildDepsOnly settingsHelperArgs;
+
+  settingsHelperPackage = craneLib.buildPackage (
+    settingsHelperArgs
+    // {
+      cargoArtifacts = settingsHelperArtifacts;
+      doCheck = false;
+    }
+  );
+
+  settingsHelperTests = craneLib.cargoTest (
+    settingsHelperArgs // { cargoArtifacts = settingsHelperArtifacts; }
+  );
+
+  settingsHelperClippy = craneLib.cargoClippy (
+    settingsHelperArgs
+    // {
+      cargoArtifacts = settingsHelperArtifacts;
+      cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+    }
+  );
+
   xtaskArgs = {
     inherit src;
     pname = "xtask";
@@ -163,6 +199,7 @@ in
     clamui = clamuiPackage;
     deps = cargoArtifacts;
     xtask = xtaskPackage;
+    settings-helper = settingsHelperPackage;
     render-screenshots = screenshotRendering.renderScreenshots;
     inherit (screenshotRendering) screenshots;
   };
@@ -175,6 +212,8 @@ in
       fmt
       xtaskTests
       xtaskClippy
+      settingsHelperTests
+      settingsHelperClippy
       ;
     inherit (screenshotRendering) screenshots;
   };

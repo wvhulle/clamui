@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=io.github.wvhulle.ClamUI.SettingsHelper
+Exec=/bin/false
+User=root
+SystemdService=clamui-settings-helper.service

@@ -4,6 +4,7 @@ use gettextrs::gettext;
 
 const PROTECTED_SETTINGS_LIST: &str = include_str!("../../data/protected-clamav-settings.txt");
 const NIX_STORE_PREFIX: &str = "/nix/store/";
+const LIVE_TUNING_RUNTIME_PREFIX: &str = "/run/clamui/";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfigFileOwner {
@@ -36,7 +37,9 @@ pub fn setting_lock_for_key(setting_key: &str) -> SettingLock {
 }
 
 pub fn config_file_owner_of_target(resolved_target: &str) -> ConfigFileOwner {
-    if resolved_target.starts_with(NIX_STORE_PREFIX) {
+    if resolved_target.starts_with(NIX_STORE_PREFIX)
+        || resolved_target.starts_with(LIVE_TUNING_RUNTIME_PREFIX)
+    {
         ConfigFileOwner::NixOsConfiguration
     } else {
         ConfigFileOwner::SystemPackage

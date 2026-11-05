@@ -1,0 +1,14 @@
+[package]
+name = "clamui-settings-helper"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+thiserror = "2"
+tokio = { version = "1.54", features = ["rt"] }
+zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }
+
+[dev-dependencies]
+tempfile = "3"

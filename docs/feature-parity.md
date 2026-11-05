@@ -79,6 +79,7 @@ Use `adw::PreferencesDialog` and `gio::Settings`.
 - [x] Close action and starting in the background, with the tray.
 - [x] Exclusions: presets, custom paths and patterns.
 - [x] Database and scanner settings, locked because the system owns them. Editing a value copies the line to add to the configuration. Settings that run commands or change identity, such as `VirusEvent`, stay read-only.
+- [x] Optional live changes through `services.clamui.liveTuning`: a D-Bus-activated root helper checks polkit for each change and enforces a deny-by-default allowlist, then rolls back if ClamAV doesn't come back healthy. Without it, there's no root helper at all.
 - [x] Scheduled scans with user systemd timers, locked when the system already has a scan timer. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
 - [x] On-access settings, locked in the same way.
 - [x] MalwareBazaar lookups by signature name, with an abuse.ch key in the system keyring. Only the signature name is sent, so blocked files can be looked up too.
