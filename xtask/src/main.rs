@@ -1,10 +1,15 @@
 mod cachix_closure_push;
+mod ci_tool_preparation;
+mod codeberg_bot_account;
+mod dependency_update_pull_request;
 mod fixture_clamav_programs;
 mod fixture_systemd_service;
 mod page_screenshots;
+mod release_publishing;
 mod screenshot_fixtures;
 mod screenshot_publishing;
 mod task_failure;
+mod tool_commands;
 
 use std::{path::PathBuf, process::ExitCode};
 
@@ -12,8 +17,11 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     cachix_closure_push::push_build_closure,
+    ci_tool_preparation::{check_commit_messages, download_tools, prepare_ci_tools},
+    dependency_update_pull_request::open_dependency_update_pull_request,
     fixture_clamav_programs::{invoked_as_fixture_program, run_fixture_program},
     page_screenshots::{list_visible_widgets, render_page_screenshots},
+    release_publishing::{ReleasePlzCommand, run_release_plz, upload_release_assets},
     screenshot_publishing::publish_screenshots,
     task_failure::TaskFailure,
 };
@@ -41,6 +49,25 @@ enum RepositoryTask {
         #[arg(required = true)]
         installables: Vec<String>,
     },
+    CheckCommits {
+        #[arg(long)]
+        fetch_target_branch: bool,
+        revision_ranges: Vec<String>,
+    },
+    ReleasePlz {
+        #[arg(value_enum)]
+        release_plz_command: ReleasePlzCommand,
+    },
+    UploadReleaseAssets {
+        assets_directory: PathBuf,
+    },
+    DownloadTools {
+        binary_cache_url: String,
+        #[arg(required = true)]
+        tool_installables: Vec<String>,
+    },
+    PrepareCiTools,
+    OpenDependencyUpdatePr,
 }
 
 fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailure> {
@@ -49,6 +76,22 @@ fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailur
             render_page_screenshots(&output_directory)
         }
         RepositoryTask::PushToCachix { installables } => push_build_closure(&installables),
+        RepositoryTask::CheckCommits {
+            fetch_target_branch,
+            revision_ranges,
+        } => check_commit_messages(fetch_target_branch, &revision_ranges),
+        RepositoryTask::ReleasePlz {
+            release_plz_command,
+        } => run_release_plz(release_plz_command),
+        RepositoryTask::UploadReleaseAssets { assets_directory } => {
+            upload_release_assets(&assets_directory)
+        }
+        RepositoryTask::DownloadTools {
+            binary_cache_url,
+            tool_installables,
+        } => download_tools(&binary_cache_url, &tool_installables),
+        RepositoryTask::PrepareCiTools => prepare_ci_tools(),
+        RepositoryTask::OpenDependencyUpdatePr => open_dependency_update_pull_request(),
         RepositoryTask::PublishScreenshots {
             screenshots_directory,
         } => publish_screenshots(&screenshots_directory),

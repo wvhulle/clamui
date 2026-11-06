@@ -1,0 +1,36 @@
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  vm-tests:
+    runs-on: nix
+    env:
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+        extra-system-features = kvm nixos-test
+        extra-substituters = https://wvhulle.cachix.org
+        extra-trusted-public-keys = wvhulle.cachix.org-1:heXx8DZMiRsKUx6l1TxNoF+Nmtmz66QEdsonQzc1ir0=
+    steps:
+      - name: Clone the commit
+        run: |
+          git init --quiet
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}.git"
+          git fetch --quiet --depth 1 origin "${{ github.sha }}"
+          git checkout --quiet FETCH_HEAD
+
+      - name: Require KVM
+        run: test -r /dev/kvm -a -w /dev/kvm
+
+      - name: Detection alerts
+        run: nix build --quiet --no-link --print-build-logs .#checks.x86_64-linux.vm-detection-alerts
+
+      - name: Live tuning
+        run: nix build --quiet --no-link --print-build-logs .#checks.x86_64-linux.vm-live-tuning
+
+      - name: Scheduled scan
+        run: nix build --quiet --no-link --print-build-logs .#checks.x86_64-linux.vm-scheduled-scan
+
+      - name: Signature update
+        run: nix build --quiet --no-link --print-build-logs .#checks.x86_64-linux.vm-signature-update

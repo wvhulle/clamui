@@ -1,20 +1,16 @@
 use std::{
-    env, fs,
+    fs,
     path::Path,
     process::{Command, Stdio},
 };
 
-use crate::task_failure::TaskFailure;
+use crate::{
+    codeberg_bot_account::{authenticated_remote_url, bot_commit_identity_arguments},
+    task_failure::TaskFailure,
+    tool_commands::required_variable,
+};
 
 const SCREENSHOTS_BRANCH: &str = "screenshots";
-const PUBLISHING_BOT_NAME: &str = "wvhulle-bot";
-const PUBLISHING_COMMITTER_EMAIL: &str = "willemvanhulle@protonmail.com";
-const PUBLISHING_HOST: &str = "codeberg.org";
-
-fn required_variable(variable_name: &'static str) -> Result<String, TaskFailure> {
-    env::var(variable_name)
-        .map_err(|_missing_variable| TaskFailure::VariableMissing { variable_name })
-}
 
 fn git_in(staging_directory: &Path) -> Command {
     let mut git_command = Command::new("git");
@@ -101,23 +97,21 @@ pub fn publish_screenshots(screenshots_directory: &Path) -> Result<(), TaskFailu
         SCREENSHOTS_BRANCH,
     ]))?;
     run_git(git_in(staging_directory).args(["add", "--all"]))?;
-    run_git(git_in(staging_directory).args([
-        "-c",
-        &format!("user.name={PUBLISHING_BOT_NAME}"),
-        "-c",
-        &format!("user.email={PUBLISHING_COMMITTER_EMAIL}"),
-        "commit",
-        "--quiet",
-        "--message",
-        &format!("docs: screenshots of {commit_hash}"),
-    ]))?;
+    run_git(
+        git_in(staging_directory)
+            .args(bot_commit_identity_arguments())
+            .args([
+                "commit",
+                "--quiet",
+                "--message",
+                &format!("docs: screenshots of {commit_hash}"),
+            ]),
+    )?;
     run_git(git_in(staging_directory).args([
         "remote",
         "add",
         "origin",
-        &format!(
-            "https://{PUBLISHING_BOT_NAME}:{bot_token}@{PUBLISHING_HOST}/{repository_name}.git"
-        ),
+        &authenticated_remote_url(&bot_token, &repository_name),
     ]))?;
     let staged_tree = git_output(git_in(staging_directory).args(["rev-parse", "HEAD^{tree}"]))?;
     if published_screenshots_tree(staging_directory).as_deref() == Some(staged_tree.as_str()) {

@@ -1,0 +1,53 @@
+when:
+  - repo: wvhulle/lazaret
+    event: pull_request
+  - repo: wvhulle/lazaret
+    event: [push, manual]
+    branch: main
+
+labels:
+  host: ryzen
+
+variables:
+  - &nix_environment
+    XDG_CACHE_HOME: /woodpecker/nix-cache
+    NIX_CONFIG: |
+      experimental-features = nix-command flakes
+      max-jobs = 1
+      cores = 2
+      extra-substituters = https://wvhulle.cachix.org
+      extra-trusted-public-keys = wvhulle.cachix.org-1:heXx8DZMiRsKUx6l1TxNoF+Nmtmz66QEdsonQzc1ir0=
+
+steps:
+  - name: cargo-checks
+    image: nixos/nix:latest
+    environment: *nix_environment
+    commands:
+      - nix build --quiet --no-link --print-build-logs .#checks.x86_64-linux.tests .#checks.x86_64-linux.clippy .#checks.x86_64-linux.fmt .#checks.x86_64-linux.xtaskTests .#checks.x86_64-linux.xtaskClippy .#checks.x86_64-linux.settingsHelperTests .#checks.x86_64-linux.settingsHelperClippy
+
+  - name: module-checks
+    image: nixos/nix:latest
+    environment: *nix_environment
+    commands:
+      - nix build --quiet --no-link --print-build-logs .#checks.x86_64-linux.nixos-background-service .#checks.x86_64-linux.home-manager-background-service
+
+  - name: conventional-commits
+    image: nixos/nix:latest
+    when:
+      - event: pull_request
+    environment: *nix_environment
+    commands:
+      - nix run --quiet .#check-commits -- --fetch-target-branch FETCH_HEAD..HEAD
+
+  - name: push-to-cachix
+    image: nixos/nix:latest
+    depends_on: [cargo-checks, module-checks]
+    failure: ignore
+    when:
+      - event: [push, manual]
+    environment:
+      <<: *nix_environment
+      CACHIX_AUTH_TOKEN:
+        from_secret: cachix_auth_token
+    commands:
+      - nix run --quiet .#push-to-cachix -- .#checks.x86_64-linux.tests .#checks.x86_64-linux.clippy .#xtask .#prepare-ci-tools .#release .#release-pr .#upload-release-assets

@@ -145,6 +145,33 @@ let
     }
   );
 
+  staticRustTarget = "${pkgs.stdenv.hostPlatform.parsed.cpu.name}-unknown-linux-musl";
+
+  staticCraneLib = (crane.mkLib pkgs).overrideToolchain (
+    toolchain.override { targets = [ staticRustTarget ]; }
+  );
+
+  staticXtaskArgs = xtaskArgs // {
+    pname = "xtask-static";
+    CARGO_BUILD_TARGET = staticRustTarget;
+    CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+  };
+
+  staticXtaskPackage = staticCraneLib.buildPackage (
+    staticXtaskArgs
+    // {
+      cargoArtifacts = staticCraneLib.buildDepsOnly staticXtaskArgs;
+      doCheck = false;
+    }
+  );
+
+  ciTools = import ./ci-tools.nix {
+    inherit pkgs;
+    xtask = xtaskPackage;
+    xtaskStatic = staticXtaskPackage;
+    rustToolchain = toolchain;
+  };
+
   xtaskTests = craneLib.cargoTest (xtaskArgs // { cargoArtifacts = xtaskArtifacts; });
 
   xtaskClippy = craneLib.cargoClippy (
@@ -209,7 +236,8 @@ in
     publish-screenshots = screenshotRendering.publishScreenshots;
     push-to-cachix = screenshotRendering.cachixPush;
     inherit (screenshotRendering) screenshots;
-  };
+  }
+  // ciTools;
 
   checks =
     moduleChecks
@@ -228,24 +256,29 @@ in
       inherit (screenshotRendering) screenshots;
     };
 
-  apps = {
-    default = {
+  apps =
+    lib.mapAttrs (_toolName: toolPackage: {
       type = "app";
-      program = lib.getExe self.packages.${system}.default;
+      program = lib.getExe toolPackage;
+    }) ciTools
+    // {
+      default = {
+        type = "app";
+        program = lib.getExe self.packages.${system}.default;
+      };
+      render-screenshots = {
+        type = "app";
+        program = lib.getExe screenshotRendering.renderScreenshots;
+      };
+      publish-screenshots = {
+        type = "app";
+        program = lib.getExe screenshotRendering.publishScreenshots;
+      };
+      push-to-cachix = {
+        type = "app";
+        program = lib.getExe screenshotRendering.cachixPush;
+      };
     };
-    render-screenshots = {
-      type = "app";
-      program = lib.getExe screenshotRendering.renderScreenshots;
-    };
-    publish-screenshots = {
-      type = "app";
-      program = lib.getExe screenshotRendering.publishScreenshots;
-    };
-    push-to-cachix = {
-      type = "app";
-      program = lib.getExe screenshotRendering.cachixPush;
-    };
-  };
 
   formatter = treefmtWrapper;
 

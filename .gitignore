@@ -1,3 +1,6 @@
 /target/
 /result
 .direnv/
+/dist/
+/screenshots/
+/.ci-tools/

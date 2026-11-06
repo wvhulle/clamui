@@ -17,6 +17,8 @@ pub enum TaskFailure {
         tool_name: &'static str,
         start_failure: io::Error,
     },
+    #[error("no [package] version in {manifest_path}")]
+    PackageVersionMissing { manifest_path: &'static str },
     #[error("{tool_name} failed with {exit_status}")]
     ToolFailed {
         tool_name: &'static str,

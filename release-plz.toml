@@ -1,0 +1,60 @@
+[workspace]
+git_only = true
+repo_url = "https://codeberg.org/wvhulle/lazaret"
+semver_check = false
+git_release_type = "prod"
+release_commits = "^(feat|fix|perf)[(:!]"
+features_always_increment_minor = true
+pr_labels = ["release"]
+git_release_body = """
+{{ changelog }}
+
+## Downloads
+
+| File | Platform |
+|------|----------|
+| `lazaret_{{ version }}_amd64.deb` | Debian 13 and Ubuntu 26.04, x86_64 |
+| `lazaret-x86_64.flatpak` | Other Linux distributions, x86_64 |
+
+Install the Debian package with `sudo apt install ./lazaret_{{ version }}_amd64.deb`, or the bundle with `flatpak install --user lazaret-x86_64.flatpak`. Each file has a `.sha256` checksum next to it. ClamAV itself comes from your distribution.
+
+See the [installation guides](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/install) for NixOS and the other options.
+"""
+
+[[package]]
+name = "lazaret"
+changelog_path = "CHANGELOG.md"
+git_tag_name = "v{{ version }}"
+git_release_name = "v{{ version }}"
+changelog_include = ["lazaret-settings-helper"]
+
+[[package]]
+name = "lazaret-settings-helper"
+release = false
+
+[[package]]
+name = "gtk_scene_capture"
+release = false
+
+[[package]]
+name = "xtask"
+release = false
+
+[changelog]
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+protect_breaking_commits = true
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^style", group = "Changed" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore: release", skip = true },
+  { message = "^chore", group = "Miscellaneous" },
+  { message = "^ci", group = "CI" },
+  { message = "^build", group = "Build" },
+  { message = ".*", skip = true },
+]
