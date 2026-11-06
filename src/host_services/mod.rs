@@ -1,4 +1,5 @@
 pub mod activity_history;
+pub mod blocking_iterator_stream;
 pub mod clamav_config;
 pub mod clamav_programs;
 pub mod clamav_scanner;

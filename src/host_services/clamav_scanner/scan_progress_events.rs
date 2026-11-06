@@ -2,7 +2,6 @@ use std::{
     collections::HashSet,
     fs::File,
     io::{self, Write},
-    ops::ControlFlow,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     process::ExitStatus,
@@ -12,7 +11,6 @@ use std::{
 
 use futures::{
     Stream, StreamExt,
-    channel::mpsc,
     future::{Either, ready},
     stream,
 };
@@ -23,12 +21,12 @@ use rustix::{
 use tempfile::NamedTempFile;
 
 use crate::host_services::{
+    blocking_iterator_stream::blocking_iterator_stream,
     clamav_scanner::{
         scan_exclusion_rules::ScanExclusions,
         scan_progress_estimates::RefreshThrottle,
         scan_target_enumeration::{
-            EnumeratedScanFiles, EnumerationProgress, ScanTargetFailure,
-            enumerate_scan_files_reporting,
+            EnumeratedScanFiles, EnumerationProgress, ScanTargetFailure, ScanWalk, WalkStep,
         },
         scanner_command_builder::{
             ScannerBackend, ScannerInvocation, ScannerProgramPaths, build_scanner_command,
@@ -49,6 +47,7 @@ use crate::host_services::{
 
 const OUTPUT_LIMIT: usize = 64 * 1024 * 1024;
 const ENUMERATION_REPORT_INTERVAL: Duration = Duration::from_millis(100);
+const TARGET_WALK_THREAD_NAME: &str = "scan-target-walk";
 const NOTEWORTHY_OUTPUT_LIMIT: usize = 1024 * 1024;
 const ROOT_LEVEL_TARGETS: &[&str] = &[
     "/", "/home", "/usr", "/var", "/opt", "/etc", "/tmp", "/root",
@@ -455,15 +454,9 @@ fn write_private_file_list(
 }
 
 fn prepare_clamd_phases(
-    target_path: &Path,
     scan_request: &ScanRequest,
-    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
+    enumerated_files: EnumeratedScanFiles,
 ) -> Result<PreparedScanTarget, ScanTargetFailure> {
-    let enumerated_files = enumerate_scan_files_reporting(
-        target_path,
-        &scan_request.scan_exclusions,
-        report_progress,
-    )?;
     let planned_file_count = enumerated_files.file_paths.len() as u64;
     let (standard_input_paths, listed_paths): (Vec<PathBuf>, Vec<PathBuf>) = enumerated_files
         .file_paths
@@ -497,37 +490,66 @@ fn prepare_clamd_phases(
 
 fn prepare_standalone_phase(
     target_path: &Path,
-    scan_exclusions: &ScanExclusions,
-    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
-) -> Result<PreparedScanTarget, ScanTargetFailure> {
-    let enumerated_files = if is_root_level_target(target_path) {
-        EnumeratedScanFiles::default()
-    } else {
-        enumerate_scan_files_reporting(target_path, scan_exclusions, report_progress)?
-    };
-    Ok(PreparedScanTarget {
+    enumerated_files: EnumeratedScanFiles,
+) -> PreparedScanTarget {
+    PreparedScanTarget {
         planned_file_count: enumerated_files.file_paths.len() as u64,
         planned_directory_count: 0,
         excluded_entry_count: enumerated_files.excluded_entry_count,
         scanner_phase_plans: vec![ScannerPhasePlan::StandaloneTarget {
             target_path: target_path.to_path_buf(),
         }],
-    })
+    }
 }
 
 fn prepare_scan_target(
     target_path: &Path,
     scan_request: &ScanRequest,
-    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
+    enumerated_files: EnumeratedScanFiles,
 ) -> Result<PreparedScanTarget, ScanTargetFailure> {
     match scan_request.scanner_backend {
-        ScannerBackend::ClamdDaemon => {
-            prepare_clamd_phases(target_path, scan_request, report_progress)
-        }
+        ScannerBackend::ClamdDaemon => prepare_clamd_phases(scan_request, enumerated_files),
         ScannerBackend::StandaloneClamscan => {
-            prepare_standalone_phase(target_path, &scan_request.scan_exclusions, report_progress)
+            Ok(prepare_standalone_phase(target_path, enumerated_files))
         }
     }
+}
+
+enum TargetPreparationStep {
+    WalkProgressed(EnumerationProgress),
+    TargetPrepared(Result<PreparedScanTarget, ScanTargetFailure>),
+}
+
+fn target_walk_steps(
+    target_path: &Path,
+    scan_request: &ScanRequest,
+) -> Box<dyn Iterator<Item = WalkStep>> {
+    match scan_request.scanner_backend {
+        ScannerBackend::StandaloneClamscan if is_root_level_target(target_path) => Box::new(
+            std::iter::once(WalkStep::WalkCompleted(Ok(EnumeratedScanFiles::default()))),
+        ),
+        ScannerBackend::StandaloneClamscan | ScannerBackend::ClamdDaemon => Box::new(
+            ScanWalk::of_target(target_path, scan_request.scan_exclusions.clone()),
+        ),
+    }
+}
+
+fn target_preparation_steps(
+    target_path: PathBuf,
+    scan_request: Arc<ScanRequest>,
+) -> impl Iterator<Item = TargetPreparationStep> {
+    let mut report_throttle =
+        RefreshThrottle::starting_at(ENUMERATION_REPORT_INTERVAL, Instant::now());
+    target_walk_steps(&target_path, &scan_request).filter_map(move |walk_step| match walk_step {
+        WalkStep::DirectoryEntered(enumeration_progress) => report_throttle
+            .allows_refresh(Instant::now())
+            .then_some(TargetPreparationStep::WalkProgressed(enumeration_progress)),
+        WalkStep::WalkCompleted(walk_outcome) => Some(TargetPreparationStep::TargetPrepared(
+            walk_outcome.and_then(|enumerated_files| {
+                prepare_scan_target(&target_path, &scan_request, enumerated_files)
+            }),
+        )),
+    })
 }
 
 fn open_standard_input_file(input_path: &Path) -> Result<File, ScanStartFailure> {
@@ -707,35 +729,23 @@ fn target_progress_events(
     scan_request: Arc<ScanRequest>,
 ) -> impl Stream<Item = ScanProgressEvent> + Send + 'static {
     let preparation_request = Arc::clone(&scan_request);
-    let (progress_sender, progress_receiver) = mpsc::unbounded();
-    let target_preparation = tokio::task::spawn_blocking(move || {
-        let mut report_throttle =
-            RefreshThrottle::starting_at(ENUMERATION_REPORT_INTERVAL, Instant::now());
-        prepare_scan_target(
-            &target_path,
-            &preparation_request,
-            &mut |enumeration_progress| {
-                if progress_sender.is_closed() {
-                    return ControlFlow::Break(());
-                }
-                if report_throttle.allows_refresh(Instant::now()) {
-                    let _scan_abandoned =
-                        progress_sender.unbounded_send(enumeration_progress.clone());
-                }
-                ControlFlow::Continue(())
-            },
-        )
-    });
-    progress_receiver
-        .map(ScanProgressEvent::EnumerationProgressed)
-        .chain(
-            stream::once(target_preparation).flat_map(move |prepared_target| {
-                prepared_target_events(
-                    prepared_target.unwrap_or(Err(ScanTargetFailure::EnumerationInterrupted)),
-                    Arc::clone(&scan_request),
-                )
-            }),
-        )
+    blocking_iterator_stream(
+        TARGET_WALK_THREAD_NAME,
+        move || target_preparation_steps(target_path, preparation_request),
+        |_spawn_failure| {
+            TargetPreparationStep::TargetPrepared(Err(ScanTargetFailure::EnumerationInterrupted))
+        },
+    )
+    .flat_map(move |preparation_step| match preparation_step {
+        TargetPreparationStep::WalkProgressed(enumeration_progress) => {
+            Either::Left(stream::iter([ScanProgressEvent::EnumerationProgressed(
+                enumeration_progress,
+            )]))
+        }
+        TargetPreparationStep::TargetPrepared(prepared_target) => Either::Right(
+            prepared_target_events(prepared_target, Arc::clone(&scan_request)),
+        ),
+    })
 }
 
 pub fn scan_progress_events(
@@ -759,6 +769,7 @@ mod scan_progress_events_tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::host_services::clamav_scanner::scan_target_enumeration::enumerate_scan_files;
 
     fn exit_status_with_code(exit_code: i32) -> ExitStatus {
         ExitStatus::from_raw(exit_code << 8)
@@ -874,9 +885,9 @@ mod scan_progress_events_tests {
         .for_each(|file_path| fs::write(file_path, b"fixture").expect("fixture file"));
 
         let prepared_target = prepare_clamd_phases(
-            &scan_target,
             &clamd_request(&temporary_root, vec![scan_target.clone()]),
-            &mut |_enumeration_progress| ControlFlow::Continue(()),
+            enumerate_scan_files(&scan_target, &ScanExclusions::default())
+                .expect("enumerated files"),
         )
         .expect("prepared target");
         assert_eq!(prepared_target.planned_file_count, 4);

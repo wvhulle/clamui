@@ -1,6 +1,5 @@
 use std::{
     fs, io,
-    ops::ControlFlow,
     path::{Path, PathBuf},
 };
 
@@ -37,118 +36,151 @@ pub struct EnumerationProgress {
     pub current_directory: PathBuf,
 }
 
+#[derive(Debug)]
+pub enum WalkStep {
+    DirectoryEntered(EnumerationProgress),
+    WalkCompleted(Result<EnumeratedScanFiles, ScanTargetFailure>),
+}
+
+enum WalkState {
+    NotStarted { target_path: PathBuf },
+    Walking { open_directories: Vec<fs::ReadDir> },
+    Completed,
+}
+
+pub struct ScanWalk {
+    scan_exclusions: ScanExclusions,
+    enumerated_files: EnumeratedScanFiles,
+    walk_state: WalkState,
+}
+
+impl ScanWalk {
+    pub fn of_target(target_path: &Path, scan_exclusions: ScanExclusions) -> Self {
+        Self {
+            scan_exclusions,
+            enumerated_files: EnumeratedScanFiles::default(),
+            walk_state: WalkState::NotStarted {
+                target_path: target_path.to_path_buf(),
+            },
+        }
+    }
+
+    fn entered_directory(&mut self, directory_path: &Path) -> WalkStep {
+        self.enumerated_files.directory_count += 1;
+        WalkStep::DirectoryEntered(EnumerationProgress {
+            found_file_count: self.enumerated_files.file_paths.len() as u64,
+            found_directory_count: self.enumerated_files.directory_count,
+            current_directory: directory_path.to_path_buf(),
+        })
+    }
+
+    fn completed(
+        &mut self,
+        walk_outcome: Result<EnumeratedScanFiles, ScanTargetFailure>,
+    ) -> WalkStep {
+        self.walk_state = WalkState::Completed;
+        WalkStep::WalkCompleted(walk_outcome)
+    }
+
+    fn started_walk(&mut self, target_path: &Path) -> WalkStep {
+        if !target_path.exists() {
+            return self.completed(Err(ScanTargetFailure::TargetMissing));
+        }
+        if target_path.is_file() {
+            return self.completed(Ok(EnumeratedScanFiles {
+                file_paths: vec![target_path.to_path_buf()],
+                directory_count: 0,
+                excluded_entry_count: 0,
+            }));
+        }
+        if !target_path.is_dir() {
+            return self.completed(Err(ScanTargetFailure::TargetNotScannable));
+        }
+        match fs::read_dir(target_path) {
+            Ok(target_entries) => {
+                self.walk_state = WalkState::Walking {
+                    open_directories: vec![target_entries],
+                };
+                self.entered_directory(target_path)
+            }
+            Err(directory_failure) => {
+                self.completed(Err(ScanTargetFailure::TargetDirectoryUnreadable {
+                    target_path: target_path.to_path_buf(),
+                    directory_failure,
+                }))
+            }
+        }
+    }
+
+    fn visited_entry(&mut self, directory_entry: &fs::DirEntry) -> Option<WalkStep> {
+        let entry_path = directory_entry.path();
+        let entry_kind = directory_entry.file_type().ok()?;
+        if entry_kind.is_dir() {
+            if self.scan_exclusions.excludes_directory(&entry_path) {
+                self.enumerated_files.excluded_entry_count += 1;
+                return None;
+            }
+            let nested_entries = fs::read_dir(&entry_path).ok()?;
+            if let WalkState::Walking { open_directories } = &mut self.walk_state {
+                open_directories.push(nested_entries);
+            }
+            return Some(self.entered_directory(&entry_path));
+        }
+        if entry_kind.is_file() {
+            if self.scan_exclusions.excludes_file(&entry_path) {
+                self.enumerated_files.excluded_entry_count += 1;
+            } else {
+                self.enumerated_files.file_paths.push(entry_path);
+            }
+        }
+        None
+    }
+}
+
+impl Iterator for ScanWalk {
+    type Item = WalkStep;
+
+    fn next(&mut self) -> Option<WalkStep> {
+        loop {
+            match &mut self.walk_state {
+                WalkState::Completed => return None,
+                WalkState::NotStarted { target_path } => {
+                    let target_path = std::mem::take(target_path);
+                    return Some(self.started_walk(&target_path));
+                }
+                WalkState::Walking { open_directories } => {
+                    let Some(innermost_directory) = open_directories.last_mut() else {
+                        let enumerated_files = std::mem::take(&mut self.enumerated_files);
+                        return Some(self.completed(Ok(enumerated_files)));
+                    };
+                    match innermost_directory.next() {
+                        None => {
+                            open_directories.pop();
+                        }
+                        Some(Err(_unreadable_entry)) => {}
+                        Some(Ok(directory_entry)) => {
+                            if let Some(walk_step) = self.visited_entry(&directory_entry) {
+                                return Some(walk_step);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 pub fn enumerate_scan_files(
     target_path: &Path,
     scan_exclusions: &ScanExclusions,
 ) -> Result<EnumeratedScanFiles, ScanTargetFailure> {
-    enumerate_scan_files_reporting(target_path, scan_exclusions, &mut |_enumeration_progress| {
-        ControlFlow::Continue(())
-    })
-}
-
-pub fn enumerate_scan_files_reporting(
-    target_path: &Path,
-    scan_exclusions: &ScanExclusions,
-    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
-) -> Result<EnumeratedScanFiles, ScanTargetFailure> {
-    if !target_path.exists() {
-        return Err(ScanTargetFailure::TargetMissing);
-    }
-    if target_path.is_file() {
-        return Ok(EnumeratedScanFiles {
-            file_paths: vec![target_path.to_path_buf()],
-            directory_count: 0,
-            excluded_entry_count: 0,
-        });
-    }
-    if !target_path.is_dir() {
-        return Err(ScanTargetFailure::TargetNotScannable);
-    }
-    let target_entries = fs::read_dir(target_path).map_err(|directory_failure| {
-        ScanTargetFailure::TargetDirectoryUnreadable {
-            target_path: target_path.to_path_buf(),
-            directory_failure,
-        }
-    })?;
-    if report_directory_entered(
-        target_path,
-        &EnumeratedScanFiles::default(),
-        report_progress,
-    )
-    .is_break()
-    {
-        return Err(ScanTargetFailure::EnumerationInterrupted);
-    }
-    match collect_directory_files(
-        target_entries,
-        scan_exclusions,
-        EnumeratedScanFiles {
-            file_paths: Vec::new(),
-            directory_count: 1,
-            excluded_entry_count: 0,
-        },
-        report_progress,
-    ) {
-        ControlFlow::Continue(enumerated_files) => Ok(enumerated_files),
-        ControlFlow::Break(()) => Err(ScanTargetFailure::EnumerationInterrupted),
-    }
-}
-
-fn report_directory_entered(
-    directory_path: &Path,
-    enumerated_files: &EnumeratedScanFiles,
-    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
-) -> ControlFlow<()> {
-    report_progress(&EnumerationProgress {
-        found_file_count: enumerated_files.file_paths.len() as u64,
-        found_directory_count: enumerated_files.directory_count,
-        current_directory: directory_path.to_path_buf(),
-    })
-}
-
-fn collect_directory_files(
-    directory_entries: fs::ReadDir,
-    scan_exclusions: &ScanExclusions,
-    enumerated_files: EnumeratedScanFiles,
-    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
-) -> ControlFlow<(), EnumeratedScanFiles> {
-    directory_entries.filter_map(Result::ok).try_fold(
-        enumerated_files,
-        |mut enumerated_files, directory_entry| {
-            let entry_path = directory_entry.path();
-            let Ok(entry_kind) = directory_entry.file_type() else {
-                return ControlFlow::Continue(enumerated_files);
-            };
-            if entry_kind.is_dir() {
-                if scan_exclusions.excludes_directory(&entry_path) {
-                    enumerated_files.excluded_entry_count += 1;
-                    return ControlFlow::Continue(enumerated_files);
-                }
-                return match fs::read_dir(&entry_path) {
-                    Ok(nested_entries) => {
-                        enumerated_files.directory_count += 1;
-                        report_directory_entered(&entry_path, &enumerated_files, report_progress)?;
-                        collect_directory_files(
-                            nested_entries,
-                            scan_exclusions,
-                            enumerated_files,
-                            report_progress,
-                        )
-                    }
-                    Err(_unreadable_directory) => ControlFlow::Continue(enumerated_files),
-                };
-            }
-            if entry_kind.is_file() {
-                if scan_exclusions.excludes_file(&entry_path) {
-                    enumerated_files.excluded_entry_count += 1;
-                } else {
-                    enumerated_files.file_paths.push(entry_path);
-                }
-            }
-            ControlFlow::Continue(enumerated_files)
-        },
-    )
+    ScanWalk::of_target(target_path, scan_exclusions.clone())
+        .find_map(|walk_step| match walk_step {
+            WalkStep::WalkCompleted(walk_outcome) => Some(walk_outcome),
+            WalkStep::DirectoryEntered(_entered_directory) => None,
+        })
+        .unwrap_or(Err(ScanTargetFailure::EnumerationInterrupted))
 }
 
 #[cfg(test)]
@@ -206,27 +238,14 @@ mod scan_target_enumeration_tests {
     }
 
     #[test]
-    fn a_cancelled_walk_stops_at_the_next_folder() {
+    fn a_dropped_walk_stops_at_the_next_folder() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let scan_root = temporary_root.path().join("scan");
         fs::create_dir_all(scan_root.join("first/second")).expect("nested directories");
-        let mut entered_folders = 0;
-        let walk_outcome = enumerate_scan_files_reporting(
-            &scan_root,
-            &ScanExclusions::default(),
-            &mut |_enumeration_progress| {
-                entered_folders += 1;
-                if entered_folders > 1 {
-                    ControlFlow::Break(())
-                } else {
-                    ControlFlow::Continue(())
-                }
-            },
-        );
-        assert!(matches!(
-            walk_outcome,
-            Err(ScanTargetFailure::EnumerationInterrupted)
-        ));
+        let entered_folders = ScanWalk::of_target(&scan_root, ScanExclusions::default())
+            .take(2)
+            .filter(|walk_step| matches!(walk_step, WalkStep::DirectoryEntered(_)))
+            .count();
         assert_eq!(entered_folders, 2);
     }
 
@@ -237,16 +256,14 @@ mod scan_target_enumeration_tests {
         fs::create_dir_all(scan_root.join("nested")).expect("nested directory");
         fs::write(scan_root.join("top.txt"), b"fixture").expect("top file");
         fs::write(scan_root.join("nested/inner.txt"), b"fixture").expect("nested file");
-        let mut reported_directories = Vec::new();
-        enumerate_scan_files_reporting(
-            &scan_root,
-            &ScanExclusions::default(),
-            &mut |enumeration_progress| {
-                reported_directories.push(enumeration_progress.current_directory.clone());
-                ControlFlow::Continue(())
-            },
-        )
-        .expect("enumerated files");
+        let reported_directories = ScanWalk::of_target(&scan_root, ScanExclusions::default())
+            .filter_map(|walk_step| match walk_step {
+                WalkStep::DirectoryEntered(enumeration_progress) => {
+                    Some(enumeration_progress.current_directory)
+                }
+                WalkStep::WalkCompleted(_walk_outcome) => None,
+            })
+            .collect::<Vec<_>>();
         assert_eq!(reported_directories.first(), Some(&scan_root));
         assert!(reported_directories.contains(&scan_root.join("nested")));
     }

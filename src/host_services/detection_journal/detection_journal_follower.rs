@@ -1,10 +1,8 @@
-use std::thread;
-
-use futures::{Stream, stream};
+use futures::Stream;
 use systemd::journal::Journal;
-use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::host_services::{
+    blocking_iterator_stream::blocking_iterator_stream,
     detection_journal::detection_journal_records::{
         JournalDetectionRecord, ON_ACCESS_SERVICE_UNITS, SCHEDULED_SCAN_SERVICE_UNITS,
         detection_record_from_fields,
@@ -60,14 +58,32 @@ fn detection_at_position(journal: &mut Journal) -> systemd::Result<Option<Journa
     ))
 }
 
-fn follow_journal_entries(
+enum SkippedResumeCursor {
+    NothingToSkip,
+    SkipFirstEntryAt(String),
+}
+
+enum FollowerState {
+    NotOpened {
+        start_position: JournalStartPosition,
+    },
+    Following {
+        journal: Journal,
+        skipped_resume_cursor: SkippedResumeCursor,
+    },
+    Stopped,
+}
+
+struct FollowedDetections {
+    follower_state: FollowerState,
+}
+
+fn opened_detection_journal(
     start_position: &JournalStartPosition,
-    event_sender: &UnboundedSender<DetectionJournalEvent>,
-) -> systemd::Result<()> {
+) -> systemd::Result<Option<Journal>> {
     let mut journal = open_system_journal()?;
     if !journal_has_readable_files(&journal)? {
-        let _receiver_gone = event_sender.send(DetectionJournalEvent::JournalUnreadable);
-        return Ok(());
+        return Ok(None);
     }
     ON_ACCESS_SERVICE_UNITS
         .iter()
@@ -83,31 +99,78 @@ fn follow_journal_entries(
             journal.seek_cursor(journal_cursor.as_str())?;
         }
     }
-    let mut resumed_cursor = match start_position {
-        JournalStartPosition::FromOldestEntry => None,
-        JournalStartPosition::AfterCursor { journal_cursor } => Some(journal_cursor.as_str()),
-    };
+    Ok(Some(journal))
+}
+
+fn next_followed_detection(
+    journal: &mut Journal,
+    skipped_resume_cursor: &mut SkippedResumeCursor,
+) -> systemd::Result<DetectionJournalEvent> {
     loop {
-        while journal.next()? > 0 {
-            if let Some(journal_cursor) = resumed_cursor.take()
-                && journal.test_cursor(journal_cursor)?
-            {
-                continue;
-            }
-            if let Some(detection_record) = detection_at_position(&mut journal)?
-                && event_sender
-                    .send(DetectionJournalEvent::DetectionObserved {
-                        detection_record,
-                        journal_cursor: journal.cursor()?,
-                    })
-                    .is_err()
-            {
-                return Ok(());
-            }
+        if journal.next()? == 0 {
+            journal.wait(None)?;
+            continue;
         }
-        journal.wait(None)?;
-        if event_sender.is_closed() {
-            return Ok(());
+        if let SkippedResumeCursor::SkipFirstEntryAt(journal_cursor) =
+            std::mem::replace(skipped_resume_cursor, SkippedResumeCursor::NothingToSkip)
+            && journal.test_cursor(&journal_cursor)?
+        {
+            continue;
+        }
+        if let Some(detection_record) = detection_at_position(journal)? {
+            return Ok(DetectionJournalEvent::DetectionObserved {
+                detection_record,
+                journal_cursor: journal.cursor()?,
+            });
+        }
+    }
+}
+
+fn following_stopped(follow_failure: &impl std::fmt::Display) -> DetectionJournalEvent {
+    DetectionJournalEvent::FollowingStopped {
+        failure_text: follow_failure.to_string(),
+    }
+}
+
+impl Iterator for FollowedDetections {
+    type Item = DetectionJournalEvent;
+
+    fn next(&mut self) -> Option<DetectionJournalEvent> {
+        match std::mem::replace(&mut self.follower_state, FollowerState::Stopped) {
+            FollowerState::Stopped => None,
+            FollowerState::NotOpened { start_position } => {
+                match opened_detection_journal(&start_position) {
+                    Ok(Some(journal)) => {
+                        self.follower_state = FollowerState::Following {
+                            journal,
+                            skipped_resume_cursor: match start_position {
+                                JournalStartPosition::FromOldestEntry => {
+                                    SkippedResumeCursor::NothingToSkip
+                                }
+                                JournalStartPosition::AfterCursor { journal_cursor } => {
+                                    SkippedResumeCursor::SkipFirstEntryAt(journal_cursor)
+                                }
+                            },
+                        };
+                        self.next()
+                    }
+                    Ok(None) => Some(DetectionJournalEvent::JournalUnreadable),
+                    Err(open_failure) => Some(following_stopped(&open_failure)),
+                }
+            }
+            FollowerState::Following {
+                mut journal,
+                mut skipped_resume_cursor,
+            } => match next_followed_detection(&mut journal, &mut skipped_resume_cursor) {
+                Ok(journal_event) => {
+                    self.follower_state = FollowerState::Following {
+                        journal,
+                        skipped_resume_cursor,
+                    };
+                    Some(journal_event)
+                }
+                Err(follow_failure) => Some(following_stopped(&follow_failure)),
+            },
         }
     }
 }
@@ -115,29 +178,13 @@ fn follow_journal_entries(
 pub fn detection_journal_events(
     start_position: JournalStartPosition,
 ) -> impl Stream<Item = DetectionJournalEvent> + Send + 'static {
-    let (event_sender, event_receiver) = mpsc::unbounded_channel();
-    let thread_sender = event_sender.clone();
-    let spawn_outcome = thread::Builder::new()
-        .name(FOLLOWER_THREAD_NAME.to_owned())
-        .spawn(move || {
-            if let Err(follow_failure) = follow_journal_entries(&start_position, &thread_sender) {
-                let _receiver_gone = thread_sender.send(DetectionJournalEvent::FollowingStopped {
-                    failure_text: follow_failure.to_string(),
-                });
-            }
-        });
-    if let Err(spawn_failure) = spawn_outcome {
-        let _receiver_gone = event_sender.send(DetectionJournalEvent::FollowingStopped {
-            failure_text: spawn_failure.to_string(),
-        });
-    }
-    drop(event_sender);
-    stream::unfold(event_receiver, |mut event_receiver| async move {
-        event_receiver
-            .recv()
-            .await
-            .map(|journal_event| (journal_event, event_receiver))
-    })
+    blocking_iterator_stream(
+        FOLLOWER_THREAD_NAME,
+        move || FollowedDetections {
+            follower_state: FollowerState::NotOpened { start_position },
+        },
+        |spawn_failure| following_stopped(&spawn_failure),
+    )
 }
 
 #[cfg(test)]
