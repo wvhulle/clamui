@@ -557,7 +557,7 @@ impl BackgroundDetectionsPage {
             }
             TimelineStepAction::UpdateSignatures
             | TimelineStepAction::RunScheduledScan { .. }
-            | TimelineStepAction::OpenSchedulePreferences => {}
+            | TimelineStepAction::OpenSettingsSubpage(_) => {}
         }
     }
 }

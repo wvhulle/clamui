@@ -16,6 +16,7 @@ use crate::{
         },
         trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
     },
+    detection_trust::trust_list_contents::{TrustListContents, read_trust_list_contents},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         clamav_engine_evidence::{
@@ -189,6 +190,7 @@ pub enum ProgramTrustFinding {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionEvidence {
     pub program_trust_findings: Vec<ProgramTrustFinding>,
+    pub trust_list: TrustListContents,
     pub engine_installation: EngineInstallation,
     pub signature_evidence: SignatureEvidence,
     pub daemon_evidence: DaemonEvidence,
@@ -512,6 +514,9 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
     };
     ProtectionEvidence {
         program_trust_findings: spawn_blocking(inspect_program_trust)
+            .await
+            .unwrap_or_default(),
+        trust_list: spawn_blocking(|| read_trust_list_contents(&configured_database_directory()))
             .await
             .unwrap_or_default(),
         engine_installation,

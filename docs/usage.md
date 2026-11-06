@@ -36,6 +36,12 @@ A move copies the file, checks its hash and only then removes the original, so a
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/quarantine.png" width="800" alt="The Quarantine page listing quarantined files">
 
+## False positives
+
+When you are sure a detection is wrong, trust the file instead of excluding its path. Open the menu of a detected threat and choose **Trust This File…**, or press **Trust…** on a quarantined file. ClamAV then never reports a file with exactly that content again, in any scan on this computer, while a changed copy is checked as usual. **Ignore This Detection Everywhere…** silences a detection name for every file; prefer trusting by hash when only one file is affected.
+
+Both need your administrator password, and the password prompt shows the exact hash or detection name. Remove entries under **Protection → Trusted Detections**, which also lists allowlist files in the signature folder that Lazaret didn't write. The **System Changes** tab on the Logs page shows every change, as recorded by the system journal. This needs the settings helper, so it isn't available in the Flatpak.
+
 ## Reputation lookups
 
 On the Quarantine page you can look up a quarantined file by its SHA-256 hash, without uploading the file. CIRCL hashlookup tells whether the hash belongs to a known, harmless file. MalwareBazaar (abuse.ch) and VirusTotal tell whether it is a known malware sample. Both need a free API key. Paste the keys under **Preferences → Online Lookups**, where they are stored in your keyring. Or point Lazaret at key files, as each install guide explains.

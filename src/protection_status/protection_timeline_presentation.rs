@@ -5,6 +5,7 @@ use crate::{
     activity_history::activity_entry_row::formatted_local_time,
     background_detections::detection_journal_follower::JournalAccess,
     clamav_components::distribution_install_guides::{DistributionFamily, engine_install_guides},
+    detection_trust::trust_list_contents::TrustListContents,
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         clamav_engine_evidence::DatabaseEvidence,
@@ -15,6 +16,7 @@ use crate::{
         },
         service_run_journal::ServiceRunHistory,
     },
+    settings_navigation::SettingsSubpage,
     signature_sources::signature_provider_catalogue::provider_of_signature_file,
     step_timeline::timeline_step_model::{
         StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, TimelineStepAction,
@@ -182,6 +184,58 @@ fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<
                 "Malware running as you could put a fake clamdscan earlier on your search path \
                  that reports every file as clean. Lazaret only runs ClamAV programs that your \
                  account can't replace, such as the ones installed for the whole system.",
+            ),
+            node_state,
+            status_text,
+        )
+    })
+}
+
+fn trust_list_step(trust_list: &TrustListContents) -> Option<TimelineStep> {
+    if trust_list.is_empty() {
+        return None;
+    }
+    let lazaret_entries = trust_list.lazaret_entry_count();
+    let (node_state, status_text) = if trust_list.foreign_allowlists.is_empty() {
+        (
+            StepNodeState::Completed,
+            ngettext(
+                "{count} file or detection is never reported",
+                "{count} files or detections are never reported",
+                u32::try_from(lazaret_entries).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &lazaret_entries.to_string()),
+        )
+    } else {
+        (
+            StepNodeState::NeedsReview,
+            gettext("An allowlist that Lazaret didn't write tells ClamAV to stay silent"),
+        )
+    };
+    Some(TimelineStep {
+        evidence_rows: trust_list
+            .foreign_allowlists
+            .iter()
+            .map(|foreign_allowlist| {
+                evidence_row(
+                    gettext("Other allowlist"),
+                    foreign_allowlist.file_name.clone(),
+                )
+            })
+            .collect(),
+        action_slot: StepActionSlot::ActionOffered {
+            action_label: gettext("Review"),
+            chosen_action: TimelineStepAction::OpenSettingsSubpage(
+                SettingsSubpage::TrustedDetections,
+            ),
+            action_suggested: node_state == StepNodeState::NeedsReview,
+        },
+        ..no_guidance_step(
+            gettext("Trusted detections"),
+            gettext(
+                "Files and detection names on ClamAV's allowlists are never reported, by any \
+                 scan. Malware that gets administrator rights could hide itself this way, so \
+                 check that every entry was added on purpose.",
             ),
             node_state,
             status_text,
@@ -542,7 +596,9 @@ fn scheduled_scan_step(
             ),
             action_slot: StepActionSlot::ActionOffered {
                 action_label: gettext("Set Up"),
-                chosen_action: TimelineStepAction::OpenSchedulePreferences,
+                chosen_action: TimelineStepAction::OpenSettingsSubpage(
+                    SettingsSubpage::ScanSchedule,
+                ),
                 action_suggested: true,
             },
             ..no_guidance_step(
@@ -692,6 +748,7 @@ pub fn protection_timeline(
                     distribution_family,
                 ),
             ])
+            .chain(trust_list_step(&protection_evidence.trust_list))
             .collect(),
     }
 }
@@ -707,6 +764,7 @@ mod protection_timeline_presentation_tests {
     fn healthy_evidence() -> ProtectionEvidence {
         ProtectionEvidence {
             program_trust_findings: Vec::new(),
+            trust_list: TrustListContents::default(),
             engine_installation: EngineInstallation::VersionReported {
                 version_banner: "ClamAV 1.5.4/28174".to_owned(),
             },
@@ -868,6 +926,28 @@ mod protection_timeline_presentation_tests {
         };
         let node_states = step_states(&protection_evidence);
         assert_eq!(node_states[0], StepNodeState::HasFailed);
+        assert_eq!(
+            node_states.len(),
+            step_states(&healthy_evidence()).len() + 1
+        );
+    }
+
+    #[test]
+    fn a_foreign_allowlist_needs_review_after_every_other_step() {
+        let protection_evidence = ProtectionEvidence {
+            trust_list: TrustListContents {
+                foreign_allowlists: vec![
+                    crate::detection_trust::trust_list_contents::ForeignAllowlistFile {
+                        file_name: "local.ign2".to_owned(),
+                        entry_count: 3,
+                    },
+                ],
+                ..TrustListContents::default()
+            },
+            ..healthy_evidence()
+        };
+        let node_states = step_states(&protection_evidence);
+        assert_eq!(node_states.last(), Some(&StepNodeState::NeedsReview));
         assert_eq!(
             node_states.len(),
             step_states(&healthy_evidence()).len() + 1

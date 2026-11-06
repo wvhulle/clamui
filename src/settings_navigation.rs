@@ -11,15 +11,17 @@ pub enum SettingsSubpage {
     ScannerEngine,
     OnAccessScanning,
     SignatureUpdates,
+    TrustedDetections,
 }
 
-const ALL_SETTINGS_SUBPAGES: [SettingsSubpage; 6] = [
+const ALL_SETTINGS_SUBPAGES: [SettingsSubpage; 7] = [
     SettingsSubpage::ScanExclusions,
     SettingsSubpage::ScanSchedule,
     SettingsSubpage::DeviceAutoScan,
     SettingsSubpage::ScannerEngine,
     SettingsSubpage::OnAccessScanning,
     SettingsSubpage::SignatureUpdates,
+    SettingsSubpage::TrustedDetections,
 ];
 
 impl SettingsSubpage {
@@ -31,6 +33,7 @@ impl SettingsSubpage {
             Self::ScannerEngine => "scanner-engine",
             Self::OnAccessScanning => "on-access-scanning",
             Self::SignatureUpdates => "signature-updates",
+            Self::TrustedDetections => "trusted-detections",
         }
     }
 
@@ -46,7 +49,7 @@ impl SettingsSubpage {
             | Self::ScanSchedule
             | Self::DeviceAutoScan
             | Self::ScannerEngine => "scan",
-            Self::OnAccessScanning => "protection",
+            Self::OnAccessScanning | Self::TrustedDetections => "protection",
             Self::SignatureUpdates => "signatures",
         }
     }
@@ -59,13 +62,17 @@ impl SettingsSubpage {
             Self::ScannerEngine => gettext("Scanner Engine"),
             Self::OnAccessScanning => gettext("On-Access Scanning"),
             Self::SignatureUpdates => gettext("Signature Updates"),
+            Self::TrustedDetections => gettext("Trusted Detections"),
         }
     }
 
     pub const fn needs_administrator(self) -> bool {
         matches!(
             self,
-            Self::ScannerEngine | Self::OnAccessScanning | Self::SignatureUpdates
+            Self::ScannerEngine
+                | Self::OnAccessScanning
+                | Self::SignatureUpdates
+                | Self::TrustedDetections
         )
     }
 
@@ -77,6 +84,7 @@ impl SettingsSubpage {
             Self::ScannerEngine => gettext("clamd settings for every scan on this computer"),
             Self::OnAccessScanning => gettext("Which folders clamonacc watches, and how it blocks"),
             Self::SignatureUpdates => gettext("How freshclam downloads signatures"),
+            Self::TrustedDetections => gettext("Files and detections that ClamAV never reports"),
         }
     }
 }

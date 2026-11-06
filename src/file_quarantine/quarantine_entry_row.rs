@@ -9,6 +9,7 @@ use relm4::{
 
 use crate::{
     application_settings::preferences_dialog::{PreferencesPageName, present_preferences_dialog},
+    detection_trust::trust_requests::{FileFingerprint, TrustChoice},
     file_quarantine::quarantine_entry_database::QuarantineEntryRecord,
     malware_scan::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
     threat_intel_lookup::file_reputation_check::{
@@ -27,12 +28,14 @@ pub enum QuarantineEntryRowInput {
     CopyHash,
     OpenVirusTotalReport,
     OpenOnlineLookups,
+    TrustFile,
 }
 
 #[derive(Debug)]
 pub enum QuarantineEntryRowOutput {
     RestoreEntry { entry_id: i64 },
     DeleteEntry { entry_id: i64 },
+    TrustEntry(TrustChoice),
     ShowToast(String),
 }
 
@@ -156,6 +159,18 @@ impl FactoryComponent for QuarantineEntryRow {
             },
 
             add_row = &adw::ActionRow {
+                set_title: &gettext("False Positive"),
+                set_subtitle: &gettext("Trust this exact file so ClamAV stops reporting it on this computer. Then restore it."),
+                set_subtitle_lines: 0,
+
+                add_suffix = &gtk::Button {
+                    set_label: &gettext("Trust…"),
+                    set_valign: gtk::Align::Center,
+                    connect_clicked => QuarantineEntryRowInput::TrustFile,
+                },
+            },
+
+            add_row = &adw::ActionRow {
                 set_use_markup: false,
                 set_title: "SHA-256",
                 set_subtitle: &self.entry_record.file_hash,
@@ -211,6 +226,19 @@ impl FactoryComponent for QuarantineEntryRow {
             }
             QuarantineEntryRowInput::OpenOnlineLookups => {
                 present_preferences_dialog(PreferencesPageName::OnlineLookups);
+            }
+            QuarantineEntryRowInput::TrustFile => {
+                let _parent_gone = sender.output(QuarantineEntryRowOutput::TrustEntry(
+                    TrustChoice::TrustFile {
+                        file_fingerprint: FileFingerprint {
+                            sha256_hex: self.entry_record.file_hash.clone(),
+                            file_size: self.entry_record.file_size,
+                        },
+                        shown_path: sanitize_scanner_line(
+                            &self.entry_record.original_path.to_string_lossy(),
+                        ),
+                    },
+                ));
             }
             QuarantineEntryRowInput::OpenVirusTotalReport => {
                 gtk::UriLauncher::new(self.virustotal_report_url()).launch(

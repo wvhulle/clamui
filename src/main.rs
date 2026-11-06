@@ -4,6 +4,7 @@ mod application_window_shell;
 mod background_detections;
 mod clamav_components;
 mod desktop_integration;
+mod detection_trust;
 mod file_process_lock;
 mod file_quarantine;
 #[cfg(test)]

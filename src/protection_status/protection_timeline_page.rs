@@ -228,10 +228,10 @@ impl ProtectionTimelinePage {
                     }
                 });
             }
-            TimelineStepAction::OpenSchedulePreferences => {
+            TimelineStepAction::OpenSettingsSubpage(settings_subpage) => {
                 let _action_missing = root.activate_action(
                     &format!("win.{OPEN_SETTINGS_ACTION_NAME}"),
-                    Some(&SettingsSubpage::ScanSchedule.action_target().to_variant()),
+                    Some(&settings_subpage.action_target().to_variant()),
                 );
             }
             TimelineStepAction::QuarantineIncident
@@ -302,7 +302,10 @@ impl Component for ProtectionTimelinePage {
 
                 add: timeline_group,
 
-                add = &system_settings_group(&[SettingsSubpage::OnAccessScanning]),
+                add = &system_settings_group(&[
+                    SettingsSubpage::OnAccessScanning,
+                    SettingsSubpage::TrustedDetections,
+                ]),
             },
             #[watch]
             set_visible_child_name: model.first_load().shown_page_name(),

@@ -39,6 +39,7 @@ use crate::{
         },
         system_tray_menu::{SystemTrayMenu, spawn_system_tray},
     },
+    detection_trust::trusted_detections_page::TrustedDetectionsPage,
     file_process_lock::{ProcessFileLock, wait_for_file_lock},
     file_quarantine::{
         quarantine_entries_page::{
@@ -159,6 +160,11 @@ fn settings_subpage_content(settings_subpage: SettingsSubpage) -> gtk::Widget {
             schedule_page.detach_runtime();
             schedule_page.widget().clone().upcast()
         }
+        SettingsSubpage::TrustedDetections => {
+            let mut trusted_page = TrustedDetectionsPage::builder().launch(()).detach();
+            trusted_page.detach_runtime();
+            trusted_page.widget().clone().upcast()
+        }
         SettingsSubpage::ScannerEngine
         | SettingsSubpage::OnAccessScanning
         | SettingsSubpage::SignatureUpdates => adw::Spinner::new().upcast(),
@@ -172,7 +178,8 @@ const fn engine_section(settings_subpage: SettingsSubpage) -> Option<EngineSetti
         SettingsSubpage::SignatureUpdates => Some(EngineSettingsSection::SignatureUpdates),
         SettingsSubpage::ScanExclusions
         | SettingsSubpage::ScanSchedule
-        | SettingsSubpage::DeviceAutoScan => None,
+        | SettingsSubpage::DeviceAutoScan
+        | SettingsSubpage::TrustedDetections => None,
     }
 }
 

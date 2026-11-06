@@ -1,3 +1,5 @@
+use crate::settings_navigation::SettingsSubpage;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StepNodeState {
     Completed,
@@ -38,7 +40,7 @@ impl StepNodeState {
 pub enum TimelineStepAction {
     UpdateSignatures,
     RunScheduledScan { service_unit: &'static str },
-    OpenSchedulePreferences,
+    OpenSettingsSubpage(SettingsSubpage),
     QuarantineIncident,
     AskIncidentDeletion,
     DeleteIncidentFile,

@@ -8,6 +8,10 @@ use relm4::{
 };
 
 use crate::{
+    detection_trust::trust_requests::{
+        TrustChoice, TrustOutcome, present_trust_confirmation, request_trust_change,
+        trust_outcome_text,
+    },
     file_quarantine::{
         quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
         quarantine_entry_row::{QuarantineEntryRow, QuarantineEntryRowOutput},
@@ -101,6 +105,8 @@ pub enum QuarantineEntriesPageInput {
     ClearOldEntriesRequested,
     ClearOldEntriesConfirmed,
     ToastRequested(String),
+    TrustRequested(TrustChoice),
+    TrustConfirmed(TrustChoice),
 }
 
 #[derive(Debug)]
@@ -108,6 +114,7 @@ pub enum QuarantineEntriesPageCommand {
     EntriesLoaded(Result<Vec<QuarantineEntryRecord>, QuarantineMoveFailure>),
     EntryOperationFinished(Result<QuarantineEntryRecord, QuarantineMoveFailure>),
     OldEntriesCleared(Vec<Result<QuarantineEntryRecord, QuarantineMoveFailure>>),
+    TrustChangeFinished(TrustOutcome),
 }
 
 impl QuarantineEntriesPage {
@@ -329,6 +336,9 @@ impl Component for QuarantineEntriesPage {
                 QuarantineEntryRowOutput::ShowToast(toast_message) => {
                     QuarantineEntriesPageInput::ToastRequested(toast_message)
                 }
+                QuarantineEntryRowOutput::TrustEntry(trust_choice) => {
+                    QuarantineEntriesPageInput::TrustRequested(trust_choice)
+                }
             });
         let model = Self {
             quarantine_vault,
@@ -383,7 +393,25 @@ impl Component for QuarantineEntriesPage {
         let command_sender = sender.command_sender().clone();
         match page_input {
             QuarantineEntriesPageInput::ToastRequested(toast_message) => {
-                root.add_toast(adw::Toast::new(&toast_message));
+                root.add_toast(
+                    adw::Toast::builder()
+                        .title(toast_message)
+                        .use_markup(false)
+                        .build(),
+                );
+            }
+            QuarantineEntriesPageInput::TrustRequested(trust_choice) => {
+                let input_sender = sender.input_sender().clone();
+                present_trust_confirmation(root, trust_choice, move |confirmed_choice| {
+                    input_sender.emit(QuarantineEntriesPageInput::TrustConfirmed(confirmed_choice));
+                });
+            }
+            QuarantineEntriesPageInput::TrustConfirmed(confirmed_choice) => {
+                sender.oneshot_command(async move {
+                    QuarantineEntriesPageCommand::TrustChangeFinished(
+                        request_trust_change(confirmed_choice).await,
+                    )
+                });
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {
@@ -438,9 +466,17 @@ impl Component for QuarantineEntriesPage {
         &mut self,
         page_command: QuarantineEntriesPageCommand,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match page_command {
+            QuarantineEntriesPageCommand::TrustChangeFinished(trust_outcome) => {
+                root.add_toast(
+                    adw::Toast::builder()
+                        .title(trust_outcome_text(&trust_outcome))
+                        .use_markup(false)
+                        .build(),
+                );
+            }
             QuarantineEntriesPageCommand::EntriesLoaded(Ok(listed_entries)) => {
                 self.first_load = FirstLoad::LoadFinished;
                 self.listed_entries = listed_entries;

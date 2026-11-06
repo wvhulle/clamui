@@ -19,6 +19,7 @@ use crate::{
         activity_history_database::{ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure},
         daemon_log_reader::{DaemonLogContents, read_daemon_log},
     },
+    detection_trust::helper_audit_records::{HelperAuditEntry, newest_helper_audit_entries},
     loading_indicators::{FirstLoad, loading_placeholder_stack},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     text_export_dialog::{TextExportOutcome, describe_export_failure, save_text_with_dialog},
@@ -36,6 +37,8 @@ enum DaemonLogRefresh {
     LiveRefresh { refresh_abort_handle: AbortHandle },
 }
 
+const SYSTEM_CHANGE_LIMIT: usize = 200;
+
 pub struct ActivityLogsPage {
     activity_history: ActivityHistory,
     listed_entries: Vec<ActivityEntryRecord>,
@@ -47,6 +50,7 @@ pub struct ActivityLogsPage {
     daemon_log_refresh: DaemonLogRefresh,
     history_notice: String,
     first_load: FirstLoad,
+    system_change_list: gtk::ListBox,
 }
 
 #[derive(Debug)]
@@ -60,6 +64,7 @@ pub enum ActivityLogsPageInput {
     CopyDetailRequested,
     ExportDetailRequested,
     RefreshDaemonLogRequested,
+    RefreshSystemChangesRequested,
     LiveDaemonLogToggled,
     CopyDaemonLogRequested,
     ExportDaemonLogRequested,
@@ -71,9 +76,61 @@ pub enum ActivityLogsPageCommand {
     EntriesCleared(Result<(), ActivityHistoryFailure>),
     DaemonLogRead(DaemonLogContents),
     TextExportFinished(TextExportOutcome),
+    SystemChangesLoaded(Result<Vec<HelperAuditEntry>, String>),
+}
+
+fn system_change_row(audit_entry: &HelperAuditEntry) -> adw::ActionRow {
+    let change_row = adw::ActionRow::builder()
+        .use_markup(false)
+        .title(&audit_entry.action_subject)
+        .title_lines(0)
+        .subtitle(
+            gettext("{time} · {outcome} · requested by user {uid}")
+                .replace(
+                    "{time}",
+                    &formatted_local_time(
+                        i64::try_from(audit_entry.recorded_unix_seconds).unwrap_or(i64::MAX),
+                    ),
+                )
+                .replace("{outcome}", &audit_entry.audited_outcome.described())
+                .replace("{uid}", &audit_entry.requester_uid),
+        )
+        .build();
+    if audit_entry.lowered_protection() {
+        change_row.add_prefix(
+            &gtk::Image::builder()
+                .icon_name("dialog-warning-symbolic")
+                .tooltip_text(gettext("This change lowered protection"))
+                .css_classes(["warning"])
+                .build(),
+        );
+    }
+    change_row
+}
+
+fn system_change_placeholder(placeholder_text: String) -> adw::ActionRow {
+    adw::ActionRow::builder()
+        .use_markup(false)
+        .title(placeholder_text)
+        .title_lines(0)
+        .css_classes(["dim-label"])
+        .build()
 }
 
 impl ActivityLogsPage {
+    fn reload_system_changes(sender: &ComponentSender<Self>) {
+        sender.oneshot_command(async {
+            ActivityLogsPageCommand::SystemChangesLoaded(
+                tokio::task::spawn_blocking(|| {
+                    newest_helper_audit_entries(SYSTEM_CHANGE_LIMIT)
+                        .map_err(|journal_failure| journal_failure.to_string())
+                })
+                .await
+                .unwrap_or_else(|interrupted_read| Err(interrupted_read.to_string())),
+            )
+        });
+    }
+
     fn reload_entries(&self, sender: &ComponentSender<Self>) {
         let activity_history = self.activity_history.clone();
         sender.oneshot_command(async move {
@@ -350,6 +407,53 @@ impl Component for ActivityLogsPage {
                         append: &log_text_view(&model.detail_buffer),
                     },
 
+                    add_titled_with_icon[Some("system-changes"), &gettext("System Changes"), "changes-prevent-symbolic"] = &gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_spacing: 12,
+
+                        gtk::Box {
+                            set_spacing: 6,
+
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_hexpand: true,
+
+                                gtk::Label {
+                                    set_xalign: 0.0,
+                                    add_css_class: "heading",
+                                    set_label: &gettext("System Changes"),
+                                },
+
+                                gtk::Label {
+                                    set_xalign: 0.0,
+                                    set_wrap: true,
+                                    add_css_class: "dim-label",
+                                    set_label: &gettext("ClamAV settings and trusted detections changed through Lazaret, as recorded by the system. Software running as you can't remove these records."),
+                                },
+                            },
+
+                            gtk::Button {
+                                set_icon_name: "view-refresh-symbolic",
+                                set_tooltip_text: Some(&gettext("Refresh")),
+                                set_valign: gtk::Align::Center,
+                                add_css_class: "flat",
+                                connect_clicked => ActivityLogsPageInput::RefreshSystemChangesRequested,
+                            },
+                        },
+
+                        gtk::ScrolledWindow {
+                            set_vexpand: true,
+                            set_hscrollbar_policy: gtk::PolicyType::Never,
+
+                            #[local_ref]
+                            system_change_list -> gtk::ListBox {
+                                add_css_class: "boxed-list",
+                                set_selection_mode: gtk::SelectionMode::None,
+                                set_valign: gtk::Align::Start,
+                            },
+                        },
+                    },
+
                     add_titled_with_icon[Some("daemon"), &gettext("ClamAV Daemon"), "utilities-terminal-symbolic"] = &gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 12,
@@ -434,11 +538,14 @@ impl Component for ActivityLogsPage {
             daemon_log_refresh: DaemonLogRefresh::ManualRefresh,
             history_notice: String::new(),
             first_load: FirstLoad::StillLoading,
+            system_change_list: gtk::ListBox::new(),
         };
         model.select_entry(SelectedEntryView::NoEntrySelected);
         model.reload_entries(&sender);
         model.refresh_daemon_log(&sender);
+        Self::reload_system_changes(&sender);
         let entry_list = model.entry_rows.widget();
+        let system_change_list = &model.system_change_list;
         let placeholder_stack = &loading_placeholder_stack(
             &gettext("Loading history…"),
             &adw::StatusPage::builder()
@@ -504,6 +611,9 @@ impl Component for ActivityLogsPage {
                 );
             }
             ActivityLogsPageInput::RefreshDaemonLogRequested => self.refresh_daemon_log(&sender),
+            ActivityLogsPageInput::RefreshSystemChangesRequested => {
+                Self::reload_system_changes(&sender);
+            }
             ActivityLogsPageInput::LiveDaemonLogToggled => match &self.daemon_log_refresh {
                 DaemonLogRefresh::ManualRefresh => self.start_live_refresh(&sender),
                 DaemonLogRefresh::LiveRefresh {
@@ -543,6 +653,28 @@ impl Component for ActivityLogsPage {
         root: &Self::Root,
     ) {
         match page_command {
+            ActivityLogsPageCommand::SystemChangesLoaded(loaded_changes) => {
+                self.system_change_list.remove_all();
+                match loaded_changes {
+                    Ok(audit_entries) if audit_entries.is_empty() => {
+                        self.system_change_list
+                            .append(&system_change_placeholder(gettext(
+                                "No ClamAV settings or trusted detections were changed through \
+                                 Lazaret",
+                            )));
+                    }
+                    Ok(audit_entries) => audit_entries.iter().for_each(|audit_entry| {
+                        self.system_change_list
+                            .append(&system_change_row(audit_entry));
+                    }),
+                    Err(journal_failure) => {
+                        self.system_change_list.append(&system_change_placeholder(
+                            gettext("The system journal can't be read: {error}")
+                                .replace("{error}", &journal_failure),
+                        ));
+                    }
+                }
+            }
             ActivityLogsPageCommand::EntriesLoaded(Ok(listed_entries)) => {
                 self.first_load = FirstLoad::LoadFinished;
                 self.history_notice.clear();
