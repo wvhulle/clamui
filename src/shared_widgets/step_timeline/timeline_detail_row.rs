@@ -9,30 +9,44 @@ use relm4::{
 use crate::{
     host_services::desktop::locale_formatting::exact_local_time_text,
     shared_widgets::step_timeline::timeline_step_contents::{
-        EvidenceMoment, StepActionSlot, StepChoiceRow, StepEvidenceRow, TimelineStep,
-        TimelineStepAction, TimelineStepRowOutput,
+        ActionableEvidenceRow, EvidenceMoment, EvidenceRowControl, OfferedAction, StepActionButton,
+        StepChoiceRow, StepEvidenceRow, StepPhase, TimelineStep, TimelineStepRowOutput,
     },
 };
 
-pub enum TimelineDetailRow {
-    StepChoice(StepChoiceRow),
-    StepEvidence(StepEvidenceRow),
+pub enum TimelineDetailRow<StepAction> {
+    StepChoice(StepChoiceRow<StepAction>),
+    ActionableEvidence(ActionableEvidenceRow<StepAction>),
+    RunningEvidence(StepEvidenceRow),
     GuidanceCommand(String),
 }
 
-pub fn detail_rows_of(timeline_step: &TimelineStep) -> Vec<TimelineDetailRow> {
-    timeline_step
-        .choice_rows
-        .iter()
-        .cloned()
-        .map(TimelineDetailRow::StepChoice)
-        .chain(
-            timeline_step
-                .evidence_rows
-                .iter()
-                .cloned()
-                .map(TimelineDetailRow::StepEvidence),
-        )
+pub fn detail_rows_of<StepAction: StepActionButton>(
+    timeline_step: &TimelineStep<StepAction>,
+) -> Vec<TimelineDetailRow<StepAction>> {
+    let phase_rows = match &timeline_step.step_phase {
+        StepPhase::StepSettled(settled_step) => settled_step
+            .choice_rows
+            .iter()
+            .cloned()
+            .map(TimelineDetailRow::StepChoice)
+            .chain(
+                settled_step
+                    .evidence_rows
+                    .iter()
+                    .cloned()
+                    .map(TimelineDetailRow::ActionableEvidence),
+            )
+            .collect::<Vec<_>>(),
+        StepPhase::StepRunning(running_step) => running_step
+            .evidence_rows
+            .iter()
+            .cloned()
+            .map(TimelineDetailRow::RunningEvidence)
+            .collect(),
+    };
+    phase_rows
+        .into_iter()
         .chain(
             timeline_step
                 .guidance_commands
@@ -51,9 +65,7 @@ fn moment_prefix(evidence_moment: EvidenceMoment) -> Option<gtk::Widget> {
             "document-open-recent-symbolic"
         }
         EvidenceMoment::UpcomingEvent { .. } | EvidenceMoment::NothingUpcoming => "alarm-symbolic",
-        EvidenceMoment::FixedSetting | EvidenceMoment::ChangeableSetting { .. } => {
-            "emblem-system-symbolic"
-        }
+        EvidenceMoment::SettingValue => "emblem-system-symbolic",
     };
     let moment_icon = gtk::Image::from_icon_name(icon_name);
     moment_icon.add_css_class("dim-label");
@@ -68,8 +80,7 @@ fn exact_moment_text(evidence_moment: EvidenceMoment) -> Option<String> {
         | EvidenceMoment::HappeningNow
         | EvidenceMoment::NeverHappened
         | EvidenceMoment::NothingUpcoming
-        | EvidenceMoment::FixedSetting
-        | EvidenceMoment::ChangeableSetting { .. } => None,
+        | EvidenceMoment::SettingValue => None,
     }
 }
 
@@ -91,48 +102,60 @@ fn evidence_row(step_evidence: &StepEvidenceRow) -> adw::ActionRow {
     evidence_row
 }
 
-fn row_action_button(
-    row_action: &StepActionSlot,
-    sender: FactorySender<TimelineDetailRow>,
-) -> Option<gtk::Button> {
-    let StepActionSlot::ActionOffered {
-        action_label,
-        chosen_action,
-        action_suggested,
-    } = row_action
-    else {
-        return None;
-    };
+pub fn offered_action_button<StepAction: StepActionButton>(
+    offered_action: &OfferedAction<StepAction>,
+) -> gtk::Button {
     let action_button = gtk::Button::builder()
-        .label(action_label)
+        .label(offered_action.offered_action.button_label())
         .valign(gtk::Align::Center)
         .build();
-    if *action_suggested {
-        action_button.add_css_class("suggested-action");
+    if let Some(style_class) = offered_action.button_style().css_class() {
+        action_button.add_css_class(style_class);
     }
-    let chosen_action = *chosen_action;
-    action_button.connect_clicked(move |_clicked_button| {
-        let _step_closed = sender.output(TimelineStepRowOutput::ActionChosen(chosen_action));
-    });
-    Some(action_button)
+    action_button
 }
 
-fn attach_settings_link(
+fn action_choosing_button<StepAction: StepActionButton>(
+    offered_action: &OfferedAction<StepAction>,
+    sender: FactorySender<TimelineDetailRow<StepAction>>,
+) -> gtk::Button {
+    let action_button = offered_action_button(offered_action);
+    let chosen_action = offered_action.offered_action.clone();
+    action_button.connect_clicked(move |_clicked_button| {
+        let _step_closed =
+            sender.output(TimelineStepRowOutput::ActionChosen(chosen_action.clone()));
+    });
+    action_button
+}
+
+fn attach_settings_link<StepAction: StepActionButton>(
     evidence_row: &adw::ActionRow,
-    evidence_moment: EvidenceMoment,
-    sender: FactorySender<TimelineDetailRow>,
+    settings_action: StepAction,
+    sender: FactorySender<TimelineDetailRow<StepAction>>,
 ) {
-    let EvidenceMoment::ChangeableSetting { settings_subpage } = evidence_moment else {
-        return;
-    };
     evidence_row.set_activatable(true);
     evidence_row.set_tooltip_text(Some(&gettext("Change in the settings")));
     evidence_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
     evidence_row.connect_activated(move |_activated_row| {
-        let _step_closed = sender.output(TimelineStepRowOutput::ActionChosen(
-            TimelineStepAction::OpenSettingsSubpage(settings_subpage),
-        ));
+        let _step_closed =
+            sender.output(TimelineStepRowOutput::ActionChosen(settings_action.clone()));
     });
+}
+
+fn attach_row_control<StepAction: StepActionButton>(
+    evidence_row: &adw::ActionRow,
+    row_control: &EvidenceRowControl<StepAction>,
+    sender: FactorySender<TimelineDetailRow<StepAction>>,
+) {
+    match row_control {
+        EvidenceRowControl::NoRowControl => {}
+        EvidenceRowControl::RowButton(offered_action) => {
+            evidence_row.add_suffix(&action_choosing_button(offered_action, sender));
+        }
+        EvidenceRowControl::SettingsLink { settings_action } => {
+            attach_settings_link(evidence_row, settings_action.clone(), sender);
+        }
+    }
 }
 
 fn guidance_command_row(guidance_command: &str) -> adw::ActionRow {
@@ -151,7 +174,10 @@ fn guidance_command_row(guidance_command: &str) -> adw::ActionRow {
     command_row
 }
 
-fn copy_button(copied_command: String, sender: FactorySender<TimelineDetailRow>) -> gtk::Button {
+fn copy_button<StepAction: StepActionButton>(
+    copied_command: String,
+    sender: FactorySender<TimelineDetailRow<StepAction>>,
+) -> gtk::Button {
     let copy_button = gtk::Button::builder()
         .icon_name("edit-copy-symbolic")
         .tooltip_text(gettext("Copy"))
@@ -165,7 +191,7 @@ fn copy_button(copied_command: String, sender: FactorySender<TimelineDetailRow>)
     copy_button
 }
 
-fn choice_row(step_choice: &StepChoiceRow) -> adw::ActionRow {
+fn choice_row<StepAction>(step_choice: &StepChoiceRow<StepAction>) -> adw::ActionRow {
     adw::ActionRow::builder()
         .use_markup(false)
         .title(&step_choice.choice_description)
@@ -173,29 +199,11 @@ fn choice_row(step_choice: &StepChoiceRow) -> adw::ActionRow {
         .build()
 }
 
-fn choice_button(
-    step_choice: &StepChoiceRow,
-    sender: FactorySender<TimelineDetailRow>,
-) -> gtk::Button {
-    let choice_button = gtk::Button::builder()
-        .label(&step_choice.choice_label)
-        .valign(gtk::Align::Center)
-        .build();
-    if step_choice.choice_destructive {
-        choice_button.add_css_class("destructive-action");
-    }
-    let chosen_action = step_choice.chosen_action;
-    choice_button.connect_clicked(move |_clicked_button| {
-        let _step_closed = sender.output(TimelineStepRowOutput::ActionChosen(chosen_action));
-    });
-    choice_button
-}
-
-impl FactoryComponent for TimelineDetailRow {
+impl<StepAction: StepActionButton> FactoryComponent for TimelineDetailRow<StepAction> {
     type ParentWidget = adw::ExpanderRow;
     type CommandOutput = ();
     type Input = ();
-    type Output = TimelineStepRowOutput;
+    type Output = TimelineStepRowOutput<StepAction>;
     type Init = Self;
     type Root = adw::ActionRow;
     type Widgets = ();
@@ -212,7 +220,10 @@ impl FactoryComponent for TimelineDetailRow {
     fn init_root(&self) -> Self::Root {
         match self {
             Self::StepChoice(step_choice) => choice_row(step_choice),
-            Self::StepEvidence(step_evidence) => evidence_row(step_evidence),
+            Self::ActionableEvidence(actionable_row) => {
+                evidence_row(&actionable_row.shown_evidence)
+            }
+            Self::RunningEvidence(step_evidence) => evidence_row(step_evidence),
             Self::GuidanceCommand(guidance_command) => guidance_command_row(guidance_command),
         }
     }
@@ -225,18 +236,19 @@ impl FactoryComponent for TimelineDetailRow {
         sender: FactorySender<Self>,
     ) -> Self::Widgets {
         match self {
-            Self::StepChoice(step_choice) => root.add_suffix(&choice_button(step_choice, sender)),
+            Self::StepChoice(step_choice) => {
+                root.add_suffix(&action_choosing_button(
+                    &step_choice.offered_choice(),
+                    sender,
+                ));
+            }
             Self::GuidanceCommand(guidance_command) => {
                 root.add_suffix(&copy_button(guidance_command.clone(), sender));
             }
-            Self::StepEvidence(step_evidence) => {
-                if let Some(action_button) =
-                    row_action_button(&step_evidence.row_action, sender.clone())
-                {
-                    root.add_suffix(&action_button);
-                }
-                attach_settings_link(&root, step_evidence.evidence_moment, sender);
+            Self::ActionableEvidence(actionable_row) => {
+                attach_row_control(&root, &actionable_row.row_control, sender);
             }
+            Self::RunningEvidence(_) => {}
         }
     }
 }

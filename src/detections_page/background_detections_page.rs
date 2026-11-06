@@ -23,8 +23,8 @@ use crate::{
             unresolved_detection_count,
         },
         incident_timeline_presentation::{
-            DeletionPrompt, DisplayedDetection, SignatureLookupState, displayed_file_name,
-            incident_timeline,
+            DeletionPrompt, DisplayedDetection, IncidentStep, IncidentStepAction,
+            SignatureLookupState, displayed_file_name, incident_timeline,
         },
     },
     host_services::{
@@ -52,7 +52,7 @@ use crate::{
         component_streams::{RunningStream, run_stream},
         loading_indicators::FirstLoad,
         step_timeline::{
-            timeline_step_contents::{TimelineStep, TimelineStepAction, TimelineStepRowOutput},
+            timeline_step_contents::TimelineStepRowOutput,
             timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
         },
     },
@@ -72,7 +72,7 @@ pub struct BackgroundDetectionsPage {
     application_started: Timestamp,
     first_load: FirstLoad,
     detection_list_rows: FactoryVecDeque<DetectionListRow>,
-    incident_rows: FactoryVecDeque<TimelineStepRow>,
+    incident_rows: FactoryVecDeque<TimelineStepRow<IncidentStepAction>>,
     toaster: Toaster,
     _journal_follow: RunningStream,
 }
@@ -88,7 +88,7 @@ pub enum BackgroundDetectionsPageInput {
     IncidentOpened(i64),
     IncidentRequestedForFile(PathBuf),
     BackToListRequested,
-    StepRequested(TimelineStepRowOutput),
+    StepRequested(TimelineStepRowOutput<IncidentStepAction>),
 }
 
 #[derive(Debug)]
@@ -420,7 +420,7 @@ impl BackgroundDetectionsPage {
             });
     }
 
-    fn opened_incident_steps(&self) -> Vec<TimelineStep> {
+    fn opened_incident_steps(&self) -> Vec<IncidentStep> {
         let IncidentView::IncidentOpen {
             deletion_prompt,
             signature_lookup,
@@ -552,36 +552,32 @@ impl BackgroundDetectionsPage {
 
     fn run_incident_action(
         &mut self,
-        chosen_action: TimelineStepAction,
+        chosen_action: IncidentStepAction,
         sender: &ComponentSender<Self>,
     ) {
         match chosen_action {
-            TimelineStepAction::LookUpIncidentSignature => self.start_signature_lookup(sender),
-            TimelineStepAction::AskIncidentDeletion => {
+            IncidentStepAction::LookUpIncidentSignature => self.start_signature_lookup(sender),
+            IncidentStepAction::AskIncidentDeletion => {
                 let next_view = self
                     .taken_incident_view()
                     .with_deletion_prompt(DeletionPrompt::AwaitingAnswer);
                 self.replace_incident_view(next_view);
             }
-            TimelineStepAction::CancelIncidentDeletion => {
+            IncidentStepAction::CancelIncidentDeletion => {
                 let next_view = self
                     .taken_incident_view()
                     .with_deletion_prompt(DeletionPrompt::NotAsked);
                 self.replace_incident_view(next_view);
             }
-            TimelineStepAction::QuarantineIncident => {
+            IncidentStepAction::QuarantineIncident => {
                 self.resolve_opened_incident(sender, ResolvingIncidentAction::QuarantineFile);
             }
-            TimelineStepAction::DeleteIncidentFile => {
+            IncidentStepAction::DeleteIncidentFile => {
                 self.resolve_opened_incident(sender, ResolvingIncidentAction::DeleteFile);
             }
-            TimelineStepAction::DismissIncident => {
+            IncidentStepAction::DismissIncident => {
                 self.resolve_opened_incident(sender, ResolvingIncidentAction::KeepFile);
             }
-            TimelineStepAction::UpdateSignatures
-            | TimelineStepAction::CancelSignatureUpdate
-            | TimelineStepAction::RunScheduledScan { .. }
-            | TimelineStepAction::OpenSettingsSubpage(_) => {}
         }
     }
 }

@@ -413,7 +413,9 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     incident_steps.iter().for_each(|incident_step| {
         println!(
             "{:?} | {} | {}",
-            incident_step.node_state, incident_step.step_title, incident_step.status_text
+            incident_step.node_state(),
+            incident_step.step_title,
+            incident_step.status_text
         );
     });
 

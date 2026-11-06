@@ -17,13 +17,49 @@ use crate::{
         },
     },
     shared_widgets::step_timeline::timeline_step_contents::{
-        StepActionSlot, StepChoiceRow, StepEvidenceRow, StepNodeState, TimelineStep,
-        TimelineStepAction,
+        ActionConsequence, ActionableEvidenceRow, SettledNodeState, SettledStep, StepActionButton,
+        StepChoiceRow, StepEvidenceRow, TimelineStep,
     },
     signatures_page::signature_provider_catalogue::provider_of_signature,
 };
 
 const TEST_SIGNATURE_MARKER: &str = "Eicar-Test-Signature";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IncidentStepAction {
+    QuarantineIncident,
+    AskIncidentDeletion,
+    DeleteIncidentFile,
+    CancelIncidentDeletion,
+    DismissIncident,
+    LookUpIncidentSignature,
+}
+
+impl StepActionButton for IncidentStepAction {
+    fn button_label(&self) -> String {
+        match self {
+            Self::QuarantineIncident => gettext("Quarantine"),
+            Self::AskIncidentDeletion => gettext("Delete…"),
+            Self::DeleteIncidentFile => gettext("Delete Permanently"),
+            Self::CancelIncidentDeletion => gettext("Cancel"),
+            Self::DismissIncident => gettext("Keep"),
+            Self::LookUpIncidentSignature => gettext("Look Up"),
+        }
+    }
+
+    fn action_consequence(&self) -> ActionConsequence {
+        match self {
+            Self::DeleteIncidentFile => ActionConsequence::DestructiveAction,
+            Self::QuarantineIncident
+            | Self::AskIncidentDeletion
+            | Self::CancelIncidentDeletion
+            | Self::DismissIncident
+            | Self::LookUpIncidentSignature => ActionConsequence::OrdinaryAction,
+        }
+    }
+}
+
+pub type IncidentStep = TimelineStep<IncidentStepAction>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisplayedDetection {
@@ -131,26 +167,25 @@ pub fn detection_summary_text(displayed_detection: &DisplayedDetection) -> Strin
     }
 }
 
-fn evidence_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
-    StepEvidenceRow::current_fact(evidence_name, evidence_value)
+fn evidence_row(
+    evidence_name: String,
+    evidence_value: String,
+) -> ActionableEvidenceRow<IncidentStepAction> {
+    StepEvidenceRow::current_fact(evidence_name, evidence_value).into()
 }
 
 fn plain_step(
     step_title: String,
     mechanism_details: String,
-    node_state: StepNodeState,
+    node_state: SettledNodeState,
     status_text: String,
-) -> TimelineStep {
-    TimelineStep {
+) -> IncidentStep {
+    TimelineStep::settled(
         step_title,
         mechanism_details,
-        node_state,
         status_text,
-        evidence_rows: Vec::new(),
-        guidance_commands: Vec::new(),
-        choice_rows: Vec::new(),
-        action_slot: StepActionSlot::NoAction,
-    }
+        SettledStep::without_offers(node_state),
+    )
 }
 
 fn source_text(stored_detection: &StoredDetection) -> String {
@@ -164,86 +199,87 @@ fn source_text(stored_detection: &StoredDetection) -> String {
     }
 }
 
-fn detected_step(stored_detection: &StoredDetection) -> TimelineStep {
+fn detected_step(stored_detection: &StoredDetection) -> IncidentStep {
     let signature_text = sanitize_scanner_line(&stored_detection.signature_name);
-    TimelineStep {
-        evidence_rows: vec![
-            evidence_row(gettext("File"), displayed_file_path(stored_detection)),
-            evidence_row(
-                gettext("Signature source"),
-                provider_of_signature(&stored_detection.signature_name).to_owned(),
+    let evidence_rows = vec![
+        evidence_row(gettext("File"), displayed_file_path(stored_detection)),
+        evidence_row(
+            gettext("Signature source"),
+            provider_of_signature(&stored_detection.signature_name).to_owned(),
+        ),
+        evidence_row(gettext("Found by"), source_text(stored_detection)),
+        evidence_row(
+            gettext("Last seen"),
+            exact_local_time_text(stored_detection.last_seen),
+        ),
+        evidence_row(
+            gettext("Times seen"),
+            stored_detection.sighting_count.to_string(),
+        ),
+    ];
+    TimelineStep::settled(
+        gettext("Detected"),
+        if signature_is_test_pattern(&stored_detection.signature_name) {
+            gettext(
+                "This signature matches the harmless EICAR test pattern, which exists to check \
+                 that detection works.",
+            )
+        } else {
+            gettext(
+                "ClamAV matched this file against a signature. A match is strong evidence, but \
+                 false positives happen, especially with packed or administrative tools.",
+            )
+        },
+        gettext("{signature}, first seen {time}")
+            .replace("{signature}", &signature_text)
+            .replace(
+                "{time}",
+                &exact_local_time_text(stored_detection.first_seen),
             ),
-            evidence_row(gettext("Found by"), source_text(stored_detection)),
-            evidence_row(
-                gettext("Last seen"),
-                exact_local_time_text(stored_detection.last_seen),
-            ),
-            evidence_row(
-                gettext("Times seen"),
-                stored_detection.sighting_count.to_string(),
-            ),
-        ],
-        ..plain_step(
-            gettext("Detected"),
-            if signature_is_test_pattern(&stored_detection.signature_name) {
-                gettext(
-                    "This signature matches the harmless EICAR test pattern, which exists to \
-                     check that detection works.",
-                )
-            } else {
-                gettext(
-                    "ClamAV matched this file against a signature. A match is strong evidence, \
-                     but false positives happen, especially with packed or administrative tools.",
-                )
-            },
-            StepNodeState::Completed,
-            gettext("{signature}, first seen {time}")
-                .replace("{signature}", &signature_text)
-                .replace(
-                    "{time}",
-                    &exact_local_time_text(stored_detection.first_seen),
-                ),
-        )
-    }
+        SettledStep {
+            evidence_rows,
+            ..SettledStep::without_offers(SettledNodeState::Completed)
+        },
+    )
 }
 
-fn blocked_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
+fn blocked_step(displayed_detection: &DisplayedDetection) -> IncidentStep {
     let stored_detection = &displayed_detection.stored_detection;
     let (node_state, status_text) = match displayed_detection.file_state {
         DetectedFileState::Present {
             access: FileAccess::BlockedOnAccess,
             ..
         } => (
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             gettext("Opening this file is refused, which is why it won't open"),
         ),
         DetectedFileState::Present {
             access: FileAccess::NotOpened,
             ..
         } => (
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             gettext("Not opened again after your decision"),
         ),
         DetectedFileState::NoLongerThere => (
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             gettext("The file is no longer there"),
         ),
         DetectedFileState::Present {
             access: FileAccess::Readable,
             ..
         } if stored_detection.detection_sources == DetectionSources::ScheduleOnly => (
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext("Not blocked: the scheduled scan found it, and it can still be opened"),
         ),
         DetectedFileState::Present {
             access: FileAccess::Readable,
             ..
         } => (
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext("Not blocked right now: it can still be opened"),
         ),
         DetectedFileState::StateUnknown => (
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext("Could not check whether the file is blocked"),
         ),
     };
@@ -331,14 +367,12 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
     }
 }
 
-fn lookup_choices() -> Vec<StepChoiceRow> {
+fn lookup_choices() -> Vec<StepChoiceRow<IncidentStepAction>> {
     let signature_lookup = StepChoiceRow {
         choice_description: gettext(
             "Ask MalwareBazaar about this signature. Only its name is sent.",
         ),
-        choice_label: gettext("Look Up"),
-        chosen_action: TimelineStepAction::LookUpIncidentSignature,
-        choice_destructive: false,
+        chosen_action: IncidentStepAction::LookUpIncidentSignature,
     };
     vec![signature_lookup]
 }
@@ -346,48 +380,36 @@ fn lookup_choices() -> Vec<StepChoiceRow> {
 fn decision_choices(
     deletion_prompt: DeletionPrompt,
     file_state: DetectedFileState,
-) -> Vec<StepChoiceRow> {
+) -> Vec<StepChoiceRow<IncidentStepAction>> {
     if !file_state.user_can_move_or_delete() {
         return vec![StepChoiceRow {
             choice_description: gettext("Stop asking about this file"),
-            choice_label: gettext("Keep"),
-            chosen_action: TimelineStepAction::DismissIncident,
-            choice_destructive: false,
+            chosen_action: IncidentStepAction::DismissIncident,
         }];
     }
     match deletion_prompt {
         DeletionPrompt::AwaitingAnswer => vec![
             StepChoiceRow {
                 choice_description: gettext("Delete this file permanently? This can't be undone."),
-                choice_label: gettext("Delete Permanently"),
-                chosen_action: TimelineStepAction::DeleteIncidentFile,
-                choice_destructive: true,
+                chosen_action: IncidentStepAction::DeleteIncidentFile,
             },
             StepChoiceRow {
                 choice_description: gettext("Go back without deleting"),
-                choice_label: gettext("Cancel"),
-                chosen_action: TimelineStepAction::CancelIncidentDeletion,
-                choice_destructive: false,
+                chosen_action: IncidentStepAction::CancelIncidentDeletion,
             },
         ],
         DeletionPrompt::NotAsked => vec![
             StepChoiceRow {
                 choice_description: gettext("Move it somewhere safe. You can restore it later."),
-                choice_label: gettext("Quarantine"),
-                chosen_action: TimelineStepAction::QuarantineIncident,
-                choice_destructive: false,
+                chosen_action: IncidentStepAction::QuarantineIncident,
             },
             StepChoiceRow {
                 choice_description: gettext("Remove it for good"),
-                choice_label: gettext("Delete…"),
-                chosen_action: TimelineStepAction::AskIncidentDeletion,
-                choice_destructive: false,
+                chosen_action: IncidentStepAction::AskIncidentDeletion,
             },
             StepChoiceRow {
                 choice_description: gettext("You know this file is fine"),
-                choice_label: gettext("Keep"),
-                chosen_action: TimelineStepAction::DismissIncident,
-                choice_destructive: false,
+                chosen_action: IncidentStepAction::DismissIncident,
             },
         ],
     }
@@ -398,7 +420,7 @@ fn review_step(
     deletion_prompt: DeletionPrompt,
     lookup_state: &SignatureLookupState,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> IncidentStep {
     let stored_detection = &displayed_detection.stored_detection;
     let step_title = gettext("Your decision");
     let mechanism_details = gettext(
@@ -414,7 +436,7 @@ fn review_step(
                  still blocked by on-access scanning until its path is excluded in the ClamAV \
                  configuration.",
             ),
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             detection_state_text(displayed_detection),
         );
     }
@@ -432,29 +454,29 @@ fn review_step(
         }
         | DetectedFileState::NoLongerThere => gettext("Choose what happens to this file"),
     };
-    TimelineStep {
-        choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state)
-            .into_iter()
-            .chain(lookup_choices())
-            .collect(),
-        evidence_rows: lookup_summary_text(lookup_state)
-            .map(|lookup_summary| evidence_row(gettext("MalwareBazaar"), lookup_summary))
-            .into_iter()
-            .collect(),
-        guidance_commands: vec![false_positive_snippet(
-            stored_detection,
-            distribution_family,
-        )],
-        ..plain_step(
-            step_title,
-            mechanism_details,
-            StepNodeState::ActNext,
-            status_text,
-        )
-    }
+    TimelineStep::settled(
+        step_title,
+        mechanism_details,
+        status_text,
+        SettledStep {
+            choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state)
+                .into_iter()
+                .chain(lookup_choices())
+                .collect(),
+            evidence_rows: lookup_summary_text(lookup_state)
+                .map(|lookup_summary| evidence_row(gettext("MalwareBazaar"), lookup_summary))
+                .into_iter()
+                .collect(),
+            ..SettledStep::without_offers(SettledNodeState::ActNext)
+        },
+    )
+    .with_guidance_commands(vec![false_positive_snippet(
+        stored_detection,
+        distribution_family,
+    )])
 }
 
-fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
+fn resolved_step(displayed_detection: &DisplayedDetection) -> IncidentStep {
     let stored_detection = &displayed_detection.stored_detection;
     let step_title = gettext("Resolved");
     let mechanism_details = gettext(
@@ -465,7 +487,7 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
         return plain_step(
             step_title,
             mechanism_details,
-            StepNodeState::AwaitingPrerequisite,
+            SettledNodeState::AwaitingPrerequisite,
             gettext("Waiting for your decision"),
         );
     }
@@ -480,7 +502,7 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
     plain_step(
         step_title,
         mechanism_details,
-        StepNodeState::Completed,
+        SettledNodeState::Completed,
         status_text,
     )
 }
@@ -490,7 +512,7 @@ pub fn incident_timeline(
     deletion_prompt: DeletionPrompt,
     lookup_state: &SignatureLookupState,
     distribution_family: DistributionFamily,
-) -> Vec<TimelineStep> {
+) -> Vec<IncidentStep> {
     vec![
         detected_step(&displayed_detection.stored_detection),
         blocked_step(displayed_detection),
@@ -509,7 +531,12 @@ mod incident_timeline_presentation_tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::host_services::detection_journal::detection_history_store::StoredStateInconsistency;
+    use crate::{
+        host_services::detection_journal::detection_history_store::StoredStateInconsistency,
+        shared_widgets::step_timeline::timeline_step_contents::{
+            ButtonStyle, StepNodeState, StepPhase,
+        },
+    };
 
     const BLOCKED_POSITION: usize = 1;
     const REVIEW_POSITION: usize = 2;
@@ -534,23 +561,55 @@ mod incident_timeline_presentation_tests {
         }
     }
 
-    fn choice_actions(
+    fn review_choices(
         displayed_detection: &DisplayedDetection,
         deletion_prompt: DeletionPrompt,
-    ) -> Vec<TimelineStepAction> {
-        incident_timeline(
+    ) -> Vec<StepChoiceRow<IncidentStepAction>> {
+        let review_step = incident_timeline(
             displayed_detection,
             deletion_prompt,
             &SignatureLookupState::NotLookedUp,
             DistributionFamily::NixosFamily,
-        )[REVIEW_POSITION]
-            .choice_rows
-            .iter()
+        )
+        .remove(REVIEW_POSITION);
+        match review_step.step_phase {
+            StepPhase::StepSettled(settled_step) => settled_step.choice_rows,
+            StepPhase::StepRunning(_) => panic!("the review step never runs"),
+        }
+    }
+
+    fn choice_actions(
+        displayed_detection: &DisplayedDetection,
+        deletion_prompt: DeletionPrompt,
+    ) -> Vec<IncidentStepAction> {
+        review_choices(displayed_detection, deletion_prompt)
+            .into_iter()
             .map(|choice_row| choice_row.chosen_action)
             .filter(|chosen_action| {
-                !matches!(chosen_action, TimelineStepAction::LookUpIncidentSignature)
+                !matches!(chosen_action, IncidentStepAction::LookUpIncidentSignature)
             })
             .collect()
+    }
+
+    #[test]
+    fn permanent_deletion_is_always_shown_as_destructive() {
+        let deletion_choices = review_choices(&blocked_detection(), DeletionPrompt::AwaitingAnswer);
+        let choice_styles = deletion_choices
+            .iter()
+            .map(|choice_row| choice_row.offered_choice().button_style())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            choice_styles,
+            vec![
+                ButtonStyle::DestructiveButton,
+                ButtonStyle::PlainButton,
+                ButtonStyle::PlainButton
+            ]
+        );
+        assert_eq!(
+            deletion_choices[0].chosen_action.button_label(),
+            "Delete Permanently"
+        );
     }
 
     #[test]
@@ -562,7 +621,7 @@ mod incident_timeline_presentation_tests {
             DistributionFamily::NixosFamily,
         );
         assert_eq!(
-            incident_steps[BLOCKED_POSITION].node_state,
+            incident_steps[BLOCKED_POSITION].node_state(),
             StepNodeState::Completed
         );
         assert!(
@@ -571,11 +630,11 @@ mod incident_timeline_presentation_tests {
                 .contains("won't open")
         );
         assert_eq!(
-            incident_steps[REVIEW_POSITION].node_state,
+            incident_steps[REVIEW_POSITION].node_state(),
             StepNodeState::ActNext
         );
         assert_eq!(
-            incident_steps[RESOLVED_POSITION].node_state,
+            incident_steps[RESOLVED_POSITION].node_state(),
             StepNodeState::AwaitingPrerequisite
         );
     }
@@ -583,13 +642,13 @@ mod incident_timeline_presentation_tests {
     #[test]
     fn deleting_takes_two_explicit_choices() {
         let first_choices = choice_actions(&blocked_detection(), DeletionPrompt::NotAsked);
-        assert!(first_choices.contains(&TimelineStepAction::AskIncidentDeletion));
-        assert!(!first_choices.contains(&TimelineStepAction::DeleteIncidentFile));
+        assert!(first_choices.contains(&IncidentStepAction::AskIncidentDeletion));
+        assert!(!first_choices.contains(&IncidentStepAction::DeleteIncidentFile));
         assert_eq!(
             choice_actions(&blocked_detection(), DeletionPrompt::AwaitingAnswer),
             vec![
-                TimelineStepAction::DeleteIncidentFile,
-                TimelineStepAction::CancelIncidentDeletion
+                IncidentStepAction::DeleteIncidentFile,
+                IncidentStepAction::CancelIncidentDeletion
             ]
         );
     }
@@ -613,7 +672,7 @@ mod incident_timeline_presentation_tests {
             DistributionFamily::NixosFamily,
         );
         assert_eq!(
-            incident_steps[BLOCKED_POSITION].node_state,
+            incident_steps[BLOCKED_POSITION].node_state(),
             StepNodeState::NeedsReview
         );
         assert!(
@@ -637,7 +696,7 @@ mod incident_timeline_presentation_tests {
                 };
                 assert_eq!(
                     choice_actions(&displayed_detection, DeletionPrompt::NotAsked),
-                    vec![TimelineStepAction::DismissIncident]
+                    vec![IncidentStepAction::DismissIncident]
                 );
             });
     }
@@ -651,7 +710,7 @@ mod incident_timeline_presentation_tests {
         assert!(detection_needs_attention(&displayed_detection));
         assert_eq!(
             choice_actions(&displayed_detection, DeletionPrompt::NotAsked),
-            vec![TimelineStepAction::DismissIncident]
+            vec![IncidentStepAction::DismissIncident]
         );
     }
 
@@ -776,7 +835,7 @@ mod incident_timeline_presentation_tests {
             .collect::<Vec<_>>();
         assert_eq!(
             lookup_actions,
-            vec![TimelineStepAction::LookUpIncidentSignature]
+            vec![IncidentStepAction::LookUpIncidentSignature]
         );
     }
 

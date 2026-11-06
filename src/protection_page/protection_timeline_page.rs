@@ -34,7 +34,8 @@ use crate::{
             lazaret_schedule_is_enabled, scan_service_evidence,
         },
         protection_timeline_presentation::{
-            AlertReadiness, ProtectionActivity, protection_timeline,
+            AlertReadiness, ProtectionActivity, ProtectionStep, ProtectionStepAction,
+            protection_timeline,
         },
         signature_update_run::{
             database_update_events::{DatabaseUpdateEvent, database_update_events},
@@ -50,7 +51,7 @@ use crate::{
             busy_page_name, loading_status_page,
         },
         step_timeline::{
-            timeline_step_contents::{TimelineStep, TimelineStepAction, TimelineStepRowOutput},
+            timeline_step_contents::TimelineStepRowOutput,
             timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
         },
     },
@@ -68,9 +69,9 @@ enum EvidenceRefresh {
 
 pub struct ProtectionTimelinePage {
     toaster: Toaster,
-    protection_rows: FactoryVecDeque<TimelineStepRow>,
-    engine_rows: FactoryVecDeque<TimelineStepRow>,
-    review_rows: FactoryVecDeque<TimelineStepRow>,
+    protection_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
+    engine_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
+    review_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
     activity_history: ActivityHistory,
     signature_update_session: SignatureUpdateSession,
     scheduled_scan_starting: bool,
@@ -98,7 +99,7 @@ pub enum ProtectionTimelinePageInput {
     SignatureUpdateRequested,
     UnresolvedDetectionsChanged(usize),
     JournalAccessChanged(JournalAccess),
-    StepRequested(TimelineStepRowOutput),
+    StepRequested(TimelineStepRowOutput<ProtectionStepAction>),
 }
 
 #[derive(Debug)]
@@ -214,8 +215,8 @@ pub fn unit_run_toast_text(
 }
 
 fn show_group_steps(
-    group_rows: &mut FactoryVecDeque<TimelineStepRow>,
-    group_steps: Vec<TimelineStep>,
+    group_rows: &mut FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
+    group_steps: Vec<ProtectionStep>,
 ) {
     if group_rows.len() == group_steps.len() {
         group_steps
@@ -239,7 +240,7 @@ fn show_group_steps(
 fn launched_step_group(
     step_group: adw::PreferencesGroup,
     sender: &ComponentSender<ProtectionTimelinePage>,
-) -> FactoryVecDeque<TimelineStepRow> {
+) -> FactoryVecDeque<TimelineStepRow<ProtectionStepAction>> {
     FactoryVecDeque::builder().launch(step_group).forward(
         sender.input_sender(),
         ProtectionTimelinePageInput::StepRequested,
@@ -373,17 +374,17 @@ impl ProtectionTimelinePage {
 
     fn run_step_action(
         &mut self,
-        chosen_action: TimelineStepAction,
+        chosen_action: ProtectionStepAction,
         sender: &ComponentSender<Self>,
         root: &adw::ToastOverlay,
     ) {
         match chosen_action {
-            TimelineStepAction::UpdateSignatures => self.start_signature_update(sender),
-            TimelineStepAction::CancelSignatureUpdate => {
+            ProtectionStepAction::UpdateSignatures => self.start_signature_update(sender),
+            ProtectionStepAction::CancelSignatureUpdate => {
                 self.signature_update_session.cancel_requested();
                 self.show_timeline();
             }
-            TimelineStepAction::RunScheduledScan { service_unit } => {
+            ProtectionStepAction::RunScheduledScan { service_unit } => {
                 self.scheduled_scan_starting = true;
                 self.show_timeline();
                 sender.oneshot_command(async move {
@@ -396,18 +397,13 @@ impl ProtectionTimelinePage {
                     }
                 });
             }
-            TimelineStepAction::OpenSettingsSubpage(settings_subpage) => {
+            ProtectionStepAction::ReviewSettingsSubpage(settings_subpage)
+            | ProtectionStepAction::SetUpSettingsSubpage(settings_subpage) => {
                 let _action_missing = root.activate_action(
                     &OpenSettingsAction::action_name(),
                     Some(&settings_subpage.action_target().to_variant()),
                 );
             }
-            TimelineStepAction::QuarantineIncident
-            | TimelineStepAction::AskIncidentDeletion
-            | TimelineStepAction::DeleteIncidentFile
-            | TimelineStepAction::CancelIncidentDeletion
-            | TimelineStepAction::DismissIncident
-            | TimelineStepAction::LookUpIncidentSignature => {}
         }
     }
 }

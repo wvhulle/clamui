@@ -34,8 +34,9 @@ use crate::{
         },
     },
     shared_widgets::step_timeline::timeline_step_contents::{
-        EvidenceMoment, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
-        TimelineStepAction, moment_value_text,
+        ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment, EvidenceRowControl,
+        OfferedAction, RunningStep, SettledNodeState, SettledStep, StepActionButton,
+        StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, moment_value_text,
     },
     signatures_page::signature_provider_catalogue::provider_of_signature_file,
 };
@@ -43,6 +44,40 @@ use crate::{
 const DATABASE_FRESH_LIMIT: SignedDuration = SignedDuration::from_hours(4 * 24);
 const DATABASE_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(8 * 24);
 const THIRD_PARTY_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(48);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProtectionStepAction {
+    UpdateSignatures,
+    CancelSignatureUpdate,
+    RunScheduledScan { service_unit: &'static str },
+    ReviewSettingsSubpage(SettingsSubpage),
+    SetUpSettingsSubpage(SettingsSubpage),
+}
+
+impl StepActionButton for ProtectionStepAction {
+    fn button_label(&self) -> String {
+        match self {
+            Self::UpdateSignatures => gettext("Update Now"),
+            Self::CancelSignatureUpdate => gettext("Cancel"),
+            Self::RunScheduledScan { .. } => gettext("Run Now"),
+            Self::ReviewSettingsSubpage(_) => gettext("Review"),
+            Self::SetUpSettingsSubpage(_) => gettext("Set Up"),
+        }
+    }
+
+    fn action_consequence(&self) -> ActionConsequence {
+        match self {
+            Self::UpdateSignatures
+            | Self::CancelSignatureUpdate
+            | Self::RunScheduledScan { .. }
+            | Self::ReviewSettingsSubpage(_)
+            | Self::SetUpSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
+        }
+    }
+}
+
+pub type ProtectionStep = TimelineStep<ProtectionStepAction>;
+type ProtectionEvidenceRow = ActionableEvidenceRow<ProtectionStepAction>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AlertReadiness {
@@ -53,9 +88,9 @@ pub struct AlertReadiness {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionTimeline {
     pub coverage_summary: String,
-    pub protection_steps: Vec<TimelineStep>,
-    pub engine_steps: Vec<TimelineStep>,
-    pub review_steps: Vec<TimelineStep>,
+    pub protection_steps: Vec<ProtectionStep>,
+    pub engine_steps: Vec<ProtectionStep>,
+    pub review_steps: Vec<ProtectionStep>,
 }
 
 #[derive(Clone)]
@@ -108,19 +143,21 @@ fn timed_evidence_row(
 fn no_guidance_step(
     step_title: String,
     mechanism_details: String,
-    node_state: StepNodeState,
+    node_state: SettledNodeState,
     status_text: String,
-) -> TimelineStep {
-    TimelineStep {
+) -> ProtectionStep {
+    TimelineStep::settled(
         step_title,
         mechanism_details,
-        node_state,
         status_text,
-        evidence_rows: Vec::new(),
-        guidance_commands: Vec::new(),
-        choice_rows: Vec::new(),
-        action_slot: StepActionSlot::NoAction,
-    }
+        SettledStep::without_offers(node_state),
+    )
+}
+
+fn plain_rows(
+    evidence_rows: impl IntoIterator<Item = StepEvidenceRow>,
+) -> Vec<ProtectionEvidenceRow> {
+    evidence_rows.into_iter().map(Into::into).collect()
 }
 
 fn remedy_commands(
@@ -136,7 +173,7 @@ fn remedy_commands(
 fn engine_step(
     engine_installation: &EngineInstallation,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> ProtectionStep {
     let step_title = gettext("ClamAV installed");
     let mechanism_details = gettext(
         "ClamAV is the engine that recognizes malware. Lazaret uses the copy installed on this \
@@ -146,28 +183,28 @@ fn engine_step(
         EngineInstallation::VersionReported { version_banner } => no_guidance_step(
             step_title,
             mechanism_details,
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             version_banner.clone(),
         ),
         EngineInstallation::VersionUnverified { failure_text } => no_guidance_step(
             step_title,
             mechanism_details,
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             failure_text.clone(),
         ),
-        EngineInstallation::EngineMissing => TimelineStep {
-            guidance_commands: engine_install_guides()
+        EngineInstallation::EngineMissing => no_guidance_step(
+            step_title,
+            mechanism_details,
+            SettledNodeState::ActNext,
+            gettext("ClamAV was not found on this computer"),
+        )
+        .with_guidance_commands(
+            engine_install_guides()
                 .iter()
                 .filter(|install_guide| install_guide.distribution_family == distribution_family)
                 .map(|install_guide| install_guide.install_command.to_owned())
                 .collect(),
-            ..no_guidance_step(
-                step_title,
-                mechanism_details,
-                StepNodeState::ActNext,
-                gettext("ClamAV was not found on this computer"),
-            )
-        },
+        ),
     }
 }
 
@@ -203,7 +240,7 @@ fn program_trust_rows(program_trust_finding: &ProgramTrustFinding) -> Vec<StepEv
     }
 }
 
-fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<TimelineStep> {
+fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<ProtectionStep> {
     if program_trust_findings.is_empty() {
         return None;
     }
@@ -215,36 +252,33 @@ fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<
     });
     let (node_state, status_text) = if any_program_refused {
         (
-            StepNodeState::HasFailed,
+            SettledNodeState::HasFailed,
             gettext(
                 "A ClamAV program can be replaced by your account, so Lazaret refuses to run it",
             ),
         )
     } else {
         (
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext(
                 "A ClamAV program in your account shadows the system copy. Lazaret ignores it, \
                  but check where it came from",
             ),
         )
     };
-    Some(TimelineStep {
-        evidence_rows: program_trust_findings
-            .iter()
-            .flat_map(program_trust_rows)
-            .collect(),
-        ..no_guidance_step(
-            gettext("Scanner programs can be trusted"),
-            gettext(
-                "Malware running as you could put a fake clamdscan earlier on your search path \
-                 that reports every file as clean. Lazaret only runs ClamAV programs that your \
-                 account can't replace, such as the ones installed for the whole system.",
-            ),
-            node_state,
-            status_text,
-        )
-    })
+    Some(TimelineStep::settled(
+        gettext("Scanner programs can be trusted"),
+        gettext(
+            "Malware running as you could put a fake clamdscan earlier on your search path that \
+             reports every file as clean. Lazaret only runs ClamAV programs that your account \
+             can't replace, such as the ones installed for the whole system.",
+        ),
+        status_text,
+        SettledStep {
+            evidence_rows: plain_rows(program_trust_findings.iter().flat_map(program_trust_rows)),
+            ..SettledStep::without_offers(node_state)
+        },
+    ))
 }
 
 fn reduced_settings_status(
@@ -278,79 +312,75 @@ fn override_change_time_row(change_time: OverridesChangeTime) -> StepEvidenceRow
     )
 }
 
-fn runtime_review_action() -> StepActionSlot {
-    StepActionSlot::ActionOffered {
-        action_label: gettext("Review"),
-        chosen_action: TimelineStepAction::OpenSettingsSubpage(SettingsSubpage::ScannerEngine),
-        action_suggested: false,
-    }
+fn runtime_review_action() -> StepActionSlot<ProtectionStepAction> {
+    StepActionSlot::ActionOffered(OfferedAction::plain(
+        ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::ScannerEngine),
+    ))
 }
 
-fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<TimelineStep> {
+fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<ProtectionStep> {
     match runtime_reductions {
         RuntimeReductions::NothingReduced => None,
         RuntimeReductions::SettingsReduced {
             change_time,
             reduced_settings,
-        } => Some(TimelineStep {
-            evidence_rows: reduced_settings
-                .iter()
-                .map(|reduced_setting| {
+        } => Some(TimelineStep::settled(
+            gettext("Protection reduced on purpose"),
+            gettext(
+                "Someone with the administrator password changed ClamAV settings at runtime in a \
+                 way that checks less than your configuration does. The System Changes tab on the \
+                 Logs page shows who and when.",
+            ),
+            reduced_settings_status(reduced_settings, *change_time),
+            SettledStep {
+                evidence_rows: plain_rows(reduced_settings.iter().map(|reduced_setting| {
                     evidence_row(
                         reduced_setting.setting_key.clone(),
                         gettext("{base} in your configuration, {changed} now")
                             .replace("{base}", &reduced_setting.base_value)
                             .replace("{changed}", &reduced_setting.changed_value),
                     )
-                })
-                .collect(),
-            action_slot: runtime_review_action(),
-            ..no_guidance_step(
-                gettext("Protection reduced on purpose"),
-                gettext(
-                    "Someone with the administrator password changed ClamAV settings at runtime \
-                     in a way that checks less than your configuration does. The System Changes \
-                     tab on the Logs page shows who and when.",
-                ),
-                StepNodeState::NeedsReview,
-                reduced_settings_status(reduced_settings, *change_time),
-            )
-        }),
+                })),
+                header_action: runtime_review_action(),
+                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+            },
+        )),
         RuntimeReductions::BaseConfigUnreadable {
             change_time,
             overridden_settings,
-        } => Some(TimelineStep {
-            evidence_rows: overridden_settings
-                .iter()
-                .map(|overridden_setting| {
-                    evidence_row(
-                        overridden_setting.setting_key.clone(),
-                        gettext("{changed} now")
-                            .replace("{changed}", &overridden_setting.changed_value),
-                    )
-                })
-                .chain(std::iter::once(override_change_time_row(*change_time)))
-                .collect(),
-            action_slot: runtime_review_action(),
-            ..no_guidance_step(
-                gettext("Settings changed at runtime"),
-                gettext(
-                    "Someone with the administrator password changed ClamAV settings at runtime. \
-                     Your clamd.conf could not be read, so Lazaret can't tell whether these \
-                     changes check less than your configuration does. The System Changes tab on \
-                     the Logs page shows who and when.",
+        } => Some(TimelineStep::settled(
+            gettext("Settings changed at runtime"),
+            gettext(
+                "Someone with the administrator password changed ClamAV settings at runtime. Your \
+                 clamd.conf could not be read, so Lazaret can't tell whether these changes check \
+                 less than your configuration does. The System Changes tab on the Logs page shows \
+                 who and when.",
+            ),
+            gettext(
+                "Settings were changed at runtime, but clamd.conf could not be read to compare \
+                 them",
+            ),
+            SettledStep {
+                evidence_rows: plain_rows(
+                    overridden_settings
+                        .iter()
+                        .map(|overridden_setting| {
+                            evidence_row(
+                                overridden_setting.setting_key.clone(),
+                                gettext("{changed} now")
+                                    .replace("{changed}", &overridden_setting.changed_value),
+                            )
+                        })
+                        .chain(std::iter::once(override_change_time_row(*change_time))),
                 ),
-                StepNodeState::NeedsReview,
-                gettext(
-                    "Settings were changed at runtime, but clamd.conf could not be read to \
-                     compare them",
-                ),
-            )
-        }),
+                header_action: runtime_review_action(),
+                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+            },
+        )),
     }
 }
 
-fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<TimelineStep> {
+fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<ProtectionStep> {
     if account_findings.is_empty() {
         return None;
     }
@@ -360,48 +390,49 @@ fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<T
             AccountSettingFinding::BroadExclusion { .. }
         )
     });
-    Some(TimelineStep {
-        evidence_rows: account_findings
-            .iter()
-            .map(|account_finding| match account_finding {
-                AccountSettingFinding::BroadExclusion {
-                    exclusion_pattern,
-                    skipped_example,
-                } => evidence_row(
-                    gettext("Exclusion {pattern}").replace("{pattern}", exclusion_pattern),
-                    gettext("Skips files such as {path}").replace("{path}", skipped_example),
-                ),
-                AccountSettingFinding::ScheduleUnitChanged { unit_file_name } => {
-                    evidence_row(gettext("Changed outside Lazaret"), unit_file_name.clone())
-                }
-            })
-            .collect(),
-        action_slot: StepActionSlot::ActionOffered {
-            action_label: gettext("Review"),
-            chosen_action: TimelineStepAction::OpenSettingsSubpage(if exclusion_found {
-                SettingsSubpage::ScanExclusions
-            } else {
-                SettingsSubpage::ScanSchedule
-            }),
-            action_suggested: true,
+    let evidence_rows =
+        plain_rows(
+            account_findings
+                .iter()
+                .map(|account_finding| match account_finding {
+                    AccountSettingFinding::BroadExclusion {
+                        exclusion_pattern,
+                        skipped_example,
+                    } => evidence_row(
+                        gettext("Exclusion {pattern}").replace("{pattern}", exclusion_pattern),
+                        gettext("Skips files such as {path}").replace("{path}", skipped_example),
+                    ),
+                    AccountSettingFinding::ScheduleUnitChanged { unit_file_name } => {
+                        evidence_row(gettext("Changed outside Lazaret"), unit_file_name.clone())
+                    }
+                }),
+        );
+    Some(TimelineStep::settled(
+        gettext("Scan settings in your account"),
+        gettext(
+            "Exclusions and the scan schedule are stored in your account, so any program running \
+             as you can change them. Lazaret warns when an exclusion skips places where malware \
+             usually lands, or when the schedule's unit files differ from what Lazaret wrote, for \
+             example after an update or because something else changed them. Applying the \
+             schedule again rewrites them.",
+        ),
+        gettext("Your scan settings may skip malware"),
+        SettledStep {
+            evidence_rows,
+            header_action: StepActionSlot::ActionOffered(OfferedAction::suggested(
+                ProtectionStepAction::ReviewSettingsSubpage(if exclusion_found {
+                    SettingsSubpage::ScanExclusions
+                } else {
+                    SettingsSubpage::ScanSchedule
+                }),
+            )),
+            ..SettledStep::without_offers(SettledNodeState::NeedsReview)
         },
-        ..no_guidance_step(
-            gettext("Scan settings in your account"),
-            gettext(
-                "Exclusions and the scan schedule are stored in your account, so any program \
-                 running as you can change them. Lazaret warns when an exclusion skips places \
-                 where malware usually lands, or when the schedule's unit files differ from what \
-                 Lazaret wrote, for example after an update or because something else changed \
-                 them. Applying the schedule again rewrites them.",
-            ),
-            StepNodeState::NeedsReview,
-            gettext("Your scan settings may skip malware"),
-        )
-    })
+    ))
 }
 
 struct TrustListVerdict {
-    node_state: StepNodeState,
+    node_state: SettledNodeState,
     status_text: String,
     evidence_rows: Vec<StepEvidenceRow>,
 }
@@ -453,7 +484,7 @@ fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustLi
     .collect();
     if !trust_list.foreign_allowlists.is_empty() {
         return Some(TrustListVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext(
                 "An allowlist that Lazaret didn't write tells ClamAV to stay silent",
             ),
@@ -467,7 +498,7 @@ fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustLi
         ) => {
             let lazaret_entries = trusted_files.len() + ignored_signatures.len();
             (lazaret_entries > 0).then(|| TrustListVerdict {
-                node_state: StepNodeState::Completed,
+                node_state: SettledNodeState::Completed,
                 status_text: ngettext(
                     "{count} file or detection is never reported",
                     "{count} files or detections are never reported",
@@ -480,7 +511,7 @@ fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustLi
         (LazaretListReading::ListUnreadable(_), _)
         | (LazaretListReading::ListRead(_), LazaretListReading::ListUnreadable(_)) => {
             Some(TrustListVerdict {
-                node_state: StepNodeState::NeedsReview,
+                node_state: SettledNodeState::NeedsReview,
                 status_text: gettext(
                     "Lazaret can't read its own allowlist, so it can't tell what ClamAV stays \
                      silent about",
@@ -496,7 +527,7 @@ fn trust_list_verdict(trust_list_reading: &TrustListReading) -> Option<TrustList
         TrustListReading::ListsRead(trust_list) => trust_list_contents_verdict(trust_list),
         TrustListReading::FolderMissing => None,
         TrustListReading::FolderUnreadable(read_failure) => Some(TrustListVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext(
                 "Lazaret can't read the signature folder, so it can't tell what ClamAV stays \
                  silent about",
@@ -509,56 +540,58 @@ fn trust_list_verdict(trust_list_reading: &TrustListReading) -> Option<TrustList
     }
 }
 
-fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<TimelineStep> {
+fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<ProtectionStep> {
     let TrustListVerdict {
         node_state,
         status_text,
         evidence_rows,
     } = trust_list_verdict(trust_list_reading)?;
-    Some(TimelineStep {
-        evidence_rows,
-        action_slot: StepActionSlot::ActionOffered {
-            action_label: gettext("Review"),
-            chosen_action: TimelineStepAction::OpenSettingsSubpage(
-                SettingsSubpage::TrustedDetections,
+    let review_action =
+        ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::TrustedDetections);
+    Some(TimelineStep::settled(
+        gettext("Trusted detections"),
+        gettext(
+            "Files and detection names on ClamAV's allowlists are never reported, by any scan. \
+             Malware that gets administrator rights could hide itself this way, so check that \
+             every entry was added on purpose.",
+        ),
+        status_text,
+        SettledStep {
+            evidence_rows: plain_rows(evidence_rows),
+            header_action: StepActionSlot::ActionOffered(
+                if node_state == SettledNodeState::NeedsReview {
+                    OfferedAction::suggested(review_action)
+                } else {
+                    OfferedAction::plain(review_action)
+                },
             ),
-            action_suggested: node_state == StepNodeState::NeedsReview,
+            ..SettledStep::without_offers(node_state)
         },
-        ..no_guidance_step(
-            gettext("Trusted detections"),
-            gettext(
-                "Files and detection names on ClamAV's allowlists are never reported, by any \
-                 scan. Malware that gets administrator rights could hide itself this way, so \
-                 check that every entry was added on purpose.",
-            ),
-            node_state,
-            status_text,
-        )
-    })
+    ))
 }
 
 fn database_state(
     database_evidence: &DatabaseEvidence,
     reference_moment: Timestamp,
-) -> StepNodeState {
+) -> SettledNodeState {
     match database_evidence {
         DatabaseEvidence::BuiltAt { built_at } if *built_at > reference_moment => {
-            StepNodeState::NeedsReview
+            SettledNodeState::NeedsReview
         }
         DatabaseEvidence::BuiltAt { built_at }
             if reference_moment.duration_since(*built_at) < DATABASE_FRESH_LIMIT =>
         {
-            StepNodeState::Completed
+            SettledNodeState::Completed
         }
         DatabaseEvidence::BuiltAt { built_at }
             if reference_moment.duration_since(*built_at) < DATABASE_STALE_LIMIT =>
         {
-            StepNodeState::NeedsReview
+            SettledNodeState::NeedsReview
         }
         DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::DatabaseMissing => {
-            StepNodeState::HasFailed
+            SettledNodeState::HasFailed
         }
-        DatabaseEvidence::AgeUndetermined => StepNodeState::NeedsReview,
+        DatabaseEvidence::AgeUndetermined => SettledNodeState::NeedsReview,
     }
 }
 
@@ -681,10 +714,8 @@ fn update_progress_of(signature_update: &SignatureUpdateView) -> SignatureUpdate
     }
 }
 
-fn update_now_row(
+fn manual_update_row(
     signature_update: &SignatureUpdateView,
-    update_progress: &SignatureUpdateProgress,
-    suggest_update: bool,
     moment_context: MomentContext,
 ) -> StepEvidenceRow {
     let last_manual_update = match signature_update {
@@ -706,30 +737,12 @@ fn update_now_row(
             gettext("Fetch the newest signatures from every updater now"),
         ),
     };
-    let row_action = match update_progress {
-        SignatureUpdateProgress::ReadyToUpdate => StepActionSlot::ActionOffered {
-            action_label: gettext("Update Now"),
-            chosen_action: TimelineStepAction::UpdateSignatures,
-            action_suggested: suggest_update,
-        },
-        SignatureUpdateProgress::CancellableUpdateRunning { .. } => StepActionSlot::ActionOffered {
-            action_label: gettext("Cancel"),
-            chosen_action: TimelineStepAction::CancelSignatureUpdate,
-            action_suggested: false,
-        },
-        SignatureUpdateProgress::UncancellableUpdateRunning { .. }
-        | SignatureUpdateProgress::UpdateCancelling
-        | SignatureUpdateProgress::UpdateUnavailable => StepActionSlot::NoAction,
-    };
-    StepEvidenceRow {
-        row_action,
-        ..timed_evidence_row(
-            gettext("Manual update"),
-            evidence_moment,
-            evidence_value,
-            moment_context,
-        )
-    }
+    timed_evidence_row(
+        gettext("Manual update"),
+        evidence_moment,
+        evidence_value,
+        moment_context,
+    )
 }
 
 fn update_host_rows(signature_update: &SignatureUpdateView) -> Vec<StepEvidenceRow> {
@@ -768,7 +781,7 @@ fn signature_step(
     signature_update: &SignatureUpdateView,
     moment_context: MomentContext,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> ProtectionStep {
     let any_updater_failed = signature_evidence
         .updater_evidence
         .iter()
@@ -787,69 +800,99 @@ fn signature_step(
         moment_context.reference_moment,
     );
     let evidence_state =
-        if base_state == StepNodeState::Completed && (any_updater_failed || any_source_stale) {
-            StepNodeState::NeedsReview
+        if base_state == SettledNodeState::Completed && (any_updater_failed || any_source_stale) {
+            SettledNodeState::NeedsReview
         } else {
             base_state
         };
     let update_progress = update_progress_of(signature_update);
-    let (node_state, status_text) = match &update_progress {
-        SignatureUpdateProgress::CancellableUpdateRunning { .. }
-        | SignatureUpdateProgress::UncancellableUpdateRunning { .. } => {
-            (StepNodeState::InProgress, gettext("Updating signatures…"))
-        }
-        SignatureUpdateProgress::UpdateCancelling => {
-            (StepNodeState::InProgress, gettext("Cancelling the update…"))
-        }
-        SignatureUpdateProgress::ReadyToUpdate | SignatureUpdateProgress::UpdateUnavailable => (
-            evidence_state,
-            database_status_text(&signature_evidence.database_evidence, moment_context),
-        ),
-    };
-    let evidence_rows = std::iter::once(update_now_row(
-        signature_update,
-        &update_progress,
-        evidence_state != StepNodeState::Completed,
-        moment_context,
-    ))
-    .chain(updater_output_rows(&update_progress))
-    .chain(
-        signature_evidence
-            .updater_evidence
-            .iter()
-            .map(|updater_evidence| updater_row(updater_evidence, moment_context)),
-    )
-    .chain(
-        signature_evidence
-            .third_party_files
-            .iter()
-            .map(|signature_file| third_party_file_row(signature_file, moment_context)),
-    )
-    .chain(update_host_rows(signature_update))
-    .collect();
-    TimelineStep {
-        evidence_rows,
-        guidance_commands: if signature_evidence.updater_evidence.is_empty() {
-            remedy_commands(SuggestedRemedy::FreshclamUpdatesEnable, distribution_family)
-        } else {
-            Vec::new()
-        },
-        ..no_guidance_step(
-            gettext("Signatures current"),
-            gettext(
-                "Signatures describe known malware, and new ones are published constantly. Old \
-                 signatures miss recent threats even when everything else is running.",
-            ),
-            node_state,
-            status_text,
+    let manual_row = manual_update_row(signature_update, moment_context);
+    let other_rows = updater_output_rows(&update_progress)
+        .into_iter()
+        .chain(
+            signature_evidence
+                .updater_evidence
+                .iter()
+                .map(|updater_evidence| updater_row(updater_evidence, moment_context)),
         )
-    }
+        .chain(
+            signature_evidence
+                .third_party_files
+                .iter()
+                .map(|signature_file| third_party_file_row(signature_file, moment_context)),
+        )
+        .chain(update_host_rows(signature_update))
+        .collect::<Vec<_>>();
+    let step_title = gettext("Signatures current");
+    let mechanism_details = gettext(
+        "Signatures describe known malware, and new ones are published constantly. Old signatures \
+         miss recent threats even when everything else is running.",
+    );
+    let running_signature_step = |status_text: String, cancel_slot| {
+        TimelineStep::running(
+            step_title.clone(),
+            mechanism_details.clone(),
+            status_text,
+            RunningStep {
+                evidence_rows: std::iter::once(manual_row.clone())
+                    .chain(other_rows.clone())
+                    .collect(),
+                cancel_slot,
+            },
+        )
+    };
+    let settled_signature_step = |manual_control| {
+        TimelineStep::settled(
+            step_title.clone(),
+            mechanism_details.clone(),
+            database_status_text(&signature_evidence.database_evidence, moment_context),
+            SettledStep {
+                evidence_rows: std::iter::once(ActionableEvidenceRow {
+                    shown_evidence: manual_row.clone(),
+                    row_control: manual_control,
+                })
+                .chain(plain_rows(other_rows.clone()))
+                .collect(),
+                ..SettledStep::without_offers(evidence_state)
+            },
+        )
+    };
+    let signature_step = match &update_progress {
+        SignatureUpdateProgress::CancellableUpdateRunning { .. } => running_signature_step(
+            gettext("Updating signatures…"),
+            CancelSlot::Cancellable {
+                cancel_action: ProtectionStepAction::CancelSignatureUpdate,
+            },
+        ),
+        SignatureUpdateProgress::UncancellableUpdateRunning { .. } => {
+            running_signature_step(gettext("Updating signatures…"), CancelSlot::NotCancellable)
+        }
+        SignatureUpdateProgress::UpdateCancelling => running_signature_step(
+            gettext("Cancelling the update…"),
+            CancelSlot::NotCancellable,
+        ),
+        SignatureUpdateProgress::ReadyToUpdate => settled_signature_step(
+            EvidenceRowControl::RowButton(if evidence_state == SettledNodeState::Completed {
+                OfferedAction::plain(ProtectionStepAction::UpdateSignatures)
+            } else {
+                OfferedAction::suggested(ProtectionStepAction::UpdateSignatures)
+            }),
+        ),
+        SignatureUpdateProgress::UpdateUnavailable => {
+            settled_signature_step(EvidenceRowControl::NoRowControl)
+        }
+    };
+    signature_step.with_guidance_commands(if signature_evidence.updater_evidence.is_empty() {
+        remedy_commands(SuggestedRemedy::FreshclamUpdatesEnable, distribution_family)
+    } else {
+        Vec::new()
+    })
 }
 
 fn daemon_step(
     daemon_evidence: &DaemonEvidence,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> ProtectionStep {
     let step_title = gettext("Daemon running");
     let mechanism_details = gettext(
         "clamd keeps the signatures loaded in memory. On-access blocking and scheduled scans both \
@@ -865,7 +908,7 @@ fn daemon_step(
         } => no_guidance_step(
             step_title,
             mechanism_details,
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext("clamd still uses signatures {loaded}, but {disk} is on disk")
                 .replace("{loaded}", loaded_version)
                 .replace("{disk}", disk_version),
@@ -873,55 +916,48 @@ fn daemon_step(
         DaemonEvidence::ClamdAnswering { .. } => no_guidance_step(
             step_title,
             mechanism_details,
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             gettext("clamd is answering"),
         ),
-        DaemonEvidence::UnitActiveNotAnswering { service_unit } => TimelineStep {
-            guidance_commands: remedy_commands(
-                SuggestedRemedy::ClamavDaemonRestart,
-                distribution_family,
-            ),
-            ..no_guidance_step(
-                step_title,
-                mechanism_details,
-                StepNodeState::HasFailed,
-                gettext(
-                    "{unit} is running, but clamd does not answer. It may still be loading \
-                     signatures.",
-                )
-                .replace("{unit}", service_unit),
+        DaemonEvidence::UnitActiveNotAnswering { service_unit } => no_guidance_step(
+            step_title,
+            mechanism_details,
+            SettledNodeState::HasFailed,
+            gettext(
+                "{unit} is running, but clamd does not answer. It may still be loading signatures.",
             )
-        },
+            .replace("{unit}", service_unit),
+        )
+        .with_guidance_commands(remedy_commands(
+            SuggestedRemedy::ClamavDaemonRestart,
+            distribution_family,
+        )),
         DaemonEvidence::UnitStateUnknown => no_guidance_step(
             step_title,
             mechanism_details,
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext("clamd does not answer, and systemd could not report its state"),
         ),
-        DaemonEvidence::UnitStopped { service_unit } => TimelineStep {
-            guidance_commands: remedy_commands(
-                SuggestedRemedy::ClamavDaemonStart,
-                distribution_family,
-            ),
-            ..no_guidance_step(
-                step_title,
-                mechanism_details,
-                StepNodeState::HasFailed,
-                gettext("{unit} is not running").replace("{unit}", service_unit),
-            )
-        },
-        DaemonEvidence::NeverSetUp => TimelineStep {
-            guidance_commands: remedy_commands(
-                SuggestedRemedy::ClamavDaemonStart,
-                distribution_family,
-            ),
-            ..no_guidance_step(
-                step_title,
-                mechanism_details,
-                StepNodeState::ActNext,
-                gettext("clamd is not set up, so scans fall back to the slower clamscan"),
-            )
-        },
+        DaemonEvidence::UnitStopped { service_unit } => no_guidance_step(
+            step_title,
+            mechanism_details,
+            SettledNodeState::HasFailed,
+            gettext("{unit} is not running").replace("{unit}", service_unit),
+        )
+        .with_guidance_commands(remedy_commands(
+            SuggestedRemedy::ClamavDaemonStart,
+            distribution_family,
+        )),
+        DaemonEvidence::NeverSetUp => no_guidance_step(
+            step_title,
+            mechanism_details,
+            SettledNodeState::ActNext,
+            gettext("clamd is not set up, so scans fall back to the slower clamscan"),
+        )
+        .with_guidance_commands(remedy_commands(
+            SuggestedRemedy::ClamavDaemonStart,
+            distribution_family,
+        )),
     }
 }
 
@@ -929,12 +965,17 @@ fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
     matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
 }
 
-fn on_access_setting_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
-    StepEvidenceRow {
-        evidence_moment: EvidenceMoment::ChangeableSetting {
-            settings_subpage: SettingsSubpage::OnAccessScanning,
+fn on_access_setting_row(evidence_name: String, evidence_value: String) -> ProtectionEvidenceRow {
+    ActionableEvidenceRow {
+        shown_evidence: StepEvidenceRow {
+            evidence_moment: EvidenceMoment::SettingValue,
+            ..evidence_row(evidence_name, evidence_value)
         },
-        ..evidence_row(evidence_name, evidence_value)
+        row_control: EvidenceRowControl::SettingsLink {
+            settings_action: ProtectionStepAction::ReviewSettingsSubpage(
+                SettingsSubpage::OnAccessScanning,
+            ),
+        },
     }
 }
 
@@ -976,7 +1017,7 @@ fn size_limit_text(size_limit: &OnAccessSizeLimit) -> String {
     }
 }
 
-fn on_access_rows(on_access_config: &OnAccessConfig) -> Vec<StepEvidenceRow> {
+fn on_access_rows(on_access_config: &OnAccessConfig) -> Vec<ProtectionEvidenceRow> {
     match on_access_config {
         OnAccessConfig::ConfigUnreadable(config_failure) => vec![on_access_setting_row(
             gettext("Configuration"),
@@ -994,7 +1035,7 @@ fn on_access_rows(on_access_config: &OnAccessConfig) -> Vec<StepEvidenceRow> {
 }
 
 struct OnAccessVerdict {
-    node_state: StepNodeState,
+    node_state: SettledNodeState,
     status_text: String,
     suggested_remedies: Vec<SuggestedRemedy>,
 }
@@ -1002,7 +1043,7 @@ struct OnAccessVerdict {
 fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict {
     match on_access_config {
         OnAccessConfig::ConfigUnreadable(_) => OnAccessVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext(
                 "Running, but clamd.conf could not be read, so what is checked and whether \
                  detected files are blocked is unknown",
@@ -1014,7 +1055,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::BlockAccess,
             ..
         } => OnAccessVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext("Running, but no folders or mounts are watched"),
             suggested_remedies: vec![SuggestedRemedy::OnAccessWatchedPathAdd],
         },
@@ -1023,7 +1064,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::ReportOnly,
             ..
         } => OnAccessVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext(
                 "Running, but no folders or mounts are watched, and detected files would not be \
                  blocked",
@@ -1038,7 +1079,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::ReportOnly,
             ..
         } => OnAccessVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext("Files are checked, but detected files are not blocked"),
             suggested_remedies: vec![SuggestedRemedy::OnAccessPreventionEnable],
         },
@@ -1047,7 +1088,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::BlockAccess,
             ..
         } => OnAccessVerdict {
-            node_state: StepNodeState::Completed,
+            node_state: SettledNodeState::Completed,
             status_text: gettext("Detected files are blocked"),
             suggested_remedies: Vec::new(),
         },
@@ -1060,22 +1101,22 @@ fn on_access_verdict(
 ) -> OnAccessVerdict {
     match on_access_evidence.on_access_scanner {
         OnAccessScanner::NeverSetUp => OnAccessVerdict {
-            node_state: StepNodeState::NeedsReview,
+            node_state: SettledNodeState::NeedsReview,
             status_text: gettext("On-access scanning is not set up"),
             suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
         },
         OnAccessScanner::UnitStopped { .. } if !daemon_answering => OnAccessVerdict {
-            node_state: StepNodeState::AwaitingPrerequisite,
+            node_state: SettledNodeState::AwaitingPrerequisite,
             status_text: daemon_awaited_text(),
             suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
         },
         OnAccessScanner::UnitStopped { service_unit } => OnAccessVerdict {
-            node_state: StepNodeState::HasFailed,
+            node_state: SettledNodeState::HasFailed,
             status_text: gettext("{unit} is not running").replace("{unit}", service_unit),
             suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
         },
         OnAccessScanner::MonitorRunning if !daemon_answering => OnAccessVerdict {
-            node_state: StepNodeState::AwaitingPrerequisite,
+            node_state: SettledNodeState::AwaitingPrerequisite,
             status_text: daemon_awaited_text(),
             suggested_remedies: Vec::new(),
         },
@@ -1089,7 +1130,7 @@ fn on_access_step(
     on_access_evidence: &OnAccessEvidence,
     daemon_answering: bool,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> ProtectionStep {
     let step_title = gettext("On-access blocking");
     let mechanism_details = gettext(
         "clamonacc checks files in the watched folders as they are opened. With prevention on, \
@@ -1097,20 +1138,22 @@ fn on_access_step(
          even though it is still there.",
     );
     let on_access_verdict = on_access_verdict(on_access_evidence, daemon_answering);
-    TimelineStep {
-        evidence_rows: on_access_rows(&on_access_evidence.on_access_config),
-        guidance_commands: on_access_verdict
+    TimelineStep::settled(
+        step_title,
+        mechanism_details,
+        on_access_verdict.status_text,
+        SettledStep {
+            evidence_rows: on_access_rows(&on_access_evidence.on_access_config),
+            ..SettledStep::without_offers(on_access_verdict.node_state)
+        },
+    )
+    .with_guidance_commands(
+        on_access_verdict
             .suggested_remedies
             .into_iter()
             .flat_map(|suggested_remedy| remedy_commands(suggested_remedy, distribution_family))
             .collect(),
-        ..no_guidance_step(
-            step_title,
-            mechanism_details,
-            on_access_verdict.node_state,
-            on_access_verdict.status_text,
-        )
-    }
+    )
 }
 
 fn daemon_awaited_text() -> String {
@@ -1139,7 +1182,6 @@ fn next_run_row(next_run: UnitTimestamp, moment_context: MomentContext) -> StepE
 
 fn last_run_row(
     last_completed_run: ScanRunHistory,
-    row_action: StepActionSlot,
     moment_context: MomentContext,
 ) -> StepEvidenceRow {
     let evidence_value = match last_completed_run {
@@ -1153,15 +1195,12 @@ fn last_run_row(
         } => gettext("nothing found"),
         ScanRunHistory::NoCompletedScan => gettext("Not run yet"),
     };
-    StepEvidenceRow {
-        row_action,
-        ..timed_evidence_row(
-            gettext("Last scan"),
-            EvidenceMoment::from(last_completed_run),
-            evidence_value,
-            moment_context,
-        )
-    }
+    timed_evidence_row(
+        gettext("Last scan"),
+        EvidenceMoment::from(last_completed_run),
+        evidence_value,
+        moment_context,
+    )
 }
 
 fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
@@ -1186,7 +1225,7 @@ fn scheduled_scan_step(
     daemon_answering: bool,
     moment_context: MomentContext,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> ProtectionStep {
     let step_title = gettext("Scheduled scan");
     let mechanism_details = gettext(
         "A scheduled scan catches files that were not opened, or that only became detectable \
@@ -1199,97 +1238,119 @@ fn scheduled_scan_step(
             scan_service,
             last_completed_run,
         } => {
-            let (node_state, status_text) = match timer_state {
-                TimerState::TimerInactive | TimerState::TimerActive { .. } if !daemon_answering => {
-                    (StepNodeState::AwaitingPrerequisite, daemon_awaited_text())
-                }
-                TimerState::TimerInactive => (
-                    StepNodeState::HasFailed,
-                    gettext("The system timer is not active"),
+            let next_scan_row = match timer_state {
+                TimerState::TimerActive { next_run } => next_run_row(*next_run, moment_context),
+                TimerState::TimerInactive => evidence_row(
+                    gettext("Next scan"),
+                    gettext("Not scheduled, because the timer is not active"),
                 ),
-                TimerState::TimerActive { .. } if scheduled_scan_starting => {
-                    (StepNodeState::InProgress, gettext("Starting the scan…"))
+            };
+            let folders_row = StepEvidenceRow {
+                evidence_moment: EvidenceMoment::SettingValue,
+                ..evidence_row(
+                    gettext("Folders scanned"),
+                    scanned_folders_text(scan_service),
+                )
+            };
+            let scan_rows = |last_scan_control| {
+                vec![
+                    next_scan_row.clone().into(),
+                    ActionableEvidenceRow {
+                        shown_evidence: last_run_row(*last_completed_run, moment_context),
+                        row_control: last_scan_control,
+                    },
+                    folders_row.clone().into(),
+                ]
+            };
+            let run_now_control = EvidenceRowControl::RowButton(OfferedAction::plain(
+                ProtectionStepAction::RunScheduledScan { service_unit },
+            ));
+            let settled_scan_step = |node_state, status_text, last_scan_control| {
+                TimelineStep::settled(
+                    step_title.clone(),
+                    mechanism_details.clone(),
+                    status_text,
+                    SettledStep {
+                        evidence_rows: scan_rows(last_scan_control),
+                        ..SettledStep::without_offers(node_state)
+                    },
+                )
+            };
+            match timer_state {
+                TimerState::TimerInactive | TimerState::TimerActive { .. } if !daemon_answering => {
+                    settled_scan_step(
+                        SettledNodeState::AwaitingPrerequisite,
+                        daemon_awaited_text(),
+                        EvidenceRowControl::NoRowControl,
+                    )
                 }
+                TimerState::TimerInactive => settled_scan_step(
+                    SettledNodeState::HasFailed,
+                    gettext("The system timer is not active"),
+                    run_now_control,
+                ),
+                TimerState::TimerActive { .. } if scheduled_scan_starting => TimelineStep::running(
+                    step_title.clone(),
+                    mechanism_details.clone(),
+                    gettext("Starting the scan…"),
+                    RunningStep {
+                        evidence_rows: vec![
+                            next_scan_row.clone(),
+                            last_run_row(*last_completed_run, moment_context),
+                            folders_row.clone(),
+                        ],
+                        cancel_slot: CancelSlot::NotCancellable,
+                    },
+                ),
                 TimerState::TimerActive { next_run } => match scan_service {
                     ScanServiceEvidence::ServiceConfigured { last_result, .. }
                         if scan_result_failed(last_result) =>
                     {
-                        (
-                            StepNodeState::NeedsReview,
+                        settled_scan_step(
+                            SettledNodeState::NeedsReview,
                             gettext("The last scan ended with an error"),
+                            run_now_control,
                         )
                     }
-                    ScanServiceEvidence::ServiceConfigured { .. } => (
-                        StepNodeState::Completed,
+                    ScanServiceEvidence::ServiceConfigured { .. } => settled_scan_step(
+                        SettledNodeState::Completed,
                         gettext("Next scan: {time}").replace("{time}", &next_run_text(*next_run)),
+                        run_now_control,
                     ),
-                    ScanServiceEvidence::ServiceMissing => (
-                        StepNodeState::NeedsReview,
+                    ScanServiceEvidence::ServiceMissing => settled_scan_step(
+                        SettledNodeState::NeedsReview,
                         gettext("The timer starts a scan service that is not installed"),
+                        run_now_control,
                     ),
-                    ScanServiceEvidence::ServiceUnreadable => (
-                        StepNodeState::NeedsReview,
+                    ScanServiceEvidence::ServiceUnreadable => settled_scan_step(
+                        SettledNodeState::NeedsReview,
                         gettext("The scan service could not be read from systemd"),
+                        run_now_control,
                     ),
                 },
-            };
-            let run_action = if scheduled_scan_starting || !daemon_answering {
-                StepActionSlot::NoAction
-            } else {
-                StepActionSlot::ActionOffered {
-                    action_label: gettext("Run Now"),
-                    chosen_action: TimelineStepAction::RunScheduledScan { service_unit },
-                    action_suggested: false,
-                }
-            };
-            TimelineStep {
-                evidence_rows: vec![
-                    match timer_state {
-                        TimerState::TimerActive { next_run } => {
-                            next_run_row(*next_run, moment_context)
-                        }
-                        TimerState::TimerInactive => evidence_row(
-                            gettext("Next scan"),
-                            gettext("Not scheduled, because the timer is not active"),
-                        ),
-                    },
-                    last_run_row(*last_completed_run, run_action, moment_context),
-                    StepEvidenceRow {
-                        evidence_moment: EvidenceMoment::FixedSetting,
-                        ..evidence_row(
-                            gettext("Folders scanned"),
-                            scanned_folders_text(scan_service),
-                        )
-                    },
-                ],
-                ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
             }
         }
         ScheduledScanEvidence::LazaretSchedule => no_guidance_step(
             step_title,
             mechanism_details,
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             gettext("Scheduled by Lazaret"),
         ),
-        ScheduledScanEvidence::NoSchedule => TimelineStep {
-            guidance_commands: remedy_commands(
-                SuggestedRemedy::ScheduledScanEnable,
-                distribution_family,
-            ),
-            action_slot: StepActionSlot::ActionOffered {
-                action_label: gettext("Set Up"),
-                chosen_action: TimelineStepAction::OpenSettingsSubpage(
-                    SettingsSubpage::ScanSchedule,
-                ),
-                action_suggested: true,
+        ScheduledScanEvidence::NoSchedule => TimelineStep::settled(
+            step_title,
+            mechanism_details,
+            gettext("No scan is scheduled"),
+            SettledStep {
+                header_action: StepActionSlot::ActionOffered(OfferedAction::suggested(
+                    ProtectionStepAction::SetUpSettingsSubpage(SettingsSubpage::ScanSchedule),
+                )),
+                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
             },
-            ..no_guidance_step(
-                step_title,
-                mechanism_details,
-                StepNodeState::NeedsReview,
-                gettext("No scan is scheduled"),
-            )
-        },
+        )
+        .with_guidance_commands(remedy_commands(
+            SuggestedRemedy::ScheduledScanEnable,
+            distribution_family,
+        )),
     }
 }
 
@@ -1297,7 +1358,7 @@ fn alerts_step(
     alert_readiness: &AlertReadiness,
     background_service_state: UnitState,
     distribution_family: DistributionFamily,
-) -> TimelineStep {
+) -> ProtectionStep {
     let step_title = gettext("Alerts");
     let mechanism_details = gettext(
         "Lazaret follows the system journal and notifies you when something is detected. It can \
@@ -1305,25 +1366,25 @@ fn alerts_step(
     );
     let (node_state, status_text) = match &alert_readiness.journal_access {
         JournalAccess::JournalUnreadable => (
-            StepNodeState::HasFailed,
+            SettledNodeState::HasFailed,
             gettext(
                 "The system journal can't be read. Add your user to the systemd-journal group.",
             ),
         ),
         JournalAccess::FollowingFailed { failure_text } => (
-            StepNodeState::HasFailed,
+            SettledNodeState::HasFailed,
             gettext("Reading the system journal stopped: {error}")
                 .replace("{error}", &sanitize_scanner_line(failure_text)),
         ),
         JournalAccess::FollowingJournal if !alert_readiness.notifications_enabled => (
-            StepNodeState::NeedsReview,
+            SettledNodeState::NeedsReview,
             gettext("Notifications are turned off in the preferences"),
         ),
         JournalAccess::FollowingJournal
             if background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive) =>
         {
             (
-                StepNodeState::NeedsReview,
+                SettledNodeState::NeedsReview,
                 gettext(
                     "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
                      background",
@@ -1331,12 +1392,12 @@ fn alerts_step(
             )
         }
         JournalAccess::FollowingJournal => (
-            StepNodeState::Completed,
+            SettledNodeState::Completed,
             gettext("Running in the background and following the journal"),
         ),
     };
-    TimelineStep {
-        guidance_commands: if alert_readiness.journal_access == JournalAccess::FollowingJournal
+    no_guidance_step(step_title, mechanism_details, node_state, status_text).with_guidance_commands(
+        if alert_readiness.journal_access == JournalAccess::FollowingJournal
             && alert_readiness.notifications_enabled
             && background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive)
         {
@@ -1344,8 +1405,7 @@ fn alerts_step(
         } else {
             Vec::new()
         },
-        ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
-    }
+    )
 }
 
 fn on_access_coverage(on_access_evidence: &OnAccessEvidence) -> Option<String> {
@@ -1425,7 +1485,7 @@ pub fn protection_timeline(
         &protection_evidence.engine_installation,
         distribution_family,
     ))
-    .filter(|installation_step| installation_step.node_state != StepNodeState::Completed);
+    .filter(|installation_step| installation_step.node_state() != StepNodeState::Completed);
     ProtectionTimeline {
         coverage_summary: coverage_summary(protection_evidence),
         protection_steps: vec![
@@ -1483,6 +1543,7 @@ mod protection_timeline_presentation_tests {
             signature_update_run::updater_exit_status::SignatureUpdaterProgram,
             trusted_detections_page::trust_list_contents::TrustListReadFailure,
         },
+        shared_widgets::step_timeline::timeline_step_contents::StepPhase,
     };
 
     const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
@@ -1536,16 +1597,16 @@ mod protection_timeline_presentation_tests {
     }
 
     fn step_titled<'timeline>(
-        timeline_steps: &'timeline [TimelineStep],
+        timeline_steps: &'timeline [ProtectionStep],
         step_title: &str,
-    ) -> &'timeline TimelineStep {
+    ) -> &'timeline ProtectionStep {
         timeline_steps
             .iter()
             .find(|timeline_step| timeline_step.step_title == step_title)
             .unwrap()
     }
 
-    fn step_titles(timeline_steps: &[TimelineStep]) -> Vec<&str> {
+    fn step_titles(timeline_steps: &[ProtectionStep]) -> Vec<&str> {
         timeline_steps
             .iter()
             .map(|timeline_step| timeline_step.step_title.as_str())
@@ -1553,17 +1614,36 @@ mod protection_timeline_presentation_tests {
     }
 
     fn row_named<'step>(
-        timeline_step: &'step TimelineStep,
+        timeline_step: &'step ProtectionStep,
         evidence_name: &str,
     ) -> &'step StepEvidenceRow {
         timeline_step
-            .evidence_rows
-            .iter()
+            .shown_evidence_rows()
+            .into_iter()
             .find(|step_evidence| step_evidence.evidence_name == evidence_name)
             .unwrap()
     }
 
-    fn all_steps(protection_timeline: ProtectionTimeline) -> Vec<TimelineStep> {
+    fn settled_part(timeline_step: &ProtectionStep) -> &SettledStep<ProtectionStepAction> {
+        match &timeline_step.step_phase {
+            StepPhase::StepSettled(settled_step) => settled_step,
+            StepPhase::StepRunning(_) => panic!("{} is running", timeline_step.step_title),
+        }
+    }
+
+    fn row_control_named<'step>(
+        timeline_step: &'step ProtectionStep,
+        evidence_name: &str,
+    ) -> &'step EvidenceRowControl<ProtectionStepAction> {
+        &settled_part(timeline_step)
+            .evidence_rows
+            .iter()
+            .find(|actionable_row| actionable_row.shown_evidence.evidence_name == evidence_name)
+            .unwrap()
+            .row_control
+    }
+
+    fn all_steps(protection_timeline: ProtectionTimeline) -> Vec<ProtectionStep> {
         protection_timeline
             .protection_steps
             .into_iter()
@@ -1633,12 +1713,12 @@ mod protection_timeline_presentation_tests {
     fn step_states(protection_evidence: &ProtectionEvidence) -> Vec<StepNodeState> {
         all_steps(idle_timeline(protection_evidence))
             .iter()
-            .map(|timeline_step| timeline_step.node_state)
+            .map(|timeline_step| timeline_step.node_state())
             .collect()
     }
 
     fn state_of(protection_evidence: &ProtectionEvidence, step_title: &str) -> StepNodeState {
-        step_titled(&all_steps(idle_timeline(protection_evidence)), step_title).node_state
+        step_titled(&all_steps(idle_timeline(protection_evidence)), step_title).node_state()
     }
 
     #[tokio::test]
@@ -1654,11 +1734,13 @@ mod protection_timeline_presentation_tests {
         all_steps(host_timeline).iter().for_each(|timeline_step| {
             println!(
                 "{:?} | {} | {}",
-                timeline_step.node_state, timeline_step.step_title, timeline_step.status_text
+                timeline_step.node_state(),
+                timeline_step.step_title,
+                timeline_step.status_text
             );
             timeline_step
-                .evidence_rows
-                .iter()
+                .shown_evidence_rows()
+                .into_iter()
                 .for_each(|step_evidence| {
                     println!(
                         "    {}: {}",
@@ -1743,31 +1825,34 @@ mod protection_timeline_presentation_tests {
         let last_scan_row = row_named(scheduled_step, "Last scan");
         assert_eq!(last_scan_row.evidence_value, "2 hours ago · nothing found");
         assert!(matches!(
-            last_scan_row.row_action,
-            StepActionSlot::ActionOffered {
-                chosen_action: TimelineStepAction::RunScheduledScan { .. },
+            row_control_named(scheduled_step, "Last scan"),
+            EvidenceRowControl::RowButton(OfferedAction {
+                offered_action: ProtectionStepAction::RunScheduledScan { .. },
                 ..
-            }
+            })
         ));
-        assert_eq!(scheduled_step.action_slot, StepActionSlot::NoAction);
+        assert_eq!(scheduled_step.header_offer(), None);
+        let on_access_step = step_titled(&healthy_steps, "On-access blocking");
         assert_eq!(
-            row_named(
-                step_titled(&healthy_steps, "On-access blocking"),
-                "Watched folders"
-            )
-            .evidence_moment,
-            EvidenceMoment::ChangeableSetting {
-                settings_subpage: SettingsSubpage::OnAccessScanning
+            row_named(on_access_step, "Watched folders").evidence_moment,
+            EvidenceMoment::SettingValue
+        );
+        assert_eq!(
+            row_control_named(on_access_step, "Watched folders"),
+            &EvidenceRowControl::SettingsLink {
+                settings_action: ProtectionStepAction::ReviewSettingsSubpage(
+                    SettingsSubpage::OnAccessScanning
+                )
             }
         );
         let signature_step = step_titled(&healthy_steps, "Signatures current");
-        assert_eq!(signature_step.action_slot, StepActionSlot::NoAction);
+        assert_eq!(signature_step.header_offer(), None);
         assert!(matches!(
-            row_named(signature_step, "Manual update").row_action,
-            StepActionSlot::ActionOffered {
-                chosen_action: TimelineStepAction::UpdateSignatures,
+            row_control_named(signature_step, "Manual update"),
+            EvidenceRowControl::RowButton(OfferedAction {
+                offered_action: ProtectionStepAction::UpdateSignatures,
                 ..
-            }
+            })
         ));
         assert!(
             signature_step
@@ -1788,17 +1873,16 @@ mod protection_timeline_presentation_tests {
         };
         let running_timeline = timeline_with(&healthy_evidence(), &running_activity);
         let signature_step = step_titled(&running_timeline.engine_steps, "Signatures current");
-        assert_eq!(signature_step.node_state, StepNodeState::InProgress);
+        assert_eq!(signature_step.node_state(), StepNodeState::InProgress);
         let output_row = row_named(signature_step, "Updater output");
         assert_eq!(output_row.evidence_moment, EvidenceMoment::HappeningNow);
         assert_eq!(output_row.evidence_value, "daily.cld updated");
-        assert!(matches!(
-            row_named(signature_step, "Manual update").row_action,
-            StepActionSlot::ActionOffered {
-                chosen_action: TimelineStepAction::CancelSignatureUpdate,
-                ..
-            }
-        ));
+        assert_eq!(
+            signature_step.offered_actions(),
+            vec![OfferedAction::plain(
+                ProtectionStepAction::CancelSignatureUpdate
+            )]
+        );
     }
 
     #[test]
@@ -1811,10 +1895,11 @@ mod protection_timeline_presentation_tests {
             },
         );
         let scheduled_step = step_titled(&starting_timeline.protection_steps, "Scheduled scan");
-        assert_eq!(scheduled_step.node_state, StepNodeState::InProgress);
+        assert_eq!(scheduled_step.node_state(), StepNodeState::InProgress);
+        assert_eq!(scheduled_step.offered_actions(), Vec::new());
         assert_eq!(
-            row_named(scheduled_step, "Last scan").row_action,
-            StepActionSlot::NoAction
+            row_named(scheduled_step, "Last scan").evidence_value,
+            "Not run yet"
         );
     }
 
@@ -1863,7 +1948,7 @@ mod protection_timeline_presentation_tests {
         let unreadable_service = system_timer_with(ScanServiceEvidence::ServiceUnreadable);
         let scheduled_steps = all_steps(idle_timeline(&unreadable_service));
         let scheduled_step = step_titled(&scheduled_steps, "Scheduled scan");
-        assert_eq!(scheduled_step.node_state, StepNodeState::NeedsReview);
+        assert_eq!(scheduled_step.node_state(), StepNodeState::NeedsReview);
         assert_eq!(
             scheduled_step.status_text,
             "The scan service could not be read from systemd"
@@ -1914,7 +1999,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         let engine_steps = idle_timeline(&protection_evidence).engine_steps;
-        assert_eq!(engine_steps[0].node_state, StepNodeState::HasFailed);
+        assert_eq!(engine_steps[0].node_state(), StepNodeState::HasFailed);
         assert_eq!(engine_steps.len(), 3);
     }
 
@@ -1926,7 +2011,7 @@ mod protection_timeline_presentation_tests {
         }
     }
 
-    fn trust_review_steps(trust_list_reading: TrustListReading) -> Vec<TimelineStep> {
+    fn trust_review_steps(trust_list_reading: TrustListReading) -> Vec<ProtectionStep> {
         let protection_evidence = ProtectionEvidence {
             trust_list: trust_list_reading,
             ..healthy_evidence()
@@ -1944,7 +2029,7 @@ mod protection_timeline_presentation_tests {
             ..empty_trust_list()
         }));
         assert_eq!(review_steps.len(), 1);
-        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
     }
 
     #[test]
@@ -1959,7 +2044,7 @@ mod protection_timeline_presentation_tests {
             ..empty_trust_list()
         }));
         assert_eq!(review_steps.len(), 1);
-        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
         assert_eq!(
             review_steps[0].status_text,
             "An allowlist that Lazaret didn't write tells ClamAV to stay silent"
@@ -1972,7 +2057,7 @@ mod protection_timeline_presentation_tests {
             TrustListReadFailure::AccessDenied,
         ));
         assert_eq!(review_steps.len(), 1);
-        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
     }
 
     #[test]
@@ -1984,7 +2069,7 @@ mod protection_timeline_presentation_tests {
             ..empty_trust_list()
         }));
         assert_eq!(review_steps.len(), 1);
-        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
     }
 
     #[test]
@@ -2012,7 +2097,7 @@ mod protection_timeline_presentation_tests {
         };
         let review_steps = idle_timeline(&protection_evidence).review_steps;
         assert_eq!(review_steps.len(), 1);
-        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
     }
 
     #[test]
@@ -2026,16 +2111,13 @@ mod protection_timeline_presentation_tests {
         };
         let review_steps = idle_timeline(&protection_evidence).review_steps;
         let account_step = review_steps.last().unwrap();
-        assert_eq!(account_step.node_state, StepNodeState::NeedsReview);
-        assert!(matches!(
-            account_step.action_slot,
-            StepActionSlot::ActionOffered {
-                chosen_action: TimelineStepAction::OpenSettingsSubpage(
-                    SettingsSubpage::ScanExclusions
-                ),
-                ..
-            }
-        ));
+        assert_eq!(account_step.node_state(), StepNodeState::NeedsReview);
+        assert_eq!(
+            account_step.header_offer(),
+            Some(OfferedAction::suggested(
+                ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::ScanExclusions)
+            ))
+        );
     }
 
     #[test]
@@ -2049,7 +2131,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            idle_timeline(&protection_evidence).engine_steps[0].node_state,
+            idle_timeline(&protection_evidence).engine_steps[0].node_state(),
             StepNodeState::NeedsReview
         );
     }
@@ -2116,7 +2198,7 @@ mod protection_timeline_presentation_tests {
             background_service_state,
             DistributionFamily::NixosFamily,
         )
-        .node_state
+        .node_state()
     }
 
     #[test]
@@ -2161,7 +2243,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            idle_timeline(&protection_evidence).engine_steps[0].node_state,
+            idle_timeline(&protection_evidence).engine_steps[0].node_state(),
             StepNodeState::ActNext
         );
         assert!(coverage_summary(&protection_evidence).contains("nothing is being checked"));
@@ -2174,7 +2256,7 @@ mod protection_timeline_presentation_tests {
         }
     }
 
-    fn on_access_step_of(protection_evidence: &ProtectionEvidence) -> TimelineStep {
+    fn on_access_step_of(protection_evidence: &ProtectionEvidence) -> ProtectionStep {
         step_titled(
             &idle_timeline(protection_evidence).protection_steps,
             "On-access blocking",
@@ -2191,7 +2273,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state, StepNodeState::NeedsReview);
+        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
         assert!(
             on_access_step
                 .status_text
@@ -2218,7 +2300,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state, StepNodeState::NeedsReview);
+        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
         assert_eq!(
             on_access_step.status_text,
             "Running, but no folders or mounts are watched"
@@ -2249,7 +2331,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state, StepNodeState::Completed);
+        assert_eq!(on_access_step.node_state(), StepNodeState::Completed);
         assert_eq!(
             row_named(&on_access_step, "Watched folders").evidence_value,
             "/ (whole mount)"
@@ -2269,7 +2351,7 @@ mod protection_timeline_presentation_tests {
             &protection_evidence.daemon_evidence,
             DistributionFamily::DebianFamily,
         );
-        assert_eq!(daemon_step.node_state, StepNodeState::HasFailed);
+        assert_eq!(daemon_step.node_state(), StepNodeState::HasFailed);
         assert!(
             daemon_step
                 .status_text
@@ -2290,7 +2372,7 @@ mod protection_timeline_presentation_tests {
     }
 
     fn daemon_step_state(daemon_evidence: DaemonEvidence) -> StepNodeState {
-        daemon_step(&daemon_evidence, DistributionFamily::NixosFamily).node_state
+        daemon_step(&daemon_evidence, DistributionFamily::NixosFamily).node_state()
     }
 
     #[test]
@@ -2307,7 +2389,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         let review_steps = idle_timeline(&protection_evidence).review_steps;
-        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
         assert_eq!(
             review_steps[0].status_text,
             "1 setting checks less than configured, since a time that could not be read"
@@ -2331,7 +2413,7 @@ mod protection_timeline_presentation_tests {
         };
         let protection_steps = idle_timeline(&protection_evidence).protection_steps;
         let scheduled_step = step_titled(&protection_steps, "Scheduled scan");
-        assert_eq!(scheduled_step.node_state, StepNodeState::HasFailed);
+        assert_eq!(scheduled_step.node_state(), StepNodeState::HasFailed);
         assert_eq!(
             row_named(scheduled_step, "Next scan").evidence_value,
             "Not scheduled, because the timer is not active"
