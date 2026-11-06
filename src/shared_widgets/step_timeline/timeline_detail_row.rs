@@ -6,15 +6,18 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::shared_widgets::step_timeline::timeline_step_contents::{
-    StepChoiceRow, StepEvidenceRow, TimelineStep, TimelineStepRowOutput,
+use crate::{
+    host_services::desktop::locale_formatting::exact_local_time_text,
+    shared_widgets::step_timeline::timeline_step_contents::{
+        EvidenceMoment, StepActionSlot, StepChoiceRow, StepEvidenceRow, TimelineStep,
+        TimelineStepAction, TimelineStepRowOutput,
+    },
 };
 
 pub enum TimelineDetailRow {
     StepChoice(StepChoiceRow),
     StepEvidence(StepEvidenceRow),
     GuidanceCommand(String),
-    MechanismDetails(String),
 }
 
 pub fn detail_rows_of(timeline_step: &TimelineStep) -> Vec<TimelineDetailRow> {
@@ -37,38 +40,99 @@ pub fn detail_rows_of(timeline_step: &TimelineStep) -> Vec<TimelineDetailRow> {
                 .cloned()
                 .map(TimelineDetailRow::GuidanceCommand),
         )
-        .chain(std::iter::once(TimelineDetailRow::MechanismDetails(
-            timeline_step.mechanism_details.clone(),
-        )))
         .collect()
 }
 
-fn wrapped_text_row(row_text: &str) -> adw::ActionRow {
-    let text_label = gtk::Label::builder()
-        .label(row_text)
-        .use_markup(false)
-        .wrap(true)
-        .wrap_mode(gtk::pango::WrapMode::WordChar)
-        .xalign(0.0)
-        .hexpand(true)
-        .margin_top(6)
-        .margin_bottom(6)
-        .css_classes(["dim-label"])
-        .build();
-    let text_row = adw::ActionRow::new();
-    text_row.add_prefix(&text_label);
-    text_row
+fn moment_prefix(evidence_moment: EvidenceMoment) -> Option<gtk::Widget> {
+    let icon_name = match evidence_moment {
+        EvidenceMoment::CurrentFact => return None,
+        EvidenceMoment::HappeningNow => return Some(adw::Spinner::new().upcast()),
+        EvidenceMoment::PastEvent { .. } | EvidenceMoment::NeverHappened => {
+            "document-open-recent-symbolic"
+        }
+        EvidenceMoment::UpcomingEvent { .. } | EvidenceMoment::NothingUpcoming => "alarm-symbolic",
+        EvidenceMoment::FixedSetting | EvidenceMoment::ChangeableSetting { .. } => {
+            "emblem-system-symbolic"
+        }
+    };
+    let moment_icon = gtk::Image::from_icon_name(icon_name);
+    moment_icon.add_css_class("dim-label");
+    Some(moment_icon.upcast())
+}
+
+fn exact_moment_text(evidence_moment: EvidenceMoment) -> Option<String> {
+    match evidence_moment {
+        EvidenceMoment::PastEvent { happened_at } => Some(exact_local_time_text(happened_at)),
+        EvidenceMoment::UpcomingEvent { due_at } => Some(exact_local_time_text(due_at)),
+        EvidenceMoment::CurrentFact
+        | EvidenceMoment::HappeningNow
+        | EvidenceMoment::NeverHappened
+        | EvidenceMoment::NothingUpcoming
+        | EvidenceMoment::FixedSetting
+        | EvidenceMoment::ChangeableSetting { .. } => None,
+    }
 }
 
 fn evidence_row(step_evidence: &StepEvidenceRow) -> adw::ActionRow {
-    adw::ActionRow::builder()
+    let evidence_row = adw::ActionRow::builder()
         .use_markup(false)
         .title(&step_evidence.evidence_name)
         .subtitle(&step_evidence.evidence_value)
         .subtitle_selectable(true)
         .subtitle_lines(0)
         .css_classes(["property"])
-        .build()
+        .build();
+    if let Some(exact_moment) = exact_moment_text(step_evidence.evidence_moment) {
+        evidence_row.set_tooltip_text(Some(&exact_moment));
+    }
+    if let Some(moment_widget) = moment_prefix(step_evidence.evidence_moment) {
+        evidence_row.add_prefix(&moment_widget);
+    }
+    evidence_row
+}
+
+fn row_action_button(
+    row_action: &StepActionSlot,
+    sender: FactorySender<TimelineDetailRow>,
+) -> Option<gtk::Button> {
+    let StepActionSlot::ActionOffered {
+        action_label,
+        chosen_action,
+        action_suggested,
+    } = row_action
+    else {
+        return None;
+    };
+    let action_button = gtk::Button::builder()
+        .label(action_label)
+        .valign(gtk::Align::Center)
+        .build();
+    if *action_suggested {
+        action_button.add_css_class("suggested-action");
+    }
+    let chosen_action = *chosen_action;
+    action_button.connect_clicked(move |_clicked_button| {
+        let _step_closed = sender.output(TimelineStepRowOutput::ActionChosen(chosen_action));
+    });
+    Some(action_button)
+}
+
+fn attach_settings_link(
+    evidence_row: &adw::ActionRow,
+    evidence_moment: EvidenceMoment,
+    sender: FactorySender<TimelineDetailRow>,
+) {
+    let EvidenceMoment::ChangeableSetting { settings_subpage } = evidence_moment else {
+        return;
+    };
+    evidence_row.set_activatable(true);
+    evidence_row.set_tooltip_text(Some(&gettext("Change in the settings")));
+    evidence_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+    evidence_row.connect_activated(move |_activated_row| {
+        let _step_closed = sender.output(TimelineStepRowOutput::ActionChosen(
+            TimelineStepAction::OpenSettingsSubpage(settings_subpage),
+        ));
+    });
 }
 
 fn guidance_command_row(guidance_command: &str) -> adw::ActionRow {
@@ -150,7 +214,6 @@ impl FactoryComponent for TimelineDetailRow {
             Self::StepChoice(step_choice) => choice_row(step_choice),
             Self::StepEvidence(step_evidence) => evidence_row(step_evidence),
             Self::GuidanceCommand(guidance_command) => guidance_command_row(guidance_command),
-            Self::MechanismDetails(mechanism_details) => wrapped_text_row(mechanism_details),
         }
     }
 
@@ -166,7 +229,14 @@ impl FactoryComponent for TimelineDetailRow {
             Self::GuidanceCommand(guidance_command) => {
                 root.add_suffix(&copy_button(guidance_command.clone(), sender));
             }
-            Self::StepEvidence(_) | Self::MechanismDetails(_) => {}
+            Self::StepEvidence(step_evidence) => {
+                if let Some(action_button) =
+                    row_action_button(&step_evidence.row_action, sender.clone())
+                {
+                    root.add_suffix(&action_button);
+                }
+                attach_settings_link(&root, step_evidence.evidence_moment, sender);
+            }
         }
     }
 }

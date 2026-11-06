@@ -1,5 +1,7 @@
 use std::{fs, path::Path};
 
+use bytesize::ByteSize;
+
 use crate::host_services::clamav_scanner::scanner_output_parser::sanitize_scanner_line;
 
 pub const TRUSTED_FILES_NAME: &str = "lazaret-local.sfp";
@@ -9,7 +11,7 @@ const ALLOWLIST_EXTENSIONS: [&str; 4] = ["fp", "sfp", "ign", "ign2"];
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrustedFileEntry {
     pub sha256_hex: String,
-    pub file_size: u64,
+    pub file_size: ByteSize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,7 +49,7 @@ pub fn parse_trusted_files(list_text: &str) -> Vec<TrustedFileEntry> {
         .filter_map(|list_line| {
             let mut line_fields = list_line.split(':');
             let sha256_hex = line_fields.next()?;
-            let file_size = line_fields.next()?.parse().ok()?;
+            let file_size = ByteSize::b(line_fields.next()?.parse().ok()?);
             Some(TrustedFileEntry {
                 sha256_hex: sanitize_scanner_line(sha256_hex),
                 file_size,
@@ -127,7 +129,7 @@ mod trust_list_contents_tests {
             TrustListContents {
                 trusted_files: vec![TrustedFileEntry {
                     sha256_hex: "ab12".to_owned(),
-                    file_size: 68,
+                    file_size: ByteSize::b(68),
                 }],
                 ignored_signatures: vec!["Win.Test.EICAR_HDB-1".to_owned()],
                 foreign_allowlists: vec![ForeignAllowlistFile {

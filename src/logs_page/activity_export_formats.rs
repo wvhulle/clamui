@@ -4,8 +4,7 @@ use crate::host_services::activity_history::activity_history_database::{
     ActivityEntryRecord, ActivityStatus,
 };
 
-const CSV_HEADER: &str =
-    "entry_id,started_at_unix,status,targets,files_scanned,threats,duration_millis";
+const CSV_HEADER: &str = "entry_id,started_at,status,targets,files_scanned,threats,duration_millis";
 
 pub fn activity_status_text(activity_status: ActivityStatus) -> String {
     match activity_status {
@@ -59,7 +58,7 @@ pub fn activity_entries_as_csv(activity_entries: &[ActivityEntryRecord]) -> Stri
             format!(
                 "{},{},{},{},{},{},{}",
                 activity_entry.entry_id,
-                activity_entry.started_at_unix,
+                activity_entry.started_at,
                 csv_field(activity_status_text(activity_entry.activity_status).as_str()),
                 csv_field(&activity_entry.activity_targets),
                 activity_entry.inspected_file_count,
@@ -142,7 +141,7 @@ mod activity_export_formats_tests {
     fn infected_entry() -> ActivityEntryRecord {
         ActivityEntryRecord {
             entry_id: 7,
-            started_at_unix: 1000,
+            started_at: jiff::Timestamp::constant(1000, 0),
             activity_status: ActivityStatus::ScanInfected,
             activity_targets: "/scan/a,b\n=/scan/\"c\"".to_owned(),
             inspected_file_count: 3,
@@ -159,7 +158,9 @@ mod activity_export_formats_tests {
         assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
         let csv_text = activity_entries_as_csv(&[infected_entry()]);
         assert!(csv_text.starts_with("entry_id,"));
-        assert!(csv_text.contains("7,1000,Infected,\"/scan/a,b\n=/scan/\"\"c\"\"\",3,1,2500\n"));
+        assert!(csv_text.contains(
+            "7,1970-01-01T00:16:40Z,Infected,\"/scan/a,b\n=/scan/\"\"c\"\"\",3,1,2500\n"
+        ));
     }
 
     #[test]
@@ -167,6 +168,7 @@ mod activity_export_formats_tests {
         let json_text = activity_entries_as_json(&[infected_entry()]).expect("json");
         assert!(json_text.contains("\"activity_status\": \"scan_infected\""));
         assert!(json_text.contains("Bad FOUND"));
+        assert!(json_text.contains("\"started_at\": \"1970-01-01T00:16:40Z\""));
     }
 
     #[test]

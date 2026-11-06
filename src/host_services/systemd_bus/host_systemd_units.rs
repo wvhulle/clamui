@@ -3,6 +3,7 @@ use futures::{
     future::{join_all, ready},
     stream::{self, BoxStream},
 };
+use jiff::Timestamp;
 use tokio::sync::OnceCell;
 use zbus::{Connection, proxy::MethodFlags, zvariant::OwnedObjectPath};
 
@@ -11,7 +12,6 @@ use crate::host_services::systemd_bus::systemd_unit_proxies::{
     SystemdUnitProxy,
 };
 
-const MICROSECONDS_PER_SECOND: u64 = 1_000_000;
 const SERVICE_SUCCESS_RESULT: &str = "success";
 const JOB_DONE_RESULT: &str = "done";
 const JOB_REPLACE_MODE: &str = "replace";
@@ -34,7 +34,7 @@ pub enum UnitState {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UnitTimestamp {
     NeverRecorded,
-    RecordedAt { unix_seconds: i64 },
+    RecordedAt { recorded_at: Timestamp },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -87,9 +87,11 @@ pub fn timestamp_from_microseconds(unit_microseconds: u64) -> UnitTimestamp {
     if unit_microseconds == 0 || unit_microseconds == u64::MAX {
         return UnitTimestamp::NeverRecorded;
     }
-    i64::try_from(unit_microseconds / MICROSECONDS_PER_SECOND)
-        .map_or(UnitTimestamp::NeverRecorded, |unix_seconds| {
-            UnitTimestamp::RecordedAt { unix_seconds }
+    i64::try_from(unit_microseconds)
+        .ok()
+        .and_then(|signed_microseconds| Timestamp::from_microsecond(signed_microseconds).ok())
+        .map_or(UnitTimestamp::NeverRecorded, |recorded_at| {
+            UnitTimestamp::RecordedAt { recorded_at }
         })
 }
 
@@ -492,7 +494,7 @@ mod host_systemd_units_tests {
         assert_eq!(
             timestamp_from_microseconds(1_794_223_800_000_000),
             UnitTimestamp::RecordedAt {
-                unix_seconds: 1_794_223_800
+                recorded_at: Timestamp::constant(1_794_223_800, 0)
             }
         );
     }

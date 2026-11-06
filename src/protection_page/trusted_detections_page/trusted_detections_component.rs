@@ -7,12 +7,12 @@ use relm4::{
 use crate::{
     host_services::{
         clamav_programs::database_directory_status::configured_database_directory,
+        desktop::locale_formatting::{byte_size_text, exact_local_time_text},
         settings_helper::{
             helper_audit_records::{AuditedOutcome, HelperAuditEntry, newest_helper_audit_entries},
             trust_requests::{TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text},
         },
     },
-    logs_page::activity_entry_row::formatted_local_time,
     protection_page::trusted_detections_page::{
         trust_list_contents::{
             ForeignAllowlistFile, TrustListContents, TrustedFileEntry, read_trust_list_contents,
@@ -55,12 +55,7 @@ fn added_text(
             || gettext("No record of who added this in the system journal"),
             |audit_entry| {
                 gettext("Added {time} by user {uid}")
-                    .replace(
-                        "{time}",
-                        &formatted_local_time(
-                            i64::try_from(audit_entry.recorded_unix_seconds).unwrap_or(i64::MAX),
-                        ),
-                    )
+                    .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
                     .replace("{uid}", &audit_entry.requester_uid)
             },
         )
@@ -111,7 +106,7 @@ fn trusted_file_row(
         row_title: trusted_file.sha256_hex.clone(),
         row_subtitle: format!(
             "{} · {}",
-            bytesize::ByteSize::b(trusted_file.file_size),
+            byte_size_text(trusted_file.file_size),
             added_text(audit_entries, "trust-file", &trusted_file.sha256_hex)
         ),
         shows_hash: true,

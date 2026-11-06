@@ -1,4 +1,3 @@
-use bytesize::ByteSize;
 use gettextrs::gettext;
 use relm4::{
     FactorySender, adw,
@@ -14,7 +13,8 @@ use crate::{
             content_verdict::ContentVerdict,
             scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         },
-        quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
+        desktop::locale_formatting::{byte_size_text, exact_local_time_text},
+        quarantine_vault::quarantine_entry_database::{QuarantineEntryRecord, StoredDetectionDate},
         settings_helper::trust_requests::{FileFingerprint, TrustChoice},
         threat_intel::file_reputation_check::{
             ReputationAnswers, SourceAnswer, check_hash_reputation,
@@ -130,8 +130,11 @@ impl FactoryComponent for QuarantineEntryRow {
             set_subtitle: &format!(
                 "{}\n{} · {}",
                 sanitize_scanner_line(&self.entry_record.original_path.to_string_lossy()),
-                self.entry_record.detection_date,
-                ByteSize::b(self.entry_record.file_size),
+                match &self.entry_record.detection_date {
+                    StoredDetectionDate::DetectedAt(detected_at) => exact_local_time_text(*detected_at),
+                    StoredDetectionDate::UnreadableText(stored_text) => sanitize_scanner_line(stored_text),
+                },
+                byte_size_text(self.entry_record.file_size),
             ),
             set_subtitle_lines: 0,
 

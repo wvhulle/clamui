@@ -3,6 +3,7 @@ use std::{
     time::Duration,
 };
 
+use bytesize::ByteSize;
 use relm4::gtk::{gio, gio::prelude::*};
 
 use crate::headless_modes::headless_scheduled_scan::{
@@ -18,7 +19,6 @@ pub const DEVICE_SCAN_SETTING_KEYS: [&str; 3] = [
     DEVICE_SCAN_SKIP_BATTERY_KEY,
 ];
 const SETTLE_DELAY: Duration = Duration::from_secs(3);
-const BYTES_PER_GIGABYTE: u64 = 1_000_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeviceAutoScanSettings {
@@ -55,8 +55,8 @@ pub fn device_qualifies_for_scan(device_traits: DeviceTraits) -> bool {
         && (device_traits.drive_is_removable || device_traits.mount_can_eject)
 }
 
-pub fn device_size_is_allowed(device_bytes: u64, maximum_gigabytes: u64) -> bool {
-    maximum_gigabytes == 0 || device_bytes <= maximum_gigabytes.saturating_mul(BYTES_PER_GIGABYTE)
+pub fn device_size_is_allowed(device_size: ByteSize, maximum_gigabytes: u32) -> bool {
+    maximum_gigabytes == 0 || device_size <= ByteSize::gb(u64::from(maximum_gigabytes))
 }
 
 pub fn mounted_device_of(added_mount: &gio::Mount) -> Option<MountedDevice> {
@@ -72,13 +72,13 @@ pub fn mounted_device_of(added_mount: &gio::Mount) -> Option<MountedDevice> {
     })
 }
 
-fn filesystem_bytes(mount_path: &Path) -> Option<u64> {
+fn filesystem_size(mount_path: &Path) -> Option<ByteSize> {
     let filesystem_status = rustix::fs::statvfs(mount_path).ok()?;
-    Some(
+    Some(ByteSize::b(
         filesystem_status
             .f_blocks
             .saturating_mul(filesystem_status.f_frsize),
-    )
+    ))
 }
 
 pub async fn settled_device_passes_limits(
@@ -90,15 +90,12 @@ pub async fn settled_device_passes_limits(
     {
         return false;
     }
-    tokio::task::spawn_blocking(move || filesystem_bytes(&mount_path))
+    tokio::task::spawn_blocking(move || filesystem_size(&mount_path))
         .await
         .ok()
         .flatten()
-        .is_some_and(|device_bytes| {
-            device_size_is_allowed(
-                device_bytes,
-                u64::from(auto_scan_settings.maximum_gigabytes),
-            )
+        .is_some_and(|device_size| {
+            device_size_is_allowed(device_size, auto_scan_settings.maximum_gigabytes)
         })
 }
 
@@ -135,8 +132,11 @@ mod device_mount_scans_tests {
 
     #[test]
     fn zero_means_no_size_limit() {
-        assert!(device_size_is_allowed(u64::MAX, 0));
-        assert!(device_size_is_allowed(32 * BYTES_PER_GIGABYTE, 32));
-        assert!(!device_size_is_allowed(32 * BYTES_PER_GIGABYTE + 1, 32));
+        assert!(device_size_is_allowed(ByteSize::b(u64::MAX), 0));
+        assert!(device_size_is_allowed(ByteSize::gb(32), 32));
+        assert!(!device_size_is_allowed(
+            ByteSize::gb(32) + ByteSize::b(1),
+            32
+        ));
     }
 }

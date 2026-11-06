@@ -101,7 +101,7 @@ fn present_about_dialog(parent_window: &adw::ApplicationWindow) {
 
 fn startup_destination(startup_page: &str) -> StartupDestination {
     match startup_page {
-        DATABASE_STARTUP_PAGE => StartupDestination::ShowSignatureUpdate,
+        DATABASE_STARTUP_PAGE => StartupDestination::ShowPage(ApplicationPage::Protection),
         startup_page => StartupDestination::ShowPage(
             ApplicationPage::from_page_name(startup_page).unwrap_or(ApplicationPage::Protection),
         ),

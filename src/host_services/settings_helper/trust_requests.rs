@@ -1,5 +1,6 @@
 use std::{fs::File, io, os::unix::fs::OpenOptionsExt, path::Path};
 
+use bytesize::ByteSize;
 use gettextrs::gettext;
 use sha2::{Digest, Sha256};
 use zbus::{Connection, proxy};
@@ -31,7 +32,7 @@ trait DetectionTrustHelper {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FileFingerprint {
     pub sha256_hex: String,
-    pub file_size: u64,
+    pub file_size: ByteSize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,7 +67,7 @@ pub fn fingerprint_file(file_path: &Path) -> io::Result<FileFingerprint> {
         .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
         .open(file_path)?;
     let mut content_hash = Sha256::new();
-    let file_size = io::copy(&mut opened_file, &mut content_hash)?;
+    let file_size = ByteSize::b(io::copy(&mut opened_file, &mut content_hash)?);
     Ok(FileFingerprint {
         sha256_hex: hex::encode(content_hash.finalize()),
         file_size,
@@ -127,7 +128,10 @@ pub async fn request_trust_change(trust_choice: TrustChoice) -> TrustOutcome {
                 file_fingerprint, ..
             } => {
                 trust_helper
-                    .trust_file(&file_fingerprint.sha256_hex, file_fingerprint.file_size)
+                    .trust_file(
+                        &file_fingerprint.sha256_hex,
+                        file_fingerprint.file_size.as_u64(),
+                    )
                     .await
             }
             TrustChoice::IgnoreSignature { signature_name } => {
@@ -174,7 +178,7 @@ mod trust_requests_tests {
             FileFingerprint {
                 sha256_hex: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
                     .to_owned(),
-                file_size: 3,
+                file_size: ByteSize::b(3),
             }
         );
     }

@@ -55,9 +55,11 @@ The Protection page shows whether your system is actually protected: how old the
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/signatures.webp" width="800" alt="Recording of the Signatures page, expanding a signature source that shows how to add it">
 
-The Signatures page lists where ClamAV's signatures come from and which other sources you could add, with the lines to add for each. **Update** downloads new signatures right away:
+The Signatures page lists where ClamAV's signatures come from and which other sources you could add, with the lines to add for each.
 
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/signature-update.webp" width="800" alt="The signature update dialog with the freshclam version, the update service and the age of the signatures">
+To download new signatures right away, expand **Signatures current** on the Protection page and choose **Update Now**. The step shows the updater's output while it runs and the result when it is done:
+
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/signature-update.webp" width="800" alt="Recording of the Protection page, expanding the signatures step with its last updates and the Update Now button">
 
 ## Hardening
 

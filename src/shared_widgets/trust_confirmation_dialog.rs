@@ -2,7 +2,10 @@ use gettextrs::gettext;
 use relm4::{Sender, adw, adw::prelude::*, gtk};
 
 use crate::{
-    host_services::settings_helper::trust_requests::TrustChoice,
+    host_services::{
+        desktop::locale_formatting::exact_byte_size_text,
+        settings_helper::trust_requests::TrustChoice,
+    },
     shared_widgets::awaited_dialogs::{alert_response, deliver_local_outcome},
 };
 
@@ -30,10 +33,9 @@ fn confirmation_text(trust_choice: &TrustChoice) -> ConfirmationText {
                  needed, and the password prompt shows the same SHA-256 hash as below.\n\n{path}",
             )
             .replace("{path}", shown_path),
-            shown_value: format!(
-                "SHA-256 {}\n{} bytes",
-                file_fingerprint.sha256_hex, file_fingerprint.file_size
-            ),
+            shown_value: gettext("SHA-256 {hash}\n{size}")
+                .replace("{hash}", &file_fingerprint.sha256_hex)
+                .replace("{size}", &exact_byte_size_text(file_fingerprint.file_size)),
             confirm_label: gettext("Trust"),
             lowers_protection: true,
         },

@@ -1,5 +1,5 @@
-use bytesize::ByteSize;
 use gettextrs::{gettext, ngettext};
+use jiff::{SignedDuration, Timestamp};
 
 use crate::{
     application_window::settings_navigation::SettingsSubpage,
@@ -7,30 +7,34 @@ use crate::{
     host_services::{
         clamav_programs::distribution_install_guides::{DistributionFamily, engine_install_guides},
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
         systemd_bus::host_systemd_units::{ServiceLastResult, UnitState, UnitTimestamp},
     },
-    logs_page::activity_entry_row::formatted_local_time,
     protection_page::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
             AccountSettingFinding, DaemonEvidence, EngineInstallation, LoadedSignatures,
             OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding,
             ProtectionEvidence, RuntimeReductions, ScheduledScanEvidence, SignatureEvidence,
-            UpdaterEvidence,
+            ThirdPartySignatureFile, UpdaterEvidence,
         },
         service_run_journal::ServiceRunHistory,
+        signature_update_run::signature_update_session::{
+            LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
+        },
         trusted_detections_page::trust_list_contents::TrustListContents,
     },
     shared_widgets::step_timeline::timeline_step_contents::{
-        StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, TimelineStepAction,
+        EvidenceMoment, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
+        TimelineStepAction, moment_value_text,
     },
     signatures_page::signature_provider_catalogue::provider_of_signature_file,
 };
 
-const DATABASE_FRESH_DAYS: u64 = 3;
-const DATABASE_STALE_DAYS: u64 = 7;
-const THIRD_PARTY_STALE_HOURS: u64 = 48;
+const DATABASE_FRESH_LIMIT: SignedDuration = SignedDuration::from_hours(4 * 24);
+const DATABASE_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(8 * 24);
+const THIRD_PARTY_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(48);
 const SCANNER_ERROR_STATUS: i32 = 2;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,13 +46,55 @@ pub struct AlertReadiness {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionTimeline {
     pub coverage_summary: String,
-    pub timeline_steps: Vec<TimelineStep>,
+    pub protection_steps: Vec<TimelineStep>,
+    pub engine_steps: Vec<TimelineStep>,
+    pub review_steps: Vec<TimelineStep>,
+}
+
+#[derive(Clone)]
+pub struct ProtectionActivity {
+    pub signature_update: SignatureUpdateView,
+    pub scheduled_scan_starting: bool,
+    pub observed_at: Timestamp,
+    pub moment_formatters: &'static MomentFormatters,
+}
+
+impl ProtectionActivity {
+    const fn moment_context(&self) -> MomentContext {
+        MomentContext {
+            moment_formatters: self.moment_formatters,
+            reference_moment: self.observed_at,
+        }
+    }
 }
 
 fn evidence_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
+    StepEvidenceRow::current_fact(evidence_name, evidence_value)
+}
+
+#[derive(Clone, Copy)]
+struct MomentContext {
+    moment_formatters: &'static MomentFormatters,
+    reference_moment: Timestamp,
+}
+
+fn timed_evidence_row(
+    evidence_name: String,
+    evidence_moment: EvidenceMoment,
+    moment_details: String,
+    moment_context: MomentContext,
+) -> StepEvidenceRow {
     StepEvidenceRow {
-        evidence_name,
-        evidence_value,
+        evidence_moment,
+        ..evidence_row(
+            evidence_name,
+            moment_value_text(
+                moment_context.moment_formatters,
+                evidence_moment,
+                moment_details,
+                moment_context.reference_moment,
+            ),
+        )
     }
 }
 
@@ -196,7 +242,7 @@ fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<
 
 fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<TimelineStep> {
     let RuntimeReductions::ReducedSince {
-        changed_unix_seconds,
+        changed_at,
         reduced_settings,
     } = runtime_reductions
     else {
@@ -233,7 +279,7 @@ fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<Time
                 u32::try_from(reduced_settings.len()).unwrap_or(u32::MAX),
             )
             .replace("{count}", &reduced_settings.len().to_string())
-            .replace("{time}", &formatted_local_time(*changed_unix_seconds)),
+            .replace("{time}", &exact_local_time_text(*changed_at)),
         )
     })
 }
@@ -340,30 +386,52 @@ fn trust_list_step(trust_list: &TrustListContents) -> Option<TimelineStep> {
     })
 }
 
-fn database_state(database_evidence: &DatabaseEvidence) -> StepNodeState {
+fn database_state(
+    database_evidence: &DatabaseEvidence,
+    reference_moment: Timestamp,
+) -> StepNodeState {
     match database_evidence {
-        DatabaseEvidence::BuiltDaysAgo { age_days, .. } if *age_days <= DATABASE_FRESH_DAYS => {
-            StepNodeState::Completed
-        }
-        DatabaseEvidence::BuiltDaysAgo { age_days, .. } if *age_days <= DATABASE_STALE_DAYS => {
+        DatabaseEvidence::BuiltAt { built_at } if *built_at > reference_moment => {
             StepNodeState::NeedsReview
         }
-        DatabaseEvidence::BuiltDaysAgo { .. } | DatabaseEvidence::DatabaseMissing => {
+        DatabaseEvidence::BuiltAt { built_at }
+            if reference_moment.duration_since(*built_at) < DATABASE_FRESH_LIMIT =>
+        {
+            StepNodeState::Completed
+        }
+        DatabaseEvidence::BuiltAt { built_at }
+            if reference_moment.duration_since(*built_at) < DATABASE_STALE_LIMIT =>
+        {
+            StepNodeState::NeedsReview
+        }
+        DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::DatabaseMissing => {
             StepNodeState::HasFailed
         }
         DatabaseEvidence::AgeUndetermined => StepNodeState::NeedsReview,
     }
 }
 
-fn database_status_text(database_evidence: &DatabaseEvidence) -> String {
+fn database_status_text(
+    database_evidence: &DatabaseEvidence,
+    moment_context: MomentContext,
+) -> String {
     match database_evidence {
-        DatabaseEvidence::BuiltDaysAgo {
-            age_days,
-            build_date,
-        } => gettext("Definitions built {date}, {days} days ago")
-            .replace("{days}", &age_days.to_string())
-            .replace("{date}", build_date),
-        DatabaseEvidence::AgeUndetermined => {
+        DatabaseEvidence::BuiltAt { built_at } if *built_at <= moment_context.reference_moment => {
+            gettext("Definitions built {when} ({date})")
+                .replace(
+                    "{when}",
+                    &moment_context
+                        .moment_formatters
+                        .relative_moment_text(*built_at, moment_context.reference_moment),
+                )
+                .replace(
+                    "{date}",
+                    &moment_context
+                        .moment_formatters
+                        .calendar_date_text(*built_at),
+                )
+        }
+        DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::AgeUndetermined => {
             gettext("Definitions exist, but their age could not be determined")
         }
         DatabaseEvidence::DatabaseMissing => gettext("No virus definitions were found"),
@@ -374,21 +442,166 @@ fn updater_failed(updater_evidence: &UpdaterEvidence) -> bool {
     updater_evidence.last_result != ServiceLastResult::ResultSucceeded
 }
 
-fn updater_status_text(updater_evidence: &UpdaterEvidence) -> String {
-    if updater_failed(updater_evidence) {
-        return gettext("Its last update failed");
+impl From<ServiceRunHistory> for EvidenceMoment {
+    fn from(run_history: ServiceRunHistory) -> Self {
+        match run_history {
+            ServiceRunHistory::CompletedRun(service_run) => Self::PastEvent {
+                happened_at: service_run.finished_at,
+            },
+            ServiceRunHistory::NoCompletedRun => Self::NeverHappened,
+        }
     }
-    match updater_evidence.last_completed_run {
-        ServiceRunHistory::CompletedRun(service_run) => gettext("Last updated {time}").replace(
-            "{time}",
-            &formatted_local_time(service_run.finished_at_unix),
+}
+
+impl From<UnitTimestamp> for EvidenceMoment {
+    fn from(unit_timestamp: UnitTimestamp) -> Self {
+        match unit_timestamp {
+            UnitTimestamp::RecordedAt { recorded_at } => Self::UpcomingEvent {
+                due_at: recorded_at,
+            },
+            UnitTimestamp::NeverRecorded => Self::NothingUpcoming,
+        }
+    }
+}
+
+fn updater_row(
+    updater_evidence: &UpdaterEvidence,
+    moment_context: MomentContext,
+) -> StepEvidenceRow {
+    let evidence_moment = EvidenceMoment::from(updater_evidence.last_completed_run);
+    let evidence_value = if updater_failed(updater_evidence) {
+        gettext("Its last update failed")
+    } else if evidence_moment == EvidenceMoment::NeverHappened {
+        gettext("No completed update recorded yet")
+    } else {
+        String::new()
+    };
+    timed_evidence_row(
+        gettext("{updater} updated").replace("{updater}", updater_evidence.updater_name),
+        evidence_moment,
+        evidence_value,
+        moment_context,
+    )
+}
+
+fn third_party_file_row(
+    signature_file: &ThirdPartySignatureFile,
+    moment_context: MomentContext,
+) -> StepEvidenceRow {
+    timed_evidence_row(
+        gettext("{provider} fetched").replace(
+            "{provider}",
+            provider_of_signature_file(&signature_file.file_name),
         ),
-        ServiceRunHistory::NoCompletedRun => gettext("No completed update recorded yet"),
+        EvidenceMoment::PastEvent {
+            happened_at: signature_file.modified_at,
+        },
+        ngettext(
+            "{count} signature, {size} ({file})",
+            "{count} signatures, {size} ({file})",
+            u32::try_from(signature_file.signature_count).unwrap_or(u32::MAX),
+        )
+        .replace("{count}", &signature_file.signature_count.to_string())
+        .replace("{size}", &byte_size_text(signature_file.file_size))
+        .replace("{file}", &signature_file.file_name),
+        moment_context,
+    )
+}
+
+fn update_progress_of(signature_update: &SignatureUpdateView) -> SignatureUpdateProgress {
+    match signature_update {
+        SignatureUpdateView::HostStatusLoading => SignatureUpdateProgress::UpdateUnavailable,
+        SignatureUpdateView::HostStatusKnown(known_host) => known_host.update_progress.clone(),
+    }
+}
+
+fn update_now_row(
+    signature_update: &SignatureUpdateView,
+    update_progress: &SignatureUpdateProgress,
+    suggest_update: bool,
+    moment_context: MomentContext,
+) -> StepEvidenceRow {
+    let last_manual_update = match signature_update {
+        SignatureUpdateView::HostStatusLoading => &LastManualUpdate::NotRunThisSession,
+        SignatureUpdateView::HostStatusKnown(known_host) => &known_host.last_manual_update,
+    };
+    let (evidence_moment, evidence_value) = match last_manual_update {
+        LastManualUpdate::FinishedAt {
+            summary_line,
+            finished_at,
+        } => (
+            EvidenceMoment::PastEvent {
+                happened_at: *finished_at,
+            },
+            summary_line.clone(),
+        ),
+        LastManualUpdate::NotRunThisSession => (
+            EvidenceMoment::CurrentFact,
+            gettext("Fetch the newest signatures from every updater now"),
+        ),
+    };
+    let row_action = match update_progress {
+        SignatureUpdateProgress::ReadyToUpdate => StepActionSlot::ActionOffered {
+            action_label: gettext("Update Now"),
+            chosen_action: TimelineStepAction::UpdateSignatures,
+            action_suggested: suggest_update,
+        },
+        SignatureUpdateProgress::UpdateRunning {
+            cancellable: true, ..
+        } => StepActionSlot::ActionOffered {
+            action_label: gettext("Cancel"),
+            chosen_action: TimelineStepAction::CancelSignatureUpdate,
+            action_suggested: false,
+        },
+        SignatureUpdateProgress::UpdateRunning { .. }
+        | SignatureUpdateProgress::UpdateCancelling
+        | SignatureUpdateProgress::UpdateUnavailable => StepActionSlot::NoAction,
+    };
+    StepEvidenceRow {
+        row_action,
+        ..timed_evidence_row(
+            gettext("Manual update"),
+            evidence_moment,
+            evidence_value,
+            moment_context,
+        )
+    }
+}
+
+fn update_host_rows(signature_update: &SignatureUpdateView) -> Vec<StepEvidenceRow> {
+    match signature_update {
+        SignatureUpdateView::HostStatusLoading => Vec::new(),
+        SignatureUpdateView::HostStatusKnown(known_host) => vec![
+            evidence_row(
+                gettext("Update service"),
+                known_host.update_service_text.clone(),
+            ),
+            evidence_row(
+                gettext("Database folder"),
+                known_host.database_folder_text.clone(),
+            ),
+        ],
+    }
+}
+
+fn updater_output_rows(update_progress: &SignatureUpdateProgress) -> Vec<StepEvidenceRow> {
+    match update_progress {
+        SignatureUpdateProgress::UpdateRunning {
+            latest_output_line, ..
+        } => vec![StepEvidenceRow {
+            evidence_moment: EvidenceMoment::HappeningNow,
+            ..evidence_row(gettext("Updater output"), latest_output_line.clone())
+        }],
+        SignatureUpdateProgress::UpdateCancelling
+        | SignatureUpdateProgress::ReadyToUpdate
+        | SignatureUpdateProgress::UpdateUnavailable => Vec::new(),
     }
 }
 
 fn signature_step(
     signature_evidence: &SignatureEvidence,
+    signature_update: &SignatureUpdateView,
+    moment_context: MomentContext,
     distribution_family: DistributionFamily,
 ) -> TimelineStep {
     let any_updater_failed = signature_evidence
@@ -398,54 +611,62 @@ fn signature_step(
     let any_source_stale = signature_evidence
         .third_party_files
         .iter()
-        .any(|signature_file| signature_file.age_hours > THIRD_PARTY_STALE_HOURS);
-    let base_state = database_state(&signature_evidence.database_evidence);
-    let node_state =
+        .any(|signature_file| {
+            moment_context
+                .reference_moment
+                .duration_since(signature_file.modified_at)
+                > THIRD_PARTY_STALE_LIMIT
+        });
+    let base_state = database_state(
+        &signature_evidence.database_evidence,
+        moment_context.reference_moment,
+    );
+    let evidence_state =
         if base_state == StepNodeState::Completed && (any_updater_failed || any_source_stale) {
             StepNodeState::NeedsReview
         } else {
             base_state
         };
-    let updater_rows = signature_evidence
-        .updater_evidence
-        .iter()
-        .map(|updater_evidence| {
-            evidence_row(
-                updater_evidence.updater_name.to_owned(),
-                updater_status_text(updater_evidence),
-            )
-        });
-    let file_rows = signature_evidence
-        .third_party_files
-        .iter()
-        .map(|signature_file| {
-            evidence_row(
-                provider_of_signature_file(&signature_file.file_name).to_owned(),
-                ngettext(
-                    "{count} signature, {size}, updated {hours} hours ago ({file})",
-                    "{count} signatures, {size}, updated {hours} hours ago ({file})",
-                    u32::try_from(signature_file.signature_count).unwrap_or(u32::MAX),
-                )
-                .replace("{count}", &signature_file.signature_count.to_string())
-                .replace(
-                    "{size}",
-                    &ByteSize::b(signature_file.file_size_bytes).to_string(),
-                )
-                .replace("{hours}", &signature_file.age_hours.to_string())
-                .replace("{file}", &signature_file.file_name),
-            )
-        });
+    let update_progress = update_progress_of(signature_update);
+    let (node_state, status_text) = match &update_progress {
+        SignatureUpdateProgress::UpdateRunning { .. } => {
+            (StepNodeState::InProgress, gettext("Updating signatures…"))
+        }
+        SignatureUpdateProgress::UpdateCancelling => {
+            (StepNodeState::InProgress, gettext("Cancelling the update…"))
+        }
+        SignatureUpdateProgress::ReadyToUpdate | SignatureUpdateProgress::UpdateUnavailable => (
+            evidence_state,
+            database_status_text(&signature_evidence.database_evidence, moment_context),
+        ),
+    };
+    let evidence_rows = std::iter::once(update_now_row(
+        signature_update,
+        &update_progress,
+        evidence_state != StepNodeState::Completed,
+        moment_context,
+    ))
+    .chain(updater_output_rows(&update_progress))
+    .chain(
+        signature_evidence
+            .updater_evidence
+            .iter()
+            .map(|updater_evidence| updater_row(updater_evidence, moment_context)),
+    )
+    .chain(
+        signature_evidence
+            .third_party_files
+            .iter()
+            .map(|signature_file| third_party_file_row(signature_file, moment_context)),
+    )
+    .chain(update_host_rows(signature_update))
+    .collect();
     TimelineStep {
-        evidence_rows: updater_rows.chain(file_rows).collect(),
+        evidence_rows,
         guidance_commands: if signature_evidence.updater_evidence.is_empty() {
             remedy_commands(SuggestedRemedy::FreshclamUpdatesEnable, distribution_family)
         } else {
             Vec::new()
-        },
-        action_slot: StepActionSlot::ActionOffered {
-            action_label: gettext("Update Now"),
-            chosen_action: TimelineStepAction::UpdateSignatures,
-            action_suggested: node_state != StepNodeState::Completed,
         },
         ..no_guidance_step(
             gettext("Signatures current"),
@@ -454,7 +675,7 @@ fn signature_step(
                  signatures miss recent threats even when everything else is running.",
             ),
             node_state,
-            database_status_text(&signature_evidence.database_evidence),
+            status_text,
         )
     }
 }
@@ -520,8 +741,17 @@ fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
     matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
 }
 
+fn on_access_setting_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
+    StepEvidenceRow {
+        evidence_moment: EvidenceMoment::ChangeableSetting {
+            settings_subpage: SettingsSubpage::OnAccessScanning,
+        },
+        ..evidence_row(evidence_name, evidence_value)
+    }
+}
+
 fn on_access_rows(on_access_evidence: &OnAccessEvidence) -> Vec<StepEvidenceRow> {
-    let watched_row = evidence_row(
+    let watched_row = on_access_setting_row(
         gettext("Watched folders"),
         if on_access_evidence.watched_paths.is_empty() {
             gettext("None configured")
@@ -529,15 +759,14 @@ fn on_access_rows(on_access_evidence: &OnAccessEvidence) -> Vec<StepEvidenceRow>
             on_access_evidence.watched_paths.join("\n")
         },
     );
-    let size_row = match &on_access_evidence.size_limit {
-        OnAccessSizeLimit::DefaultLimit => evidence_row(
-            gettext("Largest file scanned"),
-            gettext("The ClamAV default"),
-        ),
-        OnAccessSizeLimit::ConfiguredLimit { limit_text } => {
-            evidence_row(gettext("Largest file scanned"), limit_text.clone())
-        }
-    };
+    let size_row = on_access_setting_row(
+        gettext("Largest file scanned"),
+        match &on_access_evidence.size_limit {
+            OnAccessSizeLimit::DefaultLimit => gettext("The ClamAV default"),
+            OnAccessSizeLimit::ConfiguredLimit { size_limit } => byte_size_text(*size_limit),
+            OnAccessSizeLimit::UnreadableLimit { limit_text } => limit_text.clone(),
+        },
+    );
     vec![watched_row, size_row]
 }
 
@@ -557,10 +786,9 @@ fn on_access_step(
             StepNodeState::NeedsReview,
             gettext("On-access scanning is not set up"),
         ),
-        _configured_scanner if !daemon_answering => (
-            StepNodeState::AwaitingEarlier,
-            gettext("Waiting for the daemon"),
-        ),
+        _configured_scanner if !daemon_answering => {
+            (StepNodeState::AwaitingPrerequisite, daemon_awaited_text())
+        }
         OnAccessScanner::UnitStopped { service_unit } => (
             StepNodeState::HasFailed,
             gettext("{unit} is not running").replace("{unit}", service_unit),
@@ -596,26 +824,50 @@ fn on_access_step(
     }
 }
 
+fn daemon_awaited_text() -> String {
+    gettext("Needs the daemon, see Engine below")
+}
+
 fn next_run_text(next_run: UnitTimestamp) -> String {
     match next_run {
-        UnitTimestamp::RecordedAt { unix_seconds } => formatted_local_time(unix_seconds),
+        UnitTimestamp::RecordedAt { recorded_at } => exact_local_time_text(recorded_at),
         UnitTimestamp::NeverRecorded => gettext("Not scheduled"),
     }
 }
 
-fn last_run_text(last_completed_run: ServiceRunHistory) -> String {
-    match last_completed_run {
+fn next_run_row(next_run: UnitTimestamp, moment_context: MomentContext) -> StepEvidenceRow {
+    let evidence_value = match next_run {
+        UnitTimestamp::RecordedAt { .. } => String::new(),
+        UnitTimestamp::NeverRecorded => gettext("Not scheduled"),
+    };
+    timed_evidence_row(
+        gettext("Next scan"),
+        EvidenceMoment::from(next_run),
+        evidence_value,
+        moment_context,
+    )
+}
+
+fn last_run_row(
+    last_completed_run: ServiceRunHistory,
+    row_action: StepActionSlot,
+    moment_context: MomentContext,
+) -> StepEvidenceRow {
+    let evidence_value = match last_completed_run {
         ServiceRunHistory::CompletedRun(service_run) if service_run.threats_found => {
-            gettext("{time}, threats found").replace(
-                "{time}",
-                &formatted_local_time(service_run.finished_at_unix),
-            )
+            gettext("threats found")
         }
-        ServiceRunHistory::CompletedRun(service_run) => gettext("{time}, nothing found").replace(
-            "{time}",
-            &formatted_local_time(service_run.finished_at_unix),
-        ),
+        ServiceRunHistory::CompletedRun(_) => gettext("nothing found"),
         ServiceRunHistory::NoCompletedRun => gettext("Not run yet"),
+    };
+    StepEvidenceRow {
+        row_action,
+        ..timed_evidence_row(
+            gettext("Last scan"),
+            EvidenceMoment::from(last_completed_run),
+            evidence_value,
+            moment_context,
+        )
     }
 }
 
@@ -629,7 +881,9 @@ fn scan_result_failed(last_result: &ServiceLastResult) -> bool {
 
 fn scheduled_scan_step(
     scheduled_scan_evidence: &ScheduledScanEvidence,
+    scheduled_scan_starting: bool,
     daemon_answering: bool,
+    moment_context: MomentContext,
     distribution_family: DistributionFamily,
 ) -> TimelineStep {
     let step_title = gettext("Scheduled scan");
@@ -647,15 +901,14 @@ fn scheduled_scan_step(
             last_completed_run,
         } => {
             let (node_state, status_text) = if !daemon_answering {
-                (
-                    StepNodeState::AwaitingEarlier,
-                    gettext("Waiting for the daemon"),
-                )
+                (StepNodeState::AwaitingPrerequisite, daemon_awaited_text())
             } else if !timer_active {
                 (
                     StepNodeState::HasFailed,
                     gettext("The system timer is not active"),
                 )
+            } else if scheduled_scan_starting {
+                (StepNodeState::InProgress, gettext("Starting the scan…"))
             } else if scan_result_failed(last_result) {
                 (
                     StepNodeState::NeedsReview,
@@ -667,16 +920,24 @@ fn scheduled_scan_step(
                     gettext("Next scan: {time}").replace("{time}", &next_run_text(*next_run)),
                 )
             };
-            TimelineStep {
-                evidence_rows: vec![
-                    evidence_row(gettext("Last scan"), last_run_text(*last_completed_run)),
-                    evidence_row(gettext("Folders scanned"), scan_targets.join("\n")),
-                ],
-                action_slot: StepActionSlot::ActionOffered {
+            let run_action = if scheduled_scan_starting || !daemon_answering {
+                StepActionSlot::NoAction
+            } else {
+                StepActionSlot::ActionOffered {
                     action_label: gettext("Run Now"),
                     chosen_action: TimelineStepAction::RunScheduledScan { service_unit },
                     action_suggested: false,
-                },
+                }
+            };
+            TimelineStep {
+                evidence_rows: vec![
+                    next_run_row(*next_run, moment_context),
+                    last_run_row(*last_completed_run, run_action, moment_context),
+                    StepEvidenceRow {
+                        evidence_moment: EvidenceMoment::FixedSetting,
+                        ..evidence_row(gettext("Folders scanned"), scan_targets.join("\n"))
+                    },
+                ],
                 ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
             }
         }
@@ -813,6 +1074,7 @@ pub fn coverage_summary(protection_evidence: &ProtectionEvidence) -> String {
 pub fn protection_timeline(
     protection_evidence: &ProtectionEvidence,
     alert_readiness: &AlertReadiness,
+    protection_activity: &ProtectionActivity,
     distribution_family: DistributionFamily,
 ) -> ProtectionTimeline {
     let daemon_answering = daemon_is_answering(&protection_evidence.daemon_evidence);
@@ -823,31 +1085,42 @@ pub fn protection_timeline(
     .filter(|installation_step| installation_step.node_state != StepNodeState::Completed);
     ProtectionTimeline {
         coverage_summary: coverage_summary(protection_evidence),
-        timeline_steps: program_trust_step(&protection_evidence.program_trust_findings)
+        protection_steps: vec![
+            on_access_step(
+                &protection_evidence.on_access_evidence,
+                daemon_answering,
+                distribution_family,
+            ),
+            scheduled_scan_step(
+                &protection_evidence.scheduled_scan_evidence,
+                protection_activity.scheduled_scan_starting,
+                daemon_answering,
+                protection_activity.moment_context(),
+                distribution_family,
+            ),
+            alerts_step(
+                alert_readiness,
+                protection_evidence.background_service_state,
+                distribution_family,
+            ),
+        ],
+        engine_steps: engine_problem
             .into_iter()
-            .chain(engine_problem)
-            .chain([
-                signature_step(&protection_evidence.signature_evidence, distribution_family),
-                daemon_step(&protection_evidence.daemon_evidence, distribution_family),
-                on_access_step(
-                    &protection_evidence.on_access_evidence,
-                    daemon_answering,
-                    distribution_family,
-                ),
-                scheduled_scan_step(
-                    &protection_evidence.scheduled_scan_evidence,
-                    daemon_answering,
-                    distribution_family,
-                ),
-                alerts_step(
-                    alert_readiness,
-                    protection_evidence.background_service_state,
-                    distribution_family,
-                ),
-            ])
-            .chain(runtime_reduction_step(
-                &protection_evidence.runtime_reductions,
+            .chain(program_trust_step(
+                &protection_evidence.program_trust_findings,
             ))
+            .chain([
+                signature_step(
+                    &protection_evidence.signature_evidence,
+                    &protection_activity.signature_update,
+                    protection_activity.moment_context(),
+                    distribution_family,
+                ),
+                daemon_step(&protection_evidence.daemon_evidence, distribution_family),
+            ])
+            .collect(),
+        review_steps: runtime_reduction_step(&protection_evidence.runtime_reductions)
+            .into_iter()
             .chain(account_settings_step(
                 &protection_evidence.account_setting_findings,
             ))
@@ -858,11 +1131,96 @@ pub fn protection_timeline(
 
 #[cfg(test)]
 mod protection_timeline_presentation_tests {
+    use bytesize::ByteSize;
+
     use super::*;
 
-    const ON_ACCESS_POSITION: usize = 2;
-    const SCHEDULED_POSITION: usize = 3;
-    const SIGNATURE_POSITION: usize = 0;
+    const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
+
+    fn english_formatters() -> &'static MomentFormatters {
+        static ENGLISH_FORMATTERS: std::sync::OnceLock<MomentFormatters> =
+            std::sync::OnceLock::new();
+        ENGLISH_FORMATTERS.get_or_init(|| {
+            MomentFormatters::try_for_locales(
+                &icu::locale::locale!("en"),
+                &icu::locale::locale!("en"),
+            )
+            .unwrap()
+        })
+    }
+
+    fn known_update_host(update_progress: SignatureUpdateProgress) -> SignatureUpdateView {
+        SignatureUpdateView::HostStatusKnown(
+            crate::protection_page::signature_update_run::signature_update_session::KnownUpdateHost {
+                update_progress,
+                last_manual_update: LastManualUpdate::NotRunThisSession,
+                update_service_text: "Active".to_owned(),
+                database_folder_text: "/var/lib/clamav".to_owned(),
+            },
+        )
+    }
+
+    fn idle_activity() -> ProtectionActivity {
+        ProtectionActivity {
+            signature_update: known_update_host(SignatureUpdateProgress::ReadyToUpdate),
+            scheduled_scan_starting: false,
+            observed_at: REFERENCE_MOMENT,
+            moment_formatters: english_formatters(),
+        }
+    }
+
+    fn timeline_with(
+        protection_evidence: &ProtectionEvidence,
+        protection_activity: &ProtectionActivity,
+    ) -> ProtectionTimeline {
+        protection_timeline(
+            protection_evidence,
+            &ready_alerts(),
+            protection_activity,
+            DistributionFamily::NixosFamily,
+        )
+    }
+
+    fn idle_timeline(protection_evidence: &ProtectionEvidence) -> ProtectionTimeline {
+        timeline_with(protection_evidence, &idle_activity())
+    }
+
+    fn step_titled<'timeline>(
+        timeline_steps: &'timeline [TimelineStep],
+        step_title: &str,
+    ) -> &'timeline TimelineStep {
+        timeline_steps
+            .iter()
+            .find(|timeline_step| timeline_step.step_title == step_title)
+            .unwrap()
+    }
+
+    fn step_titles(timeline_steps: &[TimelineStep]) -> Vec<&str> {
+        timeline_steps
+            .iter()
+            .map(|timeline_step| timeline_step.step_title.as_str())
+            .collect()
+    }
+
+    fn row_named<'step>(
+        timeline_step: &'step TimelineStep,
+        evidence_name: &str,
+    ) -> &'step StepEvidenceRow {
+        timeline_step
+            .evidence_rows
+            .iter()
+            .find(|step_evidence| step_evidence.evidence_name == evidence_name)
+            .unwrap()
+    }
+
+    fn all_steps(protection_timeline: ProtectionTimeline) -> Vec<TimelineStep> {
+        protection_timeline
+            .protection_steps
+            .into_iter()
+            .chain(protection_timeline.engine_steps)
+            .chain(protection_timeline.review_steps)
+            .collect()
+    }
 
     fn healthy_evidence() -> ProtectionEvidence {
         ProtectionEvidence {
@@ -874,9 +1232,8 @@ mod protection_timeline_presentation_tests {
                 version_banner: "ClamAV 1.5.4/28174".to_owned(),
             },
             signature_evidence: SignatureEvidence {
-                database_evidence: DatabaseEvidence::BuiltDaysAgo {
-                    age_days: 0,
-                    build_date: "2026-11-05".to_owned(),
+                database_evidence: DatabaseEvidence::BuiltAt {
+                    built_at: REFERENCE_MOMENT - SignedDuration::from_hours(5),
                 },
                 updater_evidence: Vec::new(),
                 third_party_files: Vec::new(),
@@ -889,14 +1246,14 @@ mod protection_timeline_presentation_tests {
                 watched_paths: vec!["/home/user/Downloads".to_owned()],
                 prevention_enabled: true,
                 size_limit: OnAccessSizeLimit::ConfiguredLimit {
-                    limit_text: "100M".to_owned(),
+                    size_limit: ByteSize::mib(100),
                 },
             },
             scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
                 service_unit: "clamdscan.service",
                 timer_active: true,
                 next_run: UnitTimestamp::RecordedAt {
-                    unix_seconds: 1_794_223_800,
+                    recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
                 },
                 scan_targets: vec!["/tmp".to_owned(), "/var/tmp".to_owned()],
                 last_result: ServiceLastResult::ResultSucceeded,
@@ -914,15 +1271,14 @@ mod protection_timeline_presentation_tests {
     }
 
     fn step_states(protection_evidence: &ProtectionEvidence) -> Vec<StepNodeState> {
-        protection_timeline(
-            protection_evidence,
-            &ready_alerts(),
-            DistributionFamily::NixosFamily,
-        )
-        .timeline_steps
-        .iter()
-        .map(|timeline_step| timeline_step.node_state)
-        .collect()
+        all_steps(idle_timeline(protection_evidence))
+            .iter()
+            .map(|timeline_step| timeline_step.node_state)
+            .collect()
+    }
+
+    fn state_of(protection_evidence: &ProtectionEvidence, step_title: &str) -> StepNodeState {
+        step_titled(&all_steps(idle_timeline(protection_evidence)), step_title).node_state
     }
 
     #[tokio::test]
@@ -931,27 +1287,25 @@ mod protection_timeline_presentation_tests {
         let host_timeline = protection_timeline(
             &crate::protection_page::protection_evidence::gather_protection_evidence(false).await,
             &ready_alerts(),
+            &idle_activity(),
             crate::host_services::clamav_programs::distribution_install_guides::detect_distribution_family(),
         );
         println!("{}", host_timeline.coverage_summary);
-        host_timeline
-            .timeline_steps
-            .iter()
-            .for_each(|timeline_step| {
-                println!(
-                    "{:?} | {} | {}",
-                    timeline_step.node_state, timeline_step.step_title, timeline_step.status_text
-                );
-                timeline_step
-                    .evidence_rows
-                    .iter()
-                    .for_each(|step_evidence| {
-                        println!(
-                            "    {}: {}",
-                            step_evidence.evidence_name, step_evidence.evidence_value
-                        );
-                    });
-            });
+        all_steps(host_timeline).iter().for_each(|timeline_step| {
+            println!(
+                "{:?} | {} | {}",
+                timeline_step.node_state, timeline_step.step_title, timeline_step.status_text
+            );
+            timeline_step
+                .evidence_rows
+                .iter()
+                .for_each(|step_evidence| {
+                    println!(
+                        "    {}: {}",
+                        step_evidence.evidence_name, step_evidence.evidence_value
+                    );
+                });
+        });
     }
 
     #[test]
@@ -969,14 +1323,137 @@ mod protection_timeline_presentation_tests {
     }
 
     #[test]
+    fn panes_follow_a_file_and_the_engine_comes_after() {
+        let healthy_timeline = idle_timeline(&healthy_evidence());
+        assert_eq!(
+            step_titles(&healthy_timeline.protection_steps),
+            vec!["On-access blocking", "Scheduled scan", "Alerts"]
+        );
+        assert_eq!(
+            step_titles(&healthy_timeline.engine_steps),
+            vec!["Signatures current", "Daemon running"]
+        );
+        assert!(healthy_timeline.review_steps.is_empty());
+    }
+
+    #[test]
     fn the_installation_step_only_appears_when_clamav_is_missing() {
-        let installed_steps = protection_timeline(
+        let missing_timeline = idle_timeline(&ProtectionEvidence {
+            engine_installation: EngineInstallation::EngineMissing,
+            ..healthy_evidence()
+        });
+        assert_eq!(
+            missing_timeline.engine_steps[0].step_title,
+            "ClamAV installed"
+        );
+        assert_eq!(
+            idle_timeline(&healthy_evidence()).engine_steps[0].step_title,
+            "Signatures current"
+        );
+    }
+
+    #[test]
+    fn each_row_says_whether_it_is_past_upcoming_or_a_setting() {
+        let healthy_steps = all_steps(idle_timeline(&ProtectionEvidence {
+            scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
+                service_unit: "clamdscan.service",
+                timer_active: true,
+                next_run: UnitTimestamp::RecordedAt {
+                    recorded_at: REFERENCE_MOMENT
+                        + SignedDuration::from_hours(72)
+                        + SignedDuration::from_mins(1),
+                },
+                scan_targets: vec!["/tmp".to_owned()],
+                last_result: ServiceLastResult::ResultSucceeded,
+                last_completed_run: ServiceRunHistory::CompletedRun(
+                    crate::protection_page::service_run_journal::ServiceRunRecord {
+                        finished_at: REFERENCE_MOMENT - SignedDuration::from_hours(2),
+                        threats_found: false,
+                    },
+                ),
+            },
+            ..healthy_evidence()
+        }));
+        let scheduled_step = step_titled(&healthy_steps, "Scheduled scan");
+        assert_eq!(
+            row_named(scheduled_step, "Next scan").evidence_value,
+            "in 3 days"
+        );
+        let last_scan_row = row_named(scheduled_step, "Last scan");
+        assert_eq!(last_scan_row.evidence_value, "2 hours ago · nothing found");
+        assert!(matches!(
+            last_scan_row.row_action,
+            StepActionSlot::ActionOffered {
+                chosen_action: TimelineStepAction::RunScheduledScan { .. },
+                ..
+            }
+        ));
+        assert_eq!(scheduled_step.action_slot, StepActionSlot::NoAction);
+        assert_eq!(
+            row_named(
+                step_titled(&healthy_steps, "On-access blocking"),
+                "Watched folders"
+            )
+            .evidence_moment,
+            EvidenceMoment::ChangeableSetting {
+                settings_subpage: SettingsSubpage::OnAccessScanning
+            }
+        );
+        let signature_step = step_titled(&healthy_steps, "Signatures current");
+        assert_eq!(signature_step.action_slot, StepActionSlot::NoAction);
+        assert!(matches!(
+            row_named(signature_step, "Manual update").row_action,
+            StepActionSlot::ActionOffered {
+                chosen_action: TimelineStepAction::UpdateSignatures,
+                ..
+            }
+        ));
+        assert!(
+            signature_step
+                .status_text
+                .starts_with("Definitions built 5 hours ago (")
+        );
+    }
+
+    #[test]
+    fn a_running_update_shows_its_progress_and_can_be_cancelled() {
+        let running_activity = ProtectionActivity {
+            signature_update: known_update_host(SignatureUpdateProgress::UpdateRunning {
+                latest_output_line: "daily.cld updated".to_owned(),
+                cancellable: true,
+            }),
+            ..idle_activity()
+        };
+        let running_timeline = timeline_with(&healthy_evidence(), &running_activity);
+        let signature_step = step_titled(&running_timeline.engine_steps, "Signatures current");
+        assert_eq!(signature_step.node_state, StepNodeState::InProgress);
+        let output_row = row_named(signature_step, "Updater output");
+        assert_eq!(output_row.evidence_moment, EvidenceMoment::HappeningNow);
+        assert_eq!(output_row.evidence_value, "daily.cld updated");
+        assert!(matches!(
+            row_named(signature_step, "Manual update").row_action,
+            StepActionSlot::ActionOffered {
+                chosen_action: TimelineStepAction::CancelSignatureUpdate,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_starting_scan_is_in_progress_and_cannot_be_started_twice() {
+        let starting_timeline = timeline_with(
             &healthy_evidence(),
-            &ready_alerts(),
-            DistributionFamily::NixosFamily,
-        )
-        .timeline_steps;
-        assert_eq!(installed_steps[0].step_title, "Signatures current");
+            &ProtectionActivity {
+                scheduled_scan_starting: true,
+                ..idle_activity()
+            },
+        );
+        let scheduled_step = step_titled(&starting_timeline.protection_steps, "Scheduled scan");
+        assert_eq!(scheduled_step.node_state, StepNodeState::InProgress);
+        assert_eq!(
+            row_named(scheduled_step, "Last scan").row_action,
+            StepActionSlot::NoAction
+        );
     }
 
     #[test]
@@ -990,11 +1467,11 @@ mod protection_timeline_presentation_tests {
         assert_eq!(
             step_states(&protection_evidence),
             vec![
+                StepNodeState::AwaitingPrerequisite,
+                StepNodeState::AwaitingPrerequisite,
+                StepNodeState::Completed,
                 StepNodeState::Completed,
                 StepNodeState::HasFailed,
-                StepNodeState::AwaitingEarlier,
-                StepNodeState::AwaitingEarlier,
-                StepNodeState::Completed,
             ]
         );
         assert_eq!(
@@ -1015,13 +1492,18 @@ mod protection_timeline_presentation_tests {
             scheduled_scan_evidence: ScheduledScanEvidence::NoSchedule,
             ..healthy_evidence()
         };
-        let node_states = step_states(&protection_evidence);
-        assert_eq!(node_states[ON_ACCESS_POSITION], StepNodeState::HasFailed);
-        assert_eq!(node_states[SCHEDULED_POSITION], StepNodeState::NeedsReview);
+        assert_eq!(
+            state_of(&protection_evidence, "On-access blocking"),
+            StepNodeState::HasFailed
+        );
+        assert_eq!(
+            state_of(&protection_evidence, "Scheduled scan"),
+            StepNodeState::NeedsReview
+        );
     }
 
     #[test]
-    fn a_replaceable_scanner_program_fails_before_every_other_step() {
+    fn a_replaceable_scanner_program_fails_first_among_the_engine_steps() {
         let protection_evidence = ProtectionEvidence {
             program_trust_findings: vec![ProgramTrustFinding::OnlyReplaceableProgram {
                 program_name: "clamdscan",
@@ -1029,16 +1511,13 @@ mod protection_timeline_presentation_tests {
             }],
             ..healthy_evidence()
         };
-        let node_states = step_states(&protection_evidence);
-        assert_eq!(node_states[0], StepNodeState::HasFailed);
-        assert_eq!(
-            node_states.len(),
-            step_states(&healthy_evidence()).len() + 1
-        );
+        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
+        assert_eq!(engine_steps[0].node_state, StepNodeState::HasFailed);
+        assert_eq!(engine_steps.len(), 3);
     }
 
     #[test]
-    fn a_foreign_allowlist_needs_review_after_every_other_step() {
+    fn a_foreign_allowlist_appears_under_needs_review() {
         let protection_evidence = ProtectionEvidence {
             trust_list: TrustListContents {
                 foreign_allowlists: vec![
@@ -1051,19 +1530,16 @@ mod protection_timeline_presentation_tests {
             },
             ..healthy_evidence()
         };
-        let node_states = step_states(&protection_evidence);
-        assert_eq!(node_states.last(), Some(&StepNodeState::NeedsReview));
-        assert_eq!(
-            node_states.len(),
-            step_states(&healthy_evidence()).len() + 1
-        );
+        let review_steps = idle_timeline(&protection_evidence).review_steps;
+        assert_eq!(review_steps.len(), 1);
+        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
     }
 
     #[test]
     fn a_runtime_reduction_stays_visible_as_needing_review() {
         let protection_evidence = ProtectionEvidence {
             runtime_reductions: RuntimeReductions::ReducedSince {
-                changed_unix_seconds: 1_794_223_800,
+                changed_at: REFERENCE_MOMENT,
                 reduced_settings: vec![
                     crate::protection_page::protection_evidence::ReducedSetting {
                         setting_key: "OnAccessPrevention".to_owned(),
@@ -1074,12 +1550,9 @@ mod protection_timeline_presentation_tests {
             },
             ..healthy_evidence()
         };
-        let node_states = step_states(&protection_evidence);
-        assert_eq!(node_states.last(), Some(&StepNodeState::NeedsReview));
-        assert_eq!(
-            node_states.len(),
-            step_states(&healthy_evidence()).len() + 1
-        );
+        let review_steps = idle_timeline(&protection_evidence).review_steps;
+        assert_eq!(review_steps.len(), 1);
+        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
     }
 
     #[test]
@@ -1091,12 +1564,8 @@ mod protection_timeline_presentation_tests {
             }],
             ..healthy_evidence()
         };
-        let timeline = protection_timeline(
-            &protection_evidence,
-            &ready_alerts(),
-            DistributionFamily::NixosFamily,
-        );
-        let account_step = timeline.timeline_steps.last().unwrap();
+        let review_steps = idle_timeline(&protection_evidence).review_steps;
+        let account_step = review_steps.last().unwrap();
         assert_eq!(account_step.node_state, StepNodeState::NeedsReview);
         assert!(matches!(
             account_step.action_slot,
@@ -1120,7 +1589,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            step_states(&protection_evidence)[0],
+            idle_timeline(&protection_evidence).engine_steps[0].node_state,
             StepNodeState::NeedsReview
         );
     }
@@ -1135,7 +1604,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            step_states(&protection_evidence)[ON_ACCESS_POSITION],
+            state_of(&protection_evidence, "On-access blocking"),
             StepNodeState::NeedsReview
         );
         assert!(coverage_summary(&protection_evidence).contains("not blocked"));
@@ -1169,7 +1638,7 @@ mod protection_timeline_presentation_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            step_states(&failed_updater)[SIGNATURE_POSITION],
+            state_of(&failed_updater, "Signatures current"),
             StepNodeState::NeedsReview
         );
     }
@@ -1224,7 +1693,10 @@ mod protection_timeline_presentation_tests {
             engine_installation: EngineInstallation::EngineMissing,
             ..healthy_evidence()
         };
-        assert_eq!(step_states(&protection_evidence)[0], StepNodeState::ActNext);
+        assert_eq!(
+            idle_timeline(&protection_evidence).engine_steps[0].node_state,
+            StepNodeState::ActNext
+        );
         assert!(coverage_summary(&protection_evidence).contains("nothing is being checked"));
     }
 }

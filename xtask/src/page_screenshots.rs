@@ -122,10 +122,15 @@ fn page_scenarios() -> Vec<PageScenario> {
             .concat(),
         },
         PageScenario {
-            page_argument: "--page=database",
+            page_argument: "--page=protection",
             scan_fixture_use: ScanFixtureUse::IdlePage,
             animation_name: "signature-update",
-            user_interactions: shown("database"),
+            user_interactions: [
+                shown("protection"),
+                point_and_click(WidgetTarget::list_item("Signatures current")),
+                shown("signature-update"),
+            ]
+            .concat(),
         },
         PageScenario {
             page_argument: "--page=signatures",

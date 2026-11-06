@@ -5,13 +5,13 @@ use crate::{
     host_services::{
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::{
-            stored_settings::application_settings, stored_settings_watch::forward_setting_changes,
+            locale_formatting::exact_local_time_text, stored_settings::application_settings,
+            stored_settings_watch::forward_setting_changes,
         },
         systemd_bus::host_systemd_units::{
             TimerUnitSnapshot, UnitState, UnitTimestamp, timer_unit_snapshot,
         },
     },
-    logs_page::activity_entry_row::formatted_local_time,
     scan_page::scan_schedule_page::{
         scan_schedule_settings::{
             SCHEDULE_SETTING_KEYS, StoredScheduleSettings, frequency_at, frequency_position,
@@ -71,11 +71,11 @@ fn describe_timer_state(timer_state: &ScheduleTimerState) -> String {
 
 fn describe_system_schedule(next_run: UnitTimestamp) -> String {
     match next_run {
-        UnitTimestamp::RecordedAt { unix_seconds } => gettext(
+        UnitTimestamp::RecordedAt { recorded_at } => gettext(
             "Your system already runs scheduled scans, so these settings are locked to avoid a \
              second schedule. Next scan: {time}. Change it in your system configuration.",
         )
-        .replace("{time}", &formatted_local_time(unix_seconds)),
+        .replace("{time}", &exact_local_time_text(recorded_at)),
         UnitTimestamp::NeverRecorded => gettext(
             "Your system has a scan timer, so these settings are locked to avoid a second \
              schedule. Change it in your system configuration.",

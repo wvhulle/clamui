@@ -2,11 +2,12 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::ExitCode,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::Instant,
 };
 
 use futures::{StreamExt, future::ready, stream};
 use gettextrs::{gettext, ngettext};
+use jiff::Timestamp;
 use relm4::gtk::glib;
 
 use crate::{
@@ -105,15 +106,9 @@ fn joined_target_text(scan_targets: &[PathBuf]) -> String {
         .join("\n")
 }
 
-fn current_unix_time() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed_time| elapsed_time.as_secs() as i64)
-}
-
 fn skipped_entry(scan_targets: &[PathBuf]) -> NewActivityEntry {
     NewActivityEntry {
-        started_at_unix: current_unix_time(),
+        started_at: Timestamp::now(),
         activity_status: ActivityStatus::ScanSkipped,
         activity_targets: joined_target_text(scan_targets),
         inspected_file_count: 0,
@@ -198,7 +193,7 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
             .await;
         return ExitCode::SUCCESS;
     }
-    let started_at_unix = current_unix_time();
+    let started_at = Timestamp::now();
     let started_instant = Instant::now();
     let scanner_programs = ScannerProgramPaths::locate_trusted_programs();
     let scanner_backend =
@@ -230,7 +225,7 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
     let activity_status = activity_status_of(&scan_outcome);
     let _history_unavailable = activity_history
         .record_activity(NewActivityEntry {
-            started_at_unix,
+            started_at,
             activity_status,
             activity_targets: joined_target_text(&scan_targets),
             inspected_file_count: scan_outcome.inspected_file_count,

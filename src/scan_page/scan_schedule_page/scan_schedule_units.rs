@@ -4,15 +4,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    host_services::{
-        desktop::flatpak_sandbox::{running_in_flatpak, sandboxed_launcher_words},
-        systemd_bus::host_systemd_units::{
-            TimerUnitSnapshot, UnitState, UnitTimestamp, disable_user_timer, enable_user_timer,
-            reload_user_manager, user_timer_snapshot,
-        },
+use crate::host_services::{
+    desktop::{
+        flatpak_sandbox::{running_in_flatpak, sandboxed_launcher_words},
+        locale_formatting::exact_local_time_text,
     },
-    logs_page::activity_entry_row::formatted_local_time,
+    systemd_bus::host_systemd_units::{
+        TimerUnitSnapshot, UnitState, UnitTimestamp, disable_user_timer, enable_user_timer,
+        reload_user_manager, user_timer_snapshot,
+    },
 };
 
 const SERVICE_FILE_NAME: &str = "lazaret-scheduled-scan.service";
@@ -283,7 +283,7 @@ pub fn schedule_state_from_timer(timer_snapshot: TimerUnitSnapshot) -> ScheduleT
     match timer_snapshot.unit_state {
         UnitState::UnitActive => ScheduleTimerState::TimerActive {
             next_run_text: match timer_snapshot.next_run {
-                UnitTimestamp::RecordedAt { unix_seconds } => formatted_local_time(unix_seconds),
+                UnitTimestamp::RecordedAt { recorded_at } => exact_local_time_text(recorded_at),
                 UnitTimestamp::NeverRecorded => String::new(),
             },
         },

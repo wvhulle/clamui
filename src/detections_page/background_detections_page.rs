@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use futures::{Stream, StreamExt, stream};
 use gettextrs::gettext;
+use jiff::Timestamp;
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
     prelude::FactoryVecDeque,
@@ -18,9 +19,9 @@ use crate::{
         },
         detection_list_row::{DetectionListRow, DetectionListRowOutput},
         detections_view_state::{
-            AwaitedIncident, JournalBatch, OpenedIncident, current_unix_seconds,
-            detection_for_file, detections_needing_attention_first, file_state_for_detection,
-            file_states_to_keep, split_journal_batch, unresolved_detection_count,
+            AwaitedIncident, JournalBatch, OpenedIncident, detection_for_file,
+            detections_needing_attention_first, file_state_for_detection, file_states_to_keep,
+            split_journal_batch, unresolved_detection_count,
         },
         incident_timeline_presentation::{
             DeletionPrompt, DisplayedDetection, SignatureLookupState, displayed_file_name,
@@ -71,7 +72,7 @@ pub struct BackgroundDetectionsPage {
     journal_access: JournalAccess,
     opened_incident: OpenedIncident,
     awaited_incident: AwaitedIncident,
-    application_started_unix: i64,
+    application_started: Timestamp,
     deletion_prompt: DeletionPrompt,
     lookup_state: SignatureLookupState,
     first_load: FirstLoad,
@@ -421,11 +422,7 @@ impl BackgroundDetectionsPage {
                     ),
                 };
                 activity_history
-                    .resolve_detection(
-                        stored_detection.detection_id,
-                        resolution,
-                        current_unix_seconds(),
-                    )
+                    .resolve_detection(stored_detection.detection_id, resolution, Timestamp::now())
                     .await
                     .map_err(|resolving_failure| resolving_failure.to_string())?;
                 Ok(action_effect)
@@ -478,6 +475,7 @@ impl BackgroundDetectionsPage {
                 }
             }
             TimelineStepAction::UpdateSignatures
+            | TimelineStepAction::CancelSignatureUpdate
             | TimelineStepAction::RunScheduledScan { .. }
             | TimelineStepAction::OpenSettingsSubpage(_) => {}
         }
@@ -561,7 +559,7 @@ impl Component for BackgroundDetectionsPage {
             journal_access: JournalAccess::FollowingJournal,
             opened_incident: OpenedIncident::NoIncidentOpen,
             awaited_incident: AwaitedIncident::NothingAwaited,
-            application_started_unix: current_unix_seconds(),
+            application_started: Timestamp::now(),
             deletion_prompt: DeletionPrompt::NotAsked,
             lookup_state: SignatureLookupState::NotLookedUp,
             first_load: FirstLoad::StillLoading,
@@ -640,7 +638,7 @@ impl Component for BackgroundDetectionsPage {
                 send_detection_alerts(&plan_detection_alerts(
                     &newly_opened,
                     journal_replay,
-                    self.application_started_unix,
+                    self.application_started,
                 ));
                 self.refresh_after_sightings(&newly_opened, &sender);
             }

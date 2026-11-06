@@ -1,7 +1,9 @@
-use std::{fs, path::Path, time::SystemTime};
+use std::{fs, path::Path};
 
+use bytesize::ByteSize;
 use futures::future::join_all;
 use gettextrs::gettext;
+use jiff::Timestamp;
 use relm4::gtk::gio::prelude::SettingsExt;
 use tokio::task::spawn_blocking;
 
@@ -24,7 +26,7 @@ use crate::{
             flatpak_sandbox::readable_host_path,
             stored_settings::{application_settings, read_exclusion_entries},
         },
-        settings_helper::protection_change_rules::change_weakens_protection,
+        settings_helper::protection_change_rules::{change_weakens_protection, limit_in_units},
         systemd_bus::host_systemd_units::{
             ServiceLastResult, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
             probe_user_unit_state, service_unit_snapshot, timer_unit_snapshot,
@@ -79,7 +81,6 @@ const THIRD_PARTY_SIGNATURE_EXTENSIONS: [&str; 7] =
 const LAZARET_SCHEDULE_KEY: &str = "schedule-enabled";
 const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
 const BACKGROUND_SERVICE_UNIT: &str = "lazaret.service";
-const SECONDS_PER_HOUR: u64 = 3_600;
 
 pub const WATCHED_SERVICE_UNITS: [&str; 10] = [
     "clamav-daemon.service",
@@ -124,8 +125,8 @@ pub struct UpdaterEvidence {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThirdPartySignatureFile {
     pub file_name: String,
-    pub age_hours: u64,
-    pub file_size_bytes: u64,
+    pub modified_at: Timestamp,
+    pub file_size: ByteSize,
     pub signature_count: u64,
 }
 
@@ -163,7 +164,8 @@ pub enum OnAccessScanner {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OnAccessSizeLimit {
     DefaultLimit,
-    ConfiguredLimit { limit_text: String },
+    ConfiguredLimit { size_limit: ByteSize },
+    UnreadableLimit { limit_text: String },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -216,7 +218,7 @@ pub enum RuntimeReductions {
     #[default]
     NothingReduced,
     ReducedSince {
-        changed_unix_seconds: i64,
+        changed_at: Timestamp,
         reduced_settings: Vec<ReducedSetting>,
     },
 }
@@ -271,13 +273,11 @@ fn inspect_runtime_reductions() -> RuntimeReductions {
         return RuntimeReductions::NothingReduced;
     }
     RuntimeReductions::ReducedSince {
-        changed_unix_seconds: overrides_metadata
+        changed_at: overrides_metadata
             .modified()
             .ok()
-            .and_then(|modified_time| modified_time.duration_since(SystemTime::UNIX_EPOCH).ok())
-            .map_or(0, |since_epoch| {
-                i64::try_from(since_epoch.as_secs()).unwrap_or(i64::MAX)
-            }),
+            .and_then(|modified_time| Timestamp::try_from(modified_time).ok())
+            .unwrap_or(Timestamp::UNIX_EPOCH),
         reduced_settings,
     }
 }
@@ -399,9 +399,14 @@ pub fn on_access_evidence_from_config(
         size_limit: config_values(config_settings, "OnAccessMaxFileSize")
             .next()
             .map_or(OnAccessSizeLimit::DefaultLimit, |limit_text| {
-                OnAccessSizeLimit::ConfiguredLimit {
-                    limit_text: sanitize_scanner_line(limit_text),
-                }
+                limit_in_units(limit_text).map_or_else(
+                    || OnAccessSizeLimit::UnreadableLimit {
+                        limit_text: sanitize_scanner_line(limit_text),
+                    },
+                    |limit_units| OnAccessSizeLimit::ConfiguredLimit {
+                        size_limit: ByteSize::b(limit_units),
+                    },
+                )
             }),
     }
 }
@@ -494,7 +499,6 @@ fn count_signature_lines(signature_file: &Path) -> u64 {
 }
 
 fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySignatureFile> {
-    let current_time = SystemTime::now();
     let mut signature_files = fs::read_dir(database_directory)
         .map(|directory_entries| {
             directory_entries
@@ -510,17 +514,13 @@ fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySigna
                 })
                 .filter_map(|directory_entry| {
                     let file_metadata = directory_entry.metadata().ok()?;
-                    let modified_time = file_metadata.modified().ok()?;
+                    let modified_at = Timestamp::try_from(file_metadata.modified().ok()?).ok()?;
                     Some(ThirdPartySignatureFile {
                         file_name: sanitize_scanner_line(
                             &directory_entry.file_name().to_string_lossy(),
                         ),
-                        age_hours: current_time
-                            .duration_since(modified_time)
-                            .unwrap_or_default()
-                            .as_secs()
-                            / SECONDS_PER_HOUR,
-                        file_size_bytes: file_metadata.len(),
+                        modified_at,
+                        file_size: ByteSize::b(file_metadata.len()),
                         signature_count: count_signature_lines(&directory_entry.path()),
                     })
                 })
@@ -769,7 +769,7 @@ mod protection_evidence_tests {
                 watched_paths: vec!["/home/user/Downloads".to_owned(), "/srv/inbox".to_owned()],
                 prevention_enabled: true,
                 size_limit: OnAccessSizeLimit::ConfiguredLimit {
-                    limit_text: "100M".to_owned()
+                    size_limit: ByteSize::mib(100)
                 },
             }
         );

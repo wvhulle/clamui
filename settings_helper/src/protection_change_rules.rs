@@ -41,7 +41,7 @@ fn switch_is_on(setting_value: &str) -> bool {
     matches!(setting_value, "true" | "yes")
 }
 
-fn limit_in_units(limit_text: &str) -> Option<u64> {
+pub fn limit_in_units(limit_text: &str) -> Option<u64> {
     let (digits, multiplier) = match limit_text.chars().last()? {
         'k' | 'K' => (&limit_text[..limit_text.len() - 1], 1024),
         'm' | 'M' => (&limit_text[..limit_text.len() - 1], 1024 * 1024),
@@ -133,6 +133,14 @@ mod protection_change_rules_tests {
             .iter()
             .map(|setting_value| (*setting_value).to_owned())
             .collect()
+    }
+
+    #[test]
+    fn limit_suffixes_are_binary_multiples() {
+        assert_eq!(limit_in_units("100M"), Some(104_857_600));
+        assert_eq!(limit_in_units("102400k"), Some(104_857_600));
+        assert_eq!(limit_in_units("512"), Some(512));
+        assert_eq!(limit_in_units("lots"), None);
     }
 
     #[test]

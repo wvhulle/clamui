@@ -1,10 +1,7 @@
-use std::{
-    os::unix::process::CommandExt,
-    process::Stdio,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{os::unix::process::CommandExt, process::Stdio};
 
 use futures::{Stream, StreamExt, future::ready, stream};
+use jiff::Timestamp;
 use tokio::{process::Command, task::spawn_blocking};
 
 use crate::{
@@ -107,7 +104,10 @@ fn update_event_from_process(process_event: ScannerProcessEvent) -> DatabaseUpda
     }
 }
 
-async fn service_journal_lines(service_unit: &'static str, started_after: u64) -> Vec<String> {
+async fn service_journal_lines(
+    service_unit: &'static str,
+    started_after: Timestamp,
+) -> Vec<String> {
     spawn_blocking(move || unit_messages_since(&format!("{service_unit}.service"), started_after))
         .await
         .ok()
@@ -115,7 +115,7 @@ async fn service_journal_lines(service_unit: &'static str, started_after: u64) -
         .unwrap_or_default()
 }
 
-async fn third_party_update_lines(started_after: u64) -> Vec<String> {
+async fn third_party_update_lines(started_after: Timestamp) -> Vec<String> {
     if !matches!(
         probe_unit_state(FANGFRISCH_SERVICE_UNIT).await,
         UnitState::UnitActive | UnitState::UnitInactive
@@ -135,17 +135,10 @@ async fn third_party_update_lines(started_after: u64) -> Vec<String> {
         .collect()
 }
 
-fn current_unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-}
-
 pub fn database_update_events(
     update_plan: DatabaseUpdatePlan,
 ) -> impl Stream<Item = DatabaseUpdateEvent> + Send + 'static {
-    let started_after = current_unix_seconds();
+    let started_after = Timestamp::now();
     match update_plan {
         DatabaseUpdatePlan::SignalRunningDaemon { service_unit } => stream::once(async move {
             events_from_unit_outcome(

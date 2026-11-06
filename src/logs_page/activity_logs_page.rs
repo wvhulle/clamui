@@ -11,10 +11,11 @@ use crate::{
             ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure,
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        desktop::locale_formatting::exact_local_time_text,
         settings_helper::helper_audit_records::{HelperAuditEntry, newest_helper_audit_entries},
     },
     logs_page::{
-        activity_entry_row::{ActivityEntryRow, formatted_local_time},
+        activity_entry_row::ActivityEntryRow,
         activity_export_formats::{
             activity_detail_text, activity_entries_as_csv, activity_entries_as_json,
         },
@@ -139,7 +140,7 @@ impl ActivityLogsPage {
             SelectedEntryView::NoEntrySelected => gettext("Select a log entry to view details."),
             SelectedEntryView::EntrySelected(activity_entry) => activity_detail_text(
                 activity_entry,
-                &formatted_local_time(activity_entry.started_at_unix),
+                &exact_local_time_text(activity_entry.started_at),
             ),
         }
     }

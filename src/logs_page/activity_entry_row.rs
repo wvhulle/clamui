@@ -2,22 +2,16 @@ use relm4::{
     FactorySender, adw,
     adw::prelude::*,
     gtk,
-    gtk::glib,
     prelude::{DynamicIndex, FactoryComponent},
 };
 
 use crate::{
-    host_services::activity_history::activity_history_database::{
-        ActivityEntryRecord, ActivityStatus,
+    host_services::{
+        activity_history::activity_history_database::{ActivityEntryRecord, ActivityStatus},
+        desktop::locale_formatting::exact_local_time_text,
     },
     logs_page::activity_export_formats::{activity_status_text, activity_summary_text},
 };
-
-pub fn formatted_local_time(timestamp_unix: i64) -> String {
-    glib::DateTime::from_unix_local(timestamp_unix)
-        .and_then(|local_time| local_time.format("%x %X"))
-        .map_or_else(|_format_failure| timestamp_unix.to_string(), String::from)
-}
 
 fn status_icon(activity_status: ActivityStatus) -> &'static str {
     match activity_status {
@@ -37,7 +31,7 @@ fn status_icon(activity_status: ActivityStatus) -> &'static str {
 fn entry_subtitle(activity_entry: &ActivityEntryRecord) -> String {
     let first_target = activity_entry.activity_targets.lines().next();
     [
-        formatted_local_time(activity_entry.started_at_unix),
+        exact_local_time_text(activity_entry.started_at),
         activity_status_text(activity_entry.activity_status),
     ]
     .into_iter()

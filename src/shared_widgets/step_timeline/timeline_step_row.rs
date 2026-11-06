@@ -1,3 +1,4 @@
+use gettextrs::gettext;
 use relm4::{
     FactorySender, RelmWidgetExt, adw,
     adw::prelude::*,
@@ -30,12 +31,18 @@ pub struct TimelineStepRowWidgets {
     status_image: gtk::Image,
     running_spinner: adw::Spinner,
     action_button: gtk::Button,
+    explanation_button: gtk::MenuButton,
+    explanation_label: gtk::Label,
     detail_rows: FactoryVecDeque<TimelineDetailRow>,
 }
 
 impl TimelineStepRow {
     fn is_running(&self) -> bool {
         self.timeline_step.node_state == StepNodeState::InProgress
+    }
+
+    fn has_detail_rows(&self) -> bool {
+        !detail_rows_of(&self.timeline_step).is_empty()
     }
 
     fn action_label(&self) -> &str {
@@ -95,9 +102,28 @@ impl FactoryComponent for TimelineStepRow {
         let status_image = gtk::Image::new();
         let running_spinner = adw::Spinner::new();
         let action_button = gtk::Button::builder().valign(gtk::Align::Center).build();
+        let explanation_label = gtk::Label::builder()
+            .use_markup(false)
+            .wrap(true)
+            .wrap_mode(gtk::pango::WrapMode::WordChar)
+            .max_width_chars(48)
+            .xalign(0.0)
+            .margin_top(6)
+            .margin_bottom(6)
+            .margin_start(6)
+            .margin_end(6)
+            .build();
+        let explanation_button = gtk::MenuButton::builder()
+            .icon_name("help-about-symbolic")
+            .tooltip_text(gettext("Why this matters"))
+            .valign(gtk::Align::Center)
+            .css_classes(["flat"])
+            .popover(&gtk::Popover::builder().child(&explanation_label).build())
+            .build();
         root.add_prefix(&status_image);
         root.add_prefix(&running_spinner);
         root.add_suffix(&action_button);
+        root.add_suffix(&explanation_button);
         let click_sender = sender.input_sender().clone();
         action_button.connect_clicked(move |_clicked_button| {
             click_sender.emit(TimelineStepRowInput::ActionButtonClicked);
@@ -117,6 +143,8 @@ impl FactoryComponent for TimelineStepRow {
             status_image,
             running_spinner,
             action_button,
+            explanation_button,
+            explanation_label,
         };
         self.update_view(&mut widgets, sender);
         widgets
@@ -151,7 +179,8 @@ impl FactoryComponent for TimelineStepRow {
         expander_row.set_title(&self.timeline_step.step_title);
         expander_row.set_subtitle(&self.timeline_step.status_text);
         expander_row.block_signal(&widgets.expansion_handler);
-        expander_row.set_expanded(self.expanded);
+        expander_row.set_enable_expansion(self.has_detail_rows());
+        expander_row.set_expanded(self.expanded && self.has_detail_rows());
         expander_row.unblock_signal(&widgets.expansion_handler);
         widgets
             .status_image
@@ -159,6 +188,12 @@ impl FactoryComponent for TimelineStepRow {
         widgets
             .status_image
             .set_css_classes(&[self.timeline_step.node_state.style_class()]);
+        widgets
+            .explanation_label
+            .set_label(&self.timeline_step.mechanism_details);
+        widgets
+            .explanation_button
+            .set_visible(!self.timeline_step.mechanism_details.is_empty());
         widgets.status_image.set_visible(!self.is_running());
         widgets.running_spinner.set_visible(self.is_running());
         widgets.action_button.set_label(self.action_label());

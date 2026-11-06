@@ -1,3 +1,4 @@
+use jiff::Timestamp;
 use tokio::task::spawn_blocking;
 
 use crate::host_services::systemd_journal::unit_journal_reader::{
@@ -9,11 +10,10 @@ const UNIT_DEACTIVATED_MESSAGE: &str = "7ad2d189f7e94e70a38c781354912448";
 const PROCESS_EXITED_MESSAGE: &str = "98e322203f7a4ed290d09fe03c09fe15";
 const NORMAL_EXIT_CODE: &str = "exited";
 const THREATS_FOUND_STATUS: &str = "1";
-const MICROSECONDS_PER_SECOND: u64 = 1_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ServiceRunRecord {
-    pub finished_at_unix: i64,
+    pub finished_at: Timestamp,
     pub threats_found: bool,
 }
 
@@ -35,10 +35,7 @@ fn completed_service_run(manager_record: &ManagerUnitRecord) -> Option<ServiceRu
         _other_message => return None,
     };
     Some(ServiceRunRecord {
-        finished_at_unix: i64::try_from(
-            manager_record.realtime_microseconds / MICROSECONDS_PER_SECOND,
-        )
-        .ok()?,
+        finished_at: manager_record.recorded_at,
         threats_found,
     })
 }
@@ -67,11 +64,11 @@ pub async fn newest_service_run(service_unit: &'static str) -> ServiceRunHistory
 mod service_run_journal_tests {
     use super::*;
 
-    const RECORDED_AT_MICROSECONDS: u64 = 1_793_872_800_860_146;
+    const RECORDED_AT: Timestamp = Timestamp::constant(1_793_872_800, 860_146_000);
 
     fn deactivated_record() -> ManagerUnitRecord {
         ManagerUnitRecord {
-            realtime_microseconds: RECORDED_AT_MICROSECONDS,
+            recorded_at: RECORDED_AT,
             message_id: UNIT_DEACTIVATED_MESSAGE.to_owned(),
             ..ManagerUnitRecord::default()
         }
@@ -79,7 +76,7 @@ mod service_run_journal_tests {
 
     fn exited_record(exit_code: &str, exit_status: &str) -> ManagerUnitRecord {
         ManagerUnitRecord {
-            realtime_microseconds: RECORDED_AT_MICROSECONDS,
+            recorded_at: RECORDED_AT,
             message_id: PROCESS_EXITED_MESSAGE.to_owned(),
             exit_code: exit_code.to_owned(),
             exit_status: exit_status.to_owned(),
@@ -91,7 +88,7 @@ mod service_run_journal_tests {
         assert_eq!(
             newest_completed_run(&[deactivated_record()]),
             ServiceRunHistory::CompletedRun(ServiceRunRecord {
-                finished_at_unix: 1_793_872_800,
+                finished_at: RECORDED_AT,
                 threats_found: false,
             })
         );
@@ -102,7 +99,7 @@ mod service_run_journal_tests {
         assert_eq!(
             newest_completed_run(&[exited_record("exited", "1")]),
             ServiceRunHistory::CompletedRun(ServiceRunRecord {
-                finished_at_unix: 1_793_872_800,
+                finished_at: RECORDED_AT,
                 threats_found: true,
             })
         );

@@ -10,6 +10,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use bytesize::ByteSize;
 use rustix::{
     fs::{AtFlags, Mode, OFlags, RenameFlags},
     io::Errno,
@@ -24,7 +25,7 @@ const DATABASE_FILE_MODE: u32 = 0o600;
 const QUARANTINE_DIRECTORY_MODE: u32 = 0o700;
 const QUARANTINE_FILE_MODE: u32 = 0o400;
 const COPY_BUFFER_SIZE: usize = 64 * 1024;
-const FREE_SPACE_RESERVE: u64 = 10 * 1024 * 1024;
+const FREE_SPACE_RESERVE: ByteSize = ByteSize::mib(10);
 const MAXIMUM_FILE_NAME_LENGTH: usize = 255;
 const QUARANTINE_NAME_PREFIX_LENGTH: usize = 17;
 pub const UNKNOWN_PAYLOAD_HASH: &str = "";
@@ -103,7 +104,7 @@ pub struct PinnedParentDirectory {
 pub struct CopiedQuarantinePayload {
     pub source_path: PathBuf,
     pub destination_path: PathBuf,
-    pub file_size: u64,
+    pub file_size: ByteSize,
     pub file_hash: String,
     pub original_permissions: u32,
     source_parent: PinnedParentDirectory,
@@ -277,11 +278,13 @@ fn unique_quarantine_name(source_path: &Path) -> Vec<u8> {
     .concat()
 }
 
-fn available_disk_space(directory_path: &Path) -> Result<u64, QuarantineMoveFailure> {
+fn available_disk_space(directory_path: &Path) -> Result<ByteSize, QuarantineMoveFailure> {
     let filesystem_stats = rustix::fs::statvfs(directory_path)?;
-    Ok(filesystem_stats
-        .f_bavail
-        .saturating_mul(filesystem_stats.f_frsize))
+    Ok(ByteSize::b(
+        filesystem_stats
+            .f_bavail
+            .saturating_mul(filesystem_stats.f_frsize),
+    ))
 }
 
 pub fn lexically_normalized_path(unnormalized_path: &Path) -> PathBuf {
@@ -352,8 +355,8 @@ pub fn copy_file_into_quarantine(
     if !source_metadata.is_file() {
         return Err(QuarantineMoveFailure::SourceNotRegularFile);
     }
-    let file_size = source_metadata.len();
-    if available_disk_space(quarantine_directory)? < file_size.saturating_add(FREE_SPACE_RESERVE) {
+    let file_size = ByteSize::b(source_metadata.len());
+    if available_disk_space(quarantine_directory)? < file_size + FREE_SPACE_RESERVE {
         return Err(QuarantineMoveFailure::NotEnoughFreeSpace);
     }
     let destination_path =
@@ -400,7 +403,7 @@ pub fn copy_file_into_quarantine(
 pub struct PlannedBlockedRename {
     pub source_path: PathBuf,
     pub destination_path: PathBuf,
-    pub file_size: u64,
+    pub file_size: ByteSize,
     pub original_permissions: u32,
     source_parent: PinnedParentDirectory,
     source_metadata: fs::Metadata,
@@ -432,7 +435,7 @@ pub fn plan_blocked_file_rename(
     Ok(PlannedBlockedRename {
         source_path: source_path.to_path_buf(),
         destination_path,
-        file_size: source_metadata.len(),
+        file_size: ByteSize::b(source_metadata.len()),
         original_permissions: source_metadata.mode() & 0o777,
         source_parent,
         source_metadata,

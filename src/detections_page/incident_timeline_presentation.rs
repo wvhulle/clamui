@@ -7,10 +7,10 @@ use crate::{
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        desktop::locale_formatting::exact_local_time_text,
         detection_journal::detection_history_store::{DetectionResolution, StoredDetection},
         threat_intel::malware_bazaar_client::KnownSampleLookup,
     },
-    logs_page::activity_entry_row::formatted_local_time,
     shared_widgets::step_timeline::timeline_step_contents::{
         StepActionSlot, StepChoiceRow, StepEvidenceRow, StepNodeState, TimelineStep,
         TimelineStepAction,
@@ -98,10 +98,7 @@ pub fn detection_summary_text(displayed_detection: &DisplayedDetection) -> Strin
 }
 
 fn evidence_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
-    StepEvidenceRow {
-        evidence_name,
-        evidence_value,
-    }
+    StepEvidenceRow::current_fact(evidence_name, evidence_value)
 }
 
 fn plain_step(
@@ -145,7 +142,7 @@ fn detected_step(stored_detection: &StoredDetection) -> TimelineStep {
             evidence_row(gettext("Found by"), source_text(stored_detection)),
             evidence_row(
                 gettext("Last seen"),
-                formatted_local_time(stored_detection.last_seen_unix),
+                exact_local_time_text(stored_detection.last_seen),
             ),
             evidence_row(
                 gettext("Times seen"),
@@ -170,7 +167,7 @@ fn detected_step(stored_detection: &StoredDetection) -> TimelineStep {
                 .replace("{signature}", &signature_text)
                 .replace(
                     "{time}",
-                    &formatted_local_time(stored_detection.first_seen_unix),
+                    &exact_local_time_text(stored_detection.first_seen),
                 ),
         )
     }
@@ -394,7 +391,7 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
         return plain_step(
             step_title,
             mechanism_details,
-            StepNodeState::AwaitingEarlier,
+            StepNodeState::AwaitingPrerequisite,
             gettext("Waiting for your decision"),
         );
     }
@@ -405,7 +402,7 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
             .replace("{state}", &detection_state_text(displayed_detection))
             .replace(
                 "{time}",
-                &formatted_local_time(stored_detection.resolved_at_unix),
+                &exact_local_time_text(stored_detection.resolved_at),
             )
     };
     plain_step(
@@ -453,11 +450,11 @@ mod incident_timeline_presentation_tests {
                 signature_name: "Win.Trojan.Agent-1".to_owned(),
                 found_on_access: true,
                 found_by_schedule: false,
-                first_seen_unix: 1_793_869_222,
-                last_seen_unix: 1_793_869_225,
+                first_seen: jiff::Timestamp::constant(1_793_869_222, 0),
+                last_seen: jiff::Timestamp::constant(1_793_869_225, 0),
                 sighting_count: 6,
                 resolution: DetectionResolution::Unresolved,
-                resolved_at_unix: 0,
+                resolved_at: jiff::Timestamp::UNIX_EPOCH,
             },
             file_state: DetectedFileState::BlockedInPlace,
         }
@@ -505,7 +502,7 @@ mod incident_timeline_presentation_tests {
         );
         assert_eq!(
             incident_steps[RESOLVED_POSITION].node_state,
-            StepNodeState::AwaitingEarlier
+            StepNodeState::AwaitingPrerequisite
         );
     }
 

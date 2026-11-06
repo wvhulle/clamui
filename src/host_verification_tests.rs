@@ -311,7 +311,9 @@ async fn host_status_probes_read_the_real_system() {
     println!("database directory: {directory_status:#?}");
     println!(
         "update plan: {:?}",
-        crate::signatures_page::signature_update_dialog::database_update_events::plan_database_update(service_state)
+        crate::protection_page::signature_update_run::database_update_events::plan_database_update(
+            service_state
+        )
     );
     println!(
         "distribution: {:?}",
@@ -417,7 +419,7 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
         .resolve_detection(
             stored_detection.detection_id,
             DetectionResolution::MovedToQuarantine,
-            stored_detection.last_seen_unix + 1,
+            stored_detection.last_seen + jiff::SignedDuration::from_secs(1),
         )
         .await
         .expect("resolved");

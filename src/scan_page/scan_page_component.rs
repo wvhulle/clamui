@@ -1,10 +1,11 @@
 use std::{
     path::PathBuf,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
+use jiff::Timestamp;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmWidgetExt,
     abstractions::Toaster,
@@ -124,7 +125,7 @@ pub struct ScanPage {
     profile_manager_view: ProfileManagerView,
     profile_names: Vec<String>,
     profile_names_replaced: bool,
-    scan_started_at: SystemTime,
+    scan_started_at: Timestamp,
     scan_started_instant: Instant,
     active_scan_targets: Vec<PathBuf>,
     file_list_directory: PathBuf,
@@ -424,10 +425,7 @@ impl ScanPage {
             ScanResultsStatus::ScanCancelled => ActivityStatus::ScanCancelled,
         };
         let new_entry = NewActivityEntry {
-            started_at_unix: self
-                .scan_started_at
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |elapsed_time| elapsed_time.as_secs() as i64),
+            started_at: self.scan_started_at,
             activity_status,
             activity_targets: self
                 .active_scan_targets
@@ -466,7 +464,7 @@ impl ScanPage {
 
     fn start_scan(&mut self, scan_targets: Vec<PathBuf>, sender: &ComponentSender<Self>) {
         self.page_notice.clear();
-        self.scan_started_at = SystemTime::now();
+        self.scan_started_at = Timestamp::now();
         self.scan_started_instant = Instant::now();
         self.active_scan_targets.clone_from(&scan_targets);
         self.scan_outcome = CompletedScanOutcome::default();
@@ -895,7 +893,7 @@ impl Component for ScanPage {
             profile_names: Vec::new(),
             profile_names_replaced: false,
             activity_history: page_init.activity_history,
-            scan_started_at: SystemTime::now(),
+            scan_started_at: Timestamp::now(),
             scan_started_instant: Instant::now(),
             active_scan_targets: Vec::new(),
             file_list_directory: page_init.file_list_directory,

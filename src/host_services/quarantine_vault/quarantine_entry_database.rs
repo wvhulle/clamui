@@ -2,10 +2,12 @@ use std::{
     ffi::OsString,
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
+use bytesize::ByteSize;
 use futures::{TryStreamExt, stream};
+use jiff::Timestamp;
 use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Database, Row, Value};
 
@@ -50,13 +52,28 @@ const ENTRY_COLUMNS: &str = "id, original_path, quarantine_path, threat_name, de
                              file_size, file_hash, original_permissions";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StoredDetectionDate {
+    DetectedAt(Timestamp),
+    UnreadableText(String),
+}
+
+impl From<String> for StoredDetectionDate {
+    fn from(stored_text: String) -> Self {
+        stored_text.parse().map_or_else(
+            |_unparseable| Self::UnreadableText(stored_text),
+            Self::DetectedAt,
+        )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QuarantineEntryRecord {
     pub entry_id: i64,
     pub original_path: PathBuf,
     pub quarantine_path: PathBuf,
     pub threat_name: String,
-    pub detection_date: String,
-    pub file_size: u64,
+    pub detection_date: StoredDetectionDate,
+    pub file_size: ByteSize,
     pub file_hash: String,
     pub original_permissions: u32,
 }
@@ -65,7 +82,7 @@ struct PendingQuarantineRow {
     quarantine_path: PathBuf,
     original_path: PathBuf,
     threat_name: String,
-    file_size: i64,
+    file_size: ByteSize,
     file_hash: String,
     original_permissions: i64,
 }
@@ -110,15 +127,11 @@ fn entry_record_from_row(
         original_path: stored_path_column(database_row, 1)?,
         quarantine_path: stored_path_column(database_row, 2)?,
         threat_name: database_row.get(3)?,
-        detection_date: database_row.get(4)?,
-        file_size: database_row.get::<i64>(5)?.max(0) as u64,
+        detection_date: StoredDetectionDate::from(database_row.get::<String>(4)?),
+        file_size: ByteSize::b(database_row.get::<i64>(5)?.max(0) as u64),
         file_hash: database_row.get(6)?,
         original_permissions: (database_row.get::<i64>(7)? as u32) & 0o777,
     })
-}
-
-fn current_detection_date() -> String {
-    humantime::format_rfc3339_millis(SystemTime::now()).to_string()
 }
 
 impl QuarantineVault {
@@ -226,7 +239,7 @@ impl QuarantineVault {
                 quarantine_path: stored_path_column(&pending_row, 0)?,
                 original_path: stored_path_column(&pending_row, 1)?,
                 threat_name: pending_row.get(2)?,
-                file_size: pending_row.get(3)?,
+                file_size: ByteSize::b(pending_row.get::<i64>(3)?.max(0) as u64),
                 file_hash: pending_row.get(4)?,
                 original_permissions: pending_row.get(5)?,
             });
@@ -289,7 +302,7 @@ impl QuarantineVault {
                     path_blob(&pending_payload.destination_path),
                     path_blob(&pending_payload.source_path),
                     Value::Text(threat_name.to_owned()),
-                    Value::Integer(pending_payload.file_size as i64),
+                    Value::Integer(pending_payload.file_size.as_u64() as i64),
                     Value::Text(pending_payload.file_hash.clone()),
                     Value::Integer(i64::from(pending_payload.original_permissions)),
                 ],
@@ -363,8 +376,8 @@ impl QuarantineVault {
                     path_blob(&recorded_payload.source_path),
                     path_blob(&recorded_payload.destination_path),
                     Value::Text(threat_name.to_owned()),
-                    Value::Text(current_detection_date()),
-                    Value::Integer(recorded_payload.file_size as i64),
+                    Value::Text(format!("{:.3}", Timestamp::now())),
+                    Value::Integer(recorded_payload.file_size.as_u64() as i64),
                     Value::Text(recorded_payload.file_hash.clone()),
                     Value::Integer(i64::from(recorded_payload.original_permissions & 0o777)),
                 ],
@@ -551,7 +564,7 @@ impl QuarantineVault {
 pub(super) struct RecordedPayload {
     source_path: PathBuf,
     destination_path: PathBuf,
-    file_size: u64,
+    file_size: ByteSize,
     file_hash: String,
     original_permissions: u32,
 }
@@ -624,8 +637,8 @@ async fn recover_verified_pending_entry(
                 path_blob(&pending_entry.original_path),
                 path_blob(&pending_entry.quarantine_path),
                 Value::Text(pending_entry.threat_name),
-                Value::Text(current_detection_date()),
-                Value::Integer(pending_entry.file_size),
+                Value::Text(format!("{:.3}", Timestamp::now())),
+                Value::Integer(pending_entry.file_size.as_u64() as i64),
                 Value::Text(verified_hash),
                 Value::Integer(pending_entry.original_permissions),
             ],

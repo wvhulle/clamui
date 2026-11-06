@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::Path,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, path::Path};
 
 use crate::{
     detections_page::{
@@ -32,14 +28,6 @@ pub struct JournalBatch {
     pub detection_records: Vec<JournalDetectionRecord>,
     pub last_cursor: String,
     pub access_changes: Vec<JournalAccess>,
-}
-
-pub fn current_unix_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed_time| {
-            i64::try_from(elapsed_time.as_secs()).unwrap_or_default()
-        })
 }
 
 pub fn split_journal_batch(journal_events: Vec<DetectionJournalEvent>) -> JournalBatch {
@@ -149,11 +137,11 @@ mod detections_view_state_tests {
             signature_name: "Win.Test-1".to_owned(),
             found_on_access: true,
             found_by_schedule: false,
-            first_seen_unix: 1,
-            last_seen_unix: 2,
+            first_seen: jiff::Timestamp::constant(1, 0),
+            last_seen: jiff::Timestamp::constant(2, 0),
             sighting_count: 1,
             resolution,
-            resolved_at_unix: 0,
+            resolved_at: jiff::Timestamp::UNIX_EPOCH,
         }
     }
 
@@ -192,7 +180,7 @@ mod detections_view_state_tests {
             file_state: DetectedFileState::NoLongerThere,
         }];
         let reopened_record = JournalDetectionRecord {
-            observed_at_unix: 3,
+            observed_at: jiff::Timestamp::constant(3, 0),
             detection_source: DetectionSource::OnAccessScanner,
             file_path: detection.file_path.clone(),
             signature_name: detection.signature_name.clone(),
@@ -220,7 +208,7 @@ mod detections_view_state_tests {
     #[test]
     fn a_journal_batch_keeps_the_last_cursor_and_reports_access_problems() {
         let detection_record = JournalDetectionRecord {
-            observed_at_unix: 1,
+            observed_at: jiff::Timestamp::constant(1, 0),
             detection_source: DetectionSource::OnAccessScanner,
             file_path: PathBuf::from("/tmp/file"),
             signature_name: "Win.Test-1".to_owned(),

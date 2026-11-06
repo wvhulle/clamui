@@ -1,6 +1,7 @@
 use std::{os::unix::ffi::OsStrExt, path::Path};
 
 use gettextrs::{gettext, ngettext};
+use jiff::Timestamp;
 use relm4::gtk::{gio, gio::prelude::*, glib::variant::ToVariant};
 
 use crate::{
@@ -37,12 +38,11 @@ pub enum DetectionAlert {
 pub fn plan_detection_alerts(
     newly_opened: &[JournalDetectionRecord],
     journal_replay: JournalReplay,
-    application_started_unix: i64,
+    application_started: Timestamp,
 ) -> Vec<DetectionAlert> {
-    let (live_records, missed_records): (Vec<_>, Vec<_>) =
-        newly_opened.iter().partition(|detection_record| {
-            detection_record.observed_at_unix >= application_started_unix
-        });
+    let (live_records, missed_records): (Vec<_>, Vec<_>) = newly_opened
+        .iter()
+        .partition(|detection_record| detection_record.observed_at >= application_started);
     let missed_count = missed_records
         .iter()
         .filter(|detection_record| !signature_is_test_pattern(&detection_record.signature_name))
@@ -154,11 +154,11 @@ mod detection_alerts_tests {
 
     use super::*;
 
-    const STARTED_UNIX: i64 = 1_793_869_222;
+    const STARTED_AT: Timestamp = Timestamp::constant(1_793_869_222, 0);
 
-    fn detection_record(observed_at_unix: i64, signature_name: &str) -> JournalDetectionRecord {
+    fn detection_record(observed_at: Timestamp, signature_name: &str) -> JournalDetectionRecord {
         JournalDetectionRecord {
-            observed_at_unix,
+            observed_at,
             detection_source: DetectionSource::OnAccessScanner,
             file_path: PathBuf::from("/home/user/Downloads/invoice.exe"),
             signature_name: signature_name.to_owned(),
@@ -169,9 +169,12 @@ mod detection_alerts_tests {
     fn the_first_import_of_old_history_raises_no_alert() {
         assert_eq!(
             plan_detection_alerts(
-                &[detection_record(STARTED_UNIX - 900, "Win.Test-1")],
+                &[detection_record(
+                    STARTED_AT - jiff::SignedDuration::from_secs(900),
+                    "Win.Test-1"
+                )],
                 JournalReplay::FirstImport,
-                STARTED_UNIX,
+                STARTED_AT,
             ),
             vec![]
         );
@@ -182,11 +185,17 @@ mod detection_alerts_tests {
         assert_eq!(
             plan_detection_alerts(
                 &[
-                    detection_record(STARTED_UNIX - 900, "Win.Test-1"),
-                    detection_record(STARTED_UNIX - 800, "Win.Test-2"),
+                    detection_record(
+                        STARTED_AT - jiff::SignedDuration::from_secs(900),
+                        "Win.Test-1"
+                    ),
+                    detection_record(
+                        STARTED_AT - jiff::SignedDuration::from_secs(800),
+                        "Win.Test-2"
+                    ),
                 ],
                 JournalReplay::AfterSavedCursor,
-                STARTED_UNIX,
+                STARTED_AT,
             ),
             vec![DetectionAlert::MissedDetections { missed_count: 2 }]
         );
@@ -196,9 +205,12 @@ mod detection_alerts_tests {
     fn missed_test_patterns_are_not_worth_a_summary() {
         assert_eq!(
             plan_detection_alerts(
-                &[detection_record(STARTED_UNIX - 900, "Eicar-Test-Signature")],
+                &[detection_record(
+                    STARTED_AT - jiff::SignedDuration::from_secs(900),
+                    "Eicar-Test-Signature"
+                )],
                 JournalReplay::AfterSavedCursor,
-                STARTED_UNIX,
+                STARTED_AT,
             ),
             vec![]
         );
@@ -208,9 +220,12 @@ mod detection_alerts_tests {
     fn live_detections_alert_individually_even_during_the_first_import() {
         assert_eq!(
             plan_detection_alerts(
-                &[detection_record(STARTED_UNIX + 5, "Win.Test-1")],
+                &[detection_record(
+                    STARTED_AT + jiff::SignedDuration::from_secs(5),
+                    "Win.Test-1"
+                )],
                 JournalReplay::FirstImport,
-                STARTED_UNIX,
+                STARTED_AT,
             )
             .len(),
             1
@@ -220,11 +235,11 @@ mod detection_alerts_tests {
     #[test]
     fn only_real_signatures_are_urgent() {
         assert_eq!(
-            live_detection_priority(&detection_record(STARTED_UNIX, "Win.Test-1")),
+            live_detection_priority(&detection_record(STARTED_AT, "Win.Test-1")),
             gio::NotificationPriority::Urgent
         );
         assert_eq!(
-            live_detection_priority(&detection_record(STARTED_UNIX, "Eicar-Test-Signature")),
+            live_detection_priority(&detection_record(STARTED_AT, "Eicar-Test-Signature")),
             gio::NotificationPriority::Normal
         );
     }
@@ -233,7 +248,7 @@ mod detection_alerts_tests {
     fn scheduled_finds_do_not_claim_the_file_was_blocked() {
         let scheduled_record = JournalDetectionRecord {
             detection_source: DetectionSource::ScheduledScan,
-            ..detection_record(STARTED_UNIX, "Win.Test-1")
+            ..detection_record(STARTED_AT, "Win.Test-1")
         };
         assert_eq!(
             live_detection_title(&scheduled_record),

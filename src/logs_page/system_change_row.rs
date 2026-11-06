@@ -1,9 +1,9 @@
 use gettextrs::gettext;
 use relm4::{FactorySender, adw, adw::prelude::*, gtk, prelude::FactoryComponent};
 
-use crate::{
-    host_services::settings_helper::helper_audit_records::HelperAuditEntry,
-    logs_page::activity_entry_row::formatted_local_time,
+use crate::host_services::{
+    desktop::locale_formatting::exact_local_time_text,
+    settings_helper::helper_audit_records::HelperAuditEntry,
 };
 
 pub enum SystemChangeRow {
@@ -23,12 +23,7 @@ impl SystemChangeRow {
         match self {
             Self::ChangeRecorded(audit_entry) => {
                 gettext("{time} · {outcome} · requested by user {uid}")
-                    .replace(
-                        "{time}",
-                        &formatted_local_time(
-                            i64::try_from(audit_entry.recorded_unix_seconds).unwrap_or(i64::MAX),
-                        ),
-                    )
+                    .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
                     .replace("{outcome}", &audit_entry.audited_outcome.described())
                     .replace("{uid}", &audit_entry.requester_uid)
             }

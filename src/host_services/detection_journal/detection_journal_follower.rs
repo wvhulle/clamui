@@ -1,4 +1,7 @@
+use std::io;
+
 use futures::Stream;
+use jiff::Timestamp;
 use systemd::journal::Journal;
 
 use crate::host_services::{
@@ -45,7 +48,7 @@ fn journal_has_readable_files(journal: &Journal) -> systemd::Result<bool> {
 
 fn detection_at_position(journal: &mut Journal) -> systemd::Result<Option<JournalDetectionRecord>> {
     let systemd_unit = journal_field_text(journal, SYSTEMD_UNIT_FIELD)?;
-    let realtime_microseconds = journal.timestamp_usec()?;
+    let observed_at = Timestamp::try_from(journal.timestamp()?).map_err(io::Error::other)?;
     let message_field = journal.get_data(MESSAGE_FIELD)?;
     let message_bytes = message_field
         .as_ref()
@@ -54,7 +57,7 @@ fn detection_at_position(journal: &mut Journal) -> systemd::Result<Option<Journa
     Ok(detection_record_from_fields(
         &systemd_unit,
         message_bytes,
-        realtime_microseconds,
+        observed_at,
     ))
 }
 

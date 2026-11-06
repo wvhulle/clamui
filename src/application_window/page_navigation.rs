@@ -53,14 +53,10 @@ use crate::{
         },
         engine_settings::engine_settings_page::{EngineSettingsPage, EngineSettingsSection},
     },
-    signatures_page::signature_update_dialog::database_update_page::{
-        DatabaseUpdatePage, DatabaseUpdatePageInput, DatabaseUpdatePageOutput,
-    },
 };
 
 pub enum StartupDestination {
     ShowPage(ApplicationPage),
-    ShowSignatureUpdate,
 }
 
 pub struct PageNavigationInit {
@@ -154,13 +150,11 @@ pub struct PageNavigation {
     opened_settings_subpages: Vec<OpenedSettingsSubpage>,
     scan_page: Controller<ScanPage>,
     quarantine_page: Controller<QuarantineEntriesPage>,
-    signature_update_page: Controller<DatabaseUpdatePage>,
     logs_page: Controller<ActivityLogsPage>,
     signatures_page: Controller<AuditSectionsPage>,
     hardening_page: Controller<AuditSectionsPage>,
     protection_page: Controller<ProtectionTimelinePage>,
     detections_page: Controller<BackgroundDetectionsPage>,
-    signature_update_dialog: adw::Dialog,
 }
 
 #[derive(Debug)]
@@ -171,7 +165,6 @@ pub enum PageNavigationInput {
     SettingsSubpagePopped(String),
     QuickScanRequested,
     SignatureUpdateRequested,
-    SignatureUpdateDialogRequested,
     ScanTargetsReceived(Vec<PathBuf>),
     ScanPathsForwarded(Vec<PathBuf>),
     DetectionsListRequested,
@@ -247,18 +240,6 @@ fn primary_menu() -> gio::Menu {
     primary_menu.append(Some(&gettext("About Lazaret")), Some("app.about"));
     primary_menu.append(Some(&gettext("Quit")), Some("app.quit"));
     primary_menu
-}
-
-fn signature_update_dialog(signature_update_page: &Controller<DatabaseUpdatePage>) -> adw::Dialog {
-    let dialog_view = adw::ToolbarView::new();
-    dialog_view.add_top_bar(&adw::HeaderBar::new());
-    dialog_view.set_content(Some(signature_update_page.widget()));
-    adw::Dialog::builder()
-        .title(gettext("Update signatures"))
-        .content_width(560)
-        .content_height(640)
-        .child(&dialog_view)
-        .build()
 }
 
 fn narrow_layout_breakpoint(split_view: &adw::NavigationSplitView) -> adw::Breakpoint {
@@ -557,22 +538,19 @@ impl Component for PageNavigation {
                 file_list_directory: data_directory,
             })
             .forward(sender.input_sender(), forwarded_scan_output);
-        let signature_update_page = DatabaseUpdatePage::builder()
+        let protection_page = ProtectionTimelinePage::builder()
             .launch(activity_history.clone())
-            .forward(sender.input_sender(), |update_output| match update_output {
-                DatabaseUpdatePageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
-                DatabaseUpdatePageOutput::SignaturesUpdated => {
-                    PageNavigationInput::SignaturesUpdated
-                }
-            });
-        let protection_page = ProtectionTimelinePage::builder().launch(()).forward(
-            sender.input_sender(),
-            |protection_output| match protection_output {
-                ProtectionTimelinePageOutput::UpdateSignaturesRequested => {
-                    PageNavigationInput::SignatureUpdateDialogRequested
-                }
-            },
-        );
+            .forward(
+                sender.input_sender(),
+                |protection_output| match protection_output {
+                    ProtectionTimelinePageOutput::SignaturesUpdated => {
+                        PageNavigationInput::SignaturesUpdated
+                    }
+                    ProtectionTimelinePageOutput::ActivityRecorded => {
+                        PageNavigationInput::ActivityRecorded
+                    }
+                },
+            );
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
                 activity_history,
@@ -604,14 +582,11 @@ impl Component for PageNavigation {
         let model = Self {
             visible_page: match navigation_init.startup_destination {
                 StartupDestination::ShowPage(application_page) => application_page,
-                StartupDestination::ShowSignatureUpdate => ApplicationPage::Protection,
             },
             shows_content_when_narrow: false,
             opened_settings_subpages: Vec::new(),
-            signature_update_dialog: signature_update_dialog(&signature_update_page),
             scan_page,
             quarantine_page,
-            signature_update_page,
             logs_page,
             signatures_page,
             hardening_page,
@@ -633,12 +608,6 @@ impl Component for PageNavigation {
                 .as_ref(),
         );
         register_page_actions(&navigation_init.window_root, &sender);
-        if matches!(
-            navigation_init.startup_destination,
-            StartupDestination::ShowSignatureUpdate
-        ) {
-            sender.input(PageNavigationInput::SignatureUpdateDialogRequested);
-        }
         if !navigation_init.startup_scan_targets.is_empty() {
             sender.input(PageNavigationInput::ScanTargetsReceived(
                 navigation_init.startup_scan_targets,
@@ -651,7 +620,7 @@ impl Component for PageNavigation {
         &mut self,
         navigation_input: PageNavigationInput,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match navigation_input {
             PageNavigationInput::PageShown(application_page) => self.show_page(application_page),
@@ -677,12 +646,9 @@ impl Component for PageNavigation {
                 self.scan_page.emit(ScanPageInput::QuickScanRequested);
             }
             PageNavigationInput::SignatureUpdateRequested => {
-                self.signature_update_dialog.present(Some(root));
-                self.signature_update_page
-                    .emit(DatabaseUpdatePageInput::UpdateRequested);
-            }
-            PageNavigationInput::SignatureUpdateDialogRequested => {
-                self.signature_update_dialog.present(Some(root));
+                self.show_page(ApplicationPage::Protection);
+                self.protection_page
+                    .emit(ProtectionTimelinePageInput::SignatureUpdateRequested);
             }
             PageNavigationInput::ScanTargetsReceived(scan_targets) => {
                 self.show_page(ApplicationPage::Scan);

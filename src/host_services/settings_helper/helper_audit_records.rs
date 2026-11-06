@@ -1,4 +1,7 @@
+use std::io;
+
 use gettextrs::gettext;
+use jiff::Timestamp;
 
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
@@ -9,7 +12,6 @@ const HELPER_SERVICE_UNIT: &str = "lazaret-settings-helper.service";
 const SYSTEMD_UNIT_FIELD: &str = "_SYSTEMD_UNIT";
 const SENDER_USER_FIELD: &str = "_UID";
 const ROOT_USER_ID: &str = "0";
-const MICROSECONDS_PER_SECOND: u64 = 1_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditedOutcome {
@@ -41,7 +43,7 @@ impl AuditedOutcome {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HelperAuditEntry {
-    pub recorded_unix_seconds: u64,
+    pub recorded_at: Timestamp,
     pub action_name: String,
     pub action_subject: String,
     pub audited_outcome: AuditedOutcome,
@@ -68,7 +70,7 @@ pub fn newest_helper_audit_entries(entry_limit: usize) -> systemd::Result<Vec<He
             continue;
         }
         newest_entries.push(HelperAuditEntry {
-            recorded_unix_seconds: journal.timestamp_usec()? / MICROSECONDS_PER_SECOND,
+            recorded_at: Timestamp::try_from(journal.timestamp()?).map_err(io::Error::other)?,
             action_name: sanitize_scanner_line(&action_name),
             action_subject: sanitize_scanner_line(&journal_field_text(
                 &mut journal,
@@ -96,7 +98,7 @@ mod helper_audit_records_tests {
     #[test]
     fn only_applied_weakening_changes_lowered_protection() {
         let audit_entry = HelperAuditEntry {
-            recorded_unix_seconds: 0,
+            recorded_at: Timestamp::UNIX_EPOCH,
             action_name: "trust-file".to_owned(),
             action_subject: String::new(),
             audited_outcome: AuditedOutcome::AuthorizationRefused,

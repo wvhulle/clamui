@@ -1,3 +1,6 @@
+use std::io;
+
+use jiff::Timestamp;
 use systemd::journal::{Journal, OpenOptions};
 
 const MESSAGE_FIELD: &str = "MESSAGE";
@@ -5,11 +8,9 @@ const SYSTEMD_UNIT_FIELD: &str = "_SYSTEMD_UNIT";
 const MANAGER_UNIT_FIELD: &str = "UNIT";
 const SENDER_PROCESS_FIELD: &str = "_PID";
 const SERVICE_MANAGER_PROCESS: &str = "1";
-const MICROSECONDS_PER_SECOND: u64 = 1_000_000;
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ManagerUnitRecord {
-    pub realtime_microseconds: u64,
+    pub recorded_at: Timestamp,
     pub message_id: String,
     pub exit_code: String,
     pub exit_status: String,
@@ -36,7 +37,7 @@ pub fn journal_field_text(journal: &mut Journal, field_name: &str) -> systemd::R
 
 fn manager_record_at_position(journal: &mut Journal) -> systemd::Result<ManagerUnitRecord> {
     Ok(ManagerUnitRecord {
-        realtime_microseconds: journal.timestamp_usec()?,
+        recorded_at: Timestamp::try_from(journal.timestamp()?).map_err(io::Error::other)?,
         message_id: journal_field_text(journal, "MESSAGE_ID")?,
         exit_code: journal_field_text(journal, "EXIT_CODE")?,
         exit_status: journal_field_text(journal, "EXIT_STATUS")?,
@@ -83,11 +84,13 @@ pub fn newest_unit_messages(
 
 pub fn unit_messages_since(
     service_unit: &str,
-    since_unix_seconds: u64,
+    since_moment: Timestamp,
 ) -> systemd::Result<Vec<String>> {
     let mut journal = open_system_journal()?;
     add_unit_matches(&mut journal, &[service_unit])?;
-    journal.seek_realtime_usec(since_unix_seconds * MICROSECONDS_PER_SECOND)?;
+    journal.seek_realtime_usec(
+        u64::try_from(since_moment.as_microsecond()).map_err(io::Error::other)?,
+    )?;
     let mut unit_messages = Vec::new();
     while journal.next()? > 0 {
         unit_messages.push(journal_field_text(&mut journal, MESSAGE_FIELD)?);

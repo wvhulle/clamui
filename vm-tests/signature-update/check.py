@@ -1,5 +1,3 @@
-UPDATE_DATABASE_BUTTON = (468, 488)
-UPDATE_NOW_BUTTON = (967, 177)
 FIXTURE_KEY = "FIXTUREKEYMUSTNEVERAPPEAR"
 
 machine.start()
@@ -14,13 +12,8 @@ with subtest("the Protection page lists both updaters"):
     time.sleep(3)
     machine.screenshot("protection_with_updaters")
 
-with subtest("Update Now opens the update dialog"):
-    click_at(UPDATE_NOW_BUTTON[0], UPDATE_NOW_BUTTON[1])
-    time.sleep(2)
-    machine.screenshot("update_dialog")
-
 with subtest("a failed update is reported through a real password prompt"):
-    click_at(UPDATE_DATABASE_BUTTON[0], UPDATE_DATABASE_BUTTON[1])
+    activate_application_action("update-definitions")
     time.sleep(3)
     machine.screenshot("update_password_prompt")
     answer_password_prompt()

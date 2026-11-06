@@ -1,5 +1,6 @@
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf};
 
+use jiff::{SignedDuration, Timestamp};
 use turso::{Connection, Row, Value};
 
 use crate::host_services::{
@@ -7,7 +8,7 @@ use crate::host_services::{
     detection_journal::detection_journal_records::{DetectionSource, JournalDetectionRecord},
 };
 
-const REOPEN_GRACE_SECONDS: i64 = 10;
+const REOPEN_GRACE: SignedDuration = SignedDuration::from_secs(10);
 const DETECTION_COLUMNS: &str = "detection_id, file_path, signature_name, found_on_access,
                                  found_by_schedule, first_seen_unix, last_seen_unix,
                                  sighting_count, resolution, resolved_at_unix";
@@ -48,11 +49,11 @@ pub struct StoredDetection {
     pub signature_name: String,
     pub found_on_access: bool,
     pub found_by_schedule: bool,
-    pub first_seen_unix: i64,
-    pub last_seen_unix: i64,
+    pub first_seen: Timestamp,
+    pub last_seen: Timestamp,
     pub sighting_count: i64,
     pub resolution: DetectionResolution,
-    pub resolved_at_unix: i64,
+    pub resolved_at: Timestamp,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,11 +64,10 @@ pub enum DetectionSighting {
 
 pub fn sighting_reopens_detection(
     resolution: DetectionResolution,
-    resolved_at_unix: i64,
-    observed_at_unix: i64,
+    resolved_at: Timestamp,
+    observed_at: Timestamp,
 ) -> bool {
-    resolution != DetectionResolution::Unresolved
-        && observed_at_unix > resolved_at_unix + REOPEN_GRACE_SECONDS
+    resolution != DetectionResolution::Unresolved && observed_at > resolved_at + REOPEN_GRACE
 }
 
 fn stored_detection_from_row(
@@ -83,11 +83,11 @@ fn stored_detection_from_row(
         signature_name: detection_row.get(2)?,
         found_on_access: found_on_access != 0,
         found_by_schedule: found_by_schedule != 0,
-        first_seen_unix: detection_row.get(5)?,
-        last_seen_unix: detection_row.get(6)?,
+        first_seen: Timestamp::from_second(detection_row.get(5)?)?,
+        last_seen: Timestamp::from_second(detection_row.get(6)?)?,
         sighting_count: detection_row.get(7)?,
         resolution: DetectionResolution::from_stored_text(&stored_resolution),
-        resolved_at_unix: detection_row.get(9)?,
+        resolved_at: Timestamp::from_second(detection_row.get(9)?)?,
     })
 }
 
@@ -134,7 +134,7 @@ async fn apply_detection_record(
                     Value::Text(detection_record.signature_name.clone()),
                     Value::Integer(seen_on_access),
                     Value::Integer(seen_by_schedule),
-                    Value::Integer(detection_record.observed_at_unix),
+                    Value::Integer(detection_record.observed_at.as_second()),
                 ],
             )
             .await?;
@@ -142,15 +142,15 @@ async fn apply_detection_record(
     };
     let reopened = sighting_reopens_detection(
         existing_detection.resolution,
-        existing_detection.resolved_at_unix,
-        detection_record.observed_at_unix,
+        existing_detection.resolved_at,
+        detection_record.observed_at,
     );
     let (kept_resolution, kept_resolved_at) = if reopened {
-        (DetectionResolution::Unresolved, 0)
+        (DetectionResolution::Unresolved, Timestamp::UNIX_EPOCH)
     } else {
         (
             existing_detection.resolution,
-            existing_detection.resolved_at_unix,
+            existing_detection.resolved_at,
         )
     };
     database_connection
@@ -162,9 +162,9 @@ async fn apply_detection_record(
             vec![
                 Value::Integer(seen_on_access),
                 Value::Integer(seen_by_schedule),
-                Value::Integer(detection_record.observed_at_unix),
+                Value::Integer(detection_record.observed_at.as_second()),
                 Value::Text(kept_resolution.stored_text().to_owned()),
-                Value::Integer(kept_resolved_at),
+                Value::Integer(kept_resolved_at.as_second()),
                 Value::Integer(existing_detection.detection_id),
             ],
         )
@@ -242,7 +242,7 @@ impl ActivityHistory {
         &self,
         detection_id: i64,
         resolution: DetectionResolution,
-        resolved_at_unix: i64,
+        resolved_at: Timestamp,
     ) -> Result<(), ActivityHistoryFailure> {
         let _history_lock = self.lock_history().await?;
         self.open_connection()
@@ -252,7 +252,7 @@ impl ActivityHistory {
                  detection_id = ?3",
                 vec![
                     Value::Text(resolution.stored_text().to_owned()),
-                    Value::Integer(resolved_at_unix),
+                    Value::Integer(resolved_at.as_second()),
                     Value::Integer(detection_id),
                 ],
             )
@@ -265,11 +265,11 @@ impl ActivityHistory {
 mod detection_history_store_tests {
     use super::*;
 
-    const FIRST_SEEN_UNIX: i64 = 1_793_869_222;
+    const FIRST_SEEN: Timestamp = Timestamp::constant(1_793_869_222, 0);
 
-    fn detection_record(observed_at_unix: i64) -> JournalDetectionRecord {
+    fn detection_record(observed_at: Timestamp) -> JournalDetectionRecord {
         JournalDetectionRecord {
-            observed_at_unix,
+            observed_at,
             detection_source: DetectionSource::OnAccessScanner,
             file_path: PathBuf::from(OsStr::from_bytes(b"/home/user/Downloads/a\xff.exe")),
             signature_name: "Win.Test-1".to_owned(),
@@ -287,9 +287,9 @@ mod detection_history_store_tests {
     async fn repeated_lines_for_one_file_become_one_counted_detection() {
         let (_temporary_root, activity_history) = temporary_history();
         let repeated_records = [
-            detection_record(FIRST_SEEN_UNIX),
-            detection_record(FIRST_SEEN_UNIX + 1),
-            detection_record(FIRST_SEEN_UNIX + 3),
+            detection_record(FIRST_SEEN),
+            detection_record(FIRST_SEEN + SignedDuration::from_secs(1)),
+            detection_record(FIRST_SEEN + SignedDuration::from_secs(3)),
         ];
         let newly_opened = activity_history
             .record_detection_batch(&repeated_records, "cursor-a")
@@ -299,8 +299,11 @@ mod detection_history_store_tests {
         let stored_detections = activity_history.list_detections().await.expect("listed");
         assert_eq!(stored_detections.len(), 1);
         assert_eq!(stored_detections[0].sighting_count, 3);
-        assert_eq!(stored_detections[0].first_seen_unix, FIRST_SEEN_UNIX);
-        assert_eq!(stored_detections[0].last_seen_unix, FIRST_SEEN_UNIX + 3);
+        assert_eq!(stored_detections[0].first_seen, FIRST_SEEN);
+        assert_eq!(
+            stored_detections[0].last_seen,
+            FIRST_SEEN + SignedDuration::from_secs(3)
+        );
         assert_eq!(
             stored_detections[0].file_path,
             repeated_records[0].file_path
@@ -315,11 +318,14 @@ mod detection_history_store_tests {
             None
         );
         activity_history
-            .record_detection_batch(&[detection_record(FIRST_SEEN_UNIX)], "cursor-a")
+            .record_detection_batch(&[detection_record(FIRST_SEEN)], "cursor-a")
             .await
             .expect("recorded");
         activity_history
-            .record_detection_batch(&[detection_record(FIRST_SEEN_UNIX + 1)], "cursor-b")
+            .record_detection_batch(
+                &[detection_record(FIRST_SEEN + SignedDuration::from_secs(1))],
+                "cursor-b",
+            )
             .await
             .expect("recorded");
         assert_eq!(
@@ -332,7 +338,7 @@ mod detection_history_store_tests {
     async fn only_a_later_sighting_reopens_a_resolved_detection() {
         let (_temporary_root, activity_history) = temporary_history();
         activity_history
-            .record_detection_batch(&[detection_record(FIRST_SEEN_UNIX)], "cursor-a")
+            .record_detection_batch(&[detection_record(FIRST_SEEN)], "cursor-a")
             .await
             .expect("recorded");
         let detection_id =
@@ -341,12 +347,15 @@ mod detection_history_store_tests {
             .resolve_detection(
                 detection_id,
                 DetectionResolution::MovedToQuarantine,
-                FIRST_SEEN_UNIX + 5,
+                FIRST_SEEN + SignedDuration::from_secs(5),
             )
             .await
             .expect("resolved");
         let trailing_sighting = activity_history
-            .record_detection_batch(&[detection_record(FIRST_SEEN_UNIX + 6)], "cursor-b")
+            .record_detection_batch(
+                &[detection_record(FIRST_SEEN + SignedDuration::from_secs(6))],
+                "cursor-b",
+            )
             .await
             .expect("recorded");
         assert!(trailing_sighting.is_empty());
@@ -355,7 +364,12 @@ mod detection_history_store_tests {
             DetectionResolution::MovedToQuarantine
         );
         let later_download = activity_history
-            .record_detection_batch(&[detection_record(FIRST_SEEN_UNIX + 600)], "cursor-c")
+            .record_detection_batch(
+                &[detection_record(
+                    FIRST_SEEN + SignedDuration::from_secs(600),
+                )],
+                "cursor-c",
+            )
             .await
             .expect("recorded");
         assert_eq!(later_download.len(), 1);

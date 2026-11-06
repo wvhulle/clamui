@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use gettextrs::{gettext, ngettext};
+use jiff::Timestamp;
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
     adw::prelude::*, gtk, prelude::FactoryVecDeque,
@@ -11,10 +12,15 @@ use crate::{
         settings_navigation::{SettingsSubpage, system_settings_group},
     },
     host_services::{
+        activity_history::activity_history_database::{ActivityHistory, ActivityHistoryFailure},
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        desktop::{
+            desktop_notifications::notify_outside_the_window,
+            locale_formatting::host_moment_formatters,
+        },
         detection_journal::detection_journal_follower::JournalAccess,
         systemd_bus::host_systemd_units::{
             ServiceLastResult, UnitStartOutcome, service_unit_snapshot, start_system_unit,
@@ -26,16 +32,24 @@ use crate::{
             ProtectionEvidence, WATCHED_SERVICE_UNITS, detection_notifications_are_enabled,
             gather_protection_evidence, lazaret_schedule_is_enabled,
         },
-        protection_timeline_presentation::{AlertReadiness, protection_timeline},
+        protection_timeline_presentation::{
+            AlertReadiness, ProtectionActivity, protection_timeline,
+        },
+        signature_update_run::{
+            database_update_events::{DatabaseUpdateEvent, database_update_events},
+            signature_update_session::{
+                DatabaseHostStatus, SignatureUpdateSession, load_host_status,
+            },
+        },
     },
     shared_widgets::{
-        component_streams::{RunningStream, run_stream},
+        component_streams::{RunningStream, run_stream, run_stream_then},
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
             busy_page_name, loading_status_page,
         },
         step_timeline::{
-            timeline_step_contents::{TimelineStepAction, TimelineStepRowOutput},
+            timeline_step_contents::{TimelineStep, TimelineStepAction, TimelineStepRowOutput},
             timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
         },
     },
@@ -43,6 +57,7 @@ use crate::{
 
 const SCANNER_FOUND_THREATS_STATUS: i32 = 1;
 const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
+const UPDATE_BATCH_SIZE: usize = 64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EvidenceRefresh {
@@ -53,7 +68,13 @@ enum EvidenceRefresh {
 
 pub struct ProtectionTimelinePage {
     toaster: Toaster,
-    timeline_rows: FactoryVecDeque<TimelineStepRow>,
+    protection_rows: FactoryVecDeque<TimelineStepRow>,
+    engine_rows: FactoryVecDeque<TimelineStepRow>,
+    review_rows: FactoryVecDeque<TimelineStepRow>,
+    activity_history: ActivityHistory,
+    signature_update_session: SignatureUpdateSession,
+    scheduled_scan_starting: bool,
+    update_awaits_host_status: bool,
     distribution_family: DistributionFamily,
     evidence_refresh: EvidenceRefresh,
     coverage_summary: String,
@@ -65,12 +86,16 @@ pub struct ProtectionTimelinePage {
 
 enum GatheredEvidence {
     NotGatheredYet,
-    Gathered(Box<ProtectionEvidence>),
+    Gathered {
+        protection_evidence: Box<ProtectionEvidence>,
+        gathered_at: Timestamp,
+    },
 }
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageInput {
     RefreshRequested,
+    SignatureUpdateRequested,
     UnresolvedDetectionsChanged(usize),
     JournalAccessChanged(JournalAccess),
     StepRequested(TimelineStepRowOutput),
@@ -78,17 +103,25 @@ pub enum ProtectionTimelinePageInput {
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageOutput {
-    UpdateSignaturesRequested,
+    SignaturesUpdated,
+    ActivityRecorded,
 }
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageCommand {
-    EvidenceGathered(Box<ProtectionEvidence>),
+    EvidenceGathered {
+        protection_evidence: Box<ProtectionEvidence>,
+        gathered_at: Timestamp,
+    },
     WatchedUnitChanged,
     UnitRunFinished {
         start_outcome: UnitStartOutcome,
         last_result: ServiceLastResult,
     },
+    SignatureHostStatusLoaded(DatabaseHostStatus),
+    SignatureUpdateBatchArrived(Vec<DatabaseUpdateEvent>),
+    SignatureUpdateStreamFinished,
+    ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
 }
 
 pub fn decision_headline(unresolved_detections: usize) -> String {
@@ -161,11 +194,55 @@ pub fn unit_run_toast_text(
     }
 }
 
+fn show_group_steps(
+    group_rows: &mut FactoryVecDeque<TimelineStepRow>,
+    group_steps: Vec<TimelineStep>,
+) {
+    if group_rows.len() == group_steps.len() {
+        group_steps
+            .into_iter()
+            .enumerate()
+            .for_each(|positioned_step| {
+                group_rows.send(
+                    positioned_step.0,
+                    TimelineStepRowInput::StepChanged(Box::new(positioned_step.1)),
+                );
+            });
+    } else {
+        let mut row_guard = group_rows.guard();
+        row_guard.clear();
+        group_steps.into_iter().for_each(|timeline_step| {
+            row_guard.push_back(timeline_step);
+        });
+    }
+}
+
+fn launched_step_group(
+    step_group: adw::PreferencesGroup,
+    sender: &ComponentSender<ProtectionTimelinePage>,
+) -> FactoryVecDeque<TimelineStepRow> {
+    FactoryVecDeque::builder().launch(step_group).forward(
+        sender.input_sender(),
+        ProtectionTimelinePageInput::StepRequested,
+    )
+}
+
+fn titled_group(group_title: &str) -> adw::PreferencesGroup {
+    adw::PreferencesGroup::builder().title(group_title).build()
+}
+
+fn described_group(group_title: &str, group_description: &str) -> adw::PreferencesGroup {
+    adw::PreferencesGroup::builder()
+        .title(group_title)
+        .description(group_description)
+        .build()
+}
+
 impl ProtectionTimelinePage {
     const fn first_load(&self) -> FirstLoad {
         match self.gathered_evidence {
             GatheredEvidence::NotGatheredYet => FirstLoad::StillLoading,
-            GatheredEvidence::Gathered(_) => FirstLoad::LoadFinished,
+            GatheredEvidence::Gathered { .. } => FirstLoad::LoadFinished,
         }
     }
 
@@ -177,14 +254,21 @@ impl ProtectionTimelinePage {
         self.evidence_refresh = EvidenceRefresh::GatheringOnce;
         let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
         sender.oneshot_command(async move {
-            ProtectionTimelinePageCommand::EvidenceGathered(Box::new(
-                gather_protection_evidence(lazaret_schedule_enabled).await,
-            ))
+            let protection_evidence =
+                Box::new(gather_protection_evidence(lazaret_schedule_enabled).await);
+            ProtectionTimelinePageCommand::EvidenceGathered {
+                protection_evidence,
+                gathered_at: Timestamp::now(),
+            }
         });
     }
 
     fn show_timeline(&mut self) {
-        let GatheredEvidence::Gathered(protection_evidence) = &self.gathered_evidence else {
+        let GatheredEvidence::Gathered {
+            protection_evidence,
+            gathered_at,
+        } = &self.gathered_evidence
+        else {
             return;
         };
         let gathered_timeline = protection_timeline(
@@ -193,46 +277,93 @@ impl ProtectionTimelinePage {
                 journal_access: self.journal_access.clone(),
                 notifications_enabled: detection_notifications_are_enabled(),
             },
+            &ProtectionActivity {
+                signature_update: self.signature_update_session.update_view(),
+                scheduled_scan_starting: self.scheduled_scan_starting,
+                observed_at: *gathered_at,
+                moment_formatters: host_moment_formatters(),
+            },
             self.distribution_family,
         );
         self.coverage_summary = gathered_timeline.coverage_summary;
-        if self.timeline_rows.len() == gathered_timeline.timeline_steps.len() {
-            gathered_timeline
-                .timeline_steps
-                .into_iter()
-                .enumerate()
-                .for_each(|positioned_step| {
-                    self.timeline_rows.send(
-                        positioned_step.0,
-                        TimelineStepRowInput::StepChanged(Box::new(positioned_step.1)),
-                    );
-                });
-        } else {
-            let mut row_guard = self.timeline_rows.guard();
-            row_guard.clear();
-            gathered_timeline
-                .timeline_steps
-                .into_iter()
-                .for_each(|timeline_step| {
-                    row_guard.push_back(timeline_step);
-                });
+        show_group_steps(
+            &mut self.protection_rows,
+            gathered_timeline.protection_steps,
+        );
+        show_group_steps(&mut self.engine_rows, gathered_timeline.engine_steps);
+        show_group_steps(&mut self.review_rows, gathered_timeline.review_steps);
+    }
+
+    fn refresh_signature_host_status(sender: &ComponentSender<Self>) {
+        sender.oneshot_command(async {
+            ProtectionTimelinePageCommand::SignatureHostStatusLoaded(load_host_status().await)
+        });
+    }
+
+    fn start_signature_update(&mut self, sender: &ComponentSender<Self>) {
+        let Some(update_plan) = self.signature_update_session.requested_update_plan() else {
+            return;
+        };
+        let update_stream = run_stream_then(
+            sender,
+            database_update_events(update_plan)
+                .ready_chunks(UPDATE_BATCH_SIZE)
+                .map(ProtectionTimelinePageCommand::SignatureUpdateBatchArrived),
+            ProtectionTimelinePageCommand::SignatureUpdateStreamFinished,
+        );
+        self.signature_update_session
+            .update_started(update_plan, update_stream);
+        self.show_timeline();
+    }
+
+    fn finish_signature_update(&mut self, sender: &ComponentSender<Self>) {
+        let finished_report = self.signature_update_session.update_finished();
+        if finished_report.definitions_changed {
+            let _shell_closed = sender.output(ProtectionTimelinePageOutput::SignaturesUpdated);
         }
+        let summary_line = finished_report
+            .summary_text
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        notify_outside_the_window(
+            "update-finished",
+            &gettext("Database update finished"),
+            &summary_line,
+        );
+        let finished_toast = plain_text_toast(&summary_line);
+        finished_toast.set_button_label(Some(&gettext("Show Log")));
+        finished_toast.set_action_name(Some("win.show-page"));
+        finished_toast.set_action_target_value(Some(&"logs".to_variant()));
+        self.toaster.add_toast(finished_toast);
+        let activity_history = self.activity_history.clone();
+        let activity_entry = finished_report.activity_entry;
+        sender.oneshot_command(async move {
+            ProtectionTimelinePageCommand::ActivityRecordingFinished(
+                activity_history.record_activity(activity_entry).await,
+            )
+        });
+        Self::refresh_signature_host_status(sender);
+        self.show_timeline();
+        self.start_evidence_refresh(sender);
     }
 
     fn run_step_action(
-        &self,
+        &mut self,
         chosen_action: TimelineStepAction,
         sender: &ComponentSender<Self>,
         root: &adw::ToastOverlay,
     ) {
         match chosen_action {
-            TimelineStepAction::UpdateSignatures => {
-                let _shell_closed =
-                    sender.output(ProtectionTimelinePageOutput::UpdateSignaturesRequested);
+            TimelineStepAction::UpdateSignatures => self.start_signature_update(sender),
+            TimelineStepAction::CancelSignatureUpdate => {
+                self.signature_update_session.cancel_requested();
+                self.show_timeline();
             }
             TimelineStepAction::RunScheduledScan { service_unit } => {
-                self.toaster
-                    .add_toast(plain_text_toast(&gettext("Starting the scan…")));
+                self.scheduled_scan_starting = true;
+                self.show_timeline();
                 sender.oneshot_command(async move {
                     let start_outcome = start_system_unit(service_unit).await;
                     ProtectionTimelinePageCommand::UnitRunFinished {
@@ -259,7 +390,7 @@ impl ProtectionTimelinePage {
 
 #[relm4::component(pub)]
 impl Component for ProtectionTimelinePage {
-    type Init = ();
+    type Init = ActivityHistory;
     type Input = ProtectionTimelinePageInput;
     type Output = ProtectionTimelinePageOutput;
     type CommandOutput = ProtectionTimelinePageCommand;
@@ -313,7 +444,15 @@ impl Component for ProtectionTimelinePage {
                     },
                 },
 
-                add: timeline_group,
+                add: protection_group,
+
+                add: engine_group,
+
+                #[local_ref]
+                add = review_group -> adw::PreferencesGroup {
+                    #[watch]
+                    set_visible: !model.review_rows.is_empty(),
+                },
 
                 add = &system_settings_group(&[
                     SettingsSubpage::OnAccessScanning,
@@ -328,19 +467,28 @@ impl Component for ProtectionTimelinePage {
     }
 
     fn init(
-        _page_init: Self::Init,
+        activity_history: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let timeline_rows = FactoryVecDeque::builder()
-            .launch(adw::PreferencesGroup::default())
-            .forward(
-                sender.input_sender(),
-                ProtectionTimelinePageInput::StepRequested,
-            );
         let mut model = Self {
             toaster: Toaster::new(&root),
-            timeline_rows,
+            protection_rows: launched_step_group(
+                titled_group(&gettext("Checks on your files")),
+                &sender,
+            ),
+            engine_rows: launched_step_group(
+                described_group(
+                    &gettext("Engine"),
+                    &gettext("What the checks above rely on"),
+                ),
+                &sender,
+            ),
+            review_rows: launched_step_group(titled_group(&gettext("Needs review")), &sender),
+            activity_history,
+            signature_update_session: SignatureUpdateSession::new(),
+            scheduled_scan_starting: false,
+            update_awaits_host_status: false,
             distribution_family: detect_distribution_family(),
             evidence_refresh: EvidenceRefresh::NothingRunning,
             coverage_summary: gettext("Checking…"),
@@ -353,11 +501,13 @@ impl Component for ProtectionTimelinePage {
                     .map(|()| ProtectionTimelinePageCommand::WatchedUnitChanged),
             ),
         };
-        let timeline_group = model.timeline_rows.widget().clone();
-        let timeline_group = &timeline_group;
+        let protection_group = &model.protection_rows.widget().clone();
+        let engine_group = &model.engine_rows.widget().clone();
+        let review_group = &model.review_rows.widget().clone();
         let protection_loading_page = &loading_status_page(&gettext("Checking your protection…"));
         let widgets = view_output!();
         model.start_evidence_refresh(&sender);
+        Self::refresh_signature_host_status(&sender);
         ComponentParts { model, widgets }
     }
 
@@ -377,6 +527,13 @@ impl Component for ProtectionTimelinePage {
             }
             ProtectionTimelinePageInput::RefreshRequested => {
                 self.start_evidence_refresh(&sender);
+            }
+            ProtectionTimelinePageInput::SignatureUpdateRequested => {
+                if self.signature_update_session.host_status_known() {
+                    self.start_signature_update(&sender);
+                } else {
+                    self.update_awaits_host_status = true;
+                }
             }
             ProtectionTimelinePageInput::StepRequested(TimelineStepRowOutput::ActionChosen(
                 chosen_action,
@@ -398,8 +555,14 @@ impl Component for ProtectionTimelinePage {
         _root: &Self::Root,
     ) {
         match page_command {
-            ProtectionTimelinePageCommand::EvidenceGathered(protection_evidence) => {
-                self.gathered_evidence = GatheredEvidence::Gathered(protection_evidence);
+            ProtectionTimelinePageCommand::EvidenceGathered {
+                protection_evidence,
+                gathered_at,
+            } => {
+                self.gathered_evidence = GatheredEvidence::Gathered {
+                    protection_evidence,
+                    gathered_at,
+                };
                 self.show_timeline();
                 let refresh_again = self.evidence_refresh == EvidenceRefresh::GatheringThenAgain;
                 self.evidence_refresh = EvidenceRefresh::NothingRunning;
@@ -414,9 +577,36 @@ impl Component for ProtectionTimelinePage {
                 start_outcome,
                 last_result,
             } => {
+                self.scheduled_scan_starting = false;
                 self.toaster
                     .add_toast(unit_run_toast(&start_outcome, &last_result));
+                self.show_timeline();
                 self.start_evidence_refresh(&sender);
+            }
+            ProtectionTimelinePageCommand::SignatureHostStatusLoaded(host_status) => {
+                self.signature_update_session
+                    .host_status_loaded(host_status);
+                if std::mem::take(&mut self.update_awaits_host_status) {
+                    self.start_signature_update(&sender);
+                }
+                self.show_timeline();
+            }
+            ProtectionTimelinePageCommand::SignatureUpdateBatchArrived(update_batch) => {
+                self.signature_update_session
+                    .absorb_update_batch(update_batch);
+                self.show_timeline();
+            }
+            ProtectionTimelinePageCommand::SignatureUpdateStreamFinished => {
+                self.finish_signature_update(&sender);
+            }
+            ProtectionTimelinePageCommand::ActivityRecordingFinished(Ok(())) => {
+                let _shell_closed = sender.output(ProtectionTimelinePageOutput::ActivityRecorded);
+            }
+            ProtectionTimelinePageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
+                self.toaster.add_toast(plain_text_toast(
+                    &gettext("The update could not be added to the history: {error}")
+                        .replace("{error}", &recording_failure.to_string()),
+                ));
             }
         }
     }

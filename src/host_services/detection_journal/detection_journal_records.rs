@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
+use jiff::Timestamp;
+
 use crate::host_services::clamav_scanner::{
     scanner_command_builder::ScannerBackend, scanner_output_parser::parse_threat_detection_line,
 };
 
 pub const ON_ACCESS_SERVICE_UNITS: [&str; 2] = ["clamav-clamonacc.service", "clamonacc.service"];
 pub const SCHEDULED_SCAN_SERVICE_UNITS: [&str; 1] = ["clamdscan.service"];
-const MICROSECONDS_PER_SECOND: u64 = 1_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetectionSource {
@@ -16,7 +17,7 @@ pub enum DetectionSource {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct JournalDetectionRecord {
-    pub observed_at_unix: i64,
+    pub observed_at: Timestamp,
     pub detection_source: DetectionSource,
     pub file_path: PathBuf,
     pub signature_name: String,
@@ -35,12 +36,12 @@ pub fn detection_source_of_unit(systemd_unit: &str) -> Option<DetectionSource> {
 pub fn detection_record_from_fields(
     systemd_unit: &str,
     message_bytes: &[u8],
-    realtime_microseconds: u64,
+    observed_at: Timestamp,
 ) -> Option<JournalDetectionRecord> {
     let detection_source = detection_source_of_unit(systemd_unit)?;
     let detected_threat = parse_threat_detection_line(message_bytes, ScannerBackend::ClamdDaemon)?;
     Some(JournalDetectionRecord {
-        observed_at_unix: i64::try_from(realtime_microseconds / MICROSECONDS_PER_SECOND).ok()?,
+        observed_at,
         detection_source,
         file_path: detected_threat.file_path,
         signature_name: detected_threat.threat_name,
@@ -53,7 +54,7 @@ mod detection_journal_records_tests {
 
     use super::*;
 
-    const OBSERVED_MICROSECONDS: u64 = 1_793_869_222_072_914;
+    const OBSERVED_AT: Timestamp = Timestamp::constant(1_793_869_222, 72_914_000);
 
     #[test]
     fn a_real_on_access_line_keeps_its_path_and_signature() {
@@ -61,10 +62,10 @@ mod detection_journal_records_tests {
             detection_record_from_fields(
                 "clamav-clamonacc.service",
                 b"/home/user/Downloads/invoice.exe: Eicar-Test-Signature FOUND",
-                OBSERVED_MICROSECONDS,
+                OBSERVED_AT,
             ),
             Some(JournalDetectionRecord {
-                observed_at_unix: 1_793_869_222,
+                observed_at: OBSERVED_AT,
                 detection_source: DetectionSource::OnAccessScanner,
                 file_path: PathBuf::from("/home/user/Downloads/invoice.exe"),
                 signature_name: "Eicar-Test-Signature".to_owned(),
@@ -78,7 +79,7 @@ mod detection_journal_records_tests {
             detection_record_from_fields(
                 "clamdscan.service",
                 b"/tmp/dropper: Win.Trojan.Agent-1 FOUND",
-                OBSERVED_MICROSECONDS,
+                OBSERVED_AT,
             )
             .map(|detection_record| detection_record.detection_source),
             Some(DetectionSource::ScheduledScan)
@@ -91,7 +92,7 @@ mod detection_journal_records_tests {
             detection_record_from_fields(
                 "clamav-daemon.service",
                 b"/tmp/scratch/eicar.txt: Eicar-Test-Signature FOUND",
-                OBSERVED_MICROSECONDS,
+                OBSERVED_AT,
             ),
             None
         );
@@ -102,7 +103,7 @@ mod detection_journal_records_tests {
         let detection_record = detection_record_from_fields(
             "clamav-clamonacc.service",
             b"/home/user/Downloads/a: b\xff.exe: Win.Test-1 FOUND",
-            OBSERVED_MICROSECONDS,
+            OBSERVED_AT,
         )
         .expect("detection");
         assert_eq!(
@@ -126,7 +127,7 @@ mod detection_journal_records_tests {
                 detection_record_from_fields(
                     "clamav-clamonacc.service",
                     message_bytes,
-                    OBSERVED_MICROSECONDS,
+                    OBSERVED_AT,
                 ),
                 None
             );

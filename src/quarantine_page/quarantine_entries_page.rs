@@ -1,11 +1,8 @@
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+use std::collections::HashMap;
 
-use bytesize::ByteSize;
 use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
+use jiff::{SignedDuration, Timestamp};
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
     adw::prelude::*, gtk, prelude::FactoryVecDeque,
@@ -22,8 +19,11 @@ use crate::{
             content_verdict::{ContentVerdict, scan_content_with_current_signatures},
             scanner_output_parser::sanitize_scanner_line,
         },
+        desktop::locale_formatting::byte_size_text,
         quarantine_vault::{
-            quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
+            quarantine_entry_database::{
+                QuarantineEntryRecord, QuarantineVault, StoredDetectionDate,
+            },
             quarantine_file_moves::QuarantineMoveFailure,
         },
         settings_helper::trust_requests::{
@@ -81,7 +81,7 @@ pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> Stri
     }
 }
 
-const OLD_ENTRY_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+const OLD_ENTRY_AGE: SignedDuration = SignedDuration::from_hours(30 * 24);
 
 pub fn entry_matches_search(entry_record: &QuarantineEntryRecord, search_text: &str) -> bool {
     let lowercase_search = search_text.trim().to_lowercase();
@@ -98,14 +98,15 @@ pub fn entry_matches_search(entry_record: &QuarantineEntryRecord, search_text: &
 
 pub fn entry_is_older_than(
     entry_record: &QuarantineEntryRecord,
-    maximum_age: Duration,
-    current_time: SystemTime,
+    maximum_age: SignedDuration,
+    current_time: Timestamp,
 ) -> bool {
-    humantime::parse_rfc3339_weak(&entry_record.detection_date).is_ok_and(|detection_time| {
-        current_time
-            .duration_since(detection_time)
-            .is_ok_and(|entry_age| entry_age > maximum_age)
-    })
+    match entry_record.detection_date {
+        StoredDetectionDate::DetectedAt(detected_at) => {
+            current_time.duration_since(detected_at) > maximum_age
+        }
+        StoredDetectionDate::UnreadableText(_) => false,
+    }
 }
 
 pub struct QuarantineEntriesPage {
@@ -363,7 +364,7 @@ impl QuarantineEntriesPage {
     }
 
     fn old_entries(&self) -> Vec<&QuarantineEntryRecord> {
-        let current_time = SystemTime::now();
+        let current_time = Timestamp::now();
         self.listed_entries
             .iter()
             .filter(|entry_record| entry_is_older_than(entry_record, OLD_ENTRY_AGE, current_time))
@@ -371,13 +372,12 @@ impl QuarantineEntriesPage {
     }
 
     fn total_stored_size(&self) -> String {
-        ByteSize::b(
+        byte_size_text(
             self.listed_entries
                 .iter()
                 .map(|entry_record| entry_record.file_size)
                 .sum(),
         )
-        .to_string()
     }
 
     fn entry_count_text(&self) -> String {
@@ -909,8 +909,8 @@ mod quarantine_entries_page_tests {
             original_path: PathBuf::from("/home/user/Downloads/Invoice.exe"),
             quarantine_path: PathBuf::from("/vault/payload"),
             threat_name: "Win.Trojan.Agent".to_owned(),
-            detection_date: detection_date.to_owned(),
-            file_size: 1,
+            detection_date: StoredDetectionDate::from(detection_date.to_owned()),
+            file_size: bytesize::ByteSize::b(1),
             file_hash: String::new(),
             original_permissions: 0o644,
         }
@@ -927,8 +927,9 @@ mod quarantine_entries_page_tests {
 
     #[test]
     fn age_is_compared_with_the_detection_date() {
-        let current_time =
-            humantime::parse_rfc3339("2026-11-05T00:00:00Z").expect("fixture current time");
+        let current_time: Timestamp = "2026-11-05T00:00:00Z"
+            .parse()
+            .expect("fixture current time");
         assert!(entry_is_older_than(
             &entry_detected_on("2026-10-01T00:00:00.000Z"),
             OLD_ENTRY_AGE,
@@ -946,7 +947,7 @@ mod quarantine_entries_page_tests {
         assert!(!entry_is_older_than(
             &entry_detected_on("not a date"),
             OLD_ENTRY_AGE,
-            SystemTime::now()
+            Timestamp::now()
         ));
     }
 }

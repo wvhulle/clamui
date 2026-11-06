@@ -1,5 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
+use jiff::Timestamp;
 use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Row, Value};
 
@@ -56,6 +57,8 @@ pub enum ActivityHistoryFailure {
     DatabasePathNotUtf8,
     #[error("a stored history entry has an unknown status")]
     StoredStatusUnknown,
+    #[error("a stored history entry has an impossible time: {0}")]
+    StoredTimeInvalid(#[from] jiff::Error),
     #[error("the history lock is unavailable: {0}")]
     HistoryLockUnavailable(#[from] std::io::Error),
 }
@@ -117,7 +120,7 @@ impl ActivityStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NewActivityEntry {
-    pub started_at_unix: i64,
+    pub started_at: Timestamp,
     pub activity_status: ActivityStatus,
     pub activity_targets: String,
     pub inspected_file_count: u64,
@@ -129,7 +132,7 @@ pub struct NewActivityEntry {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct ActivityEntryRecord {
     pub entry_id: i64,
-    pub started_at_unix: i64,
+    pub started_at: Timestamp,
     pub activity_status: ActivityStatus,
     pub activity_targets: String,
     pub inspected_file_count: u64,
@@ -145,7 +148,7 @@ fn activity_entry_from_row(entry_row: &Row) -> Result<ActivityEntryRecord, Activ
     let duration_millis: i64 = entry_row.get(6)?;
     Ok(ActivityEntryRecord {
         entry_id: entry_row.get(0)?,
-        started_at_unix: entry_row.get(1)?,
+        started_at: Timestamp::from_second(entry_row.get(1)?)?,
         activity_status: ActivityStatus::from_stored_text(&stored_status)?,
         activity_targets: entry_row.get(3)?,
         inspected_file_count: inspected_file_count.max(0) as u64,
@@ -197,7 +200,7 @@ impl ActivityHistory {
                  activity_targets, inspected_file_count, threat_count, duration_millis, \
                  activity_output) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 vec![
-                    Value::Integer(new_entry.started_at_unix),
+                    Value::Integer(new_entry.started_at.as_second()),
                     Value::Text(new_entry.activity_status.stored_text().to_owned()),
                     Value::Text(new_entry.activity_targets),
                     Value::Integer(new_entry.inspected_file_count as i64),
@@ -261,9 +264,9 @@ mod activity_history_database_tests {
 
     use super::*;
 
-    fn scan_entry(started_at_unix: i64, activity_output: &str) -> NewActivityEntry {
+    fn scan_entry(started_at: Timestamp, activity_output: &str) -> NewActivityEntry {
         NewActivityEntry {
-            started_at_unix,
+            started_at,
             activity_status: ActivityStatus::ScanInfected,
             activity_targets: "/scan/target\n/scan/other".to_owned(),
             inspected_file_count: 12,
@@ -279,11 +282,11 @@ mod activity_history_database_tests {
         let database_path = temporary_root.path().join("history.db");
         let writing_history = ActivityHistory::at_database_path(database_path.clone());
         writing_history
-            .record_activity(scan_entry(100, "older"))
+            .record_activity(scan_entry(Timestamp::constant(100, 0), "older"))
             .await
             .expect("older entry");
         writing_history
-            .record_activity(scan_entry(200, "newer"))
+            .record_activity(scan_entry(Timestamp::constant(200, 0), "newer"))
             .await
             .expect("newer entry");
         drop(writing_history);
@@ -298,7 +301,7 @@ mod activity_history_database_tests {
             ActivityStatus::ScanInfected
         );
         assert_eq!(listed_entries[0].inspected_file_count, 12);
-        assert_eq!(listed_entries[1].started_at_unix, 100);
+        assert_eq!(listed_entries[1].started_at, Timestamp::constant(100, 0));
         assert_eq!(
             std::fs::metadata(&database_path)
                 .expect("database metadata")
@@ -322,7 +325,7 @@ mod activity_history_database_tests {
                 .is_empty()
         );
         ActivityHistory::at_database_path(database_path)
-            .record_activity(scan_entry(100, "written elsewhere"))
+            .record_activity(scan_entry(Timestamp::constant(100, 0), "written elsewhere"))
             .await
             .expect("written entry");
         assert_eq!(
@@ -340,7 +343,7 @@ mod activity_history_database_tests {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
         history
-            .record_activity(scan_entry(100, "entry"))
+            .record_activity(scan_entry(Timestamp::constant(100, 0), "entry"))
             .await
             .expect("entry");
         history.clear_all_entries().await.expect("cleared");
@@ -378,7 +381,7 @@ mod activity_history_database_tests {
             .expect("recent entry");
         drop(connection);
         history
-            .record_activity(scan_entry(3, "newest"))
+            .record_activity(scan_entry(Timestamp::constant(3, 0), "newest"))
             .await
             .expect("newest");
         let listed_entries = history.list_recent_entries().await.expect("listed");
