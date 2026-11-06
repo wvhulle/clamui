@@ -1,0 +1,40 @@
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  flatpak-bundle:
+    runs-on: nix
+    env:
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+        extra-substituters = https://wvhulle.cachix.org
+        extra-trusted-public-keys = wvhulle.cachix.org-1:heXx8DZMiRsKUx6l1TxNoF+Nmtmz66QEdsonQzc1ir0=
+    steps:
+      - name: Clone the commit
+        run: |
+          git init --quiet
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}.git"
+          git fetch --quiet --depth 1 origin "${{ github.sha }}"
+          git checkout --quiet FETCH_HEAD
+
+      - name: Download tools
+        run: nix build --quiet --no-link .#download-flatpak-dependencies .#build-flatpak-bundle .#upload-release-assets
+
+      - name: Download Flatpak dependencies
+        run: nix run --quiet .#download-flatpak-dependencies
+
+      - name: Build Flatpak bundle
+        env:
+          CI_COMMIT_TAG: ${{ github.event_name == 'release' && github.ref_name || '' }}
+        run: nix run --quiet .#build-flatpak-bundle -- --skip-downloads dist
+
+      - name: Attach to Codeberg release
+        if: github.event_name == 'release'
+        env:
+          CI_FORGE_URL: ${{ github.server_url }}
+          CI_REPO: ${{ github.repository }}
+          CI_COMMIT_TAG: ${{ github.ref_name }}
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+        run: nix run --quiet .#upload-release-assets -- dist

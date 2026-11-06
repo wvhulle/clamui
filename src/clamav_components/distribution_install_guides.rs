@@ -8,6 +8,8 @@ pub enum DistributionFamily {
     UnrecognizedFamily,
 }
 
+use crate::desktop_integration::flatpak_sandbox::readable_host_path;
+
 #[derive(Clone, Copy, Debug)]
 pub struct DistributionInstallGuide {
     pub distribution_family: DistributionFamily,
@@ -85,7 +87,7 @@ pub fn parse_distribution_family(os_release_text: &str) -> DistributionFamily {
 }
 
 pub fn detect_distribution_family() -> DistributionFamily {
-    std::fs::read_to_string("/etc/os-release")
+    std::fs::read_to_string(readable_host_path("/etc/os-release"))
         .map_or(DistributionFamily::UnrecognizedFamily, |os_release_text| {
             parse_distribution_family(&os_release_text)
         })

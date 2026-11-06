@@ -1,4 +1,6 @@
-use std::{fs, path::Path};
+use std::fs;
+
+use crate::desktop_integration::flatpak_sandbox::readable_host_path;
 
 const CLAMD_CONFIG_PATHS: [&str; 4] = [
     "/run/lazaret/clamd.conf",
@@ -48,7 +50,7 @@ fn read_first_config(config_paths: &[&str]) -> HostConfigView {
     config_paths
         .iter()
         .find_map(|config_path| {
-            fs::read_to_string(Path::new(config_path))
+            fs::read_to_string(readable_host_path(config_path))
                 .ok()
                 .map(|config_text| HostConfigView::ConfigFound {
                     config_path: (*config_path).to_owned(),

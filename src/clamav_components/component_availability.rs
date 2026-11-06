@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use tokio::{process::Command, time::timeout};
+use tokio::time::timeout;
+
+use crate::desktop_integration::flatpak_sandbox::host_program_async_command;
 
 const PROGRAM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -35,7 +37,7 @@ fn program_probe_from_output(version_output: &Output) -> ProgramProbe {
 }
 
 pub async fn probe_program_version(program_path: &Path) -> ProgramProbe {
-    let mut version_command = Command::new(program_path);
+    let mut version_command = host_program_async_command(program_path, &[]);
     version_command
         .arg("--version")
         .stdin(Stdio::null())
@@ -55,7 +57,7 @@ pub async fn probe_program_version(program_path: &Path) -> ProgramProbe {
 }
 
 pub async fn clamd_answers_ping(clamdscan_program: &Path) -> bool {
-    let mut ping_command = Command::new(clamdscan_program);
+    let mut ping_command = host_program_async_command(clamdscan_program, &[]);
     ping_command
         .args(["--ping", "1"])
         .stdin(Stdio::null())

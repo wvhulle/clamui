@@ -1,0 +1,83 @@
+{
+    "app-id": "page.codeberg.wvhulle.Lazaret",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "49",
+    "sdk": "org.gnome.Sdk",
+    "sdk-extensions": [
+        "org.freedesktop.Sdk.Extension.rust-stable"
+    ],
+    "command": "lazaret",
+    "finish-args": [
+        "--share=ipc",
+        "--share=network",
+        "--socket=wayland",
+        "--socket=fallback-x11",
+        "--device=dri",
+        "--filesystem=host",
+        "--filesystem=host-etc:ro",
+        "--filesystem=host-os:ro",
+        "--filesystem=/var/lib/clamav:ro",
+        "--filesystem=/var/log/clamav:ro",
+        "--filesystem=/var/log/journal:ro",
+        "--filesystem=/run/log/journal:ro",
+        "--filesystem=xdg-config/systemd:create",
+        "--talk-name=org.freedesktop.Flatpak",
+        "--talk-name=org.freedesktop.systemd1",
+        "--system-talk-name=org.freedesktop.systemd1",
+        "--talk-name=org.freedesktop.secrets",
+        "--talk-name=org.freedesktop.Notifications",
+        "--talk-name=org.kde.StatusNotifierWatcher"
+    ],
+    "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "build-args": [
+            "--share=network"
+        ],
+        "env": {
+            "RUST_BACKTRACE": "1",
+            "RUSTUP_TOOLCHAIN": "stable",
+            "LAZARET_LOCALE_DIRECTORY": "/app/share/locale"
+        }
+    },
+    "cleanup": [
+        "/include",
+        "/lib/pkgconfig",
+        "/man",
+        "/share/doc",
+        "/share/gtk-doc",
+        "/share/man",
+        "/share/pkgconfig",
+        "*.la",
+        "*.a"
+    ],
+    "modules": [
+        {
+            "name": "lazaret",
+            "buildsystem": "simple",
+            "build-commands": [
+                "cargo build --release --locked --package lazaret",
+                "make install-binary install-data PREFIX=/app"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": ".",
+                    "skip": [
+                        "target",
+                        ".ci-tools",
+                        "result",
+                        ".direnv",
+                        ".flatpak-builder",
+                        ".git",
+                        ".jj",
+                        "flatpak-build",
+                        "flatpak-repo",
+                        "flatpak-user",
+                        "dist",
+                        "screenshots"
+                    ]
+                }
+            ]
+        }
+    ]
+}

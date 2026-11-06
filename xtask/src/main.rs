@@ -5,6 +5,7 @@ mod debian_package;
 mod dependency_update_pull_request;
 mod fixture_clamav_programs;
 mod fixture_systemd_service;
+mod flatpak_bundle;
 mod metainfo_release_stamp;
 mod page_screenshots;
 mod release_publishing;
@@ -23,6 +24,7 @@ use crate::{
     debian_package::{build_debian_package, check_debian_package_install, ci_build_debian_package},
     dependency_update_pull_request::open_dependency_update_pull_request,
     fixture_clamav_programs::{invoked_as_fixture_program, run_fixture_program},
+    flatpak_bundle::{build_flatpak_bundle, download_flatpak_dependencies},
     page_screenshots::{list_visible_widgets, render_page_screenshots},
     release_publishing::{ReleasePlzCommand, run_release_plz, upload_release_assets},
     screenshot_publishing::publish_screenshots,
@@ -83,6 +85,13 @@ enum RepositoryTask {
         #[arg(default_value = "dist")]
         packages_directory: PathBuf,
     },
+    DownloadFlatpakDependencies,
+    BuildFlatpakBundle {
+        #[arg(long)]
+        skip_downloads: bool,
+        #[arg(default_value = "dist")]
+        output_directory: PathBuf,
+    },
 }
 
 fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailure> {
@@ -116,6 +125,11 @@ fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailur
         RepositoryTask::CheckDebianPackageInstall { packages_directory } => {
             check_debian_package_install(&packages_directory)
         }
+        RepositoryTask::DownloadFlatpakDependencies => download_flatpak_dependencies(),
+        RepositoryTask::BuildFlatpakBundle {
+            skip_downloads,
+            output_directory,
+        } => build_flatpak_bundle(&output_directory, skip_downloads),
         RepositoryTask::PublishScreenshots {
             screenshots_directory,
         } => publish_screenshots(&screenshots_directory),

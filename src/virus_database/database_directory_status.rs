@@ -4,7 +4,10 @@ use std::{
     time::SystemTime,
 };
 
-use crate::systemd_bus::host_systemd_units::{UnitState, probe_unit_state};
+use crate::{
+    desktop_integration::flatpak_sandbox::readable_host_path,
+    systemd_bus::host_systemd_units::{UnitState, probe_unit_state},
+};
 
 const CONFIG_CANDIDATES: &[&str] = &[
     "/etc/clamav/freshclam.conf",
@@ -48,7 +51,7 @@ pub fn database_directory_in_config(config_text: &str) -> Option<PathBuf> {
 pub fn configured_database_directory() -> PathBuf {
     CONFIG_CANDIDATES
         .iter()
-        .filter_map(|config_path| fs::read_to_string(config_path).ok())
+        .filter_map(|config_path| fs::read_to_string(readable_host_path(config_path)).ok())
         .find_map(|config_text| database_directory_in_config(&config_text))
         .unwrap_or_else(|| PathBuf::from(DEFAULT_DATABASE_DIRECTORY))
 }

@@ -8,6 +8,7 @@ use futures::{Stream, StreamExt, future::ready, stream};
 use tokio::{process::Command, task::spawn_blocking};
 
 use crate::{
+    desktop_integration::flatpak_sandbox::host_program_command,
     malware_scan::scanner_process_events::{
         RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
     },
@@ -51,7 +52,7 @@ pub fn plan_database_update(service_state: FreshclamServiceState) -> DatabaseUpd
 }
 
 fn build_freshclam_command() -> Command {
-    let mut update_command = std::process::Command::new("freshclam");
+    let mut update_command = host_program_command("freshclam", &[]);
     update_command
         .arg("--verbose")
         .stdin(Stdio::null())

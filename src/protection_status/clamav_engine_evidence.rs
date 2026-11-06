@@ -8,7 +8,10 @@ use std::{
 use relm4::gtk::glib;
 use tokio::task::spawn_blocking;
 
-use crate::virus_database::database_directory_status::configured_database_directory;
+use crate::{
+    desktop_integration::flatpak_sandbox::readable_host_path,
+    virus_database::database_directory_status::configured_database_directory,
+};
 
 const DATABASE_HEADER_LENGTH: u64 = 512;
 const DATABASE_HEADER_MAGIC: &str = "ClamAV-VDB";
@@ -120,6 +123,7 @@ fn daily_database_paths() -> Vec<PathBuf> {
         .flat_map(|database_directory| {
             DAILY_DATABASE_FILE_NAMES.map(|file_name| database_directory.join(file_name))
         })
+        .map(readable_host_path)
         .filter(|database_path| database_path.exists())
         .collect()
 }

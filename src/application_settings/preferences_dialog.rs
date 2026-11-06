@@ -10,9 +10,12 @@ use crate::{
     application_settings::stored_settings::{
         CLOSE_ACTION_CHOICES, CLOSE_ACTION_KEY, application_settings,
     },
-    desktop_integration::file_manager_actions::{
-        SUPPORTED_FILE_MANAGERS, file_manager_action_installed, install_file_manager_action,
-        remove_file_manager_action,
+    desktop_integration::{
+        file_manager_actions::{
+            SUPPORTED_FILE_MANAGERS, file_manager_action_installed, install_file_manager_action,
+            remove_file_manager_action,
+        },
+        flatpak_sandbox::{request_background_autostart, running_in_flatpak},
     },
     scheduled_scans::scan_schedule_units::current_launcher_path,
     threat_intel_lookup::online_lookup_preferences::{
@@ -109,6 +112,16 @@ fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
     settings
         .bind("start-in-background", &background_row, "active")
         .build();
+    if running_in_flatpak() {
+        background_row.connect_active_notify(|changed_row| {
+            let autostart_enabled = changed_row.is_active();
+            relm4::spawn(async move {
+                if let Err(portal_failure) = request_background_autostart(autostart_enabled).await {
+                    eprintln!("lazaret: the Background portal refused autostart: {portal_failure}");
+                }
+            });
+        });
+    }
     window_group.add(&background_row);
     let notifications_row = adw::SwitchRow::builder()
         .title(gettext("Desktop Notifications"))
@@ -131,7 +144,9 @@ fn general_page(settings: &gio::Settings) -> adw::PreferencesPage {
         .name(GENERAL_PAGE_NAME)
         .build();
     general_page.add(&window_group(settings));
-    general_page.add(&file_manager_group());
+    if !running_in_flatpak() {
+        general_page.add(&file_manager_group());
+    }
     general_page
 }
 

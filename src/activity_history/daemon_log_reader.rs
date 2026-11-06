@@ -7,6 +7,7 @@ use std::{
 use tokio::task::spawn_blocking;
 
 use crate::{
+    desktop_integration::flatpak_sandbox::readable_host_path,
     malware_scan::scanner_output_parser::sanitize_scanner_text,
     systemd_journal::unit_journal_reader::newest_unit_messages,
 };
@@ -69,7 +70,7 @@ fn read_log_tail(log_path: &Path) -> Option<String> {
 fn read_configured_log_file() -> Option<DaemonLogContents> {
     let configured_paths = CLAMD_CONFIG_PATHS
         .iter()
-        .filter_map(|config_path| fs::read_to_string(config_path).ok())
+        .filter_map(|config_path| fs::read_to_string(readable_host_path(config_path)).ok())
         .filter_map(|config_text| log_path_in_config(&config_text));
     let default_paths = DEFAULT_LOG_PATHS.iter().map(PathBuf::from);
     configured_paths.chain(default_paths).find_map(|log_path| {

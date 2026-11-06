@@ -4,3 +4,7 @@
 /dist/
 /screenshots/
 /.ci-tools/
+/flatpak-build/
+/flatpak-repo/
+/flatpak-user/
+/.flatpak-builder/

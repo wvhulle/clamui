@@ -6,11 +6,10 @@ use std::{
     time::Duration,
 };
 
-use tokio::{
-    io::AsyncReadExt,
-    process::{Child, Command},
-    task::spawn_blocking,
-    time::timeout,
+use tokio::{io::AsyncReadExt, process::Child, task::spawn_blocking, time::timeout};
+
+use crate::desktop_integration::flatpak_sandbox::{
+    host_program_async_command, host_program_search_directories, readable_host_path,
 };
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -62,6 +61,12 @@ fn find_program_in_directories(
 }
 
 pub fn locate_host_program(program_name: &str) -> Option<PathBuf> {
+    if let Some(host_directories) = host_program_search_directories() {
+        return host_directories
+            .into_iter()
+            .map(|host_directory| host_directory.join(program_name))
+            .find(|host_program| is_executable_file(&readable_host_path(host_program)));
+    }
     let path_directories = env::var_os("PATH")
         .map(|search_path| env::split_paths(&search_path).collect::<Vec<_>>())
         .unwrap_or_default();
@@ -99,10 +104,9 @@ async fn run_program_probe(
     program_arguments: &[&str],
     probe_limits: ProbeLimits,
 ) -> CommandProbe {
-    let mut probe_command = Command::new(program_path);
+    let mut probe_command = host_program_async_command(program_path, &[("LC_ALL", "C")]);
     probe_command
         .args(program_arguments)
-        .env("LC_ALL", "C")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     activity_history::activity_entry_row::formatted_local_time,
+    desktop_integration::flatpak_sandbox::{running_in_flatpak, sandboxed_launcher_words},
     systemd_bus::host_systemd_units::{
         TimerUnitSnapshot, UnitState, UnitTimestamp, disable_user_timer, enable_user_timer,
         reload_user_manager, user_timer_snapshot,
@@ -120,13 +121,15 @@ fn systemd_quoted_argument(raw_argument: &str) -> String {
     format!("\"{escaped_argument}\"")
 }
 
-pub fn service_unit_text(launcher_path: &Path, scan_schedule: &ScanSchedule) -> String {
+pub fn service_unit_text(launcher_words: &[String], scan_schedule: &ScanSchedule) -> String {
     let option_arguments = [
         scan_schedule.skip_on_battery.then_some("--skip-on-battery"),
         scan_schedule.auto_quarantine.then_some("--auto-quarantine"),
     ];
     let command_words =
-        std::iter::once(systemd_quoted_argument(&launcher_path.to_string_lossy()))
+        launcher_words
+            .iter()
+            .map(|launcher_word| systemd_quoted_argument(launcher_word))
             .chain(std::iter::once("--scheduled-scan".to_owned()))
             .chain(option_arguments.into_iter().flatten().map(str::to_owned))
             .chain(scan_schedule.scan_targets.iter().flat_map(|scan_target| {
@@ -168,17 +171,26 @@ pub fn current_launcher_path() -> io::Result<PathBuf> {
     ))
 }
 
+fn current_launcher_words() -> io::Result<Vec<String>> {
+    if running_in_flatpak() {
+        return Ok(sandboxed_launcher_words(crate::APPLICATION_ID));
+    }
+    Ok(vec![
+        current_launcher_path()?.to_string_lossy().into_owned(),
+    ])
+}
+
 pub async fn enable_scan_schedule(
     unit_directory: PathBuf,
     scan_schedule: ScanSchedule,
 ) -> Result<(), ScheduleApplyFailure> {
-    let launcher_path =
-        current_launcher_path().map_err(ScheduleApplyFailure::UnitFilesUnwritable)?;
+    let launcher_words =
+        current_launcher_words().map_err(ScheduleApplyFailure::UnitFilesUnwritable)?;
     fs::create_dir_all(&unit_directory)
         .and_then(|()| {
             fs::write(
                 unit_directory.join(SERVICE_FILE_NAME),
-                service_unit_text(&launcher_path, &scan_schedule),
+                service_unit_text(&launcher_words, &scan_schedule),
             )
         })
         .and_then(|()| {
@@ -266,12 +278,24 @@ mod scan_schedule_units_tests {
 
     #[test]
     fn service_arguments_cannot_expand_or_break_quoting() {
-        let unit_text = service_unit_text(Path::new("/usr/bin/lazaret"), &weekly_schedule());
+        let unit_text = service_unit_text(&["/usr/bin/lazaret".to_owned()], &weekly_schedule());
         assert!(unit_text.contains(
             "ExecStart=\"/usr/bin/lazaret\" --scheduled-scan --skip-on-battery --target \"/home/a \
              b/100%%$$HOME\\\"x\"\n"
         ));
         assert!(unit_text.contains("Nice=19"));
+    }
+
+    #[test]
+    fn sandboxed_scans_start_through_flatpak_run() {
+        let unit_text = service_unit_text(
+            &sandboxed_launcher_words("page.codeberg.wvhulle.Lazaret"),
+            &weekly_schedule(),
+        );
+        assert!(unit_text.contains(
+            "ExecStart=\"flatpak\" \"run\" \"--command=lazaret\" \
+             \"page.codeberg.wvhulle.Lazaret\" --scheduled-scan "
+        ));
     }
 
     #[test]

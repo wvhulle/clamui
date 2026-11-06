@@ -43,8 +43,26 @@ let
         pkgs.gitMinimal
       ];
     };
+  flatpakTask =
+    taskName:
+    xtaskTask {
+      name = taskName;
+      runtimeInputs = [
+        pkgs.flatpak
+        pkgs.flatpak-builder
+        pkgs.appstream
+        pkgs.coreutils
+      ];
+      wrapperArgs = [
+        "--set-default"
+        "SSL_CERT_FILE"
+        "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+      ];
+    };
 in
 {
+  download-flatpak-dependencies = flatpakTask "download-flatpak-dependencies";
+  build-flatpak-bundle = flatpakTask "build-flatpak-bundle";
   release = releasePlzTask "release";
   release-pr = releasePlzTask "release-pr";
   upload-release-assets = xtaskTask {
