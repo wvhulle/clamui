@@ -1,12 +1,9 @@
 use gettextrs::gettext;
-use relm4::{
-    Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
-    adw::prelude::*, gtk,
-};
+use relm4::{Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk};
 
 use crate::host_services::threat_intel::service_key_storage::{
     KeySource, KeyStorageFailure, ResolvedApiKey, ThreatIntelService, delete_stored_api_key,
-    key_source, masked_api_key, read_api_key, save_api_key,
+    describe_key_failure, key_source, masked_api_key, read_api_key, save_api_key,
 };
 
 const VIRUSTOTAL_KEY_PAGE_URL: &str = "https://www.virustotal.com/gui/my-apikey";
@@ -52,22 +49,6 @@ const fn service_key_page_url(threat_intel_service: ThreatIntelService) -> &'sta
     }
 }
 
-pub fn describe_key_failure(key_failure: &KeyStorageFailure) -> String {
-    match key_failure {
-        KeyStorageFailure::KeyFormatInvalid => gettext("This doesn't look like a valid API key"),
-        KeyStorageFailure::StoredKeyUnreadable => gettext("Unable to read the stored API key"),
-        KeyStorageFailure::KeyringUnavailable(_keyring_failure) => gettext("Keyring unavailable"),
-        KeyStorageFailure::KeyFileUnreadable { read_failure, .. } => gettext(
-            "Lazaret can't read this file: {error}. If it is an agenix or sops-nix secret, set \
-             its owner to your user.",
-        )
-        .replace("{error}", &read_failure.to_string()),
-        KeyStorageFailure::KeyFileContentInvalid { .. } => {
-            gettext("The file doesn't hold a valid key for this service")
-        }
-    }
-}
-
 fn describe_resolved_key(resolved_key: &ResolvedApiKey) -> String {
     match resolved_key {
         ResolvedApiKey::FromKeyFile(api_key) | ResolvedApiKey::FromKeyring(api_key) => {
@@ -81,13 +62,14 @@ pub struct ServiceKeySection {
     threat_intel_service: ThreatIntelService,
     key_source: KeySource,
     key_status_text: String,
+    entered_key_cleared: bool,
 }
 
 #[derive(Debug)]
 pub enum ServiceKeySectionInput {
-    SaveEnteredKey(String),
-    DeleteStoredKey,
-    OpenKeyWebsite,
+    KeyEntered(String),
+    KeyDeletionRequested,
+    KeyWebsiteRequested,
 }
 
 #[derive(Debug)]
@@ -150,7 +132,7 @@ impl Component for ServiceKeySection {
                     set_label: &gettext("Delete Key"),
                     set_valign: gtk::Align::Center,
                     add_css_class: "flat",
-                    connect_clicked => ServiceKeySectionInput::DeleteStoredKey,
+                    connect_clicked => ServiceKeySectionInput::KeyDeletionRequested,
                 },
             },
 
@@ -158,11 +140,12 @@ impl Component for ServiceKeySection {
                 set_title: &gettext("Paste API Key"),
                 set_show_apply_button: true,
                 set_visible: !model.uses_system_key_file(),
+                #[track(model.entered_key_cleared)]
+                set_text: "",
                 connect_apply[sender] => move |applied_row| {
-                    sender.input(ServiceKeySectionInput::SaveEnteredKey(
+                    sender.input(ServiceKeySectionInput::KeyEntered(
                         applied_row.text().trim().to_owned(),
                     ));
-                    applied_row.set_text("");
                 },
             },
 
@@ -172,7 +155,7 @@ impl Component for ServiceKeySection {
                 set_activatable: true,
                 set_visible: !model.uses_system_key_file(),
                 add_suffix = &gtk::Image { set_icon_name: Some("adw-external-link-symbolic") },
-                connect_activated => ServiceKeySectionInput::OpenKeyWebsite,
+                connect_activated => ServiceKeySectionInput::KeyWebsiteRequested,
             },
         }
     }
@@ -186,6 +169,7 @@ impl Component for ServiceKeySection {
             threat_intel_service,
             key_source: key_source(threat_intel_service),
             key_status_text: gettext("Checking…"),
+            entered_key_cleared: false,
         };
         let widgets = view_output!();
         model.refresh_key_status(&sender);
@@ -199,22 +183,24 @@ impl Component for ServiceKeySection {
         root: &Self::Root,
     ) {
         let threat_intel_service = self.threat_intel_service;
+        self.entered_key_cleared = false;
         match group_input {
-            ServiceKeySectionInput::SaveEnteredKey(entered_key) => {
+            ServiceKeySectionInput::KeyEntered(entered_key) => {
+                self.entered_key_cleared = true;
                 sender.oneshot_command(async move {
                     ServiceKeySectionCommand::KeyChanged(
                         save_api_key(threat_intel_service, entered_key).await,
                     )
                 });
             }
-            ServiceKeySectionInput::DeleteStoredKey => {
+            ServiceKeySectionInput::KeyDeletionRequested => {
                 sender.oneshot_command(async move {
                     ServiceKeySectionCommand::KeyChanged(
                         delete_stored_api_key(threat_intel_service).await,
                     )
                 });
             }
-            ServiceKeySectionInput::OpenKeyWebsite => {
+            ServiceKeySectionInput::KeyWebsiteRequested => {
                 gtk::UriLauncher::new(service_key_page_url(threat_intel_service)).launch(
                     root.root().and_downcast::<gtk::Window>().as_ref(),
                     gtk::gio::Cancellable::NONE,
@@ -230,6 +216,7 @@ impl Component for ServiceKeySection {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        self.entered_key_cleared = false;
         match group_command {
             ServiceKeySectionCommand::KeyStatusRead(Ok(resolved_key)) => {
                 self.key_status_text = describe_resolved_key(&resolved_key);
@@ -242,43 +229,3 @@ impl Component for ServiceKeySection {
         }
     }
 }
-
-pub struct OnlineLookupsPage {
-    pub lookups_page: adw::PreferencesPage,
-    pub key_groups: Vec<Controller<ServiceKeySection>>,
-}
-
-pub fn online_lookups_page() -> OnlineLookupsPage {
-    let lookups_page = adw::PreferencesPage::builder()
-        .title(gettext("Online Lookups"))
-        .icon_name("network-server-symbolic")
-        .name(ONLINE_LOOKUPS_PAGE_NAME)
-        .build();
-    let circl_group = adw::PreferencesGroup::builder()
-        .title("CIRCL hashlookup")
-        .description(gettext(
-            "Always used by the reputation check on the Quarantine page. No key needed; only a \
-             file's SHA-256 hash is sent.",
-        ))
-        .build();
-    lookups_page.add(&circl_group);
-    let key_groups = [
-        ThreatIntelService::AbuseChService,
-        ThreatIntelService::VirusTotalService,
-    ]
-    .into_iter()
-    .map(|threat_intel_service| {
-        let key_group = ServiceKeySection::builder()
-            .launch(threat_intel_service)
-            .detach();
-        lookups_page.add(key_group.widget());
-        key_group
-    })
-    .collect();
-    OnlineLookupsPage {
-        lookups_page,
-        key_groups,
-    }
-}
-
-pub const ONLINE_LOOKUPS_PAGE_NAME: &str = "online-lookups";

@@ -10,10 +10,9 @@ use futures::{StreamExt, future::ready, stream};
 
 use crate::{
     detections_page::{
-        background_detections_page::{
-            BackgroundDetectionsPageCommand, file_states_to_keep, load_displayed_detections,
-        },
+        background_detections_page::{BackgroundDetectionsPageCommand, load_displayed_detections},
         detected_file_state::{DetectedFileState, inspect_detected_file},
+        detections_view_state::file_states_to_keep,
         incident_timeline_presentation::{
             DeletionPrompt, DisplayedDetection, SignatureLookupState, incident_timeline,
         },

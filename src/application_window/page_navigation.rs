@@ -44,7 +44,7 @@ use crate::{
         exclusions_page::scan_exclusions_page::ScanExclusionsPage,
         scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
         scan_profiles_dialog::scan_profile_store::ScanProfileStore,
-        scan_schedule_page::schedule_preferences_page::SchedulePreferencesPage,
+        scan_schedule_page::scan_schedule_component::ScanSchedulePage,
     },
     shared_widgets::{
         audit_sections::{
@@ -75,7 +75,7 @@ enum SettingsSubpageContent {
     EngineSettings(Controller<EngineSettingsPage>),
     ScanExclusions(Controller<ScanExclusionsPage>),
     DeviceAutoScan(Controller<DeviceScanPage>),
-    ScanSchedule(Controller<SchedulePreferencesPage>),
+    ScanSchedule(Controller<ScanSchedulePage>),
     TrustedDetections(Controller<TrustedDetectionsPage>),
 }
 
@@ -104,7 +104,7 @@ impl SettingsSubpageContent {
                 Self::DeviceAutoScan(DeviceScanPage::builder().launch(()).detach())
             }
             SettingsSubpage::ScanSchedule => {
-                Self::ScanSchedule(SchedulePreferencesPage::builder().launch(()).detach())
+                Self::ScanSchedule(ScanSchedulePage::builder().launch(()).detach())
             }
             SettingsSubpage::TrustedDetections => {
                 Self::TrustedDetections(TrustedDetectionsPage::builder().launch(()).detach())
@@ -459,17 +459,6 @@ impl Component for PageNavigation {
 
                         #[name = "page_stack"]
                         gtk::Stack {
-                            #[watch]
-                            #[block_signal(visible_page_handler)]
-                            set_visible_child_name: model.visible_page.page_name(),
-                            connect_visible_child_name_notify[sender] => move |changed_stack| {
-                                if let Some(application_page) = changed_stack
-                                    .visible_child_name()
-                                    .and_then(|page_name| ApplicationPage::from_page_name(&page_name))
-                                {
-                                    sender.input(PageNavigationInput::PageShown(application_page));
-                                }
-                            } @visible_page_handler,
 
                             add_titled[Some(ApplicationPage::Protection.page_name()), &ApplicationPage::Protection.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Protection, model.protection_page.widget()),
@@ -513,6 +502,18 @@ impl Component for PageNavigation {
                             add_titled[Some(ApplicationPage::Hardening.page_name()), &ApplicationPage::Hardening.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Hardening, model.hardening_page.widget()),
                             },
+
+                            #[watch]
+                            #[block_signal(visible_page_handler)]
+                            set_visible_child_name: model.visible_page.page_name(),
+                            connect_visible_child_name_notify[sender] => move |changed_stack| {
+                                if let Some(application_page) = changed_stack
+                                    .visible_child_name()
+                                    .and_then(|page_name| ApplicationPage::from_page_name(&page_name))
+                                {
+                                    sender.input(PageNavigationInput::PageShown(application_page));
+                                }
+                            } @visible_page_handler,
                         },
                     },
                 },

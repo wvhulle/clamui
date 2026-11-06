@@ -15,14 +15,14 @@ use crate::{
             quarantine_file_moves::QuarantineMoveFailure,
         },
         settings_helper::trust_requests::{
-            TrustChoice, TrustOutcome, present_trust_confirmation, request_trust_change,
-            trust_outcome_text,
+            TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
         },
     },
     quarantine_page::quarantine_entry_row::{QuarantineEntryRow, QuarantineEntryRowOutput},
     shared_widgets::{
         loading_indicators::{FirstLoad, loading_placeholder_stack},
         page_widget_templates::ClampedPage,
+        trust_confirmation_dialog::present_trust_confirmation,
     },
 };
 
@@ -405,10 +405,12 @@ impl Component for QuarantineEntriesPage {
                 );
             }
             QuarantineEntriesPageInput::TrustRequested(trust_choice) => {
-                let input_sender = sender.input_sender().clone();
-                present_trust_confirmation(root, trust_choice, move |confirmed_choice| {
-                    input_sender.emit(QuarantineEntriesPageInput::TrustConfirmed(confirmed_choice));
-                });
+                present_trust_confirmation(
+                    root,
+                    trust_choice,
+                    sender.input_sender().clone(),
+                    QuarantineEntriesPageInput::TrustConfirmed,
+                );
             }
             QuarantineEntriesPageInput::TrustConfirmed(confirmed_choice) => {
                 sender.oneshot_command(async move {

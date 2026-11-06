@@ -1,5 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -11,6 +11,7 @@ use futures::{
 use gettextrs::{gettext, ngettext};
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmWidgetExt,
+    abstractions::Toaster,
     adw,
     adw::prelude::*,
     gtk,
@@ -24,22 +25,16 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
         },
-        clamav_programs::trusted_program_lookup::ProgramLocation,
         clamav_scanner::{
             scan_exclusion_rules::{ExclusionEntry, ScanExclusions},
             scan_progress_estimates::{RefreshThrottle, file_progress_text},
             scan_progress_events::{
-                CompletedScanOutcome, ScanProblem, ScanProgressEvent, ScanRequest,
-                UnscannedFileCause, scan_progress_events,
+                CompletedScanOutcome, ScanProgressEvent, ScanRequest, scan_progress_events,
             },
-            scan_target_enumeration::ScanTargetFailure,
             scanner_command_builder::{
                 ScannerBackend, ScannerProgramPaths, choose_scanner_backend,
             },
-            scanner_output_parser::{
-                ScanFailureReason, ScanNotice, sanitize_scanner_line, sanitize_scanner_text,
-            },
-            scanner_process_events::ScanStartFailure,
+            scanner_output_parser::sanitize_scanner_line,
         },
         desktop::{
             desktop_notifications::notify_outside_the_window,
@@ -57,15 +52,22 @@ use crate::{
             device_qualifies_for_scan, mounted_device_of, settled_device_passes_limits,
         },
         eicar_test_file::write_eicar_test_file,
+        found_threat_row::FoundThreatRow,
         scan_options_section::ScanOptionsSection,
         scan_profiles_dialog::{
             profile_manager_dialog::{ProfileManagerDialog, ProfileManagerDialogOutput},
             scan_profile_store::{ScanProfile, ScanProfileStore},
         },
-        scan_progress_display::{ScanProgressDisplay, ScanningSnapshot},
-        scan_results_section::scan_results_component::{
-            ProblemPathGroup, ScanResultsSection, ScanResultsSectionInit, ScanResultsSectionInput,
-            ScanResultsSectionOutput, ScanResultsStatus, ScanResultsView,
+        scan_progress_view::{ScanProgressBar, ScanProgressView},
+        scan_results_section::{
+            scan_results_component::{
+                ScanResultsSection, ScanResultsSectionInput, ScanResultsSectionOutput,
+            },
+            scan_results_state::{ScanResultsStatus, ScanResultsView},
+        },
+        scan_run_state::{
+            ScannerProgramTrust, problem_path_groups, results_status, scan_summary_text,
+            scan_target_name, scanner_program_trust, unlisted_notice_lines,
         },
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
     },
@@ -102,11 +104,6 @@ enum ProfileManagerView {
     },
 }
 
-enum ResultsPanelView {
-    NoResultsYet,
-    ResultsShown(Controller<ScanResultsSection>),
-}
-
 enum ScannerBackendView {
     DetectingBackend,
     BackendDetected(ScannerBackend),
@@ -120,13 +117,13 @@ pub struct ScanPageInit {
 }
 
 pub struct ScanPage {
-    quarantine_vault: QuarantineVault,
     activity_history: ActivityHistory,
     profile_store: ScanProfileStore,
     known_profiles: Vec<ScanProfile>,
     selected_profile: SelectedScanProfile,
     profile_manager_view: ProfileManagerView,
-    profile_names: gtk::StringList,
+    profile_names: Vec<String>,
+    profile_names_replaced: bool,
     scan_started_at: SystemTime,
     scan_started_instant: Instant,
     active_scan_targets: Vec<PathBuf>,
@@ -135,11 +132,11 @@ pub struct ScanPage {
     scan_outcome: CompletedScanOutcome,
     current_file_label: String,
     show_live_progress: bool,
-    progress_display: ScanProgressDisplay,
+    scan_progress_view: ScanProgressView,
+    found_threat_rows: FactoryVecDeque<FoundThreatRow>,
     display_throttle: RefreshThrottle,
     displayed_phase: DisplayedScanPhase,
-    results_panel_view: ResultsPanelView,
-    results_container: gtk::Box,
+    scan_results_section: Controller<ScanResultsSection>,
     scan_target_rows: FactoryVecDeque<ScanTargetRow>,
     scanner_backend_view: ScannerBackendView,
     scanner_program_trust: ScannerProgramTrust,
@@ -149,6 +146,7 @@ pub struct ScanPage {
     stored_settings: gio::Settings,
     device_auto_scan_settings: DeviceAutoScanSettings,
     _device_monitor: gio::VolumeMonitor,
+    toaster: Toaster,
 }
 
 #[derive(Debug)]
@@ -191,6 +189,8 @@ pub enum ScanPageCommand {
         scanner_program_trust: ScannerProgramTrust,
     },
     ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
+    ProfilesLoaded(Result<Vec<ScanProfile>, String>),
+    EicarTestFileWritten(Result<NamedTempFile, String>),
     DeviceSettled {
         mount_path: PathBuf,
         passes_limits: bool,
@@ -199,191 +199,12 @@ pub enum ScanPageCommand {
 
 const PROTECTION_PAGE_NAME: &str = "protection";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScannerProgramTrust {
-    ProgramsTrusted,
-    ReplaceableProgramRefused,
-}
-
-fn scanner_program_trust(scanner_programs: &ScannerProgramPaths) -> ScannerProgramTrust {
-    let program_refused = [
-        &scanner_programs.clamdscan_program,
-        &scanner_programs.clamscan_program,
-    ]
-    .into_iter()
-    .any(|program_location| {
-        matches!(
-            program_location,
-            ProgramLocation::OnlyReplaceableCandidates { .. }
-        )
-    });
-    if program_refused {
-        ScannerProgramTrust::ReplaceableProgramRefused
-    } else {
-        ScannerProgramTrust::ProgramsTrusted
-    }
-}
-
-fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
-    match start_failure {
-        ScanStartFailure::ScannerProgramMissing => {
-            gettext("The ClamAV scanner is not installed or not on the search path.")
-        }
-        ScanStartFailure::ScannerProgramReplaceable {
-            candidate_path,
-            replaceable_path,
-        } => gettext(
-            "Lazaret refused to run {program}, because your account can replace {replaceable}. \
-             Install ClamAV system-wide so a program planted by malware can't fake clean results.",
-        )
-        .replace(
-            "{replaceable}",
-            &sanitize_scanner_line(&replaceable_path.to_string_lossy()),
-        )
-        .replace(
-            "{program}",
-            &sanitize_scanner_line(&candidate_path.to_string_lossy()),
-        ),
-        ScanStartFailure::ScannerSpawnFailed(spawn_failure) => {
-            gettext("The scanner could not be started: {error}")
-                .replace("{error}", &spawn_failure.to_string())
-        }
-        ScanStartFailure::ScannerWorkDirectoryUnavailable(work_directory_failure) => {
-            gettext("Unable to create the private scanner work directory: {error}")
-                .replace("{error}", &work_directory_failure.to_string())
-        }
-        ScanStartFailure::ScannerOutputUncaptured => {
-            gettext("The scanner output could not be captured.")
-        }
-        ScanStartFailure::ScanInputUnavailable {
-            input_path,
-            input_failure,
-        } => gettext("Unable to safely open scan input {path}: {error}")
-            .replace("{error}", &input_failure.to_string())
-            .replace(
-                "{path}",
-                &sanitize_scanner_line(&input_path.to_string_lossy()),
-            ),
-    }
-}
-
-fn describe_target_failure(target_failure: &ScanTargetFailure) -> String {
-    match target_failure {
-        ScanTargetFailure::TargetMissing => {
-            gettext("Scan target does not exist or contains an invalid NUL byte")
-        }
-        ScanTargetFailure::TargetNotScannable => {
-            gettext("Scan target is not a regular file or directory")
-        }
-        ScanTargetFailure::TargetDirectoryUnreadable {
-            target_path,
-            directory_failure,
-        } => gettext("Unable to enumerate scan target {path}: {error}")
-            .replace("{error}", &directory_failure.to_string())
-            .replace(
-                "{path}",
-                &sanitize_scanner_line(&target_path.to_string_lossy()),
-            ),
-        ScanTargetFailure::FileListUnwritable(list_failure) => {
-            gettext("Unable to write private clamd file list: {error}")
-                .replace("{error}", &list_failure.to_string())
-        }
-        ScanTargetFailure::EnumerationInterrupted => {
-            gettext("Listing the scan target stopped unexpectedly.")
-        }
-    }
-}
-
-fn describe_scan_problem(scan_problem: &ScanProblem) -> String {
-    match scan_problem {
-        ScanProblem::ScannerFailed(ScanFailureReason::NoFilesScanned) => {
-            gettext("No files could be scanned")
-        }
-        ScanProblem::ScannerFailed(ScanFailureReason::ScannerReported { scanner_message }) => {
-            sanitize_scanner_text(scanner_message)
-        }
-        ScanProblem::ScannerFailed(ScanFailureReason::UnexplainedScannerFailure { exit_code }) => {
-            gettext("The scanner stopped with exit code {code}.")
-                .replace("{code}", &exit_code.to_string())
-        }
-        ScanProblem::FilesNotScanned {
-            unscanned_paths,
-            unscanned_cause,
-        } => format!(
-            "{} {}",
-            unscanned_files_title(unscanned_paths.len()),
-            describe_unscanned_cause(*unscanned_cause)
-        ),
-        ScanProblem::ScanPhaseUnstartable(start_failure) => describe_start_failure(start_failure),
-        ScanProblem::TargetRejected(target_failure) => describe_target_failure(target_failure),
-    }
-}
-
-fn unscanned_files_title(unscanned_count: usize) -> String {
-    ngettext(
-        "{count} file was not scanned",
-        "{count} files were not scanned",
-        u32::try_from(unscanned_count).unwrap_or(u32::MAX),
-    )
-    .replace("{count}", &unscanned_count.to_string())
-}
-
-fn describe_unscanned_cause(unscanned_cause: UnscannedFileCause) -> String {
-    match unscanned_cause {
-        UnscannedFileCause::ClamdConnectionLost => {
-            gettext("The connection to clamd was lost during the scan.")
-        }
-        UnscannedFileCause::ScannerStoppedReporting => {
-            gettext("The scanner did not report a result for these files.")
-        }
-    }
-}
-
-fn is_listed_as_path_group(scan_problem: &ScanProblem) -> bool {
-    matches!(scan_problem, ScanProblem::FilesNotScanned { .. })
-}
-
 fn close_enclosing_popover(clicked_button: &gtk::Button) {
     if let Some(enclosing_popover) = clicked_button
         .ancestor(gtk::Popover::static_type())
         .and_downcast::<gtk::Popover>()
     {
         enclosing_popover.popdown();
-    }
-}
-
-fn scan_target_name(scan_target: &Path) -> String {
-    sanitize_scanner_line(
-        &scan_target
-            .file_name()
-            .unwrap_or(scan_target.as_os_str())
-            .to_string_lossy(),
-    )
-}
-
-fn describe_scan_notice(scan_notice: &ScanNotice) -> String {
-    match scan_notice {
-        ScanNotice::NoNotice => String::new(),
-        ScanNotice::FilesInaccessible { file_count } => ngettext(
-            "{count} file could not be accessed",
-            "{count} files could not be accessed",
-            u32::try_from(*file_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &file_count.to_string()),
-        ScanNotice::FilesUnreadable { file_count } => ngettext(
-            "{count} file could not be read",
-            "{count} files could not be read",
-            u32::try_from(*file_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &file_count.to_string()),
-        ScanNotice::NonfatalWarnings { warning_count } => ngettext(
-            "{count} non-fatal warning during scan; some files may have been only partially \
-             scanned",
-            "{count} non-fatal warnings during scan; some files may have been only partially \
-             scanned",
-            u32::try_from(*warning_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &warning_count.to_string()),
     }
 }
 
@@ -440,18 +261,17 @@ impl ScanPage {
 
     fn start_eicar_test(&mut self, sender: &ComponentSender<Self>) {
         self.page_notice.clear();
-        match write_eicar_test_file(&self.file_list_directory) {
-            Ok(eicar_file) => {
-                let eicar_path = eicar_file.path().to_path_buf();
-                self.eicar_test_files.clear();
-                self.eicar_test_files.push(eicar_file);
-                self.start_scan(vec![eicar_path], sender);
-            }
-            Err(write_failure) => {
-                self.page_notice = gettext("Could not create the EICAR test file: {error}")
-                    .replace("{error}", &write_failure.to_string());
-            }
-        }
+        let file_list_directory = self.file_list_directory.clone();
+        sender.oneshot_command(async move {
+            ScanPageCommand::EicarTestFileWritten(
+                tokio::task::spawn_blocking(move || write_eicar_test_file(&file_list_directory))
+                    .await
+                    .map_err(|interrupted_writing| interrupted_writing.to_string())
+                    .and_then(|write_outcome| {
+                        write_outcome.map_err(|write_failure| write_failure.to_string())
+                    }),
+            )
+        });
     }
 
     fn header_subtitle(&self) -> String {
@@ -500,140 +320,11 @@ impl ScanPage {
         }
     }
 
-    fn scan_summary_text(&self) -> String {
-        let threat_summary = (!self.scan_outcome.detected_threats.is_empty()).then(|| {
-            let threat_count = self.scan_outcome.detected_threats.len();
-            ngettext(
-                "{count} threat found",
-                "{count} threats found",
-                u32::try_from(threat_count).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &threat_count.to_string())
-        });
-        let inspected_summary = ngettext(
-            "{count} file scanned",
-            "{count} files scanned",
-            u32::try_from(self.scan_outcome.inspected_file_count).unwrap_or(u32::MAX),
-        )
-        .replace(
-            "{count}",
-            &self.scan_outcome.inspected_file_count.to_string(),
-        );
-        [inspected_summary]
-            .into_iter()
-            .chain(threat_summary)
-            .chain(self.scan_notice_lines())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    fn scan_notice_lines(&self) -> Vec<String> {
-        self.notice_lines_where(|_scan_problem| true, |_scan_notice| true)
-    }
-
-    fn unlisted_notice_lines(&self) -> Vec<String> {
-        self.notice_lines_where(
-            |scan_problem| !is_listed_as_path_group(scan_problem),
-            |scan_notice| {
-                !matches!(
-                    scan_notice,
-                    ScanNotice::FilesInaccessible { .. } | ScanNotice::FilesUnreadable { .. }
-                )
-            },
-        )
-    }
-
-    fn unlisted_skipped_paths(&self) -> Vec<String> {
-        self.scan_outcome
-            .skipped_paths
-            .iter()
-            .filter(|skipped_path| {
-                !self
-                    .scan_outcome
-                    .detected_threats
-                    .iter()
-                    .any(|detected_threat| detected_threat.file_path == Path::new(skipped_path))
-            })
-            .cloned()
-            .collect()
-    }
-
-    fn problem_path_groups(&self) -> Vec<ProblemPathGroup> {
-        let unscanned_groups = self
-            .scan_outcome
-            .scan_problems
-            .iter()
-            .filter_map(|scan_problem| match scan_problem {
-                ScanProblem::FilesNotScanned {
-                    unscanned_paths,
-                    unscanned_cause,
-                } => Some(ProblemPathGroup {
-                    group_title: unscanned_files_title(unscanned_paths.len()),
-                    group_explanation: describe_unscanned_cause(*unscanned_cause),
-                    listed_paths: unscanned_paths
-                        .iter()
-                        .map(|unscanned_path| unscanned_path.to_string_lossy().into_owned())
-                        .collect(),
-                }),
-                _other_problem => None,
-            });
-        let skipped_paths = self.unlisted_skipped_paths();
-        let skipped_group = (!skipped_paths.is_empty()).then(|| ProblemPathGroup {
-            group_title: ngettext(
-                "{count} file could not be accessed",
-                "{count} files could not be accessed",
-                u32::try_from(skipped_paths.len()).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &skipped_paths.len().to_string()),
-            group_explanation: gettext("ClamAV could not open these files."),
-            listed_paths: skipped_paths,
-        });
-        unscanned_groups.chain(skipped_group).collect()
-    }
-
-    fn notice_lines_where(
-        &self,
-        include_problem: impl Fn(&ScanProblem) -> bool,
-        include_notice: impl Fn(&ScanNotice) -> bool,
-    ) -> Vec<String> {
-        let unattributed_notice = (self.scan_outcome.unattributed_threats_reported
-            && self.scan_outcome.detected_threats.is_empty())
-        .then(|| gettext("The scanner reported a threat without naming the file."));
-        unattributed_notice
-            .into_iter()
-            .chain(
-                self.scan_outcome
-                    .scan_problems
-                    .iter()
-                    .filter(|scan_problem| include_problem(scan_problem))
-                    .map(describe_scan_problem),
-            )
-            .chain(
-                self.scan_outcome
-                    .scan_notices
-                    .iter()
-                    .filter(|scan_notice| include_notice(scan_notice))
-                    .map(describe_scan_notice),
-            )
-            .chain(
-                self.scan_outcome
-                    .nonfatal_warnings
-                    .iter()
-                    .map(|nonfatal_warning| sanitize_scanner_line(nonfatal_warning)),
-            )
-            .collect()
-    }
-
     fn results_status(&self) -> ScanResultsStatus {
-        if self.scan_outcome.threats_were_found() {
-            ScanResultsStatus::ThreatsDetected
-        } else if matches!(self.scan_page_state, ScanPageState::ScanCancelled) {
-            ScanResultsStatus::ScanCancelled
-        } else if self.scan_outcome.scan_problems.is_empty() {
-            ScanResultsStatus::NoThreatsDetected
-        } else {
-            ScanResultsStatus::FinishedWithProblems
-        }
+        results_status(
+            &self.scan_outcome,
+            matches!(self.scan_page_state, ScanPageState::ScanCancelled),
+        )
     }
 
     fn results_view(&self) -> ScanResultsView {
@@ -644,32 +335,36 @@ impl ScanPage {
             scanned_directory_count: self.scan_outcome.scanned_directory_count,
             elapsed_time: self.scan_started_instant.elapsed(),
             detected_threats: self.scan_outcome.detected_threats.clone(),
-            problem_path_groups: self.problem_path_groups(),
-            notice_lines: self.unlisted_notice_lines(),
+            problem_path_groups: problem_path_groups(&self.scan_outcome),
+            notice_lines: unlisted_notice_lines(&self.scan_outcome),
             noteworthy_output: self.scan_outcome.noteworthy_output.clone(),
         }
     }
 
-    fn reload_known_profiles(&mut self) {
-        match self.profile_store.load_profiles() {
-            Ok(known_profiles) => {
-                let profile_labels = std::iter::once(gettext("No Profile (Manual)"))
-                    .chain(known_profiles.iter().map(|known_profile| {
-                        sanitize_scanner_line(&known_profile.displayed_name())
-                    }))
-                    .collect::<Vec<_>>();
-                self.known_profiles = known_profiles;
-                self.profile_names.splice(
-                    0,
-                    self.profile_names.n_items(),
-                    &profile_labels
-                        .iter()
-                        .map(String::as_str)
-                        .collect::<Vec<_>>(),
-                );
-            }
-            Err(load_failure) => self.page_notice = load_failure.to_string(),
-        }
+    fn reload_known_profiles(&self, sender: &ComponentSender<Self>) {
+        let profile_store = self.profile_store.clone();
+        sender.oneshot_command(async move {
+            ScanPageCommand::ProfilesLoaded(
+                tokio::task::spawn_blocking(move || profile_store.load_profiles())
+                    .await
+                    .map_err(|interrupted_loading| interrupted_loading.to_string())
+                    .and_then(|load_outcome| {
+                        load_outcome.map_err(|load_failure| load_failure.to_string())
+                    }),
+            )
+        });
+    }
+
+    fn show_known_profiles(&mut self, known_profiles: Vec<ScanProfile>) {
+        self.profile_names = std::iter::once(gettext("No Profile (Manual)"))
+            .chain(
+                known_profiles
+                    .iter()
+                    .map(|known_profile| sanitize_scanner_line(&known_profile.displayed_name())),
+            )
+            .collect();
+        self.profile_names_replaced = true;
+        self.known_profiles = known_profiles;
     }
 
     fn apply_profile(&mut self, chosen_profile: ScanProfile) {
@@ -716,7 +411,7 @@ impl ScanPage {
         notify_outside_the_window(
             "scan-finished",
             &notification_title,
-            &self.scan_summary_text(),
+            &scan_summary_text(&self.scan_outcome),
         );
     }
 
@@ -745,39 +440,16 @@ impl ScanPage {
             activity_output: self.scan_outcome.noteworthy_output.clone(),
         };
         let activity_history = self.activity_history.clone();
-        let command_sender = sender.command_sender().clone();
-        relm4::spawn(async move {
-            let _page_closed = command_sender.send(ScanPageCommand::ActivityRecordingFinished(
+        sender.oneshot_command(async move {
+            ScanPageCommand::ActivityRecordingFinished(
                 activity_history.record_activity(new_entry).await,
-            ));
+            )
         });
     }
 
-    fn show_results_panel(&mut self, sender: &ComponentSender<Self>) {
-        self.clear_results_panel();
-        let results_panel = ScanResultsSection::builder()
-            .launch(ScanResultsSectionInit {
-                results_view: self.results_view(),
-                quarantine_vault: self.quarantine_vault.clone(),
-            })
-            .forward(sender.input_sender(), |panel_output| match panel_output {
-                ScanResultsSectionOutput::QuarantineEntriesChanged => {
-                    ScanPageInput::QuarantineEntriesChanged
-                }
-                ScanResultsSectionOutput::NewScanRequested => ScanPageInput::NewScanRequested,
-                ScanResultsSectionOutput::ToastRequested(toast_message) => {
-                    ScanPageInput::ToastRequested(toast_message)
-                }
-            });
-        self.results_container.append(results_panel.widget());
-        self.results_panel_view = ResultsPanelView::ResultsShown(results_panel);
-    }
-
-    fn clear_results_panel(&mut self) {
-        if let ResultsPanelView::ResultsShown(results_panel) = &self.results_panel_view {
-            self.results_container.remove(results_panel.widget());
-        }
-        self.results_panel_view = ResultsPanelView::NoResultsYet;
+    fn show_scan_results(&self) {
+        self.scan_results_section
+            .emit(ScanResultsSectionInput::ResultsShown(self.results_view()));
     }
 
     fn shows_results(&self) -> bool {
@@ -801,8 +473,8 @@ impl ScanPage {
         self.display_throttle =
             RefreshThrottle::starting_at(DISPLAY_REFRESH_INTERVAL, Instant::now());
         self.displayed_phase = DisplayedScanPhase::PreparingScan;
-        self.progress_display.show_preparation();
-        self.clear_results_panel();
+        self.scan_progress_view = ScanProgressView::PreparingScan;
+        self.found_threat_rows.guard().clear();
         let settings = application_settings();
         self.show_live_progress = settings.boolean(SHOW_LIVE_PROGRESS_KEY);
         let scan_exclusions = ScanExclusions::from_entries(
@@ -813,9 +485,12 @@ impl ScanPage {
             &glib::home_dir(),
         );
         let backend_preference = scanner_backend_preference(&settings);
-        let scanner_programs = ScannerProgramPaths::locate_trusted_programs();
         let file_list_directory = self.file_list_directory.clone();
         let scan_events = stream::once(async move {
+            let scanner_programs =
+                tokio::task::spawn_blocking(ScannerProgramPaths::locate_trusted_programs)
+                    .await
+                    .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
             let scanner_backend =
                 choose_scanner_backend(backend_preference, &scanner_programs).await;
             ScanRequest {
@@ -860,7 +535,9 @@ impl ScanPage {
                     target_enumerated = true;
                 }
                 ScanProgressEvent::ThreatDetected(detected_threat) => {
-                    self.progress_display.add_found_threat(detected_threat);
+                    self.found_threat_rows
+                        .guard()
+                        .push_back(detected_threat.clone());
                 }
                 ScanProgressEvent::FileInspected { file_path } => {
                     self.current_file_label = sanitize_scanner_line(&file_path.to_string_lossy());
@@ -873,8 +550,8 @@ impl ScanPage {
             DisplayedScanPhase::PreparingScan => {}
             DisplayedScanPhase::FindingFiles => {
                 if let Some(enumeration_progress) = latest_enumeration {
-                    self.progress_display
-                        .show_finding_files(&enumeration_progress);
+                    self.scan_progress_view =
+                        ScanProgressView::finding_files(&enumeration_progress);
                 }
             }
             DisplayedScanPhase::ScanningFiles => {
@@ -885,17 +562,17 @@ impl ScanPage {
         }
     }
 
-    fn show_scanning_progress(&self) {
-        self.progress_display.show_scanning(&ScanningSnapshot {
+    fn show_scanning_progress(&mut self) {
+        self.scan_progress_view = ScanProgressView::ScanningFiles {
             inspected_file_count: self.scan_outcome.inspected_file_count,
             planned_file_count: self.scan_outcome.planned_file_count,
             elapsed_time: self.scan_started_instant.elapsed(),
             current_file_text: if self.show_live_progress {
-                &self.current_file_label
+                self.current_file_label.clone()
             } else {
-                ""
+                String::new()
             },
-        });
+        };
     }
 }
 
@@ -1023,10 +700,27 @@ impl Component for ScanPage {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 18,
 
-                        #[local_ref]
-                        scan_progress_box -> gtk::Box {
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 6,
                             #[watch]
                             set_visible: model.scan_is_running(),
+
+                            gtk::ProgressBar {
+                                set_show_text: true,
+                                #[watch]
+                                show_scan_progress: &model.scan_progress_view,
+                            },
+
+                            gtk::Label {
+                                set_xalign: 0.0,
+                                set_use_markup: false,
+                                set_ellipsize: gtk::pango::EllipsizeMode::Middle,
+                                add_css_class: "dim-label",
+                                add_css_class: "caption",
+                                #[watch]
+                                set_label: &model.scan_progress_view.detail_text(),
+                            },
                         },
 
                         adw::PreferencesGroup {
@@ -1036,7 +730,10 @@ impl Component for ScanPage {
 
                             adw::ComboRow {
                                 set_title: &gettext("Profile"),
-                                set_model: Some(&model.profile_names),
+                                #[track(model.profile_names_replaced)]
+                                set_model: Some(&gtk::StringList::new(
+                                    &model.profile_names.iter().map(String::as_str).collect::<Vec<_>>(),
+                                )),
                                 connect_selected_notify[sender] => move |profile_row| {
                                     sender.input(ScanPageInput::ProfileRowSelected {
                                         row_position: profile_row.selected() as usize,
@@ -1101,10 +798,17 @@ impl Component for ScanPage {
                             },
                         },
 
-                        #[local_ref]
-                        found_threat_group -> adw::PreferencesGroup {
+                        adw::PreferencesGroup {
+                            set_title: &gettext("Found so far"),
+                            set_margin_top: 12,
                             #[watch]
-                            set_visible: model.scan_is_running() && model.scan_outcome.threats_were_found(),
+                            set_visible: model.scan_is_running() && !model.found_threat_rows.is_empty(),
+
+                            #[local_ref]
+                            found_threat_list -> gtk::ListBox {
+                                add_css_class: "boxed-list",
+                                set_selection_mode: gtk::SelectionMode::None,
+                            },
                         },
 
                         gtk::Label {
@@ -1118,7 +822,7 @@ impl Component for ScanPage {
                         },
 
                         #[local_ref]
-                        results_container -> gtk::Box {
+                        scan_results_widget -> gtk::Box {
                             #[watch]
                             set_visible: model.shows_results(),
                         },
@@ -1185,13 +889,13 @@ impl Component for ScanPage {
                 mount_sender.emit(ScanPageInput::DeviceMountAdded(mounted_device));
             }
         });
-        let mut model = Self {
+        let model = Self {
             profile_store: page_init.profile_store,
             known_profiles: Vec::new(),
             selected_profile: SelectedScanProfile::ManualTargets,
             profile_manager_view: ProfileManagerView::ManagerClosed,
-            profile_names: gtk::StringList::new(&[]),
-            quarantine_vault: page_init.quarantine_vault,
+            profile_names: Vec::new(),
+            profile_names_replaced: false,
             activity_history: page_init.activity_history,
             scan_started_at: SystemTime::now(),
             scan_started_instant: Instant::now(),
@@ -1201,14 +905,31 @@ impl Component for ScanPage {
             scan_outcome: CompletedScanOutcome::default(),
             current_file_label: String::new(),
             show_live_progress: true,
-            progress_display: ScanProgressDisplay::new(),
+            scan_progress_view: ScanProgressView::PreparingScan,
+            found_threat_rows: FactoryVecDeque::builder()
+                .launch(gtk::ListBox::default())
+                .detach(),
             display_throttle: RefreshThrottle::starting_at(
                 DISPLAY_REFRESH_INTERVAL,
                 Instant::now(),
             ),
             displayed_phase: DisplayedScanPhase::PreparingScan,
-            results_panel_view: ResultsPanelView::NoResultsYet,
-            results_container: gtk::Box::new(gtk::Orientation::Vertical, 0),
+            scan_results_section: ScanResultsSection::builder()
+                .launch(page_init.quarantine_vault)
+                .forward(
+                    sender.input_sender(),
+                    |section_output| match section_output {
+                        ScanResultsSectionOutput::QuarantineEntriesChanged => {
+                            ScanPageInput::QuarantineEntriesChanged
+                        }
+                        ScanResultsSectionOutput::NewScanRequested => {
+                            ScanPageInput::NewScanRequested
+                        }
+                        ScanResultsSectionOutput::ToastRequested(toast_message) => {
+                            ScanPageInput::ToastRequested(toast_message)
+                        }
+                    },
+                ),
             scan_target_rows,
             scanner_backend_view: ScannerBackendView::DetectingBackend,
             scanner_program_trust: ScannerProgramTrust::ProgramsTrusted,
@@ -1217,13 +938,13 @@ impl Component for ScanPage {
             device_auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
             stored_settings,
             _device_monitor: device_monitor,
+            toaster: Toaster::new(&root),
             page_notice: String::new(),
         };
-        model.reload_known_profiles();
+        model.reload_known_profiles(&sender);
         let scan_target_list = model.scan_target_rows.widget();
-        let scan_progress_box = &model.progress_display.progress_widget().clone();
-        let found_threat_group = &model.progress_display.found_threat_widget().clone();
-        let results_container = &model.results_container.clone();
+        let found_threat_list = model.found_threat_rows.widget();
+        let scan_results_widget = model.scan_results_section.widget();
         let scan_options_widget = model.scan_options_section.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -1235,6 +956,7 @@ impl Component for ScanPage {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
+        self.profile_names_replaced = false;
         match page_input {
             ScanPageInput::ChooseFilesRequested => request_files_to_open(
                 gettext("Choose Files to Scan"),
@@ -1270,7 +992,7 @@ impl Component for ScanPage {
             ScanPageInput::ManageProfilesRequested => {
                 self.open_profile_manager(root, &sender);
             }
-            ScanPageInput::ProfilesChanged => self.reload_known_profiles(),
+            ScanPageInput::ProfilesChanged => self.reload_known_profiles(&sender),
             ScanPageInput::RunProfileRequested(run_profile) => {
                 self.apply_profile(run_profile);
                 if !self.scan_target_rows.is_empty() && !self.scan_is_running() {
@@ -1350,18 +1072,14 @@ impl Component for ScanPage {
                 }
             }
             ScanPageInput::CopyResultsRequested => {
-                if let ResultsPanelView::ResultsShown(results_panel) = &self.results_panel_view {
-                    results_panel.emit(ScanResultsSectionInput::CopyReportRequested);
-                }
+                self.scan_results_section
+                    .emit(ScanResultsSectionInput::CopyReportRequested);
             }
             ScanPageInput::ExportResultsRequested => {
-                if let ResultsPanelView::ResultsShown(results_panel) = &self.results_panel_view {
-                    results_panel.emit(ScanResultsSectionInput::ExportReportRequested);
-                }
+                self.scan_results_section
+                    .emit(ScanResultsSectionInput::ExportReportRequested);
             }
-            ScanPageInput::ToastRequested(toast_message) => {
-                root.add_toast(adw::Toast::new(&toast_message));
-            }
+            ScanPageInput::ToastRequested(toast_message) => self.toaster.toast(&toast_message),
             ScanPageInput::QuarantineEntriesChanged => {
                 let _shell_closed = sender.output(ScanPageOutput::QuarantineEntriesChanged);
             }
@@ -1374,7 +1092,22 @@ impl Component for ScanPage {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        self.profile_names_replaced = false;
         match page_command {
+            ScanPageCommand::ProfilesLoaded(Ok(known_profiles)) => {
+                self.show_known_profiles(known_profiles);
+            }
+            ScanPageCommand::ProfilesLoaded(Err(load_failure)) => self.page_notice = load_failure,
+            ScanPageCommand::EicarTestFileWritten(Ok(eicar_file)) => {
+                let eicar_path = eicar_file.path().to_path_buf();
+                self.eicar_test_files.clear();
+                self.eicar_test_files.push(eicar_file);
+                self.start_scan(vec![eicar_path], &sender);
+            }
+            ScanPageCommand::EicarTestFileWritten(Err(write_failure)) => {
+                self.page_notice = gettext("Could not create the EICAR test file: {error}")
+                    .replace("{error}", &write_failure);
+            }
             ScanPageCommand::DeviceSettled {
                 mount_path,
                 passes_limits: true,
@@ -1391,7 +1124,7 @@ impl Component for ScanPage {
                     ScanPageState::ScanCancelling => ScanPageState::ScanCancelled,
                     _other_state => ScanPageState::ScanCompleted,
                 };
-                self.show_results_panel(&sender);
+                self.show_scan_results();
                 self.record_finished_scan(&sender);
                 self.notify_finished_scan();
             }

@@ -17,10 +17,10 @@ pub struct ScanProfileRow {
 
 #[derive(Debug)]
 pub enum ScanProfileRowOutput {
-    StartScan(DynamicIndex),
-    OpenEditor(DynamicIndex),
-    ConfirmDeletion(DynamicIndex),
-    SaveExport(DynamicIndex),
+    ScanRequested(DynamicIndex),
+    EditRequested(DynamicIndex),
+    DeletionRequested(DynamicIndex),
+    ExportRequested(DynamicIndex),
 }
 
 fn profile_subtitle(scan_profile: &ScanProfile) -> String {
@@ -61,7 +61,7 @@ impl FactoryComponent for ScanProfileRow {
                 set_valign: gtk::Align::Center,
                 add_css_class: "flat",
                 connect_clicked[sender, index] => move |_clicked_button| {
-                    let _parent_gone = sender.output(ScanProfileRowOutput::StartScan(index.clone()));
+                    let _parent_gone = sender.output(ScanProfileRowOutput::ScanRequested(index.clone()));
                 },
             },
 
@@ -71,7 +71,7 @@ impl FactoryComponent for ScanProfileRow {
                 set_valign: gtk::Align::Center,
                 add_css_class: "flat",
                 connect_clicked[sender, index] => move |_clicked_button| {
-                    let _parent_gone = sender.output(ScanProfileRowOutput::OpenEditor(index.clone()));
+                    let _parent_gone = sender.output(ScanProfileRowOutput::EditRequested(index.clone()));
                 },
             },
 
@@ -82,7 +82,7 @@ impl FactoryComponent for ScanProfileRow {
                 add_css_class: "flat",
                 set_sensitive: !self.scan_profile.is_builtin,
                 connect_clicked[sender, index] => move |_clicked_button| {
-                    let _parent_gone = sender.output(ScanProfileRowOutput::ConfirmDeletion(index.clone()));
+                    let _parent_gone = sender.output(ScanProfileRowOutput::DeletionRequested(index.clone()));
                 },
             },
 
@@ -92,7 +92,7 @@ impl FactoryComponent for ScanProfileRow {
                 set_valign: gtk::Align::Center,
                 add_css_class: "flat",
                 connect_clicked[sender, index] => move |_clicked_button| {
-                    let _parent_gone = sender.output(ScanProfileRowOutput::SaveExport(index.clone()));
+                    let _parent_gone = sender.output(ScanProfileRowOutput::ExportRequested(index.clone()));
                 },
             },
         }

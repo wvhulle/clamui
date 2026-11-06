@@ -1,14 +1,10 @@
-use std::{
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use futures::StreamExt;
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
+    prelude::FactoryVecDeque,
 };
 use tokio::task::spawn_blocking;
 
@@ -20,9 +16,15 @@ use crate::{
         detection_alerts::{
             JournalReplay, plan_detection_alerts, send_detection_alerts, withdraw_detection_alert,
         },
+        detection_list_row::{DetectionListRow, DetectionListRowOutput},
+        detections_view_state::{
+            AwaitedIncident, OpenedIncident, current_unix_seconds, detection_for_file,
+            detections_needing_attention_first, file_state_for_detection, file_states_to_keep,
+            split_journal_batch, unresolved_detection_count,
+        },
         incident_timeline_presentation::{
-            DeletionPrompt, DisplayedDetection, SignatureLookupState, detection_needs_attention,
-            detection_summary_text, displayed_file_name, displayed_file_path, incident_timeline,
+            DeletionPrompt, DisplayedDetection, SignatureLookupState, displayed_file_name,
+            incident_timeline,
         },
     },
     host_services::{
@@ -32,20 +34,20 @@ use crate::{
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         detection_journal::{
-            detection_history_store::{DetectionResolution, StoredDetection},
+            detection_history_store::DetectionResolution,
             detection_journal_follower::{
-                DetectionJournalEvent, JournalAccess, JournalStartPosition,
-                detection_journal_events,
+                JournalAccess, JournalStartPosition, detection_journal_events,
             },
             detection_journal_records::JournalDetectionRecord,
         },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
         threat_intel::{
             malware_bazaar_client::look_up_signature,
-            service_key_storage::{ResolvedApiKey, ThreatIntelService, read_api_key},
+            service_key_storage::{
+                ResolvedApiKey, ThreatIntelService, describe_key_failure, read_api_key,
+            },
         },
     },
-    preferences_dialog::online_lookups_page::service_key_section::describe_key_failure,
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     shared_widgets::{
         loading_indicators::FirstLoad,
@@ -60,18 +62,6 @@ const JOURNAL_BATCH_SIZE: usize = 256;
 const LIST_VIEW_NAME: &str = "list";
 const INCIDENT_VIEW_NAME: &str = "incident";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OpenedIncident {
-    NoIncidentOpen,
-    IncidentOpen { detection_id: i64 },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum AwaitedIncident {
-    NothingAwaited,
-    FileAwaited { file_path: PathBuf },
-}
-
 pub struct BackgroundDetectionsPage {
     activity_history: ActivityHistory,
     quarantine_vault: QuarantineVault,
@@ -83,12 +73,10 @@ pub struct BackgroundDetectionsPage {
     application_started_unix: i64,
     deletion_prompt: DeletionPrompt,
     lookup_state: SignatureLookupState,
-    list_rows: Vec<adw::ActionRow>,
-    incident_rows: FactoryVecDeque<TimelineStepRow>,
-    list_group: adw::PreferencesGroup,
     first_load: FirstLoad,
-    first_load_spinner: adw::Spinner,
-    view_stack: gtk::Stack,
+    detection_list_rows: FactoryVecDeque<DetectionListRow>,
+    incident_rows: FactoryVecDeque<TimelineStepRow>,
+    toaster: Toaster,
 }
 
 pub struct BackgroundDetectionsPageInit {
@@ -134,45 +122,11 @@ pub enum IncidentActionEffect {
     OnlyHistoryChanged,
 }
 
-fn current_unix_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed_time| {
-            i64::try_from(elapsed_time.as_secs()).unwrap_or_default()
-        })
-}
-
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
     adw::Toast::builder()
         .title(toast_text)
         .use_markup(false)
         .build()
-}
-
-fn split_journal_batch(
-    journal_events: Vec<DetectionJournalEvent>,
-) -> (Vec<JournalDetectionRecord>, String, Vec<JournalAccess>) {
-    journal_events.into_iter().fold(
-        (Vec::new(), String::new(), Vec::new()),
-        |(mut detection_records, mut last_cursor, mut access_changes), journal_event| {
-            match journal_event {
-                DetectionJournalEvent::DetectionObserved {
-                    detection_record,
-                    journal_cursor,
-                } => {
-                    detection_records.push(detection_record);
-                    last_cursor = journal_cursor;
-                }
-                DetectionJournalEvent::JournalUnreadable => {
-                    access_changes.push(JournalAccess::JournalUnreadable);
-                }
-                DetectionJournalEvent::FollowingStopped { failure_text } => {
-                    access_changes.push(JournalAccess::FollowingFailed { failure_text });
-                }
-            }
-            (detection_records, last_cursor, access_changes)
-        },
-    )
 }
 
 async fn follow_detection_journal(
@@ -192,17 +146,20 @@ async fn follow_detection_journal(
     let mut event_batches =
         Box::pin(detection_journal_events(start_position).ready_chunks(JOURNAL_BATCH_SIZE));
     while let Some(journal_events) = event_batches.next().await {
-        let (detection_records, last_cursor, access_changes) = split_journal_batch(journal_events);
-        access_changes.into_iter().for_each(|access_change| {
-            command_sender.emit(BackgroundDetectionsPageCommand::JournalAccessChanged(
-                access_change,
-            ));
-        });
-        if detection_records.is_empty() {
+        let journal_batch = split_journal_batch(journal_events);
+        journal_batch
+            .access_changes
+            .into_iter()
+            .for_each(|access_change| {
+                command_sender.emit(BackgroundDetectionsPageCommand::JournalAccessChanged(
+                    access_change,
+                ));
+            });
+        if journal_batch.detection_records.is_empty() {
             continue;
         }
         match activity_history
-            .record_detection_batch(&detection_records, &last_cursor)
+            .record_detection_batch(&journal_batch.detection_records, &journal_batch.last_cursor)
             .await
         {
             Ok(newly_opened) => {
@@ -218,42 +175,6 @@ async fn follow_detection_journal(
             }
         }
     }
-}
-
-pub fn file_state_for_detection(
-    stored_detection: &StoredDetection,
-    known_file_states: &HashMap<i64, DetectedFileState>,
-    open_to_check_blocking: impl Fn(&Path) -> DetectedFileState,
-    check_without_opening: impl Fn(&Path) -> DetectedFileState,
-) -> DetectedFileState {
-    if let Some(known_state) = known_file_states.get(&stored_detection.detection_id) {
-        return *known_state;
-    }
-    if stored_detection.resolution == DetectionResolution::Unresolved {
-        open_to_check_blocking(&stored_detection.file_path)
-    } else {
-        check_without_opening(&stored_detection.file_path)
-    }
-}
-
-pub fn file_states_to_keep(
-    displayed_detections: &[DisplayedDetection],
-    newly_opened: &[JournalDetectionRecord],
-) -> HashMap<i64, DetectedFileState> {
-    displayed_detections
-        .iter()
-        .filter(|displayed_detection| {
-            !newly_opened.iter().any(|detection_record| {
-                detection_record.file_path == displayed_detection.stored_detection.file_path
-            })
-        })
-        .map(|displayed_detection| {
-            (
-                displayed_detection.stored_detection.detection_id,
-                displayed_detection.file_state,
-            )
-        })
-        .collect()
 }
 
 pub async fn load_displayed_detections(
@@ -335,6 +256,21 @@ impl BackgroundDetectionsPage {
         ));
     }
 
+    fn shown_view_name(&self) -> &'static str {
+        if self.opened_detection().is_some() {
+            INCIDENT_VIEW_NAME
+        } else {
+            LIST_VIEW_NAME
+        }
+    }
+
+    fn opened_file_name(&self) -> String {
+        self.opened_detection()
+            .map_or_else(String::new, |displayed_detection| {
+                displayed_file_name(&displayed_detection.stored_detection)
+            })
+    }
+
     fn opened_detection(&self) -> Option<&DisplayedDetection> {
         let OpenedIncident::IncidentOpen { detection_id } = self.opened_incident else {
             return None;
@@ -369,56 +305,20 @@ impl BackgroundDetectionsPage {
         }
     }
 
-    fn rebuild_list_rows(&mut self, sender: &ComponentSender<Self>) {
-        self.list_rows
-            .drain(..)
-            .for_each(|list_row| self.list_group.remove(&list_row));
-        let mut sorted_detections = self.displayed_detections.iter().collect::<Vec<_>>();
-        sorted_detections
-            .sort_by_key(|displayed_detection| !detection_needs_attention(displayed_detection));
-        self.list_rows = sorted_detections
+    fn show_detection_list(&mut self) {
+        let mut row_guard = self.detection_list_rows.guard();
+        row_guard.clear();
+        detections_needing_attention_first(&self.displayed_detections)
             .into_iter()
-            .map(|displayed_detection| {
-                let detection_id = displayed_detection.stored_detection.detection_id;
-                let list_row = adw::ActionRow::builder()
-                    .use_markup(false)
-                    .title(displayed_file_name(&displayed_detection.stored_detection))
-                    .subtitle(detection_summary_text(displayed_detection))
-                    .subtitle_lines(0)
-                    .tooltip_text(displayed_file_path(&displayed_detection.stored_detection))
-                    .activatable(true)
-                    .build();
-                let needs_attention = detection_needs_attention(displayed_detection);
-                list_row.add_prefix(
-                    &gtk::Image::builder()
-                        .icon_name(if needs_attention {
-                            "dialog-warning-symbolic"
-                        } else {
-                            "object-select-symbolic"
-                        })
-                        .css_classes([if needs_attention {
-                            "warning"
-                        } else {
-                            "success"
-                        }])
-                        .build(),
-                );
-                list_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
-                let row_sender = sender.clone();
-                list_row.connect_activated(move |_activated_row| {
-                    row_sender.input(BackgroundDetectionsPageInput::IncidentOpened(detection_id));
-                });
-                self.list_group.add(&list_row);
-                list_row
-            })
-            .collect();
+            .for_each(|displayed_detection| {
+                row_guard.push_back(displayed_detection);
+            });
     }
 
     fn show_opened_incident(&mut self) {
         let Some(displayed_detection) = self.opened_detection().cloned() else {
             self.opened_incident = OpenedIncident::NoIncidentOpen;
             self.incident_rows.guard().clear();
-            self.view_stack.set_visible_child_name(LIST_VIEW_NAME);
             return;
         };
         let incident_steps = incident_timeline(
@@ -444,19 +344,13 @@ impl BackgroundDetectionsPage {
                 row_guard.push_back(timeline_step);
             });
         }
-        self.view_stack.set_visible_child_name(INCIDENT_VIEW_NAME);
     }
 
     fn open_awaited_incident(&mut self) {
         let AwaitedIncident::FileAwaited { file_path } = &self.awaited_incident else {
             return;
         };
-        if let Some(displayed_detection) =
-            self.displayed_detections
-                .iter()
-                .find(|displayed_detection| {
-                    displayed_detection.stored_detection.file_path == *file_path
-                })
+        if let Some(displayed_detection) = detection_for_file(&self.displayed_detections, file_path)
         {
             self.opened_incident = OpenedIncident::IncidentOpen {
                 detection_id: displayed_detection.stored_detection.detection_id,
@@ -576,41 +470,57 @@ impl Component for BackgroundDetectionsPage {
 
     view! {
         adw::ToastOverlay {
+            connect_map => BackgroundDetectionsPageInput::ReloadRequested,
+
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
-            add_top_bar = &adw::HeaderBar {
+                add_top_bar = &adw::HeaderBar {
+                    #[wrap(Some)]
+                    set_title_widget = &adw::WindowTitle {
+                        set_title: &gettext("Detections"),
+                        #[watch]
+                        set_subtitle: &model.opened_file_name(),
+                    },
+
+                    pack_start = &gtk::Button {
+                        set_icon_name: "go-previous-symbolic",
+                        set_tooltip_text: Some(&gettext("Back to detections")),
+                        #[watch]
+                        set_visible: model.opened_detection().is_some(),
+                        connect_clicked => BackgroundDetectionsPageInput::BackToListRequested,
+                    },
+                },
+
                 #[wrap(Some)]
-                set_title_widget = &adw::WindowTitle {
-                    set_title: &gettext("Detections"),
+                set_content = &gtk::Stack {
+                    set_transition_type: gtk::StackTransitionType::Crossfade,
+
+                    add_named[Some(LIST_VIEW_NAME)] = &adw::PreferencesPage {
+                        set_title: &gettext("Detections"),
+
+                        #[local_ref]
+                        add = detection_list_group -> adw::PreferencesGroup {
+                            set_title: &gettext("Detections"),
+                            #[watch]
+                            set_description: Some(&gtk::glib::markup_escape_text(&model.list_description())),
+                            #[wrap(Some)]
+                            set_header_suffix = &adw::Spinner {
+                                #[watch]
+                                set_visible: model.first_load == FirstLoad::StillLoading,
+                            },
+                        },
+                    },
+
+                    add_named[Some(INCIDENT_VIEW_NAME)] = &adw::PreferencesPage {
+                        set_title: &gettext("Detection"),
+
+                        #[local_ref]
+                        add = incident_group -> adw::PreferencesGroup {},
+                    },
+
                     #[watch]
-                    set_subtitle: &model.opened_detection().map_or_else(String::new, |displayed_detection| displayed_file_name(&displayed_detection.stored_detection)),
+                    set_visible_child_name: model.shown_view_name(),
                 },
-
-                pack_start = &gtk::Button {
-                    set_icon_name: "go-previous-symbolic",
-                    set_tooltip_text: Some(&gettext("Back to detections")),
-                    #[watch]
-                    set_visible: model.opened_detection().is_some(),
-                    connect_clicked => BackgroundDetectionsPageInput::BackToListRequested,
-                },
-            },
-
-            #[wrap(Some)]
-            #[local_ref]
-            set_content = stack_widget -> gtk::Stack {
-                set_transition_type: gtk::StackTransitionType::Crossfade,
-
-                add_named[Some(LIST_VIEW_NAME)] = &adw::PreferencesPage {
-                    set_title: &gettext("Detections"),
-                    add: list_group_widget,
-                },
-
-                add_named[Some(INCIDENT_VIEW_NAME)] = &adw::PreferencesPage {
-                    set_title: &gettext("Detection"),
-
-                    add: incident_group_widget,
-                },
-            },
             },
         }
     }
@@ -620,18 +530,6 @@ impl Component for BackgroundDetectionsPage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let first_load_spinner = adw::Spinner::new();
-        let incident_rows = FactoryVecDeque::builder()
-            .launch(adw::PreferencesGroup::default())
-            .forward(
-                sender.input_sender(),
-                BackgroundDetectionsPageInput::StepRequested,
-            );
-        let list_group = adw::PreferencesGroup::builder()
-            .title(gettext("Detections"))
-            .header_suffix(&first_load_spinner)
-            .build();
-        let view_stack = gtk::Stack::new();
         let model = Self {
             activity_history: page_init.activity_history.clone(),
             quarantine_vault: page_init.quarantine_vault,
@@ -643,32 +541,30 @@ impl Component for BackgroundDetectionsPage {
             application_started_unix: current_unix_seconds(),
             deletion_prompt: DeletionPrompt::NotAsked,
             lookup_state: SignatureLookupState::NotLookedUp,
-            list_rows: Vec::new(),
-            incident_rows,
-            list_group: list_group.clone(),
             first_load: FirstLoad::StillLoading,
-            first_load_spinner,
-            view_stack: view_stack.clone(),
+            detection_list_rows: FactoryVecDeque::builder()
+                .launch(adw::PreferencesGroup::default())
+                .forward(sender.input_sender(), |row_output| match row_output {
+                    DetectionListRowOutput::IncidentOpened(detection_id) => {
+                        BackgroundDetectionsPageInput::IncidentOpened(detection_id)
+                    }
+                }),
+            incident_rows: FactoryVecDeque::builder()
+                .launch(adw::PreferencesGroup::default())
+                .forward(
+                    sender.input_sender(),
+                    BackgroundDetectionsPageInput::StepRequested,
+                ),
+            toaster: Toaster::new(&root),
         };
-        let stack_widget = &view_stack;
-        let list_group_widget = &list_group;
-        let incident_group = model.incident_rows.widget().clone();
-        let incident_group_widget = &incident_group;
+        let detection_list_group = model.detection_list_rows.widget();
+        let incident_group = model.incident_rows.widget();
         let widgets = view_output!();
-        model
-            .list_group
-            .set_description(Some(&gtk::glib::markup_escape_text(
-                &model.list_description(),
-            )));
         let followed_history = page_init.activity_history;
         sender.command(|command_sender, shutdown_receiver| {
             shutdown_receiver
                 .register(follow_detection_journal(followed_history, command_sender))
                 .drop_on_shutdown()
-        });
-        let visibility_sender = sender.clone();
-        root.connect_map(move |_mapped_page| {
-            visibility_sender.input(BackgroundDetectionsPageInput::ReloadRequested);
         });
         model.start_reload(&sender);
         ComponentParts { model, widgets }
@@ -696,13 +592,12 @@ impl Component for BackgroundDetectionsPage {
                 self.opened_incident = OpenedIncident::NoIncidentOpen;
                 self.deletion_prompt = DeletionPrompt::NotAsked;
                 self.incident_rows.guard().clear();
-                self.view_stack.set_visible_child_name(LIST_VIEW_NAME);
             }
             BackgroundDetectionsPageInput::StepRequested(TimelineStepRowOutput::CopyRequested(
                 copied_text,
             )) => {
                 root.clipboard().set_text(&copied_text);
-                root.add_toast(adw::Toast::new(&gettext("Copied to clipboard")));
+                self.toaster.toast(&gettext("Copied to clipboard"));
             }
             BackgroundDetectionsPageInput::StepRequested(TimelineStepRowOutput::ActionChosen(
                 chosen_action,
@@ -714,7 +609,7 @@ impl Component for BackgroundDetectionsPage {
         &mut self,
         page_command: BackgroundDetectionsPageCommand,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match page_command {
             BackgroundDetectionsPageCommand::DetectionsRecorded {
@@ -733,36 +628,22 @@ impl Component for BackgroundDetectionsPage {
                 let _shell_closed = sender.output(
                     BackgroundDetectionsPageOutput::JournalAccessChanged(journal_access),
                 );
-                self.list_group
-                    .set_description(Some(&gtk::glib::markup_escape_text(
-                        &self.list_description(),
-                    )));
             }
             BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections) => {
                 self.first_load = FirstLoad::LoadFinished;
-                self.first_load_spinner.set_visible(false);
                 self.displayed_detections = displayed_detections;
-                self.list_group
-                    .set_description(Some(&gtk::glib::markup_escape_text(
-                        &self.list_description(),
-                    )));
-                self.rebuild_list_rows(&sender);
+                self.show_detection_list();
                 self.open_awaited_incident();
                 if self.opened_incident != OpenedIncident::NoIncidentOpen {
                     self.show_opened_incident();
                 }
                 let _shell_closed =
                     sender.output(BackgroundDetectionsPageOutput::UnresolvedCountChanged(
-                        self.displayed_detections
-                            .iter()
-                            .filter(|displayed_detection| {
-                                detection_needs_attention(displayed_detection)
-                            })
-                            .count(),
+                        unresolved_detection_count(&self.displayed_detections),
                     ));
             }
             BackgroundDetectionsPageCommand::LoadingFailed(failure_text) => {
-                root.add_toast(plain_text_toast(
+                self.toaster.add_toast(plain_text_toast(
                     &gettext("Detections could not be read: {error}")
                         .replace("{error}", &sanitize_scanner_line(&failure_text)),
                 ));
@@ -785,122 +666,12 @@ impl Component for BackgroundDetectionsPage {
                     }
                     Ok(IncidentActionEffect::OnlyHistoryChanged) => {}
                     Err(failure_text) => {
-                        root.add_toast(plain_text_toast(&sanitize_scanner_line(&failure_text)));
+                        self.toaster
+                            .add_toast(plain_text_toast(&sanitize_scanner_line(&failure_text)));
                     }
                 }
                 self.start_reload(&sender);
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod background_detections_page_tests {
-    use std::{cell::Cell, path::PathBuf};
-
-    use super::*;
-    use crate::host_services::detection_journal::detection_journal_records::DetectionSource;
-
-    fn stored_detection(detection_id: i64, resolution: DetectionResolution) -> StoredDetection {
-        StoredDetection {
-            detection_id,
-            file_path: PathBuf::from("/home/user/Downloads/blocked.exe"),
-            signature_name: "Win.Test-1".to_owned(),
-            found_on_access: true,
-            found_by_schedule: false,
-            first_seen_unix: 1,
-            last_seen_unix: 2,
-            sighting_count: 1,
-            resolution,
-            resolved_at_unix: 0,
-        }
-    }
-
-    fn opens_needed_for(
-        detection: &StoredDetection,
-        known_file_states: &HashMap<i64, DetectedFileState>,
-    ) -> u32 {
-        let open_count = Cell::new(0);
-        let _file_state = file_state_for_detection(
-            detection,
-            known_file_states,
-            |_file_path| {
-                open_count.set(open_count.get() + 1);
-                DetectedFileState::BlockedInPlace
-            },
-            |_file_path| DetectedFileState::ReadableInPlace,
-        );
-        open_count.get()
-    }
-
-    #[test]
-    fn a_repeat_sighting_never_reopens_the_file_because_that_would_cause_another_sighting() {
-        let detection = stored_detection(7, DetectionResolution::Unresolved);
-        let displayed_detections = [DisplayedDetection {
-            stored_detection: detection.clone(),
-            file_state: DetectedFileState::BlockedInPlace,
-        }];
-        assert_eq!(
-            opens_needed_for(&detection, &file_states_to_keep(&displayed_detections, &[])),
-            0
-        );
-    }
-
-    #[test]
-    fn a_new_or_reopened_detection_is_checked_once() {
-        let detection = stored_detection(7, DetectionResolution::Unresolved);
-        assert_eq!(opens_needed_for(&detection, &HashMap::new()), 1);
-        let displayed_detections = [DisplayedDetection {
-            stored_detection: detection.clone(),
-            file_state: DetectedFileState::NoLongerThere,
-        }];
-        let reopened_record = JournalDetectionRecord {
-            observed_at_unix: 3,
-            detection_source: DetectionSource::OnAccessScanner,
-            file_path: detection.file_path.clone(),
-            signature_name: detection.signature_name.clone(),
-        };
-        assert_eq!(
-            opens_needed_for(
-                &detection,
-                &file_states_to_keep(&displayed_detections, &[reopened_record])
-            ),
-            1
-        );
-    }
-
-    #[test]
-    fn resolved_detections_are_never_opened() {
-        assert_eq!(
-            opens_needed_for(
-                &stored_detection(7, DetectionResolution::DismissedByUser),
-                &HashMap::new()
-            ),
-            0
-        );
-    }
-
-    #[test]
-    fn a_journal_batch_keeps_the_last_cursor_and_reports_access_problems() {
-        let detection_record = JournalDetectionRecord {
-            observed_at_unix: 1,
-            detection_source: DetectionSource::OnAccessScanner,
-            file_path: PathBuf::from("/tmp/file"),
-            signature_name: "Win.Test-1".to_owned(),
-        };
-        let (detection_records, last_cursor, access_changes) = split_journal_batch(vec![
-            DetectionJournalEvent::DetectionObserved {
-                detection_record: detection_record.clone(),
-                journal_cursor: "cursor-a".to_owned(),
-            },
-            DetectionJournalEvent::DetectionObserved {
-                detection_record,
-                journal_cursor: "cursor-b".to_owned(),
-            },
-            DetectionJournalEvent::JournalUnreadable,
-        ]);
-        assert_eq!(detection_records.len(), 2);
-        assert_eq!(last_cursor, "cursor-b");
-        assert_eq!(access_changes, vec![JournalAccess::JournalUnreadable]);
     }
 }

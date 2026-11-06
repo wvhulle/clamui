@@ -1,7 +1,6 @@
 use std::{fs::File, io, os::unix::fs::OpenOptionsExt, path::Path};
 
 use gettextrs::gettext;
-use relm4::{adw, adw::prelude::*, gtk};
 use sha2::{Digest, Sha256};
 use zbus::{Connection, proxy};
 
@@ -13,8 +12,6 @@ const APPLIED_ANSWER: &str = "applied";
 const RELOAD_PENDING_ANSWER: &str = "applied-reload-pending";
 const SERVICE_UNKNOWN_ERROR: &str = "org.freedesktop.DBus.Error.ServiceUnknown";
 const ACCESS_DENIED_ERROR: &str = "org.freedesktop.DBus.Error.AccessDenied";
-const CONFIRM_RESPONSE: &str = "confirm";
-const CANCEL_RESPONSE: &str = "cancel";
 
 #[proxy(
     interface = "page.codeberg.wvhulle.Lazaret.SettingsHelper",
@@ -164,105 +161,6 @@ pub fn trust_outcome_text(trust_outcome: &TrustOutcome) -> String {
     }
 }
 
-struct ConfirmationText {
-    heading: String,
-    body: String,
-    shown_value: String,
-    confirm_label: String,
-    lowers_protection: bool,
-}
-
-fn confirmation_text(trust_choice: &TrustChoice) -> ConfirmationText {
-    match trust_choice {
-        TrustChoice::TrustFile {
-            file_fingerprint,
-            shown_path,
-        } => ConfirmationText {
-            heading: gettext("Trust This File?"),
-            body: gettext(
-                "ClamAV will never report a file with exactly this content again, wherever it is \
-                 on this computer and whichever scan finds it. Your administrator password is \
-                 needed, and the password prompt shows the same SHA-256 hash as below.\n\n{path}",
-            )
-            .replace("{path}", shown_path),
-            shown_value: format!(
-                "SHA-256 {}\n{} bytes",
-                file_fingerprint.sha256_hex, file_fingerprint.file_size
-            ),
-            confirm_label: gettext("Trust"),
-            lowers_protection: true,
-        },
-        TrustChoice::IgnoreSignature { signature_name } => ConfirmationText {
-            heading: gettext("Ignore This Detection?"),
-            body: gettext(
-                "ClamAV will stop reporting every file with this detection, not just this one. \
-                 Trusting the file by its hash is safer when only one file is a false positive.",
-            ),
-            shown_value: signature_name.clone(),
-            confirm_label: gettext("Ignore"),
-            lowers_protection: true,
-        },
-        TrustChoice::ForgetTrustedFile { sha256_hex } => ConfirmationText {
-            heading: gettext("Stop Trusting This File?"),
-            body: gettext("ClamAV will report this file again when it matches a signature."),
-            shown_value: format!("SHA-256 {sha256_hex}"),
-            confirm_label: gettext("Stop Trusting"),
-            lowers_protection: false,
-        },
-        TrustChoice::StopIgnoringSignature { signature_name } => ConfirmationText {
-            heading: gettext("Report This Detection Again?"),
-            body: gettext("ClamAV will report files with this detection again."),
-            shown_value: signature_name.clone(),
-            confirm_label: gettext("Report Again"),
-            lowers_protection: false,
-        },
-    }
-}
-
-fn shown_value_label(shown_value: &str) -> gtk::Label {
-    gtk::Label::builder()
-        .label(shown_value)
-        .use_markup(false)
-        .selectable(true)
-        .wrap(true)
-        .wrap_mode(gtk::pango::WrapMode::Char)
-        .css_classes(["monospace", "card"])
-        .margin_top(6)
-        .build()
-}
-
-pub fn present_trust_confirmation(
-    parent_widget: &impl IsA<gtk::Widget>,
-    trust_choice: TrustChoice,
-    on_confirmed: impl Fn(TrustChoice) + 'static,
-) {
-    let ConfirmationText {
-        heading,
-        body,
-        shown_value,
-        confirm_label,
-        lowers_protection,
-    } = confirmation_text(&trust_choice);
-    let confirmation_dialog = adw::AlertDialog::new(Some(&heading), Some(&body));
-    confirmation_dialog.set_extra_child(Some(&shown_value_label(&shown_value)));
-    confirmation_dialog.add_response(CANCEL_RESPONSE, &gettext("Cancel"));
-    confirmation_dialog.add_response(CONFIRM_RESPONSE, &confirm_label);
-    confirmation_dialog.set_response_appearance(
-        CONFIRM_RESPONSE,
-        if lowers_protection {
-            adw::ResponseAppearance::Destructive
-        } else {
-            adw::ResponseAppearance::Suggested
-        },
-    );
-    confirmation_dialog.set_default_response(Some(CANCEL_RESPONSE));
-    confirmation_dialog.set_close_response(CANCEL_RESPONSE);
-    confirmation_dialog.connect_response(Some(CONFIRM_RESPONSE), move |_dialog, _response| {
-        on_confirmed(trust_choice.clone());
-    });
-    confirmation_dialog.present(Some(parent_widget));
-}
-
 #[cfg(test)]
 mod trust_requests_tests {
     use super::*;
@@ -298,22 +196,6 @@ mod trust_requests_tests {
         assert_eq!(
             signature_of_detection("Sanesecurity.Foo.UNOFFICIAL"),
             "Sanesecurity.Foo"
-        );
-    }
-
-    #[test]
-    fn trusting_lowers_protection_and_forgetting_does_not() {
-        assert!(
-            confirmation_text(&TrustChoice::IgnoreSignature {
-                signature_name: "Win.Test.EICAR_HDB-1".to_owned()
-            })
-            .lowers_protection
-        );
-        assert!(
-            !confirmation_text(&TrustChoice::ForgetTrustedFile {
-                sha256_hex: "00".to_owned()
-            })
-            .lowers_protection
         );
     }
 }

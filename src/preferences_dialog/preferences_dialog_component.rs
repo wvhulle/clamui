@@ -1,27 +1,32 @@
 use gettextrs::gettext;
 use relm4::{
-    adw,
+    Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
     adw::prelude::*,
     gtk,
-    gtk::{gio, glib},
+    gtk::{gio, gio::prelude::SettingsExtManual},
+    prelude::FactoryVecDeque,
 };
 
 use crate::{
-    host_services::desktop::{
-        file_manager_actions::{
-            SUPPORTED_FILE_MANAGERS, file_manager_action_installed, install_file_manager_action,
-            remove_file_manager_action,
+    host_services::{
+        desktop::{
+            file_manager_actions::SUPPORTED_FILE_MANAGERS,
+            flatpak_sandbox::{request_background_autostart, running_in_flatpak},
+            stored_settings::{CLOSE_ACTION_CHOICES, CLOSE_ACTION_KEY, application_settings},
+            stored_settings_watch::forward_setting_changes,
         },
-        flatpak_sandbox::{request_background_autostart, running_in_flatpak},
-        stored_settings::{CLOSE_ACTION_CHOICES, CLOSE_ACTION_KEY, application_settings},
+        threat_intel::service_key_storage::ThreatIntelService,
     },
-    preferences_dialog::online_lookups_page::service_key_section::{
-        ONLINE_LOOKUPS_PAGE_NAME, online_lookups_page,
+    preferences_dialog::{
+        file_manager_row::FileManagerRow,
+        online_lookups_page::service_key_section::ServiceKeySection,
     },
-    scan_page::scan_schedule_page::scan_schedule_units::current_launcher_path,
 };
 
 const GENERAL_PAGE_NAME: &str = "general";
+const ONLINE_LOOKUPS_PAGE_NAME: &str = "online-lookups";
+const START_IN_BACKGROUND_KEY: &str = "start-in-background";
+const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PreferencesPageName {
@@ -30,136 +35,277 @@ pub enum PreferencesPageName {
 }
 
 impl PreferencesPageName {
-    const fn page_name(self) -> &'static str {
+    pub const fn page_name(self) -> &'static str {
         match self {
             Self::GeneralPreferences => GENERAL_PAGE_NAME,
             Self::OnlineLookups => ONLINE_LOOKUPS_PAGE_NAME,
         }
     }
+
+    pub fn from_page_name(page_name: &str) -> Option<Self> {
+        [Self::GeneralPreferences, Self::OnlineLookups]
+            .into_iter()
+            .find(|preferences_page| preferences_page.page_name() == page_name)
+    }
 }
 
-fn file_manager_group() -> adw::PreferencesGroup {
-    let integration_group = adw::PreferencesGroup::builder()
-        .title(gettext("File Manager Integration"))
-        .description(gettext(
-            "Add context menu actions for supported file managers.",
-        ))
-        .build();
-    SUPPORTED_FILE_MANAGERS.iter().for_each(|file_manager| {
-        let file_manager = *file_manager;
-        let data_directory = glib::user_data_dir();
-        let manager_row = adw::SwitchRow::builder()
-            .title(file_manager.displayed_name())
-            .active(file_manager_action_installed(file_manager, &data_directory))
-            .build();
-        manager_row.connect_active_notify(move |changed_row| {
-            let change_outcome = if changed_row.is_active() {
-                current_launcher_path().and_then(|launcher_path| {
-                    install_file_manager_action(file_manager, &data_directory, &launcher_path)
-                })
-            } else {
-                remove_file_manager_action(file_manager, &data_directory)
-            };
-            changed_row.set_subtitle(&change_outcome.map_or_else(
-                |change_failure| change_failure.to_string(),
-                |()| String::new(),
-            ));
-        });
-        integration_group.add(&manager_row);
-    });
-    integration_group
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct WindowBehaviorSettings {
+    close_action_position: u32,
+    start_in_background: bool,
+    notifications_enabled: bool,
 }
 
-fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
-    let window_group = adw::PreferencesGroup::builder()
-        .title(gettext("Window Behavior"))
-        .description(gettext(
-            "Detection alerts only work while Lazaret is running.",
-        ))
-        .build();
+impl WindowBehaviorSettings {
+    fn read_from(stored_settings: &gio::Settings) -> Self {
+        let stored_close_action = stored_settings.string(CLOSE_ACTION_KEY);
+        Self {
+            close_action_position: CLOSE_ACTION_CHOICES
+                .iter()
+                .position(|close_choice| *close_choice == stored_close_action)
+                .and_then(|close_position| u32::try_from(close_position).ok())
+                .unwrap_or(0),
+            start_in_background: stored_settings.boolean(START_IN_BACKGROUND_KEY),
+            notifications_enabled: stored_settings.boolean(NOTIFICATIONS_ENABLED_KEY),
+        }
+    }
+}
+
+pub struct PreferencesDialog {
+    stored_settings: gio::Settings,
+    window_behavior: WindowBehaviorSettings,
+    visible_page: PreferencesPageName,
+    file_manager_rows: FactoryVecDeque<FileManagerRow>,
+    abuse_ch_section: Controller<ServiceKeySection>,
+    virustotal_section: Controller<ServiceKeySection>,
+}
+
+#[derive(Debug)]
+pub enum PreferencesDialogInput {
+    PageShown(PreferencesPageName),
+    CloseActionChosen(u32),
+    StartInBackgroundToggled(bool),
+    NotificationsToggled(bool),
+    StoredSettingChanged,
+}
+
+#[derive(Debug)]
+pub enum PreferencesDialogCommand {
+    AutostartRequestFinished(Result<(), String>),
+}
+
+fn close_action_labels() -> gtk::StringList {
     let close_labels = [
         gettext("Quit completely"),
         gettext("Minimize to tray"),
         gettext("Always ask"),
     ];
-    let close_row = adw::ComboRow::builder()
-        .title(gettext("When closing window"))
-        .model(&gtk::StringList::new(
-            &close_labels.iter().map(String::as_str).collect::<Vec<_>>(),
-        ))
-        .selected(
-            CLOSE_ACTION_CHOICES
-                .iter()
-                .position(|close_choice| *close_choice == settings.string(CLOSE_ACTION_KEY))
-                .unwrap_or(0) as u32,
-        )
-        .build();
-    let close_settings = settings.clone();
-    close_row.connect_selected_notify(move |changed_row| {
-        if let Some(close_choice) = CLOSE_ACTION_CHOICES.get(changed_row.selected() as usize) {
-            let _read_only_settings = close_settings.set_string(CLOSE_ACTION_KEY, close_choice);
-        }
-    });
-    window_group.add(&close_row);
-    let background_row = adw::SwitchRow::builder()
-        .title(gettext("Start in the Background"))
-        .subtitle(gettext(
-            "Launch in the background without opening a window.",
-        ))
-        .build();
-    settings
-        .bind("start-in-background", &background_row, "active")
-        .build();
-    if running_in_flatpak() {
-        background_row.connect_active_notify(|changed_row| {
-            let autostart_enabled = changed_row.is_active();
-            relm4::spawn(async move {
-                if let Err(portal_failure) = request_background_autostart(autostart_enabled).await {
-                    eprintln!("lazaret: the Background portal refused autostart: {portal_failure}");
+    gtk::StringList::new(&close_labels.iter().map(String::as_str).collect::<Vec<_>>())
+}
+
+#[relm4::component(pub)]
+impl Component for PreferencesDialog {
+    type Init = ();
+    type Input = PreferencesDialogInput;
+    type Output = ();
+    type CommandOutput = PreferencesDialogCommand;
+
+    view! {
+        adw::PreferencesDialog {
+            set_title: &gettext("Preferences"),
+            set_search_enabled: true,
+            #[watch]
+            #[block_signal(visible_page_handler)]
+            set_visible_page_name: model.visible_page.page_name(),
+            connect_visible_page_name_notify[sender] => move |changed_dialog| {
+                if let Some(preferences_page) = changed_dialog
+                    .visible_page_name()
+                    .and_then(|page_name| PreferencesPageName::from_page_name(&page_name))
+                {
+                    sender.input(PreferencesDialogInput::PageShown(preferences_page));
                 }
-            });
-        });
-    }
-    window_group.add(&background_row);
-    let notifications_row = adw::SwitchRow::builder()
-        .title(gettext("Desktop Notifications"))
-        .subtitle(gettext(
-            "Notify about detections, and about finished scans and updates while the window is \
-             not in focus.",
-        ))
-        .build();
-    settings
-        .bind("notifications-enabled", &notifications_row, "active")
-        .build();
-    window_group.add(&notifications_row);
-    window_group
-}
+            } @visible_page_handler,
 
-fn general_page(settings: &gio::Settings) -> adw::PreferencesPage {
-    let general_page = adw::PreferencesPage::builder()
-        .title(gettext("General"))
-        .icon_name("preferences-system-symbolic")
-        .name(GENERAL_PAGE_NAME)
-        .build();
-    general_page.add(&window_group(settings));
-    if !running_in_flatpak() {
-        general_page.add(&file_manager_group());
-    }
-    general_page
-}
+            add = &adw::PreferencesPage {
+                set_title: &gettext("General"),
+                set_icon_name: Some("preferences-system-symbolic"),
+                set_name: Some(GENERAL_PAGE_NAME),
 
-pub fn present_preferences_dialog(shown_page: PreferencesPageName) {
-    let preferences_dialog = adw::PreferencesDialog::builder()
-        .title(gettext("Preferences"))
-        .search_enabled(true)
-        .build();
-    preferences_dialog.add(&general_page(&application_settings()));
-    let lookups_page = online_lookups_page();
-    preferences_dialog.add(&lookups_page.lookups_page);
-    preferences_dialog.set_visible_page_name(shown_page.page_name());
-    let key_groups = lookups_page.key_groups;
-    preferences_dialog.connect_closed(move |_closed_dialog| {
-        let _keep_groups_until_closed = &key_groups;
-    });
-    preferences_dialog.present(relm4::main_application().active_window().as_ref());
+                adw::PreferencesGroup {
+                    set_title: &gettext("Window Behavior"),
+                    set_description: Some(&gettext(
+                        "Detection alerts only work while Lazaret is running.",
+                    )),
+
+                    adw::ComboRow {
+                        set_title: &gettext("When closing window"),
+                        set_model: Some(&close_action_labels()),
+                        #[watch]
+                        #[block_signal(close_action_handler)]
+                        set_selected: model.window_behavior.close_action_position,
+                        connect_selected_notify[sender] => move |changed_row| {
+                            sender.input(PreferencesDialogInput::CloseActionChosen(changed_row.selected()));
+                        } @close_action_handler,
+                    },
+
+                    adw::SwitchRow {
+                        set_title: &gettext("Start in the Background"),
+                        set_subtitle: &gettext("Launch in the background without opening a window."),
+                        #[watch]
+                        #[block_signal(start_in_background_handler)]
+                        set_active: model.window_behavior.start_in_background,
+                        connect_active_notify[sender] => move |changed_row| {
+                            sender.input(PreferencesDialogInput::StartInBackgroundToggled(changed_row.is_active()));
+                        } @start_in_background_handler,
+                    },
+
+                    adw::SwitchRow {
+                        set_title: &gettext("Desktop Notifications"),
+                        set_subtitle: &gettext(
+                            "Notify about detections, and about finished scans and updates while \
+                             the window is not in focus.",
+                        ),
+                        #[watch]
+                        #[block_signal(notifications_handler)]
+                        set_active: model.window_behavior.notifications_enabled,
+                        connect_active_notify[sender] => move |changed_row| {
+                            sender.input(PreferencesDialogInput::NotificationsToggled(changed_row.is_active()));
+                        } @notifications_handler,
+                    },
+                },
+
+                #[local_ref]
+                file_manager_group -> adw::PreferencesGroup {
+                    set_title: &gettext("File Manager Integration"),
+                    set_description: Some(&gettext(
+                        "Add context menu actions for supported file managers.",
+                    )),
+                    set_visible: !running_in_flatpak(),
+                },
+            },
+
+            add = &adw::PreferencesPage {
+                set_title: &gettext("Online Lookups"),
+                set_icon_name: Some("network-server-symbolic"),
+                set_name: Some(ONLINE_LOOKUPS_PAGE_NAME),
+
+                adw::PreferencesGroup {
+                    set_title: "CIRCL hashlookup",
+                    set_description: Some(&gettext(
+                        "Always used by the reputation check on the Quarantine page. No key \
+                         needed; only a file's SHA-256 hash is sent.",
+                    )),
+                },
+
+                add: model.abuse_ch_section.widget(),
+                add: model.virustotal_section.widget(),
+            },
+        }
+    }
+
+    fn init(
+        _dialog_init: Self::Init,
+        root: Self::Root,
+        sender: ComponentSender<Self>,
+    ) -> ComponentParts<Self> {
+        let stored_settings = application_settings();
+        forward_setting_changes(
+            &stored_settings,
+            &[
+                CLOSE_ACTION_KEY,
+                START_IN_BACKGROUND_KEY,
+                NOTIFICATIONS_ENABLED_KEY,
+            ],
+            sender.input_sender(),
+            |_changed_settings, _changed_key| PreferencesDialogInput::StoredSettingChanged,
+        );
+        let mut file_manager_rows = FactoryVecDeque::builder()
+            .launch(adw::PreferencesGroup::default())
+            .detach();
+        if !running_in_flatpak() {
+            let mut row_guard = file_manager_rows.guard();
+            SUPPORTED_FILE_MANAGERS
+                .into_iter()
+                .for_each(|file_manager| {
+                    row_guard.push_back(file_manager);
+                });
+        }
+        let model = Self {
+            window_behavior: WindowBehaviorSettings::read_from(&stored_settings),
+            stored_settings,
+            visible_page: PreferencesPageName::GeneralPreferences,
+            file_manager_rows,
+            abuse_ch_section: ServiceKeySection::builder()
+                .launch(ThreatIntelService::AbuseChService)
+                .detach(),
+            virustotal_section: ServiceKeySection::builder()
+                .launch(ThreatIntelService::VirusTotalService)
+                .detach(),
+        };
+        let file_manager_group = model.file_manager_rows.widget();
+        let widgets = view_output!();
+        ComponentParts { model, widgets }
+    }
+
+    fn update(
+        &mut self,
+        dialog_input: PreferencesDialogInput,
+        sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match dialog_input {
+            PreferencesDialogInput::PageShown(preferences_page) => {
+                self.visible_page = preferences_page;
+            }
+            PreferencesDialogInput::CloseActionChosen(close_action_position) => {
+                if let Some(close_choice) = usize::try_from(close_action_position)
+                    .ok()
+                    .and_then(|close_position| CLOSE_ACTION_CHOICES.get(close_position))
+                {
+                    self.window_behavior.close_action_position = close_action_position;
+                    let _read_only_settings = self
+                        .stored_settings
+                        .set_string(CLOSE_ACTION_KEY, close_choice);
+                }
+            }
+            PreferencesDialogInput::StartInBackgroundToggled(start_in_background) => {
+                self.window_behavior.start_in_background = start_in_background;
+                let _read_only_settings = self
+                    .stored_settings
+                    .set(START_IN_BACKGROUND_KEY, start_in_background);
+                if running_in_flatpak() {
+                    sender.oneshot_command(async move {
+                        PreferencesDialogCommand::AutostartRequestFinished(
+                            request_background_autostart(start_in_background)
+                                .await
+                                .map_err(|portal_failure| portal_failure.to_string()),
+                        )
+                    });
+                }
+            }
+            PreferencesDialogInput::NotificationsToggled(notifications_enabled) => {
+                self.window_behavior.notifications_enabled = notifications_enabled;
+                let _read_only_settings = self
+                    .stored_settings
+                    .set(NOTIFICATIONS_ENABLED_KEY, notifications_enabled);
+            }
+            PreferencesDialogInput::StoredSettingChanged => {
+                self.window_behavior = WindowBehaviorSettings::read_from(&self.stored_settings);
+            }
+        }
+    }
+
+    fn update_cmd(
+        &mut self,
+        dialog_command: PreferencesDialogCommand,
+        _sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match dialog_command {
+            PreferencesDialogCommand::AutostartRequestFinished(Ok(())) => {}
+            PreferencesDialogCommand::AutostartRequestFinished(Err(portal_failure)) => {
+                eprintln!("lazaret: the Background portal refused autostart: {portal_failure}");
+            }
+        }
+    }
 }

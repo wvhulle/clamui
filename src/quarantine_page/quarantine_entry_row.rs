@@ -1,13 +1,16 @@
 use bytesize::ByteSize;
 use gettextrs::gettext;
 use relm4::{
-    FactorySender, adw,
+    FactorySender,
+    actions::ActionName,
+    adw,
     adw::prelude::*,
     gtk,
     prelude::{DynamicIndex, FactoryComponent},
 };
 
 use crate::{
+    application_window::application_actions::PreferencesPageAction,
     host_services::{
         clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
@@ -16,9 +19,7 @@ use crate::{
             ReputationAnswers, SourceAnswer, check_hash_reputation,
         },
     },
-    preferences_dialog::preferences_dialog_component::{
-        PreferencesPageName, present_preferences_dialog,
-    },
+    preferences_dialog::preferences_dialog_component::PreferencesPageName,
 };
 
 pub struct QuarantineEntryRow {
@@ -229,7 +230,10 @@ impl FactoryComponent for QuarantineEntryRow {
                 )));
             }
             QuarantineEntryRowInput::OpenOnlineLookups => {
-                present_preferences_dialog(PreferencesPageName::OnlineLookups);
+                let _action_missing = widgets.entry_expander.activate_action(
+                    &PreferencesPageAction::action_name(),
+                    Some(&PreferencesPageName::OnlineLookups.page_name().to_variant()),
+                );
             }
             QuarantineEntryRowInput::TrustFile => {
                 let _parent_gone = sender.output(QuarantineEntryRowOutput::TrustEntry(

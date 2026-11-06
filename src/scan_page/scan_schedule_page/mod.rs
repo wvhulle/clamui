@@ -1,2 +1,3 @@
+pub mod scan_schedule_component;
+pub mod scan_schedule_settings;
 pub mod scan_schedule_units;
-pub mod schedule_preferences_page;

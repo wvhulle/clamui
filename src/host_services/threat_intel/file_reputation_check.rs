@@ -1,16 +1,15 @@
 use gettextrs::{gettext, ngettext};
 
-use crate::{
-    host_services::{
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-        threat_intel::{
-            circl_hashlookup_client::{KnownFileLookup, look_up_known_file},
-            malware_bazaar_client::{KnownSampleLookup, look_up_file_hash},
-            service_key_storage::{ResolvedApiKey, ThreatIntelService, read_api_key},
-            virustotal_api_client::{FileReportLookup, VirusTotalClient, VirusTotalFailure},
+use crate::host_services::{
+    clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+    threat_intel::{
+        circl_hashlookup_client::{KnownFileLookup, look_up_known_file},
+        malware_bazaar_client::{KnownSampleLookup, look_up_file_hash},
+        service_key_storage::{
+            ResolvedApiKey, ThreatIntelService, describe_key_failure, read_api_key,
         },
+        virustotal_api_client::{FileReportLookup, VirusTotalClient, VirusTotalFailure},
     },
-    preferences_dialog::online_lookups_page::service_key_section::describe_key_failure,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -13,7 +13,7 @@ use crate::{
     APPLICATION_ICON_NAME, application_data_directory,
     application_window::{
         application_actions::{
-            AboutAction, PreferencesAction, QuitAction, ShowWindowAction,
+            AboutAction, PreferencesAction, PreferencesPageAction, QuitAction, ShowWindowAction,
             register_application_action,
         },
         application_pages::ApplicationPage,
@@ -35,7 +35,7 @@ use crate::{
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
     preferences_dialog::preferences_dialog_component::{
-        PreferencesPageName, present_preferences_dialog,
+        PreferencesDialog, PreferencesDialogInput, PreferencesPageName,
     },
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
 };
@@ -60,13 +60,14 @@ pub struct ApplicationWindowShell {
     close_action: CloseAction,
     stored_settings: gio::Settings,
     start_in_background: bool,
+    preferences_dialog: Controller<PreferencesDialog>,
 }
 
 #[derive(Debug)]
 pub enum ApplicationWindowShellInput {
     WindowShowRequested,
     AboutRequested,
-    PreferencesRequested,
+    PreferencesRequested(PreferencesPageName),
     QuitRequested,
     WindowCloseRequested,
     CloseAnswered(CloseAnswer),
@@ -114,7 +115,21 @@ fn register_window_actions(sender: &AsyncComponentSender<ApplicationWindowShell>
     }));
     let preferences_sender = sender.input_sender().clone();
     register_application_action(RelmAction::<PreferencesAction>::new_stateless(
-        move |_action| preferences_sender.emit(ApplicationWindowShellInput::PreferencesRequested),
+        move |_action| {
+            preferences_sender.emit(ApplicationWindowShellInput::PreferencesRequested(
+                PreferencesPageName::GeneralPreferences,
+            ));
+        },
+    ));
+    let preferences_page_sender = sender.input_sender().clone();
+    register_application_action(RelmAction::<PreferencesPageAction>::new_with_target_value(
+        move |_action, page_name: String| {
+            if let Some(preferences_page) = PreferencesPageName::from_page_name(&page_name) {
+                preferences_page_sender.emit(ApplicationWindowShellInput::PreferencesRequested(
+                    preferences_page,
+                ));
+            }
+        },
     ));
     let quit_sender = sender.input_sender().clone();
     register_application_action(RelmAction::<QuitAction>::new_stateless(move |_action| {
@@ -245,6 +260,7 @@ impl AsyncComponent for ApplicationWindowShell {
             close_action: CloseAction::read_from(&stored_settings),
             stored_settings,
             start_in_background,
+            preferences_dialog: PreferencesDialog::builder().launch(()).detach(),
         };
         let content_widget = model.window_content.content_widget();
         let widgets = view_output!();
@@ -252,7 +268,9 @@ impl AsyncComponent for ApplicationWindowShell {
             ApplicationWindowShellCommand::TrayStartFinished(start_system_tray().await)
         });
         if presents_preferences {
-            sender.input(ApplicationWindowShellInput::PreferencesRequested);
+            sender.input(ApplicationWindowShellInput::PreferencesRequested(
+                PreferencesPageName::GeneralPreferences,
+            ));
         }
         AsyncComponentParts { model, widgets }
     }
@@ -266,8 +284,10 @@ impl AsyncComponent for ApplicationWindowShell {
         match shell_input {
             ApplicationWindowShellInput::WindowShowRequested => root.present(),
             ApplicationWindowShellInput::AboutRequested => present_about_dialog(root),
-            ApplicationWindowShellInput::PreferencesRequested => {
-                present_preferences_dialog(PreferencesPageName::GeneralPreferences);
+            ApplicationWindowShellInput::PreferencesRequested(preferences_page) => {
+                self.preferences_dialog
+                    .emit(PreferencesDialogInput::PageShown(preferences_page));
+                self.preferences_dialog.widget().present(Some(root));
             }
             ApplicationWindowShellInput::QuitRequested
             | ApplicationWindowShellInput::CloseAnswered(CloseAnswer::QuitChosen) => {

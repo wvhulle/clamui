@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
 use relm4::{
@@ -13,8 +11,7 @@ use crate::{
     host_services::{
         clamav_scanner::{
             scan_exclusion_rules::exclusion_entry_for_threat,
-            scan_progress_estimates::elapsed_duration_text,
-            scanner_output_parser::{DetectedThreat, displayed_threat_name, sanitize_scanner_line},
+            scanner_output_parser::{DetectedThreat, sanitize_scanner_line},
         },
         desktop::stored_settings::{add_exclusion_entry, application_settings},
         quarantine_vault::{
@@ -22,271 +19,41 @@ use crate::{
             quarantine_file_moves::QuarantineMoveFailure,
         },
         settings_helper::trust_requests::{
-            FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file,
-            present_trust_confirmation, request_trust_change, signature_of_detection,
-            trust_outcome_text,
+            FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file, request_trust_change,
+            signature_of_detection, trust_outcome_text,
         },
     },
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
-    scan_page::scan_results_section::detected_threat_row::{
-        DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput, ThreatQuarantineState,
+    scan_page::scan_results_section::{
+        detected_threat_row::{
+            DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput,
+            ThreatQuarantineState,
+        },
+        scan_problem_row::{ScanProblemRow, problem_rows_of},
+        scan_results_state::{
+            ScanResultsView, fingerprint_failure_text, format_scan_report, status_icon,
+            status_style_class,
+        },
     },
-    shared_widgets::file_dialog_requests::{
-        TextExportOutcome, describe_export_failure, request_text_export,
+    shared_widgets::{
+        file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
+        trust_confirmation_dialog::present_trust_confirmation,
     },
 };
 
 const EXPORT_FILE_NAME: &str = "lazaret_scan_results.txt";
-const PROBLEM_PATH_ROW_LIMIT: usize = 200;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScanResultsStatus {
-    ThreatsDetected,
-    NoThreatsDetected,
-    FinishedWithProblems,
-    ScanCancelled,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProblemPathGroup {
-    pub group_title: String,
-    pub group_explanation: String,
-    pub listed_paths: Vec<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ScanResultsView {
-    pub results_status: ScanResultsStatus,
-    pub inspected_file_count: u64,
-    pub planned_file_count: u64,
-    pub scanned_directory_count: u64,
-    pub elapsed_time: Duration,
-    pub detected_threats: Vec<DetectedThreat>,
-    pub problem_path_groups: Vec<ProblemPathGroup>,
-    pub notice_lines: Vec<String>,
-    pub noteworthy_output: String,
-}
-
-impl ScanResultsView {
-    fn headline_text(&self) -> String {
-        match self.results_status {
-            ScanResultsStatus::ThreatsDetected if !self.detected_threats.is_empty() => {
-                threats_found_text(self.detected_threats.len())
-            }
-            other_status => status_title(other_status),
-        }
-    }
-
-    fn summary_text(&self) -> String {
-        let scanned_text = if self.inspected_file_count < self.planned_file_count {
-            ngettext(
-                "{done} of {total} file scanned",
-                "{done} of {total} files scanned",
-                u32::try_from(self.planned_file_count).unwrap_or(u32::MAX),
-            )
-            .replace("{done}", &self.inspected_file_count.to_string())
-            .replace("{total}", &self.planned_file_count.to_string())
-        } else {
-            ngettext(
-                "{count} file scanned",
-                "{count} files scanned",
-                u32::try_from(self.inspected_file_count).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &self.inspected_file_count.to_string())
-        };
-        format!(
-            "{scanned_text} · {}",
-            elapsed_duration_text(self.elapsed_time)
-        )
-    }
-
-    fn has_problems(&self) -> bool {
-        !self.problem_path_groups.is_empty()
-            || !self.notice_lines.is_empty()
-            || !self.noteworthy_output.is_empty()
-    }
-}
-
-fn status_title(results_status: ScanResultsStatus) -> String {
-    match results_status {
-        ScanResultsStatus::ThreatsDetected => gettext("Threats Detected"),
-        ScanResultsStatus::NoThreatsDetected => gettext("No threats found"),
-        ScanResultsStatus::FinishedWithProblems => gettext("The scan did not finish cleanly"),
-        ScanResultsStatus::ScanCancelled => gettext("Scan cancelled by user"),
-    }
-}
-
-fn status_style_class(results_status: ScanResultsStatus) -> &'static str {
-    match results_status {
-        ScanResultsStatus::ThreatsDetected => "error",
-        ScanResultsStatus::FinishedWithProblems => "warning",
-        ScanResultsStatus::NoThreatsDetected => "success",
-        ScanResultsStatus::ScanCancelled => "dim-label",
-    }
-}
-
-fn plain_text_row(row_title: &str) -> adw::ActionRow {
-    let plain_row = adw::ActionRow::new();
-    plain_row.set_use_markup(false);
-    plain_row.set_title(row_title);
-    plain_row
-}
-
-fn notice_row(notice_line: &str) -> adw::ActionRow {
-    let notice_row = plain_text_row(notice_line);
-    notice_row.set_title_lines(0);
-    notice_row
-}
-
-fn problem_path_expander(path_group: &ProblemPathGroup) -> adw::ExpanderRow {
-    let path_expander = adw::ExpanderRow::new();
-    path_expander.set_use_markup(false);
-    path_expander.set_title(&path_group.group_title);
-    path_expander.set_subtitle(&path_group.group_explanation);
-    path_group
-        .listed_paths
-        .iter()
-        .take(PROBLEM_PATH_ROW_LIMIT)
-        .for_each(|listed_path| {
-            path_expander.add_row(&plain_text_row(&sanitize_scanner_line(listed_path)));
-        });
-    let hidden_path_count = path_group
-        .listed_paths
-        .len()
-        .saturating_sub(PROBLEM_PATH_ROW_LIMIT);
-    if hidden_path_count > 0 {
-        path_expander.add_row(
-            &adw::ActionRow::builder()
-                .use_markup(false)
-                .title(
-                    ngettext(
-                        "{count} more file, listed in the exported report",
-                        "{count} more files, listed in the exported report",
-                        u32::try_from(hidden_path_count).unwrap_or(u32::MAX),
-                    )
-                    .replace("{count}", &hidden_path_count.to_string()),
-                )
-                .css_classes(["dim-label"])
-                .build(),
-        );
-    }
-    path_expander
-}
-
-fn scan_details_expander(noteworthy_output: &str) -> adw::ExpanderRow {
-    let details_expander = adw::ExpanderRow::builder()
-        .title(gettext("Scan details"))
-        .build();
-    details_expander.add_row(
-        &gtk::Label::builder()
-            .xalign(0.0)
-            .wrap(true)
-            .wrap_mode(gtk::pango::WrapMode::WordChar)
-            .selectable(true)
-            .use_markup(false)
-            .margin_top(12)
-            .margin_bottom(12)
-            .margin_start(12)
-            .margin_end(12)
-            .css_classes(["monospace"])
-            .label(noteworthy_output)
-            .build(),
-    );
-    details_expander
-}
-
-fn status_icon(results_status: ScanResultsStatus) -> &'static str {
-    match results_status {
-        ScanResultsStatus::ThreatsDetected | ScanResultsStatus::FinishedWithProblems => {
-            "dialog-warning-symbolic"
-        }
-        ScanResultsStatus::NoThreatsDetected => "object-select-symbolic",
-        ScanResultsStatus::ScanCancelled => "process-stop-symbolic",
-    }
-}
-
-fn threats_found_text(threat_count: usize) -> String {
-    ngettext(
-        "{count} threat found",
-        "{count} threats found",
-        u32::try_from(threat_count).unwrap_or(u32::MAX),
-    )
-    .replace("{count}", &threat_count.to_string())
-}
-
-pub fn format_scan_report(results_view: &ScanResultsView) -> String {
-    let statistics_lines = [
-        status_title(results_view.results_status),
-        format!(
-            "{}: {}",
-            gettext("Files scanned"),
-            results_view.inspected_file_count
-        ),
-        format!(
-            "{}: {}",
-            gettext("Files planned"),
-            results_view.planned_file_count
-        ),
-        format!(
-            "{}: {}",
-            gettext("Directories"),
-            results_view.scanned_directory_count
-        ),
-        format!(
-            "{}: {}",
-            gettext("Threats found"),
-            results_view.detected_threats.len()
-        ),
-    ];
-    let threat_lines = results_view.detected_threats.iter().map(|detected_threat| {
-        format!(
-            "{}: {}",
-            sanitize_scanner_line(&detected_threat.file_path.to_string_lossy()),
-            displayed_threat_name(&detected_threat.threat_name)
-        )
-    });
-    let problem_sections = results_view.problem_path_groups.iter().map(|path_group| {
-        std::iter::once(path_group.group_title.clone())
-            .chain(
-                path_group
-                    .listed_paths
-                    .iter()
-                    .map(|listed_path| sanitize_scanner_line(listed_path)),
-            )
-            .collect::<Vec<_>>()
-            .join("\n")
-    });
-    let report_sections = [
-        statistics_lines.join("\n"),
-        results_view.notice_lines.join("\n"),
-        threat_lines.collect::<Vec<_>>().join("\n"),
-    ]
-    .into_iter()
-    .chain(problem_sections)
-    .chain(std::iter::once(
-        results_view.noteworthy_output.trim_end().to_owned(),
-    ));
-    let mut formatted_report = report_sections
-        .filter(|report_section| !report_section.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    formatted_report.push('\n');
-    formatted_report
-}
-
-pub struct ScanResultsSectionInit {
-    pub results_view: ScanResultsView,
-    pub quarantine_vault: QuarantineVault,
-}
 
 pub struct ScanResultsSection {
     results_view: ScanResultsView,
+    results_generation: u64,
     quarantine_vault: QuarantineVault,
     threat_rows: FactoryVecDeque<DetectedThreatRow>,
+    problem_rows: FactoryVecDeque<ScanProblemRow>,
 }
 
 #[derive(Debug)]
 pub enum ScanResultsSectionInput {
+    ResultsShown(ScanResultsView),
     QuarantineThreatRequested(DynamicIndex),
     QuarantineAllRequested,
     QuarantineConfirmed(Vec<DynamicIndex>),
@@ -310,6 +77,7 @@ pub enum ScanResultsSectionOutput {
 #[derive(Debug)]
 pub enum ScanResultsSectionCommand {
     ThreatQuarantineFinished {
+        results_generation: u64,
         row_index: DynamicIndex,
         move_outcome: Result<QuarantineEntryRecord, QuarantineMoveFailure>,
     },
@@ -321,24 +89,29 @@ pub enum ScanResultsSectionCommand {
     TrustChangeFinished(TrustOutcome),
 }
 
-fn fingerprint_failure_text(fingerprint_failure: &std::io::Error) -> String {
-    match fingerprint_failure.kind() {
-        std::io::ErrorKind::NotFound => gettext(
-            "The file is no longer there. If it is in quarantine, trust it from the Quarantine \
-             page.",
-        ),
-        std::io::ErrorKind::PermissionDenied => gettext(
-            "The file can't be read, possibly because on-access scanning blocks it. Move it to \
-             quarantine, then trust it from the Quarantine page.",
-        ),
-        _other_kind => gettext("The file could not be read: {error}")
-            .replace("{error}", &fingerprint_failure.to_string()),
-    }
-}
-
 struct PendingThreatMove {
     row_index: DynamicIndex,
     detected_threat: DetectedThreat,
+}
+
+fn forwarded_threat_output(row_output: DetectedThreatRowOutput) -> ScanResultsSectionInput {
+    match row_output {
+        DetectedThreatRowOutput::MoveToQuarantine(row_index) => {
+            ScanResultsSectionInput::QuarantineThreatRequested(row_index)
+        }
+        DetectedThreatRowOutput::CopyPathToClipboard(row_index) => {
+            ScanResultsSectionInput::CopyPathRequested(row_index)
+        }
+        DetectedThreatRowOutput::ExcludeFromScans(row_index) => {
+            ScanResultsSectionInput::ExcludeThreatRequested(row_index)
+        }
+        DetectedThreatRowOutput::TrustFileRequested(row_index) => {
+            ScanResultsSectionInput::TrustFileRequested(row_index)
+        }
+        DetectedThreatRowOutput::IgnoreSignatureRequested(row_index) => {
+            ScanResultsSectionInput::IgnoreSignatureRequested(row_index)
+        }
+    }
 }
 
 impl ScanResultsSection {
@@ -414,8 +187,8 @@ impl ScanResultsSection {
             })
             .collect::<Vec<_>>();
         let quarantine_vault = self.quarantine_vault.clone();
-        let command_sender = sender.command_sender().clone();
-        relm4::spawn(async move {
+        let results_generation = self.results_generation;
+        sender.command(move |command_sender, _moves_are_never_aborted| async move {
             stream::iter(pending_moves)
                 .for_each(|pending_move| {
                     let quarantine_vault = quarantine_vault.clone();
@@ -427,22 +200,44 @@ impl ScanResultsSection {
                                 &pending_move.detected_threat.threat_name,
                             )
                             .await;
-                        let _dialog_closed = command_sender.send(
-                            ScanResultsSectionCommand::ThreatQuarantineFinished {
-                                row_index: pending_move.row_index,
-                                move_outcome,
-                            },
-                        );
+                        command_sender.emit(ScanResultsSectionCommand::ThreatQuarantineFinished {
+                            results_generation,
+                            row_index: pending_move.row_index,
+                            move_outcome,
+                        });
                     }
                 })
                 .await;
         });
     }
+
+    fn show_results(&mut self, results_view: ScanResultsView) {
+        self.results_generation += 1;
+        let mut threat_guard = self.threat_rows.guard();
+        threat_guard.clear();
+        results_view
+            .detected_threats
+            .iter()
+            .cloned()
+            .for_each(|detected_threat| {
+                threat_guard.push_back(detected_threat);
+            });
+        drop(threat_guard);
+        let mut problem_guard = self.problem_rows.guard();
+        problem_guard.clear();
+        problem_rows_of(&results_view)
+            .into_iter()
+            .for_each(|problem_row| {
+                problem_guard.push_back(problem_row);
+            });
+        drop(problem_guard);
+        self.results_view = results_view;
+    }
 }
 
 #[relm4::component(pub)]
 impl Component for ScanResultsSection {
-    type Init = ScanResultsSectionInit;
+    type Init = QuarantineVault;
     type Input = ScanResultsSectionInput;
     type Output = ScanResultsSectionOutput;
     type CommandOutput = ScanResultsSectionCommand;
@@ -458,15 +253,18 @@ impl Component for ScanResultsSection {
                 set_margin_top: 12,
 
                 gtk::Image {
+                    #[watch]
                     set_icon_name: Some(status_icon(model.results_view.results_status)),
                     set_pixel_size: 64,
-                    add_css_class: status_style_class(model.results_view.results_status),
+                    #[watch]
+                    set_css_classes: &[status_style_class(model.results_view.results_status)],
                 },
 
                 gtk::Label {
                     add_css_class: "title-1",
                     set_wrap: true,
                     set_justify: gtk::Justification::Center,
+                    #[watch]
                     set_label: &model.results_view.headline_text(),
                 },
 
@@ -474,6 +272,7 @@ impl Component for ScanResultsSection {
                     add_css_class: "dim-label",
                     set_wrap: true,
                     set_justify: gtk::Justification::Center,
+                    #[watch]
                     set_label: &model.results_view.summary_text(),
                 },
             },
@@ -513,10 +312,11 @@ impl Component for ScanResultsSection {
 
             adw::PreferencesGroup {
                 set_title: &gettext("Problems"),
+                #[watch]
                 set_visible: model.results_view.has_problems(),
 
-                #[name = "problem_list"]
-                gtk::ListBox {
+                #[local_ref]
+                problem_list -> gtk::ListBox {
                     add_css_class: "boxed-list",
                     set_selection_mode: gtk::SelectionMode::None,
                 },
@@ -525,77 +325,35 @@ impl Component for ScanResultsSection {
     }
 
     fn init(
-        panel_init: ScanResultsSectionInit,
+        quarantine_vault: QuarantineVault,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut threat_rows = FactoryVecDeque::builder()
-            .launch(gtk::ListBox::default())
-            .forward(sender.input_sender(), |row_output| match row_output {
-                DetectedThreatRowOutput::MoveToQuarantine(row_index) => {
-                    ScanResultsSectionInput::QuarantineThreatRequested(row_index)
-                }
-                DetectedThreatRowOutput::CopyPathToClipboard(row_index) => {
-                    ScanResultsSectionInput::CopyPathRequested(row_index)
-                }
-                DetectedThreatRowOutput::ExcludeFromScans(row_index) => {
-                    ScanResultsSectionInput::ExcludeThreatRequested(row_index)
-                }
-                DetectedThreatRowOutput::TrustFileRequested(row_index) => {
-                    ScanResultsSectionInput::TrustFileRequested(row_index)
-                }
-                DetectedThreatRowOutput::IgnoreSignatureRequested(row_index) => {
-                    ScanResultsSectionInput::IgnoreSignatureRequested(row_index)
-                }
-            });
-        {
-            let mut threat_rows_guard = threat_rows.guard();
-            panel_init
-                .results_view
-                .detected_threats
-                .iter()
-                .cloned()
-                .for_each(|detected_threat| {
-                    threat_rows_guard.push_back(detected_threat);
-                });
-        }
         let model = Self {
-            results_view: panel_init.results_view,
-            quarantine_vault: panel_init.quarantine_vault,
-            threat_rows,
+            results_view: ScanResultsView::empty_results(),
+            results_generation: 0,
+            quarantine_vault,
+            threat_rows: FactoryVecDeque::builder()
+                .launch(gtk::ListBox::default())
+                .forward(sender.input_sender(), forwarded_threat_output),
+            problem_rows: FactoryVecDeque::builder()
+                .launch(gtk::ListBox::default())
+                .detach(),
         };
         let threat_list = model.threat_rows.widget();
+        let problem_list = model.problem_rows.widget();
         let widgets = view_output!();
-        model
-            .results_view
-            .problem_path_groups
-            .iter()
-            .for_each(|path_group| {
-                widgets
-                    .problem_list
-                    .append(&problem_path_expander(path_group))
-            });
-        model
-            .results_view
-            .notice_lines
-            .iter()
-            .for_each(|notice_line| widgets.problem_list.append(&notice_row(notice_line)));
-        if !model.results_view.noteworthy_output.is_empty() {
-            widgets.problem_list.append(&scan_details_expander(
-                &model.results_view.noteworthy_output,
-            ));
-        }
         ComponentParts { model, widgets }
     }
 
-    fn update_with_view(
+    fn update(
         &mut self,
-        widgets: &mut Self::Widgets,
         panel_input: ScanResultsSectionInput,
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
         match panel_input {
+            ScanResultsSectionInput::ResultsShown(results_view) => self.show_results(results_view),
             ScanResultsSectionInput::QuarantineThreatRequested(row_index) => {
                 if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
                     let confirmation_body = gettext("Move '{path}' to quarantine?").replace(
@@ -670,7 +428,6 @@ impl Component for ScanResultsSection {
             }
             ScanResultsSectionInput::IgnoreSignatureRequested(row_index) => {
                 if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
-                    let input_sender = sender.input_sender().clone();
                     present_trust_confirmation(
                         root,
                         TrustChoice::IgnoreSignature {
@@ -678,11 +435,8 @@ impl Component for ScanResultsSection {
                                 &threat_row.detected_threat.threat_name,
                             ),
                         },
-                        move |confirmed_choice| {
-                            input_sender.emit(ScanResultsSectionInput::TrustChangeConfirmed(
-                                confirmed_choice,
-                            ));
-                        },
+                        sender.input_sender().clone(),
+                        ScanResultsSectionInput::TrustChangeConfirmed,
                     );
                 }
             }
@@ -713,12 +467,10 @@ impl Component for ScanResultsSection {
                 );
             }
         }
-        self.update_view(widgets, sender);
     }
 
-    fn update_cmd_with_view(
+    fn update_cmd(
         &mut self,
-        widgets: &mut Self::Widgets,
         panel_command: ScanResultsSectionCommand,
         sender: ComponentSender<Self>,
         root: &Self::Root,
@@ -728,18 +480,14 @@ impl Component for ScanResultsSection {
                 shown_path,
                 fingerprint_outcome: Ok(file_fingerprint),
             } => {
-                let input_sender = sender.input_sender().clone();
                 present_trust_confirmation(
                     root,
                     TrustChoice::TrustFile {
                         file_fingerprint,
                         shown_path,
                     },
-                    move |confirmed_choice| {
-                        input_sender.emit(ScanResultsSectionInput::TrustChangeConfirmed(
-                            confirmed_choice,
-                        ));
-                    },
+                    sender.input_sender().clone(),
+                    ScanResultsSectionInput::TrustChangeConfirmed,
                 );
             }
             ScanResultsSectionCommand::ThreatFileFingerprinted {
@@ -756,6 +504,7 @@ impl Component for ScanResultsSection {
                 ));
             }
             ScanResultsSectionCommand::ThreatQuarantineFinished {
+                results_generation,
                 row_index,
                 move_outcome,
             } => {
@@ -769,10 +518,12 @@ impl Component for ScanResultsSection {
                         failure_message: describe_quarantine_failure(&move_failure),
                     },
                 };
-                self.threat_rows.send(
-                    row_index.current_index(),
-                    DetectedThreatRowInput::QuarantineStateChanged(quarantine_state),
-                );
+                if results_generation == self.results_generation {
+                    self.threat_rows.send(
+                        row_index.current_index(),
+                        DetectedThreatRowInput::QuarantineStateChanged(quarantine_state),
+                    );
+                }
             }
             ScanResultsSectionCommand::ReportExportFinished(TextExportOutcome::TextSaved) => {
                 let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
@@ -789,50 +540,5 @@ impl Component for ScanResultsSection {
                 ));
             }
         }
-        self.update_view(widgets, sender);
-    }
-}
-
-#[cfg(test)]
-mod scan_results_panel_tests {
-    use std::path::PathBuf;
-
-    use super::*;
-
-    fn results_with_threat() -> ScanResultsView {
-        ScanResultsView {
-            results_status: ScanResultsStatus::ThreatsDetected,
-            inspected_file_count: 3,
-            scanned_directory_count: 2,
-            detected_threats: vec![DetectedThreat {
-                file_path: PathBuf::from("/scan/bad\u{1b}[31m.txt"),
-                threat_name: "Eicar-Test-Signature".to_owned(),
-                threat_category: "Test",
-            }],
-            planned_file_count: 3,
-            elapsed_time: Duration::from_secs(4),
-            problem_path_groups: vec![ProblemPathGroup {
-                group_title: "Files not accessible".to_owned(),
-                group_explanation: String::new(),
-                listed_paths: vec!["/scan/locked".to_owned()],
-            }],
-            notice_lines: vec!["1 file could not be accessed".to_owned()],
-            noteworthy_output: "Scanned files: 3\n".to_owned(),
-        }
-    }
-
-    #[test]
-    fn the_report_lists_counts_threats_and_skipped_paths() {
-        let formatted_report = format_scan_report(&results_with_threat());
-        assert!(formatted_report.contains("Files scanned: 3"));
-        assert!(formatted_report.contains("Directories: 2"));
-        assert!(formatted_report.contains("/scan/bad.txt: Eicar-Test-Signature"));
-        assert!(formatted_report.contains("/scan/locked"));
-        assert!(formatted_report.contains("Scanned files: 3"));
-    }
-
-    #[test]
-    fn the_report_removes_terminal_control_sequences_from_paths() {
-        assert!(!format_scan_report(&results_with_threat()).contains('\u{1b}'));
     }
 }

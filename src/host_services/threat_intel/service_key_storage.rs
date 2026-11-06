@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use gettextrs::gettext;
 use relm4::gtk::gio::prelude::SettingsExt;
 
 use crate::host_services::desktop::stored_settings::application_settings;
@@ -209,6 +210,22 @@ pub async fn delete_stored_api_key(
         .delete(&key_attributes(threat_intel_service))
         .await?;
     Ok(())
+}
+
+pub fn describe_key_failure(key_failure: &KeyStorageFailure) -> String {
+    match key_failure {
+        KeyStorageFailure::KeyFormatInvalid => gettext("This doesn't look like a valid API key"),
+        KeyStorageFailure::StoredKeyUnreadable => gettext("Unable to read the stored API key"),
+        KeyStorageFailure::KeyringUnavailable(_keyring_failure) => gettext("Keyring unavailable"),
+        KeyStorageFailure::KeyFileUnreadable { read_failure, .. } => gettext(
+            "Lazaret can't read this file: {error}. If it is an agenix or sops-nix secret, set \
+             its owner to your user.",
+        )
+        .replace("{error}", &read_failure.to_string()),
+        KeyStorageFailure::KeyFileContentInvalid { .. } => {
+            gettext("The file doesn't hold a valid key for this service")
+        }
+    }
 }
 
 #[cfg(test)]

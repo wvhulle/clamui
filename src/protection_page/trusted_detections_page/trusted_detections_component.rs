@@ -6,16 +6,14 @@ use crate::{
         clamav_programs::database_directory_status::configured_database_directory,
         settings_helper::{
             helper_audit_records::{AuditedOutcome, HelperAuditEntry, newest_helper_audit_entries},
-            trust_requests::{
-                TrustChoice, TrustOutcome, present_trust_confirmation, request_trust_change,
-                trust_outcome_text,
-            },
+            trust_requests::{TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text},
         },
     },
     logs_page::activity_entry_row::formatted_local_time,
     protection_page::trusted_detections_page::trust_list_contents::{
         ForeignAllowlistFile, TrustListContents, TrustedFileEntry, read_trust_list_contents,
     },
+    shared_widgets::trust_confirmation_dialog::present_trust_confirmation,
 };
 
 const AUDIT_ENTRY_LIMIT: usize = 500;
@@ -313,12 +311,12 @@ impl Component for TrustedDetectionsPage {
     ) {
         match page_input {
             TrustedDetectionsPageInput::RemovalRequested(removal_choice) => {
-                let input_sender = sender.input_sender().clone();
-                present_trust_confirmation(root, removal_choice, move |confirmed_choice| {
-                    input_sender.emit(TrustedDetectionsPageInput::RemovalConfirmed(
-                        confirmed_choice,
-                    ));
-                });
+                present_trust_confirmation(
+                    root,
+                    removal_choice,
+                    sender.input_sender().clone(),
+                    TrustedDetectionsPageInput::RemovalConfirmed,
+                );
             }
             TrustedDetectionsPageInput::RemovalConfirmed(confirmed_choice) => {
                 sender.oneshot_command(async move {
