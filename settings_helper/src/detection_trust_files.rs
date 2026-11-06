@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::protection_change_rules::ProtectionReduction;
+
 pub const TRUSTED_FILES_NAME: &str = "lazaret-local.sfp";
 pub const IGNORED_SIGNATURES_NAME: &str = "lazaret-local.ign2";
 const TRUSTED_FILE_LABEL: &str = "Lazaret.TrustedFile";
@@ -133,11 +135,15 @@ pub const fn request_action_name(trust_request: &TrustRequest) -> &'static str {
     }
 }
 
-pub const fn request_weakens_protection(trust_request: &TrustRequest) -> bool {
-    matches!(
-        trust_request,
-        TrustRequest::TrustFile { .. } | TrustRequest::IgnoreSignature { .. }
-    )
+pub const fn request_protection_reduction(trust_request: &TrustRequest) -> ProtectionReduction {
+    match trust_request {
+        TrustRequest::TrustFile { .. } | TrustRequest::IgnoreSignature { .. } => {
+            ProtectionReduction::DetectionTrusted
+        }
+        TrustRequest::ForgetTrustedFile { .. } | TrustRequest::StopIgnoringSignature { .. } => {
+            ProtectionReduction::NoReduction
+        }
+    }
 }
 
 fn list_lines(list_text: &str) -> impl Iterator<Item = &str> {

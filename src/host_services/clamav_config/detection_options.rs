@@ -1,7 +1,8 @@
 use std::ffi::OsString;
 
-use crate::host_services::clamav_config::clamav_host_config::{
-    ConfigSetting, HostConfigView, read_clamd_config,
+use crate::host_services::{
+    clamav_config::clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
+    settings_helper::protection_change_rules::protective_switch_named,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -46,8 +47,9 @@ impl DetectionOption {
         }
     }
 
-    pub const fn enabled_by_default(self) -> bool {
-        matches!(self, Self::HeuristicAlerts | Self::ArchiveContents)
+    pub fn enabled_by_default(self) -> bool {
+        protective_switch_named(self.setting_key())
+            .is_some_and(|protective_switch| protective_switch.on_by_default)
     }
 }
 
@@ -126,5 +128,18 @@ mod detection_options_tests {
             ]
             .map(OsString::from)
         );
+    }
+
+    #[test]
+    fn every_detection_option_has_a_clamav_default() {
+        DETECTION_OPTIONS.into_iter().for_each(|detection_option| {
+            assert!(
+                protective_switch_named(detection_option.setting_key()).is_some(),
+                "{detection_option:?}"
+            );
+        });
+        assert!(DetectionOption::HeuristicAlerts.enabled_by_default());
+        assert!(DetectionOption::ArchiveContents.enabled_by_default());
+        assert!(!DetectionOption::PotentiallyUnwantedPrograms.enabled_by_default());
     }
 }

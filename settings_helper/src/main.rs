@@ -21,12 +21,14 @@ use zbus::{blocking::connection::Builder, fdo, interface, message::Header, zvari
 
 use crate::{
     detection_trust_files::{
-        TrustRequest, apply_trust_request, request_action_name, request_summary,
-        request_weakens_protection, validated_request,
+        TrustRequest, apply_trust_request, request_protection_reduction, request_summary,
+        validated_request,
     },
-    helper_audit_journal::{AuditOutcome, HelperAuditRecord, RequestingUser, record_helper_action},
+    helper_audit_journal::{
+        AuditOutcome, AuditedAction, HelperAuditRecord, RequestingUser, record_helper_action,
+    },
     merged_clamd_config::OverrideSetting,
-    protection_change_rules::change_weakens_protection,
+    protection_change_rules::{ProtectionReduction, ValuesInEffect, protection_reduction},
     settings_application::{
         ApplicationOutcome, SettingsPaths, SystemClamavServices, apply_setting_changes,
         clamd_reloads_signatures, config_values_in_effect, read_current_overrides,
@@ -46,7 +48,6 @@ const CHANGE_DETAIL_KEY: &str = "lazaret.change";
 const TRUST_DETAIL_KEY: &str = "lazaret.trust";
 const DEFAULT_LOCAL_SOCKET: &str = "/run/clamav/clamd.ctl";
 const DEFAULT_DATABASE_DIRECTORY: &str = "/var/lib/clamav";
-const SETTINGS_ACTION_NAME: &str = "change-settings";
 const APPLIED_ANSWER: &str = "applied";
 const RELOAD_PENDING_ANSWER: &str = "applied-reload-pending";
 const ROLLED_BACK_ANSWER: &str = "rolled-back";
@@ -131,11 +132,16 @@ fn configured_path(
     setting_key: &str,
     default_path: &str,
 ) -> PathBuf {
-    config_values_in_effect(settings_paths, setting_key)
-        .into_iter()
-        .next()
-        .filter(|configured_value| configured_value.starts_with('/'))
-        .map_or_else(|| PathBuf::from(default_path), PathBuf::from)
+    match config_values_in_effect(settings_paths, setting_key) {
+        ValuesInEffect::Configured { setting_values } => setting_values
+            .into_iter()
+            .next()
+            .filter(|configured_value| configured_value.starts_with('/'))
+            .map_or_else(|| PathBuf::from(default_path), PathBuf::from),
+        ValuesInEffect::NotConfigured | ValuesInEffect::ConfigUnreadable(_) => {
+            PathBuf::from(default_path)
+        }
+    }
 }
 
 fn local_socket_in_config(settings_paths: &SettingsPaths) -> PathBuf {
@@ -150,10 +156,10 @@ fn database_directory_in_config(settings_paths: &SettingsPaths) -> PathBuf {
     )
 }
 
-fn changes_weaken_protection(
+fn requested_changes_reduction(
     settings_paths: &SettingsPaths,
     requested_changes: &[OverrideSetting],
-) -> bool {
+) -> ProtectionReduction {
     let new_values_by_key = requested_changes.iter().fold(
         BTreeMap::<&str, Vec<String>>::new(),
         |mut new_values_by_key, requested_change| {
@@ -164,13 +170,17 @@ fn changes_weaken_protection(
             new_values_by_key
         },
     );
-    new_values_by_key.iter().any(|(setting_key, new_values)| {
-        change_weakens_protection(
-            setting_key,
-            &config_values_in_effect(settings_paths, setting_key),
-            new_values,
-        )
-    })
+    new_values_by_key
+        .iter()
+        .map(|(setting_key, new_values)| {
+            protection_reduction(
+                setting_key,
+                &config_values_in_effect(settings_paths, setting_key),
+                new_values,
+            )
+        })
+        .find(|change_reduction| change_reduction.weakens_protection())
+        .unwrap_or(ProtectionReduction::NoReduction)
 }
 
 fn caller_of(message_header: &Header<'_>) -> fdo::Result<String> {
@@ -241,16 +251,16 @@ impl SettingsHelperService {
             })
             .collect::<Vec<_>>();
         let change_summary = changes_for_prompt(&requested_changes);
-        let weakens_protection =
-            changes_weaken_protection(&self.settings_paths, &requested_changes);
+        let protection_reduction =
+            requested_changes_reduction(&self.settings_paths, &requested_changes);
         let requesting_user = requesting_user(&caller_name).await;
         let audit = |audit_outcome| {
             record_helper_action(&HelperAuditRecord {
-                action_name: SETTINGS_ACTION_NAME,
+                audited_action: AuditedAction::ChangeSettings,
                 action_subject: &change_summary,
                 requesting_user,
                 audit_outcome,
-                weakens_protection,
+                protection_reduction,
             });
         };
         let authorization_request = AuthorizationRequest {
@@ -366,11 +376,11 @@ impl SettingsHelperService {
         let requesting_user = requesting_user(&caller_name).await;
         let audit = |audit_outcome| {
             record_helper_action(&HelperAuditRecord {
-                action_name: request_action_name(&trust_request),
+                audited_action: AuditedAction::TrustChange(&trust_request),
                 action_subject: &trust_summary,
                 requesting_user,
                 audit_outcome,
-                weakens_protection: request_weakens_protection(&trust_request),
+                protection_reduction: request_protection_reduction(&trust_request),
             });
         };
         let authorization_request = AuthorizationRequest {

@@ -3,7 +3,7 @@ use relm4::{FactorySender, adw, adw::prelude::*, gtk, prelude::FactoryComponent}
 
 use crate::host_services::{
     desktop::locale_formatting::exact_local_time_text,
-    settings_helper::helper_audit_records::HelperAuditEntry,
+    settings_helper::helper_audit_records::{HelperAuditEntry, Requester},
 };
 
 pub enum SystemChangeRow {
@@ -21,12 +21,17 @@ impl SystemChangeRow {
 
     fn row_subtitle(&self) -> String {
         match self {
-            Self::ChangeRecorded(audit_entry) => {
-                gettext("{time} · {outcome} · requested by user {uid}")
-                    .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
-                    .replace("{outcome}", &audit_entry.audited_outcome.described())
-                    .replace("{uid}", &audit_entry.requester_uid)
+            Self::ChangeRecorded(audit_entry) => match audit_entry.requester {
+                Requester::KnownUser { user_id } => {
+                    gettext("{time} · {outcome} · requested by user {uid}")
+                        .replace("{uid}", &user_id.to_string())
+                }
+                Requester::UnknownUser => {
+                    gettext("{time} · {outcome} · requested by an unknown user")
+                }
             }
+            .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
+            .replace("{outcome}", &audit_entry.audited_outcome.described()),
             Self::ListNotice(_notice_text) => String::new(),
         }
     }

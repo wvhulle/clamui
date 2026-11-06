@@ -30,8 +30,8 @@ use crate::{
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
         settings_helper::{
             live_settings_client::{
-                LiveChangeOutcome, LiveTuningState, apply_live_change, change_confirmation_text,
-                change_effect, read_live_tuning_state,
+                LiveChangeOutcome, LiveTuning, OverrideSetting, apply_live_change,
+                change_confirmation_text, change_effect, read_live_tuning,
             },
             protection_change_rules::ProtectionReduction,
         },
@@ -132,6 +132,13 @@ enum ConfigLoad {
     ConfigMissing,
 }
 
+#[derive(Debug)]
+pub enum LiveTuningLoad {
+    TuningNotOffered,
+    LoadingTuning,
+    TuningRead(LiveTuning),
+}
+
 enum UnlockState {
     Locked,
     Unlocked { relock_generation: u64 },
@@ -151,7 +158,7 @@ enum ChangeProgress {
 pub struct EngineSettingsPage {
     settings_section: EngineSettingsSection,
     config_load: ConfigLoad,
-    tuning_state: LiveTuningState,
+    tuning_load: LiveTuningLoad,
     unlock_state: UnlockState,
     unlock_count: u64,
     change_progress: ChangeProgress,
@@ -188,14 +195,14 @@ pub enum EngineSettingsPageCommand {
     ConfigLoaded {
         host_config: HostConfigView,
         config_file_owner: ConfigFileOwner,
-        tuning_state: LiveTuningState,
+        tuning_load: LiveTuningLoad,
     },
     RelockDue {
         relock_generation: u64,
     },
     LiveChangeFinished {
         change_outcome: LiveChangeOutcome,
-        tuning_state: LiveTuningState,
+        live_tuning: LiveTuning,
     },
 }
 
@@ -310,7 +317,47 @@ fn setting_row_inits(
 
 impl EngineSettingsPage {
     fn offers_live_changes(&self) -> bool {
-        self.settings_section.offers_live_tuning() && !self.tuning_state.tunable_settings.is_empty()
+        self.settings_section.offers_live_tuning()
+            && match &self.tuning_load {
+                LiveTuningLoad::TuningRead(LiveTuning::Available {
+                    tunable_settings, ..
+                }) => !tunable_settings.is_empty(),
+                LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+                | LiveTuningLoad::TuningNotOffered
+                | LiveTuningLoad::LoadingTuning => false,
+            }
+    }
+
+    fn setting_is_tunable(&self, setting_key: &str) -> bool {
+        match &self.tuning_load {
+            LiveTuningLoad::TuningRead(LiveTuning::Available {
+                tunable_settings, ..
+            }) => tunable_settings
+                .iter()
+                .any(|tunable_key| tunable_key == setting_key),
+            LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+            | LiveTuningLoad::TuningNotOffered
+            | LiveTuningLoad::LoadingTuning => false,
+        }
+    }
+
+    fn active_overrides(&self) -> &[OverrideSetting] {
+        match &self.tuning_load {
+            LiveTuningLoad::TuningRead(LiveTuning::Available {
+                active_overrides, ..
+            }) => active_overrides,
+            LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+            | LiveTuningLoad::TuningNotOffered
+            | LiveTuningLoad::LoadingTuning => &[],
+        }
+    }
+
+    const fn helper_is_unavailable(&self) -> bool {
+        self.settings_section.offers_live_tuning()
+            && matches!(
+                self.tuning_load,
+                LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+            )
     }
 
     const fn is_unlocked(&self) -> bool {
@@ -318,13 +365,7 @@ impl EngineSettingsPage {
     }
 
     fn allows_live_change(&self, setting_key: &str) -> bool {
-        self.is_unlocked()
-            && self.offers_live_changes()
-            && self
-                .tuning_state
-                .tunable_settings
-                .iter()
-                .any(|tunable_key| tunable_key == setting_key)
+        self.is_unlocked() && self.offers_live_changes() && self.setting_is_tunable(setting_key)
     }
 
     fn current_setting_values(
@@ -333,11 +374,10 @@ impl EngineSettingsPage {
         configured_values: &[String],
     ) -> Vec<String> {
         let overridden_values = self
-            .tuning_state
-            .active_overrides
+            .active_overrides()
             .iter()
-            .filter(|active_override| active_override.0 == setting_key)
-            .map(|active_override| sanitize_scanner_line(&active_override.1))
+            .filter(|active_override| active_override.setting_key == setting_key)
+            .map(|active_override| sanitize_scanner_line(&active_override.setting_value))
             .collect::<Vec<_>>();
         if overridden_values.is_empty() {
             configured_values.to_vec()
@@ -348,7 +388,7 @@ impl EngineSettingsPage {
 
     fn drift_snippet(&self) -> String {
         drift_snippet_text(
-            &self.tuning_state.active_overrides,
+            self.active_overrides(),
             self.settings_section.config_kind(),
             ConfigFileOwner::NixOsConfiguration,
         )
@@ -362,6 +402,15 @@ impl EngineSettingsPage {
             } => {
                 if self.offers_live_changes() {
                     live_tunable_config_description(config_path)
+                } else if self.helper_is_unavailable() {
+                    format!(
+                        "{}\n\n{}",
+                        managed_config_description(*config_file_owner, config_path),
+                        gettext(
+                            "Settings can't be changed here right now: the Lazaret settings \
+                             helper could not be reached."
+                        )
+                    )
                 } else {
                     managed_config_description(*config_file_owner, config_path)
                 }
@@ -407,12 +456,7 @@ impl EngineSettingsPage {
 
     fn detection_switch_state(&self, detection_option: DetectionOption) -> DetectionSwitchState {
         let setting_key = detection_option.setting_key();
-        let tunable = self.offers_live_changes()
-            && self
-                .tuning_state
-                .tunable_settings
-                .iter()
-                .any(|tunable_key| tunable_key == setting_key);
+        let tunable = self.offers_live_changes() && self.setting_is_tunable(setting_key);
         DetectionSwitchState {
             detection_option,
             switched_on: effective_switch(
@@ -580,7 +624,11 @@ impl Component for EngineSettingsPage {
         let model = Self {
             settings_section,
             config_load: ConfigLoad::LoadingConfig,
-            tuning_state: LiveTuningState::default(),
+            tuning_load: if settings_section.offers_live_tuning() {
+                LiveTuningLoad::LoadingTuning
+            } else {
+                LiveTuningLoad::TuningNotOffered
+            },
             unlock_state: UnlockState::Locked,
             unlock_count: 0,
             change_progress: ChangeProgress::NoChangeRunning,
@@ -600,15 +648,15 @@ impl Component for EngineSettingsPage {
                 }
                 HostConfigView::ConfigNotFound => ConfigFileOwner::SystemPackage,
             };
-            let tuning_state = if settings_section.offers_live_tuning() {
-                read_live_tuning_state().await
+            let tuning_load = if settings_section.offers_live_tuning() {
+                LiveTuningLoad::TuningRead(read_live_tuning().await)
             } else {
-                LiveTuningState::default()
+                LiveTuningLoad::TuningNotOffered
             };
             EngineSettingsPageCommand::ConfigLoaded {
                 host_config,
                 config_file_owner,
-                tuning_state,
+                tuning_load,
             }
         });
         ComponentParts { model, widgets }
@@ -710,7 +758,7 @@ impl Component for EngineSettingsPage {
                     let change_outcome = apply_live_change(setting_key, new_values).await;
                     EngineSettingsPageCommand::LiveChangeFinished {
                         change_outcome,
-                        tuning_state: read_live_tuning_state().await,
+                        live_tuning: read_live_tuning().await,
                     }
                 });
             }
@@ -730,9 +778,9 @@ impl Component for EngineSettingsPage {
             EngineSettingsPageCommand::ConfigLoaded {
                 host_config,
                 config_file_owner,
-                tuning_state,
+                tuning_load,
             } => {
-                self.tuning_state = tuning_state;
+                self.tuning_load = tuning_load;
                 match host_config {
                     HostConfigView::ConfigFound {
                         config_path,
@@ -775,7 +823,7 @@ impl Component for EngineSettingsPage {
             }
             EngineSettingsPageCommand::LiveChangeFinished {
                 change_outcome,
-                tuning_state,
+                live_tuning,
             } => {
                 if let ChangeProgress::ChangeRunning {
                     changed_row: ChangedRow::ConfigRow(row_index),
@@ -788,7 +836,7 @@ impl Component for EngineSettingsPage {
                 }
                 self.toaster
                     .add_toast(shown_toast(&describe_live_change_outcome(&change_outcome)));
-                self.tuning_state = tuning_state;
+                self.tuning_load = LiveTuningLoad::TuningRead(live_tuning);
                 self.refresh_detection_switches();
             }
         }

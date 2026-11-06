@@ -9,7 +9,10 @@ use crate::{
         clamav_programs::database_directory_status::configured_database_directory,
         desktop::locale_formatting::{byte_size_text, exact_local_time_text},
         settings_helper::{
-            helper_audit_records::{AuditedOutcome, HelperAuditEntry, newest_helper_audit_entries},
+            helper_audit_records::{
+                AuditedAction, HelperAuditEntry, Requester, latest_applied_entry,
+                newest_helper_audit_entries,
+            },
             trust_requests::{TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text},
         },
     },
@@ -39,26 +42,17 @@ pub async fn load_trusted_detections() -> TrustedDetectionsSnapshot {
     .unwrap_or_default()
 }
 
-fn added_text(
-    audit_entries: &[HelperAuditEntry],
-    action_name: &str,
-    subject_marker: &str,
-) -> String {
-    audit_entries
-        .iter()
-        .find(|audit_entry| {
-            audit_entry.action_name == action_name
-                && audit_entry.audited_outcome == AuditedOutcome::ActionApplied
-                && audit_entry.action_subject.contains(subject_marker)
-        })
-        .map_or_else(
-            || gettext("No record of who added this in the system journal"),
-            |audit_entry| {
-                gettext("Added {time} by user {uid}")
-                    .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
-                    .replace("{uid}", &audit_entry.requester_uid)
-            },
-        )
+fn added_text(audit_entries: &[HelperAuditEntry], adding_action: &AuditedAction) -> String {
+    match latest_applied_entry(audit_entries, adding_action) {
+        Some(audit_entry) => match audit_entry.requester {
+            Requester::KnownUser { user_id } => gettext("Added {time} by user {uid}")
+                .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
+                .replace("{uid}", &user_id.to_string()),
+            Requester::UnknownUser => gettext("Added {time} by an unknown user")
+                .replace("{time}", &exact_local_time_text(audit_entry.recorded_at)),
+        },
+        None => gettext("No record of who added this in the system journal"),
+    }
 }
 
 pub struct TrustedDetectionsPage {
@@ -107,7 +101,12 @@ fn trusted_file_row(
         row_subtitle: format!(
             "{} · {}",
             byte_size_text(trusted_file.file_size),
-            added_text(audit_entries, "trust-file", &trusted_file.sha256_hex)
+            added_text(
+                audit_entries,
+                &AuditedAction::TrustFile {
+                    sha256_hex: trusted_file.sha256_hex.clone(),
+                },
+            )
         ),
         shows_hash: true,
         needs_attention: false,
@@ -123,8 +122,9 @@ fn ignored_signature_row(signature_name: &str, audit_entries: &[HelperAuditEntry
         row_title: signature_name.to_owned(),
         row_subtitle: added_text(
             audit_entries,
-            "ignore-signature",
-            &format!("named {signature_name}"),
+            &AuditedAction::IgnoreSignature {
+                signature_name: signature_name.to_owned(),
+            },
         ),
         shows_hash: false,
         needs_attention: false,

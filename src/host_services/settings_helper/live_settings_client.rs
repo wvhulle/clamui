@@ -2,7 +2,7 @@ use gettextrs::gettext;
 use zbus::{Connection, proxy};
 
 use crate::host_services::settings_helper::protection_change_rules::{
-    ProtectionReduction, protection_reduction,
+    ProtectionReduction, ValuesInEffect, protection_reduction,
 };
 
 #[proxy(
@@ -21,10 +21,19 @@ trait SettingsHelper {
 const APPLIED_ANSWER: &str = "applied";
 const ROLLED_BACK_ANSWER: &str = "rolled-back";
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct LiveTuningState {
-    pub tunable_settings: Vec<String>,
-    pub active_overrides: Vec<(String, String)>,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OverrideSetting {
+    pub setting_key: String,
+    pub setting_value: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum LiveTuning {
+    HelperUnavailable(zbus::Error),
+    Available {
+        tunable_settings: Vec<String>,
+        active_overrides: Vec<OverrideSetting>,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,15 +47,35 @@ async fn helper_proxy() -> zbus::Result<SettingsHelperProxy<'static>> {
     SettingsHelperProxy::new(&Connection::system().await?).await
 }
 
-pub async fn read_live_tuning_state() -> LiveTuningState {
-    let read_state = async {
-        let settings_helper = helper_proxy().await?;
-        Ok::<LiveTuningState, zbus::Error>(LiveTuningState {
-            tunable_settings: settings_helper.get_tunable_settings().await?,
-            active_overrides: settings_helper.get_overrides().await?,
-        })
+async fn read_live_tuning_from(
+    settings_helper: &SettingsHelperProxy<'_>,
+) -> zbus::Result<LiveTuning> {
+    Ok(LiveTuning::Available {
+        tunable_settings: settings_helper.get_tunable_settings().await?,
+        active_overrides: settings_helper
+            .get_overrides()
+            .await?
+            .into_iter()
+            .map(|(setting_key, setting_value)| OverrideSetting {
+                setting_key,
+                setting_value,
+            })
+            .collect(),
+    })
+}
+
+async fn live_tuning_on_bus(bus_connection: zbus::Result<Connection>) -> LiveTuning {
+    let read_tuning = async {
+        let settings_helper = SettingsHelperProxy::new(&bus_connection?).await?;
+        read_live_tuning_from(&settings_helper).await
     };
-    read_state.await.unwrap_or_default()
+    read_tuning
+        .await
+        .unwrap_or_else(LiveTuning::HelperUnavailable)
+}
+
+pub async fn read_live_tuning() -> LiveTuning {
+    live_tuning_on_bus(Connection::system().await).await
 }
 
 pub fn outcome_from_helper_answer(helper_answer: &str) -> LiveChangeOutcome {
@@ -81,7 +110,11 @@ pub fn change_effect(
     current_values: &[String],
     new_values: &[String],
 ) -> ProtectionReduction {
-    protection_reduction(setting_key, current_values, new_values)
+    protection_reduction(
+        setting_key,
+        &ValuesInEffect::from_config_values(current_values.to_vec()),
+        new_values,
+    )
 }
 
 fn reduction_headline(protection_reduction: ProtectionReduction) -> Option<String> {
@@ -101,6 +134,12 @@ fn reduction_headline(protection_reduction: ProtectionReduction) -> Option<Strin
         ProtectionReduction::ScanLimitLowered => Some(gettext(
             "Files or archives above the new limit will be skipped without being checked.",
         )),
+        ProtectionReduction::CurrentValuesUnknown => Some(gettext(
+            "The current value could not be read, so this change may reduce protection.",
+        )),
+        ProtectionReduction::DetectionTrusted => {
+            Some(gettext("ClamAV will no longer report what you trust here."))
+        }
         ProtectionReduction::NoReduction => None,
     }
 }
@@ -198,6 +237,19 @@ mod live_settings_client_tests {
         assert!(matches!(
             outcome_from_helper_answer("surprise"),
             LiveChangeOutcome::NothingChanged { .. }
+        ));
+    }
+
+    #[test]
+    fn an_unreachable_helper_is_reported_as_unavailable() {
+        let unreachable_bus = Err(zbus::Error::Address("no bus here".to_owned()));
+        let live_tuning = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime")
+            .block_on(live_tuning_on_bus(unreachable_bus));
+        assert!(matches!(
+            live_tuning,
+            LiveTuning::HelperUnavailable(zbus::Error::Address(_))
         ));
     }
 }

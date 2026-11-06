@@ -2,6 +2,8 @@ use std::{fs, path::Path};
 
 use gettextrs::gettext;
 
+use crate::host_services::settings_helper::live_settings_client::OverrideSetting;
+
 const PROTECTED_SETTINGS_LIST: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/data/protected-clamav-settings.txt"
@@ -139,13 +141,13 @@ pub fn managed_config_description(config_file_owner: ConfigFileOwner, config_pat
 }
 
 pub fn drift_snippet_text(
-    active_overrides: &[(String, String)],
+    active_overrides: &[OverrideSetting],
     config_kind: ClamavConfigKind,
     config_file_owner: ConfigFileOwner,
 ) -> String {
     let mut override_keys = active_overrides
         .iter()
-        .map(|active_override| active_override.0.as_str())
+        .map(|active_override| active_override.setting_key.as_str())
         .collect::<Vec<_>>();
     override_keys.dedup();
     override_keys
@@ -153,8 +155,8 @@ pub fn drift_snippet_text(
         .map(|override_key| {
             let override_values = active_overrides
                 .iter()
-                .filter(|active_override| active_override.0 == *override_key)
-                .map(|active_override| active_override.1.clone())
+                .filter(|active_override| active_override.setting_key == *override_key)
+                .map(|active_override| active_override.setting_value.clone())
                 .collect::<Vec<_>>();
             change_snippet(
                 config_file_owner,
@@ -318,10 +320,14 @@ mod setting_provenance_tests {
 
     #[test]
     fn drift_snippets_group_repeated_override_keys() {
+        let override_of = |setting_key: &str, setting_value: &str| OverrideSetting {
+            setting_key: setting_key.to_owned(),
+            setting_value: setting_value.to_owned(),
+        };
         let active_overrides = vec![
-            ("OnAccessIncludePath".to_owned(), "/home".to_owned()),
-            ("OnAccessIncludePath".to_owned(), "/srv".to_owned()),
-            ("MaxThreads".to_owned(), "8".to_owned()),
+            override_of("OnAccessIncludePath", "/home"),
+            override_of("OnAccessIncludePath", "/srv"),
+            override_of("MaxThreads", "8"),
         ];
         assert_eq!(
             drift_snippet_text(

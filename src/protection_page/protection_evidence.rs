@@ -26,7 +26,9 @@ use crate::{
             flatpak_sandbox::readable_host_path,
             stored_settings::{application_settings, read_exclusion_entries},
         },
-        settings_helper::protection_change_rules::{change_weakens_protection, limit_in_units},
+        settings_helper::protection_change_rules::{
+            ValuesInEffect, limit_in_units, protection_reduction,
+        },
         systemd_bus::host_systemd_units::{
             ServiceFailureKind, ServiceLastResult, ServiceUnitSnapshot, TimerUnitSnapshot,
             UnitActivity, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
@@ -413,12 +415,16 @@ pub fn reduced_settings(
         .filter_map(|setting_key| {
             let base_values = values_for_key(base_settings, &setting_key);
             let changed_values = values_for_key(override_settings, &setting_key);
-            change_weakens_protection(&setting_key, &base_values, &changed_values).then(|| {
-                ReducedSetting {
-                    base_value: sanitize_scanner_line(&base_values.join(", ")),
-                    changed_value: sanitize_scanner_line(&changed_values.join(", ")),
-                    setting_key: sanitize_scanner_line(&setting_key),
-                }
+            protection_reduction(
+                &setting_key,
+                &ValuesInEffect::from_config_values(base_values.clone()),
+                &changed_values,
+            )
+            .weakens_protection()
+            .then(|| ReducedSetting {
+                base_value: sanitize_scanner_line(&base_values.join(", ")),
+                changed_value: sanitize_scanner_line(&changed_values.join(", ")),
+                setting_key: sanitize_scanner_line(&setting_key),
             })
         })
         .collect()

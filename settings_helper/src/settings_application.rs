@@ -13,6 +13,7 @@ use crate::{
         OverrideSetting, merge_clamd_config, parse_override_settings, render_override_settings,
         write_file_atomically,
     },
+    protection_change_rules::{ConfigReadFailure, ValuesInEffect},
     tunable_setting_rules::{SettingRefusal, check_setting_change, parse_tunable_settings},
 };
 
@@ -175,17 +176,33 @@ fn read_text_or_empty(file_path: &PathBuf) -> io::Result<String> {
     }
 }
 
-pub fn config_values_in_effect(settings_paths: &SettingsPaths, setting_key: &str) -> Vec<String> {
-    let config_text = fs::read_to_string(&settings_paths.merged_config)
-        .or_else(|_merged_unreadable| fs::read_to_string(&settings_paths.base_config))
-        .unwrap_or_default();
-    config_text
-        .lines()
-        .filter_map(|config_line| {
-            let (line_key, line_value) = config_line.trim().split_once(char::is_whitespace)?;
-            (line_key == setting_key).then(|| line_value.trim().to_owned())
-        })
-        .collect()
+pub fn config_values_in_effect(
+    settings_paths: &SettingsPaths,
+    setting_key: &str,
+) -> ValuesInEffect {
+    let config_text = match fs::read_to_string(&settings_paths.merged_config) {
+        Ok(merged_text) => merged_text,
+        Err(merged_failure) => match fs::read_to_string(&settings_paths.base_config) {
+            Ok(base_text) => base_text,
+            Err(base_failure) => {
+                return ValuesInEffect::ConfigUnreadable(
+                    ConfigReadFailure::MergedAndBaseUnreadable {
+                        merged_failure,
+                        base_failure,
+                    },
+                );
+            }
+        },
+    };
+    ValuesInEffect::from_config_values(
+        config_text
+            .lines()
+            .filter_map(|config_line| {
+                let (line_key, line_value) = config_line.trim().split_once(char::is_whitespace)?;
+                (line_key == setting_key).then(|| line_value.trim().to_owned())
+            })
+            .collect(),
+    )
 }
 
 pub fn read_tunable_settings(settings_paths: &SettingsPaths) -> io::Result<Vec<String>> {
@@ -467,5 +484,24 @@ mod settings_application_tests {
             fs::read_to_string(&settings_paths.merged_config).expect("merged"),
             "User clamav\nMaxThreads 4\n"
         );
+    }
+
+    #[test]
+    fn values_in_effect_tell_missing_keys_from_unreadable_configs() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let settings_paths = prepared_paths(&temporary_root);
+        assert!(matches!(
+            config_values_in_effect(&settings_paths, "MaxThreads"),
+            ValuesInEffect::Configured { setting_values } if setting_values == ["4"]
+        ));
+        assert!(matches!(
+            config_values_in_effect(&settings_paths, "DetectPUA"),
+            ValuesInEffect::NotConfigured
+        ));
+        fs::remove_file(&settings_paths.base_config).expect("removed");
+        assert!(matches!(
+            config_values_in_effect(&settings_paths, "MaxThreads"),
+            ValuesInEffect::ConfigUnreadable(ConfigReadFailure::MergedAndBaseUnreadable { .. })
+        ));
     }
 }
