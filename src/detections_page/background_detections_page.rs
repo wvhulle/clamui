@@ -11,9 +11,7 @@ use tokio::task::spawn_blocking;
 
 use crate::{
     detections_page::{
-        detected_file_state::{
-            DetectedFileState, inspect_detected_file, inspect_file_without_opening,
-        },
+        detected_file_state::{DetectedFileState, FileOwner, OpeningCheck, inspect_detected_file},
         detection_alerts::{
             JournalReplay, plan_detection_alerts, send_detection_alerts, withdraw_detection_alert,
         },
@@ -29,7 +27,7 @@ use crate::{
         },
     },
     host_services::{
-        activity_history::activity_history_database::ActivityHistory,
+        activity_history::activity_history_database::{ActivityHistory, ActivityHistoryFailure},
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
         },
@@ -41,7 +39,10 @@ use crate::{
             },
             detection_journal_records::JournalDetectionRecord,
         },
-        quarantine_vault::quarantine_entry_database::QuarantineVault,
+        quarantine_vault::{
+            quarantine_entry_database::QuarantineVault,
+            quarantine_file_moves::QuarantineMoveFailure,
+        },
         threat_intel::{
             malware_bazaar_client::look_up_signature,
             service_key_storage::{
@@ -111,10 +112,10 @@ pub enum BackgroundDetectionsPageCommand {
     },
     JournalAccessChanged(JournalAccess),
     DetectionsLoaded(Vec<DisplayedDetection>),
-    LoadingFailed(String),
+    LoadingFailed(ActivityHistoryFailure),
     IncidentActionFinished {
         file_path: PathBuf,
-        action_outcome: Result<IncidentActionEffect, String>,
+        action_outcome: Result<IncidentActionEffect, IncidentActionFailure>,
     },
     SignatureLookupFinished(SignatureLookupState),
 }
@@ -123,6 +124,47 @@ pub enum BackgroundDetectionsPageCommand {
 pub enum IncidentActionEffect {
     QuarantineChanged,
     OnlyHistoryChanged,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum IncidentActionFailure {
+    #[error("the file belongs to another user")]
+    FileOwnedByOtherUser,
+    #[error("the file could not be checked")]
+    FileNotCheckable,
+    #[error("the file could not be removed: {0}")]
+    RemovalFailed(#[from] std::io::Error),
+    #[error("the file check stopped unexpectedly: {0}")]
+    FileCheckInterrupted(#[from] tokio::task::JoinError),
+    #[error("the file could not be quarantined: {0}")]
+    QuarantineFailed(#[from] QuarantineMoveFailure),
+    #[error("the decision could not be saved: {0}")]
+    HistoryNotUpdated(#[from] ActivityHistoryFailure),
+}
+
+fn describe_incident_action_failure(action_failure: &IncidentActionFailure) -> String {
+    match action_failure {
+        IncidentActionFailure::FileOwnedByOtherUser => {
+            gettext("This file belongs to another user, so it can't be moved or deleted from here")
+        }
+        IncidentActionFailure::FileNotCheckable => {
+            gettext("This file couldn't be checked, so it can't be moved or deleted from here")
+        }
+        IncidentActionFailure::RemovalFailed(removal_failure) => {
+            gettext("The file could not be deleted: {error}")
+                .replace("{error}", &removal_failure.to_string())
+        }
+        IncidentActionFailure::FileCheckInterrupted(_) => {
+            gettext("Checking the file stopped unexpectedly")
+        }
+        IncidentActionFailure::QuarantineFailed(move_failure) => {
+            describe_quarantine_failure(move_failure)
+        }
+        IncidentActionFailure::HistoryNotUpdated(history_failure) => {
+            gettext("Your decision could not be saved: {error}")
+                .replace("{error}", &history_failure.to_string())
+        }
+    }
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -172,7 +214,7 @@ async fn recorded_batch_commands(
                     journal_replay,
                 },
                 Err(recording_failure) => {
-                    BackgroundDetectionsPageCommand::LoadingFailed(recording_failure.to_string())
+                    BackgroundDetectionsPageCommand::LoadingFailed(recording_failure)
                 }
             },
         )
@@ -208,7 +250,7 @@ pub async fn load_displayed_detections(
     let stored_detections = match activity_history.list_detections().await {
         Ok(stored_detections) => stored_detections,
         Err(listing_failure) => {
-            return BackgroundDetectionsPageCommand::LoadingFailed(listing_failure.to_string());
+            return BackgroundDetectionsPageCommand::LoadingFailed(listing_failure);
         }
     };
     let displayed_detections = spawn_blocking(move || {
@@ -219,7 +261,6 @@ pub async fn load_displayed_detections(
                     &stored_detection,
                     &known_file_states,
                     inspect_detected_file,
-                    inspect_file_without_opening,
                 ),
                 stored_detection,
             })
@@ -247,18 +288,33 @@ async fn signature_lookup_state(signature_name: &str) -> SignatureLookupState {
     }
 }
 
-async fn delete_detected_file(file_path: PathBuf) -> Result<(), String> {
-    spawn_blocking(move || match inspect_detected_file(&file_path) {
-        DetectedFileState::NoLongerThere => Ok(()),
-        DetectedFileState::OwnedByOtherUser | DetectedFileState::StateUnknown => {
-            Err(gettext("This file can't be deleted from here"))
-        }
-        DetectedFileState::BlockedInPlace | DetectedFileState::ReadableInPlace => {
-            fs::remove_file(&file_path).map_err(|removal_failure| removal_failure.to_string())
-        }
+async fn file_state_of_own_file(
+    file_path: PathBuf,
+) -> Result<DetectedFileState, IncidentActionFailure> {
+    let file_state = spawn_blocking(move || {
+        inspect_detected_file(&file_path, OpeningCheck::InspectWithoutOpening)
     })
-    .await
-    .map_err(|join_failure| join_failure.to_string())?
+    .await?;
+    match file_state {
+        DetectedFileState::Present {
+            owner: FileOwner::OtherUser,
+            ..
+        } => Err(IncidentActionFailure::FileOwnedByOtherUser),
+        DetectedFileState::StateUnknown => Err(IncidentActionFailure::FileNotCheckable),
+        DetectedFileState::Present {
+            owner: FileOwner::CurrentUser,
+            ..
+        }
+        | DetectedFileState::NoLongerThere => Ok(file_state),
+    }
+}
+
+async fn delete_detected_file(file_path: PathBuf) -> Result<(), IncidentActionFailure> {
+    if file_state_of_own_file(file_path.clone()).await? == DetectedFileState::NoLongerThere {
+        return Ok(());
+    }
+    spawn_blocking(move || fs::remove_file(&file_path)).await??;
+    Ok(())
 }
 
 impl BackgroundDetectionsPage {
@@ -397,13 +453,13 @@ impl BackgroundDetectionsPage {
             let action_outcome = async {
                 let (resolution, action_effect) = match chosen_action {
                     TimelineStepAction::QuarantineIncident => {
+                        file_state_of_own_file(stored_detection.file_path.clone()).await?;
                         quarantine_vault
                             .move_file_into_quarantine(
                                 &stored_detection.file_path,
                                 &stored_detection.signature_name,
                             )
-                            .await
-                            .map_err(|move_failure| describe_quarantine_failure(&move_failure))?;
+                            .await?;
                         (
                             DetectionResolution::MovedToQuarantine,
                             IncidentActionEffect::QuarantineChanged,
@@ -423,8 +479,7 @@ impl BackgroundDetectionsPage {
                 };
                 activity_history
                     .resolve_detection(stored_detection.detection_id, resolution, Timestamp::now())
-                    .await
-                    .map_err(|resolving_failure| resolving_failure.to_string())?;
+                    .await?;
                 Ok(action_effect)
             }
             .await;
@@ -661,10 +716,10 @@ impl Component for BackgroundDetectionsPage {
                         unresolved_detection_count(&self.displayed_detections),
                     ));
             }
-            BackgroundDetectionsPageCommand::LoadingFailed(failure_text) => {
+            BackgroundDetectionsPageCommand::LoadingFailed(history_failure) => {
                 self.toaster.add_toast(plain_text_toast(
                     &gettext("Detections could not be read: {error}")
-                        .replace("{error}", &sanitize_scanner_line(&failure_text)),
+                        .replace("{error}", &history_failure.to_string()),
                 ));
             }
             BackgroundDetectionsPageCommand::SignatureLookupFinished(lookup_state) => {
@@ -684,9 +739,10 @@ impl Component for BackgroundDetectionsPage {
                             sender.output(BackgroundDetectionsPageOutput::QuarantineReloadNeeded);
                     }
                     Ok(IncidentActionEffect::OnlyHistoryChanged) => {}
-                    Err(failure_text) => {
-                        self.toaster
-                            .add_toast(plain_text_toast(&sanitize_scanner_line(&failure_text)));
+                    Err(action_failure) => {
+                        self.toaster.add_toast(plain_text_toast(
+                            &describe_incident_action_failure(&action_failure),
+                        ));
                     }
                 }
                 self.start_reload(&sender);

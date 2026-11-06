@@ -11,7 +11,9 @@ use futures::{StreamExt, future::ready, stream};
 use crate::{
     detections_page::{
         background_detections_page::{BackgroundDetectionsPageCommand, load_displayed_detections},
-        detected_file_state::{DetectedFileState, inspect_detected_file},
+        detected_file_state::{
+            DetectedFileState, FileAccess, FileOwner, OpeningCheck, inspect_detected_file,
+        },
         detections_view_state::file_states_to_keep,
         incident_timeline_presentation::{
             DeletionPrompt, DisplayedDetection, SignatureLookupState, incident_timeline,
@@ -345,8 +347,11 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     tokio::time::sleep(Duration::from_secs(3)).await;
     let _refused_read = fs::read(&eicar_path);
     assert_eq!(
-        inspect_detected_file(&eicar_path),
-        DetectedFileState::BlockedInPlace,
+        inspect_detected_file(&eicar_path, OpeningCheck::OpenToCheckBlocking),
+        DetectedFileState::Present {
+            access: FileAccess::BlockedOnAccess,
+            owner: FileOwner::CurrentUser,
+        },
         "on-access prevention must be blocking this file"
     );
 
@@ -392,7 +397,7 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     let incident_steps = incident_timeline(
         &DisplayedDetection {
             stored_detection: stored_detection.clone(),
-            file_state: inspect_detected_file(&eicar_path),
+            file_state: inspect_detected_file(&eicar_path, OpeningCheck::OpenToCheckBlocking),
         },
         DeletionPrompt::NotAsked,
         &SignatureLookupState::NotLookedUp,
@@ -412,7 +417,7 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
         .expect("blocked file quarantined");
     assert_eq!(moved_record.threat_name, "Eicar-Test-Signature");
     assert_eq!(
-        inspect_detected_file(&eicar_path),
+        inspect_detected_file(&eicar_path, OpeningCheck::OpenToCheckBlocking),
         DetectedFileState::NoLongerThere
     );
     activity_history

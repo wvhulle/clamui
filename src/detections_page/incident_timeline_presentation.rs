@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use gettextrs::gettext;
 
 use crate::{
-    detections_page::detected_file_state::DetectedFileState,
+    detections_page::detected_file_state::{DetectedFileState, FileAccess, FileOwner},
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
@@ -47,7 +47,7 @@ pub fn signature_is_test_pattern(signature_name: &str) -> bool {
 
 pub fn detection_needs_attention(displayed_detection: &DisplayedDetection) -> bool {
     displayed_detection.stored_detection.resolution == DetectionResolution::Unresolved
-        && displayed_detection.file_state.file_is_present()
+        && displayed_detection.file_state != DetectedFileState::NoLongerThere
 }
 
 pub fn displayed_file_path(stored_detection: &StoredDetection) -> String {
@@ -73,9 +73,22 @@ pub fn detection_state_text(displayed_detection: &DisplayedDetection) -> String 
         DetectionResolution::DeletedByUser => gettext("Deleted"),
         DetectionResolution::DismissedByUser => gettext("Kept by you"),
         DetectionResolution::Unresolved => match displayed_detection.file_state {
-            DetectedFileState::BlockedInPlace => gettext("Blocked, needs a decision"),
-            DetectedFileState::ReadableInPlace => gettext("Not blocked, needs a decision"),
-            DetectedFileState::OwnedByOtherUser => gettext("Belongs to another user"),
+            DetectedFileState::Present {
+                owner: FileOwner::OtherUser,
+                ..
+            } => gettext("Belongs to another user"),
+            DetectedFileState::Present {
+                access: FileAccess::BlockedOnAccess,
+                owner: FileOwner::CurrentUser,
+            } => gettext("Blocked, needs a decision"),
+            DetectedFileState::Present {
+                access: FileAccess::Readable,
+                owner: FileOwner::CurrentUser,
+            } => gettext("Not blocked, needs a decision"),
+            DetectedFileState::Present {
+                access: FileAccess::NotOpened,
+                owner: FileOwner::CurrentUser,
+            } => gettext("Needs a decision"),
             DetectedFileState::NoLongerThere => gettext("No longer there"),
             DetectedFileState::StateUnknown => gettext("File could not be checked"),
         },
@@ -176,23 +189,35 @@ fn detected_step(stored_detection: &StoredDetection) -> TimelineStep {
 fn blocked_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
     let stored_detection = &displayed_detection.stored_detection;
     let (node_state, status_text) = match displayed_detection.file_state {
-        DetectedFileState::BlockedInPlace => (
+        DetectedFileState::Present {
+            access: FileAccess::BlockedOnAccess,
+            ..
+        } => (
             StepNodeState::Completed,
             gettext("Opening this file is refused, which is why it won't open"),
+        ),
+        DetectedFileState::Present {
+            access: FileAccess::NotOpened,
+            ..
+        } => (
+            StepNodeState::Completed,
+            gettext("Not opened again after your decision"),
         ),
         DetectedFileState::NoLongerThere => (
             StepNodeState::Completed,
             gettext("The file is no longer there"),
         ),
-        DetectedFileState::ReadableInPlace | DetectedFileState::OwnedByOtherUser
-            if !stored_detection.found_on_access =>
-        {
-            (
-                StepNodeState::NeedsReview,
-                gettext("Not blocked: the scheduled scan found it, and it can still be opened"),
-            )
-        }
-        DetectedFileState::ReadableInPlace | DetectedFileState::OwnedByOtherUser => (
+        DetectedFileState::Present {
+            access: FileAccess::Readable,
+            ..
+        } if !stored_detection.found_on_access => (
+            StepNodeState::NeedsReview,
+            gettext("Not blocked: the scheduled scan found it, and it can still be opened"),
+        ),
+        DetectedFileState::Present {
+            access: FileAccess::Readable,
+            ..
+        } => (
             StepNodeState::NeedsReview,
             gettext("Not blocked right now: it can still be opened"),
         ),
@@ -282,7 +307,7 @@ fn decision_choices(
     deletion_prompt: DeletionPrompt,
     file_state: DetectedFileState,
 ) -> Vec<StepChoiceRow> {
-    if file_state == DetectedFileState::OwnedByOtherUser {
+    if !file_state.user_can_move_or_delete() {
         return vec![StepChoiceRow {
             choice_description: gettext("Stop asking about this file"),
             choice_label: gettext("Keep"),
@@ -353,10 +378,19 @@ fn review_step(
             detection_state_text(displayed_detection),
         );
     }
-    let status_text = if displayed_detection.file_state == DetectedFileState::OwnedByOtherUser {
-        gettext("This file belongs to another user, so Lazaret can't move or delete it")
-    } else {
-        gettext("Choose what happens to this file")
+    let status_text = match displayed_detection.file_state {
+        DetectedFileState::Present {
+            owner: FileOwner::OtherUser,
+            ..
+        } => gettext("This file belongs to another user, so Lazaret can't move or delete it"),
+        DetectedFileState::StateUnknown => {
+            gettext("Lazaret couldn't check this file, so it can't move or delete it")
+        }
+        DetectedFileState::Present {
+            owner: FileOwner::CurrentUser,
+            ..
+        }
+        | DetectedFileState::NoLongerThere => gettext("Choose what happens to this file"),
     };
     TimelineStep {
         choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state)
@@ -456,7 +490,10 @@ mod incident_timeline_presentation_tests {
                 resolution: DetectionResolution::Unresolved,
                 resolved_at: jiff::Timestamp::UNIX_EPOCH,
             },
-            file_state: DetectedFileState::BlockedInPlace,
+            file_state: DetectedFileState::Present {
+                access: FileAccess::BlockedOnAccess,
+                owner: FileOwner::CurrentUser,
+            },
         }
     }
 
@@ -528,7 +565,10 @@ mod incident_timeline_presentation_tests {
                 found_by_schedule: true,
                 ..blocked_detection().stored_detection
             },
-            file_state: DetectedFileState::ReadableInPlace,
+            file_state: DetectedFileState::Present {
+                access: FileAccess::Readable,
+                owner: FileOwner::CurrentUser,
+            },
         };
         let incident_steps = incident_timeline(
             &displayed_detection,
@@ -548,11 +588,31 @@ mod incident_timeline_presentation_tests {
     }
 
     #[test]
-    fn a_foreign_file_offers_no_move_or_delete() {
+    fn a_foreign_file_offers_no_move_or_delete_even_when_blocked() {
+        [FileAccess::BlockedOnAccess, FileAccess::Readable]
+            .into_iter()
+            .for_each(|file_access| {
+                let displayed_detection = DisplayedDetection {
+                    file_state: DetectedFileState::Present {
+                        access: file_access,
+                        owner: FileOwner::OtherUser,
+                    },
+                    ..blocked_detection()
+                };
+                assert_eq!(
+                    choice_actions(&displayed_detection, DeletionPrompt::NotAsked),
+                    vec![TimelineStepAction::DismissIncident]
+                );
+            });
+    }
+
+    #[test]
+    fn an_unresolved_file_that_could_not_be_checked_still_needs_attention() {
         let displayed_detection = DisplayedDetection {
-            file_state: DetectedFileState::OwnedByOtherUser,
+            file_state: DetectedFileState::StateUnknown,
             ..blocked_detection()
         };
+        assert!(detection_needs_attention(&displayed_detection));
         assert_eq!(
             choice_actions(&displayed_detection, DeletionPrompt::NotAsked),
             vec![TimelineStepAction::DismissIncident]
@@ -582,7 +642,10 @@ mod incident_timeline_presentation_tests {
                 resolution: DetectionResolution::MovedToQuarantine,
                 ..blocked_detection().stored_detection
             },
-            file_state: DetectedFileState::ReadableInPlace,
+            file_state: DetectedFileState::Present {
+                access: FileAccess::Readable,
+                owner: FileOwner::CurrentUser,
+            },
         };
         assert_eq!(
             detection_state_text(&displayed_detection),

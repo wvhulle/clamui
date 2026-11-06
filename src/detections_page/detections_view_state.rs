@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::Path};
 
 use crate::{
     detections_page::{
-        detected_file_state::DetectedFileState,
+        detected_file_state::{DetectedFileState, OpeningCheck},
         incident_timeline_presentation::{DisplayedDetection, detection_needs_attention},
     },
     host_services::detection_journal::{
@@ -65,17 +65,19 @@ pub fn split_journal_batch(journal_events: Vec<DetectionJournalEvent>) -> Journa
 pub fn file_state_for_detection(
     stored_detection: &StoredDetection,
     known_file_states: &HashMap<i64, DetectedFileState>,
-    open_to_check_blocking: impl Fn(&Path) -> DetectedFileState,
-    check_without_opening: impl Fn(&Path) -> DetectedFileState,
+    inspect_file: impl Fn(&Path, OpeningCheck) -> DetectedFileState,
 ) -> DetectedFileState {
     if let Some(known_state) = known_file_states.get(&stored_detection.detection_id) {
         return *known_state;
     }
-    if stored_detection.resolution == DetectionResolution::Unresolved {
-        open_to_check_blocking(&stored_detection.file_path)
-    } else {
-        check_without_opening(&stored_detection.file_path)
-    }
+    inspect_file(
+        &stored_detection.file_path,
+        if stored_detection.resolution == DetectionResolution::Unresolved {
+            OpeningCheck::OpenToCheckBlocking
+        } else {
+            OpeningCheck::InspectWithoutOpening
+        },
+    )
 }
 
 pub fn file_states_to_keep(
@@ -128,7 +130,10 @@ mod detections_view_state_tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::host_services::detection_journal::detection_journal_records::DetectionSource;
+    use crate::{
+        detections_page::detected_file_state::{FileAccess, FileOwner},
+        host_services::detection_journal::detection_journal_records::DetectionSource,
+    };
 
     fn stored_detection(detection_id: i64, resolution: DetectionResolution) -> StoredDetection {
         StoredDetection {
@@ -149,12 +154,13 @@ mod detections_view_state_tests {
         detection: &StoredDetection,
         known_file_states: &HashMap<i64, DetectedFileState>,
     ) -> u32 {
-        let found_state = file_state_for_detection(
-            detection,
-            known_file_states,
-            |_file_path| DetectedFileState::StateUnknown,
-            |_file_path| DetectedFileState::ReadableInPlace,
-        );
+        let found_state =
+            file_state_for_detection(detection, known_file_states, |_file_path, opening_check| {
+                match opening_check {
+                    OpeningCheck::OpenToCheckBlocking => DetectedFileState::StateUnknown,
+                    OpeningCheck::InspectWithoutOpening => DetectedFileState::NoLongerThere,
+                }
+            });
         u32::from(found_state == DetectedFileState::StateUnknown)
     }
 
@@ -163,7 +169,10 @@ mod detections_view_state_tests {
         let detection = stored_detection(7, DetectionResolution::Unresolved);
         let displayed_detections = [DisplayedDetection {
             stored_detection: detection.clone(),
-            file_state: DetectedFileState::BlockedInPlace,
+            file_state: DetectedFileState::Present {
+                access: FileAccess::BlockedOnAccess,
+                owner: FileOwner::CurrentUser,
+            },
         }];
         assert_eq!(
             opens_needed_for(&detection, &file_states_to_keep(&displayed_detections, &[])),

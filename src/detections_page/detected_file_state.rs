@@ -5,19 +5,46 @@ use rustix::process::geteuid;
 use crate::host_services::clamav_scanner::scanner_output_parser::is_blocked_by_on_access;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileAccess {
+    BlockedOnAccess,
+    Readable,
+    NotOpened,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileOwner {
+    CurrentUser,
+    OtherUser,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetectedFileState {
-    BlockedInPlace,
-    ReadableInPlace,
-    OwnedByOtherUser,
+    Present {
+        access: FileAccess,
+        owner: FileOwner,
+    },
     NoLongerThere,
     StateUnknown,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OpeningCheck {
+    OpenToCheckBlocking,
+    InspectWithoutOpening,
+}
+
 impl DetectedFileState {
     pub const fn file_is_present(self) -> bool {
+        matches!(self, Self::Present { .. })
+    }
+
+    pub const fn user_can_move_or_delete(self) -> bool {
         matches!(
             self,
-            Self::BlockedInPlace | Self::ReadableInPlace | Self::OwnedByOtherUser
+            Self::Present {
+                owner: FileOwner::CurrentUser,
+                ..
+            }
         )
     }
 }
@@ -25,16 +52,19 @@ impl DetectedFileState {
 pub fn classify_file_state(
     metadata_outcome: Result<u32, io::ErrorKind>,
     current_user_id: u32,
-    blocked_by_on_access: bool,
+    file_access: FileAccess,
 ) -> DetectedFileState {
     match metadata_outcome {
         Err(io::ErrorKind::NotFound) => DetectedFileState::NoLongerThere,
         Err(_other_failure) => DetectedFileState::StateUnknown,
-        Ok(_any_owner) if blocked_by_on_access => DetectedFileState::BlockedInPlace,
-        Ok(owner_user_id) if owner_user_id != current_user_id => {
-            DetectedFileState::OwnedByOtherUser
-        }
-        Ok(_own_file) => DetectedFileState::ReadableInPlace,
+        Ok(owner_user_id) => DetectedFileState::Present {
+            access: file_access,
+            owner: if owner_user_id == current_user_id {
+                FileOwner::CurrentUser
+            } else {
+                FileOwner::OtherUser
+            },
+        },
     }
 }
 
@@ -44,15 +74,18 @@ fn file_owner_outcome(file_path: &Path) -> Result<u32, io::ErrorKind> {
         .map_err(|metadata_failure| metadata_failure.kind())
 }
 
-pub fn inspect_file_without_opening(file_path: &Path) -> DetectedFileState {
-    classify_file_state(file_owner_outcome(file_path), geteuid().as_raw(), false)
-}
-
-pub fn inspect_detected_file(file_path: &Path) -> DetectedFileState {
+pub fn inspect_detected_file(file_path: &Path, opening_check: OpeningCheck) -> DetectedFileState {
+    let file_access = match opening_check {
+        OpeningCheck::InspectWithoutOpening => FileAccess::NotOpened,
+        OpeningCheck::OpenToCheckBlocking if is_blocked_by_on_access(file_path) => {
+            FileAccess::BlockedOnAccess
+        }
+        OpeningCheck::OpenToCheckBlocking => FileAccess::Readable,
+    };
     classify_file_state(
         file_owner_outcome(file_path),
         geteuid().as_raw(),
-        is_blocked_by_on_access(file_path),
+        file_access,
     )
 }
 
@@ -63,34 +96,45 @@ mod detected_file_state_tests {
     const OWN_USER: u32 = 1000;
 
     #[test]
-    fn a_refused_open_is_a_blocked_file_even_when_someone_else_owns_it() {
+    fn a_blocked_file_keeps_its_owner() {
         assert_eq!(
-            classify_file_state(Ok(OWN_USER), OWN_USER, true),
-            DetectedFileState::BlockedInPlace
+            classify_file_state(Ok(0), OWN_USER, FileAccess::BlockedOnAccess),
+            DetectedFileState::Present {
+                access: FileAccess::BlockedOnAccess,
+                owner: FileOwner::OtherUser,
+            }
         );
-        assert_eq!(
-            classify_file_state(Ok(0), OWN_USER, true),
-            DetectedFileState::BlockedInPlace
+        assert!(
+            !classify_file_state(Ok(0), OWN_USER, FileAccess::BlockedOnAccess)
+                .user_can_move_or_delete()
+        );
+        assert!(
+            classify_file_state(Ok(OWN_USER), OWN_USER, FileAccess::BlockedOnAccess)
+                .user_can_move_or_delete()
         );
     }
 
     #[test]
-    fn missing_and_foreign_files_are_told_apart() {
+    fn missing_unknown_and_present_files_are_told_apart() {
         assert_eq!(
-            classify_file_state(Err(io::ErrorKind::NotFound), OWN_USER, false),
+            classify_file_state(Err(io::ErrorKind::NotFound), OWN_USER, FileAccess::Readable),
             DetectedFileState::NoLongerThere
         );
         assert_eq!(
-            classify_file_state(Ok(0), OWN_USER, false),
-            DetectedFileState::OwnedByOtherUser
-        );
-        assert_eq!(
-            classify_file_state(Ok(OWN_USER), OWN_USER, false),
-            DetectedFileState::ReadableInPlace
-        );
-        assert_eq!(
-            classify_file_state(Err(io::ErrorKind::PermissionDenied), OWN_USER, false),
+            classify_file_state(
+                Err(io::ErrorKind::PermissionDenied),
+                OWN_USER,
+                FileAccess::Readable
+            ),
             DetectedFileState::StateUnknown
+        );
+        assert!(
+            !classify_file_state(
+                Err(io::ErrorKind::PermissionDenied),
+                OWN_USER,
+                FileAccess::Readable
+            )
+            .user_can_move_or_delete()
         );
     }
 }
