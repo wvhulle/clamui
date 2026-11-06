@@ -6,9 +6,9 @@
   services.greetd = {
     enable = true;
     settings = {
-      default_session.command = "sway --config /etc/clamui-test/sway-session.conf";
+      default_session.command = "sway --config /etc/lazaret-test/sway-session.conf";
       initial_session = {
-        command = "sway --config /etc/clamui-test/sway-session.conf";
+        command = "sway --config /etc/lazaret-test/sway-session.conf";
         user = "sample-user";
       };
     };
@@ -16,8 +16,8 @@
 
   environment = {
     etc = {
-      "clamui-test/sway-session.conf".source = ./sway-session.conf;
-      "clamui-test/start-session-target.nu".source = ./start-session-target.nu;
+      "lazaret-test/sway-session.conf".source = ./sway-session.conf;
+      "lazaret-test/start-session-target.nu".source = ./start-session-target.nu;
     };
     pathsToLink = [ "/libexec" ];
     systemPackages = [
@@ -36,7 +36,7 @@
 
   fonts.packages = [ pkgs.adwaita-fonts ];
 
-  systemd.user.targets.clamui-test-session = {
+  systemd.user.targets.lazaret-test-session = {
     bindsTo = [ "graphical-session.target" ];
     wants = [ "graphical-session.target" ];
     after = [ "graphical-session-pre.target" ];

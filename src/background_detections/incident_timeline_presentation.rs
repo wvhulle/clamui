@@ -340,7 +340,7 @@ fn review_step(
     let stored_detection = &displayed_detection.stored_detection;
     let step_title = gettext("Your decision");
     let mechanism_details = gettext(
-        "If it's unfamiliar, quarantine it. Keeping a file only stops ClamUI asking: on-access \
+        "If it's unfamiliar, quarantine it. Keeping a file only stops Lazaret asking: on-access \
          scanning keeps blocking it until the path is excluded in the ClamAV configuration, as \
          shown here.",
     );
@@ -357,7 +357,7 @@ fn review_step(
         );
     }
     let status_text = if displayed_detection.file_state == DetectedFileState::OwnedByOtherUser {
-        gettext("This file belongs to another user, so ClamUI can't move or delete it")
+        gettext("This file belongs to another user, so Lazaret can't move or delete it")
     } else {
         gettext("Choose what happens to this file")
     };

@@ -689,45 +689,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clamui"
-version = "0.1.0"
-dependencies = [
- "bytesize",
- "futures",
- "gettext-rs",
- "hex",
- "humantime",
- "ksni",
- "libc",
- "oo7",
- "regex",
- "relm4",
- "reqwest",
- "rusqlite",
- "rustix 1.1.5",
- "serde",
- "serde_json",
- "sha2",
- "systemd",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-stream",
- "turso",
- "zbus",
-]
-
-[[package]]
-name = "clamui-settings-helper"
-version = "0.1.0"
-dependencies = [
- "tempfile",
- "thiserror",
- "tokio",
- "zbus",
-]
-
-[[package]]
 name = "clang-sys"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2159,6 +2120,45 @@ dependencies = [
  "futures-util",
  "pastey",
  "serde",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
+name = "lazaret"
+version = "0.1.0"
+dependencies = [
+ "bytesize",
+ "futures",
+ "gettext-rs",
+ "hex",
+ "humantime",
+ "ksni",
+ "libc",
+ "oo7",
+ "regex",
+ "relm4",
+ "reqwest",
+ "rusqlite",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "systemd",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "turso",
+ "zbus",
+]
+
+[[package]]
+name = "lazaret-settings-helper"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "thiserror",
  "tokio",
  "zbus",
 ]

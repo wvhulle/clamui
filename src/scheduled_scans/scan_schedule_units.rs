@@ -12,11 +12,11 @@ use crate::{
     },
 };
 
-const SERVICE_FILE_NAME: &str = "clamui-scheduled-scan.service";
-const TIMER_FILE_NAME: &str = "clamui-scheduled-scan.timer";
+const SERVICE_FILE_NAME: &str = "lazaret-scheduled-scan.service";
+const TIMER_FILE_NAME: &str = "lazaret-scheduled-scan.timer";
 const WEEKDAY_NAMES: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const SERVICE_TEMPLATE: &str = include_str!("../../data/clamui-scheduled-scan.service.in");
-const TIMER_TEMPLATE: &str = include_str!("../../data/clamui-scheduled-scan.timer.in");
+const SERVICE_TEMPLATE: &str = include_str!("../../data/lazaret-scheduled-scan.service.in");
+const TIMER_TEMPLATE: &str = include_str!("../../data/lazaret-scheduled-scan.timer.in");
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScheduleFrequency {
@@ -266,9 +266,9 @@ mod scan_schedule_units_tests {
 
     #[test]
     fn service_arguments_cannot_expand_or_break_quoting() {
-        let unit_text = service_unit_text(Path::new("/usr/bin/clamui"), &weekly_schedule());
+        let unit_text = service_unit_text(Path::new("/usr/bin/lazaret"), &weekly_schedule());
         assert!(unit_text.contains(
-            "ExecStart=\"/usr/bin/clamui\" --scheduled-scan --skip-on-battery --target \"/home/a \
+            "ExecStart=\"/usr/bin/lazaret\" --scheduled-scan --skip-on-battery --target \"/home/a \
              b/100%%$$HOME\\\"x\"\n"
         ));
         assert!(unit_text.contains("Nice=19"));
@@ -319,26 +319,26 @@ mod scan_schedule_units_tests {
     #[test]
     fn the_launcher_keeps_stable_search_path_entries() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        fs::write(temporary_root.path().join("clamui"), b"").expect("launcher");
+        fs::write(temporary_root.path().join("lazaret"), b"").expect("launcher");
         assert_eq!(
             launcher_path_from(
-                &OsString::from("clamui"),
+                &OsString::from("lazaret"),
                 temporary_root.path().as_os_str(),
-                PathBuf::from("/fallback/.clamui-wrapped"),
+                PathBuf::from("/fallback/.lazaret-wrapped"),
             ),
-            temporary_root.path().join("clamui")
+            temporary_root.path().join("lazaret")
         );
         assert_eq!(
             launcher_path_from(
-                &OsString::from("/opt/clamui"),
+                &OsString::from("/opt/lazaret"),
                 OsStr::new(""),
                 PathBuf::from("/fallback")
             ),
-            PathBuf::from("/opt/clamui")
+            PathBuf::from("/opt/lazaret")
         );
         assert_eq!(
             launcher_path_from(
-                &OsString::from("./clamui"),
+                &OsString::from("./lazaret"),
                 OsStr::new(""),
                 PathBuf::from("/fallback")
             ),

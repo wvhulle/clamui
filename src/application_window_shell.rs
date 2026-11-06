@@ -284,7 +284,7 @@ fn signature_update_dialog(database_page: &Controller<DatabaseUpdatePage>) -> ad
 fn primary_menu_button() -> gtk::MenuButton {
     let primary_menu = gio::Menu::new();
     primary_menu.append(Some(&gettext("Preferences")), Some("app.preferences"));
-    primary_menu.append(Some(&gettext("About ClamUI")), Some("app.about"));
+    primary_menu.append(Some(&gettext("About Lazaret")), Some("app.about"));
     primary_menu.append(Some(&gettext("Quit")), Some("app.quit"));
     gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
@@ -296,11 +296,11 @@ fn primary_menu_button() -> gtk::MenuButton {
 
 fn present_about_dialog() {
     adw::AboutDialog::builder()
-        .application_name("ClamUI")
+        .application_name("Lazaret")
         .application_icon(APPLICATION_ICON_NAME)
         .version(env!("CARGO_PKG_VERSION"))
         .license_type(gtk::License::MitX11)
-        .website("https://github.com/linx-systems/clamui")
+        .website("https://codeberg.org/wvhulle/lazaret")
         .developers(
             include_str!("../AUTHORS")
                 .lines()
@@ -367,7 +367,7 @@ fn adaptive_navigation_layout(
     let split_view = adw::NavigationSplitView::builder()
         .sidebar(
             &adw::NavigationPage::builder()
-                .title("ClamUI")
+                .title("Lazaret")
                 .child(&sidebar_view)
                 .build(),
         )
@@ -712,10 +712,10 @@ fn start_system_tray(
 
 fn confirm_close_action(window_root: &adw::ApplicationWindow) {
     let close_dialog = adw::AlertDialog::new(
-        Some(&gettext("Close ClamUI?")),
+        Some(&gettext("Close Lazaret?")),
         Some(&gettext(
-            "Detection alerts stop while ClamUI isn't running. Keep it running in the background, \
-             or quit completely?",
+            "Detection alerts stop while Lazaret isn't running. Keep it running in the \
+             background, or quit completely?",
         )),
     );
     close_dialog.add_response("cancel", &gettext("Cancel"));
@@ -758,7 +758,7 @@ impl AsyncComponent for ApplicationWindowShell {
 
     fn init_root() -> Self::Root {
         adw::ApplicationWindow::builder()
-            .title("ClamUI")
+            .title("Lazaret")
             .width_request(360)
             .height_request(500)
             .default_width(900)

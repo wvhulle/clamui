@@ -3,10 +3,10 @@
  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
-  <vendor>ClamUI</vendor>
-  <action id="io.github.wvhulle.ClamUI.apply-settings">
+  <vendor>Lazaret</vendor>
+  <action id="page.codeberg.wvhulle.Lazaret.apply-settings">
     <description>Change ClamAV settings</description>
-    <message>ClamUI wants to change ClamAV settings: $(clamui.change)</message>
+    <message>Lazaret wants to change ClamAV settings: $(lazaret.change)</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>

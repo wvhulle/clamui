@@ -2,7 +2,7 @@
 {
   imports = [ ../shared/desktop-session.nix ];
 
-  services.clamui.enable = true;
+  services.lazaret.enable = true;
 
   services.clamav = {
     updater.enable = true;

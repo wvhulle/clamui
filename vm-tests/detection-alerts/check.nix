@@ -1,6 +1,6 @@
 { machine, ... }:
 {
-  name = "clamui-detection-alerts";
+  name = "lazaret-detection-alerts";
 
   enableOCR = true;
 

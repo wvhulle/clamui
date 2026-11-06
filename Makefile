@@ -2,9 +2,9 @@ PREFIX ?= /usr/local
 DESTDIR ?=
 CARGO ?= cargo
 
-APPLICATION_ID := io.github.wvhulle.ClamUI
-TRANSLATION_DOMAIN := clamui
-RELEASE_BINARY := target/release/clamui
+APPLICATION_ID := page.codeberg.wvhulle.Lazaret
+TRANSLATION_DOMAIN := lazaret
+RELEASE_BINARY := target/release/lazaret
 INSTALL_ROOT := $(DESTDIR)$(PREFIX)
 SHARE_DIRECTORY := $(INSTALL_ROOT)/share
 TRANSLATION_BUILD_DIRECTORY ?= target/locale
@@ -19,13 +19,13 @@ build:
 install: install-binary install-data
 
 install-binary:
-	install -Dm755 $(RELEASE_BINARY) $(INSTALL_ROOT)/bin/clamui
+	install -Dm755 $(RELEASE_BINARY) $(INSTALL_ROOT)/bin/lazaret
 
 install-data: install-desktop-entry install-icons install-settings-schema install-translations install-user-service
 
 install-user-service:
 	install -d $(INSTALL_ROOT)/lib/systemd/user
-	sed 's|@BINARY_PATH@|$(PREFIX)/bin/clamui|' data/clamui.service.in > $(INSTALL_ROOT)/lib/systemd/user/clamui.service
+	sed 's|@BINARY_PATH@|$(PREFIX)/bin/lazaret|' data/lazaret.service.in > $(INSTALL_ROOT)/lib/systemd/user/lazaret.service
 
 install-desktop-entry:
 	install -Dm644 data/$(APPLICATION_ID).desktop.in $(SHARE_DIRECTORY)/applications/$(APPLICATION_ID).desktop

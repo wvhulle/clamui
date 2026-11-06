@@ -71,7 +71,7 @@ impl SettingsSubpage {
 
     fn link_subtitle(self) -> String {
         match self {
-            Self::ScanExclusions => gettext("Folders and patterns that ClamUI scans skip"),
+            Self::ScanExclusions => gettext("Folders and patterns that Lazaret scans skip"),
             Self::ScanSchedule => gettext("Scan automatically with a systemd timer"),
             Self::DeviceAutoScan => gettext("Scan removable drives when they are connected"),
             Self::ScannerEngine => gettext("clamd settings for every scan on this computer"),

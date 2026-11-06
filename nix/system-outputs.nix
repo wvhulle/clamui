@@ -36,7 +36,7 @@ let
 
   commonArgs = {
     inherit src;
-    pname = "clamui";
+    pname = "lazaret";
     version = (lib.importTOML ../Cargo.toml).package.version;
     cargoExtraArgs = "--locked";
     strictDeps = true;
@@ -52,19 +52,19 @@ let
     meta = {
       description = "Native GTK desktop frontend for host-installed ClamAV";
       license = lib.licenses.mit;
-      mainProgram = "clamui";
+      mainProgram = "lazaret";
       platforms = lib.platforms.linux;
     };
   };
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-  clamuiPackage = craneLib.buildPackage (
+  lazaretPackage = craneLib.buildPackage (
     commonArgs
     // {
       inherit cargoArtifacts;
       doCheck = false;
-      CLAMUI_LOCALE_DIRECTORY = "${placeholder "out"}/share/locale";
+      LAZARET_LOCALE_DIRECTORY = "${placeholder "out"}/share/locale";
       nativeBuildInputs = commonArgs.nativeBuildInputs ++ [
         pkgs.gettext
         pkgs.glib
@@ -92,14 +92,14 @@ let
 
   settingsHelperArgs = {
     inherit src;
-    pname = "clamui-settings-helper";
+    pname = "lazaret-settings-helper";
     version = "0.1.0";
-    cargoExtraArgs = "--locked --package clamui-settings-helper";
+    cargoExtraArgs = "--locked --package lazaret-settings-helper";
     strictDeps = true;
     meta = {
-      description = "Validates and applies runtime ClamAV setting changes for ClamUI";
+      description = "Validates and applies runtime ClamAV setting changes for Lazaret";
       license = lib.licenses.mit;
-      mainProgram = "clamui-settings-helper";
+      mainProgram = "lazaret-settings-helper";
       platforms = lib.platforms.linux;
     };
   };
@@ -156,7 +156,7 @@ let
   );
 
   vmTests = import ../vm-tests {
-    clamuiModule = self.nixosModules.default;
+    lazaretModule = self.nixosModules.default;
   };
 
   moduleChecks = import ./module-checks.nix {
@@ -165,7 +165,7 @@ let
 
   screenshotRendering = import ./screenshots.nix {
     inherit pkgs;
-    clamui = clamuiPackage;
+    lazaret = lazaretPackage;
     xtask = xtaskPackage;
   };
 
@@ -181,7 +181,7 @@ let
 
   fmt = rustfmtCrane.cargoFmt {
     inherit src;
-    pname = "clamui";
+    pname = "lazaret";
     inherit (commonArgs) version;
     cargoExtraArgs = "--all";
   };
@@ -200,8 +200,8 @@ let
 in
 {
   packages = {
-    default = clamuiPackage;
-    clamui = clamuiPackage;
+    default = lazaretPackage;
+    lazaret = lazaretPackage;
     deps = cargoArtifacts;
     xtask = xtaskPackage;
     settings-helper = settingsHelperPackage;
@@ -216,7 +216,7 @@ in
     // vmTests.checksFor pkgs
     // {
       inherit
-        clamuiPackage
+        lazaretPackage
         tests
         clippy
         fmt

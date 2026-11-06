@@ -103,9 +103,9 @@ mod running_instance_forwarding_tests {
         assert_eq!(
             application_object_path(),
             if cfg!(debug_assertions) {
-                "/io/github/wvhulle/ClamUI/Devel"
+                "/page/codeberg/wvhulle/Lazaret/Devel"
             } else {
-                "/io/github/wvhulle/ClamUI"
+                "/page/codeberg/wvhulle/Lazaret"
             }
         );
     }

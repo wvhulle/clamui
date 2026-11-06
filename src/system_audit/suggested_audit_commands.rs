@@ -99,8 +99,8 @@ pub fn suggested_command(
         },
         SuggestedRemedy::BackgroundAlertsEnable => non_nixos_or_option(
             distribution_family,
-            "services.clamui.enable = true;",
-            "systemctl --user enable --now clamui.service",
+            "services.lazaret.enable = true;",
+            "systemctl --user enable --now lazaret.service",
         ),
         SuggestedRemedy::ScheduledScanEnable => match distribution_family {
             NixosFamily => Some("services.clamav.scanner.enable = true;"),

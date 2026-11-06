@@ -153,7 +153,7 @@ fn launch_application(
     scan_fixture_use: ScanFixtureUse,
 ) -> Result<Child, TaskFailure> {
     let application_process = headless_session
-        .session_command("clamui")
+        .session_command("lazaret")
         .env("PATH", &screenshot_fixtures.search_path)
         .args(application_arguments(
             page_argument,
@@ -163,7 +163,7 @@ fn launch_application(
         .stdin(Stdio::null())
         .spawn()
         .map_err(|start_failure| TaskFailure::ToolNotStarted {
-            tool_name: "clamui",
+            tool_name: "lazaret",
             start_failure,
         })?;
     thread::sleep(PAGE_SETTLE_DURATION);

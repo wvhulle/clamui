@@ -11,14 +11,14 @@ SCANNED_FILE = "/var/lib/sample-scan/dropper.bin"
 
 machine.start()
 wait_for_desktop()
-wait_for_clamui_service()
+wait_for_lazaret_service()
 machine.succeed("systemctl start clamav-daemon.service")
 machine.wait_until_succeeds("clamdscan --ping 1", timeout=timedelta(seconds=120))
 machine.succeed(f"printf %s {shlex.quote(EICAR_TEXT)} > {SCANNED_FILE}")
 
 with subtest("the Protection page shows the system timer"):
     activate_application_action("show-window")
-    wait_for_clamui_window()
+    wait_for_lazaret_window()
     time.sleep(3)
     machine.screenshot("protection_page")
 
@@ -52,7 +52,7 @@ with subtest("the scan's journal line becomes a detection that is not called blo
     machine.screenshot("protection_after_scan")
     assert "ended with an error" not in machine.get_screen_text(), "a found threat was shown as a failed scan"
 
-with subtest("the ClamUI schedule is locked because the system has a timer"):
+with subtest("the Lazaret schedule is locked because the system has a timer"):
     activate_application_action("preferences")
     time.sleep(3)
     click_at(SCHEDULED_TAB[0], SCHEDULED_TAB[1])
@@ -61,7 +61,7 @@ with subtest("the ClamUI schedule is locked because the system has a timer"):
     click_at(ENABLE_SCHEDULE_TOGGLE[0], ENABLE_SCHEDULE_TOGGLE[1])
     click_at(APPLY_SCHEDULE_BUTTON[0], APPLY_SCHEDULE_BUTTON[1])
     time.sleep(2)
-    as_user(f"test ! -e /home/{SAMPLE_USER}/.config/systemd/user/clamui-scheduled-scan.timer")
+    as_user(f"test ! -e /home/{SAMPLE_USER}/.config/systemd/user/lazaret-scheduled-scan.timer")
 
 with subtest("settings the system owns are locked and copy a snippet"):
     click_at(SCANNER_TAB[0], SCANNER_TAB[1])

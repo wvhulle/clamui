@@ -2,7 +2,7 @@
 {
   imports = [ ../shared/desktop-session.nix ];
 
-  services.clamui = {
+  services.lazaret = {
     enable = true;
     liveTuning = {
       enable = true;

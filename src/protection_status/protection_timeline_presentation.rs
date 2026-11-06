@@ -81,7 +81,7 @@ fn engine_step(
 ) -> TimelineStep {
     let step_title = gettext("ClamAV installed");
     let mechanism_details = gettext(
-        "ClamAV is the engine that recognizes malware. ClamUI uses the copy installed on this \
+        "ClamAV is the engine that recognizes malware. Lazaret uses the copy installed on this \
          computer and never bundles its own.",
     );
     match engine_installation {
@@ -453,11 +453,11 @@ fn scheduled_scan_step(
                 ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
             }
         }
-        ScheduledScanEvidence::ClamuiSchedule => no_guidance_step(
+        ScheduledScanEvidence::LazaretSchedule => no_guidance_step(
             step_title,
             mechanism_details,
             StepNodeState::Completed,
-            gettext("Scheduled by ClamUI"),
+            gettext("Scheduled by Lazaret"),
         ),
         ScheduledScanEvidence::NoSchedule => TimelineStep {
             guidance_commands: remedy_commands(
@@ -486,7 +486,7 @@ fn alerts_step(
 ) -> TimelineStep {
     let step_title = gettext("Alerts");
     let mechanism_details = gettext(
-        "ClamUI follows the system journal and notifies you when something is detected. It can \
+        "Lazaret follows the system journal and notifies you when something is detected. It can \
          only do that while it is running, so it should run in the background.",
     );
     let (node_state, status_text) = match &alert_readiness.journal_access {
@@ -508,7 +508,7 @@ fn alerts_step(
         JournalAccess::FollowingJournal if background_service_state != UnitState::UnitActive => (
             StepNodeState::NeedsReview,
             gettext(
-                "Alerts stop when you quit ClamUI, because it isn't set up to run in the \
+                "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
                  background",
             ),
         ),
@@ -553,7 +553,9 @@ fn scheduled_coverage(scheduled_scan_evidence: &ScheduledScanEvidence) -> Option
         } if !scan_targets.is_empty() => Some(
             gettext("{paths} scanned on a schedule").replace("{paths}", &scan_targets.join(", ")),
         ),
-        ScheduledScanEvidence::ClamuiSchedule => Some(gettext("Scheduled scans set up in ClamUI")),
+        ScheduledScanEvidence::LazaretSchedule => {
+            Some(gettext("Scheduled scans set up in Lazaret"))
+        }
         ScheduledScanEvidence::SystemTimer { .. } | ScheduledScanEvidence::NoSchedule => None,
     }
 }

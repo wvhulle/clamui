@@ -27,7 +27,7 @@ fn service_description(threat_intel_service: ThreatIntelService) -> String {
         ),
         ThreatIntelService::AbuseChService => gettext(
             "Looks up a detection's signature name, and a quarantined file's SHA-256 hash, when \
-             you ask. The same abuse.ch key works for URLhaus signature downloads, but ClamUI \
+             you ask. The same abuse.ch key works for URLhaus signature downloads, but Lazaret \
              needs its own copy it can read. abuse.ch's fair-use terms say for-profit users may \
              need its commercial API.",
         ),
@@ -58,8 +58,8 @@ pub fn describe_key_failure(key_failure: &KeyStorageFailure) -> String {
         KeyStorageFailure::StoredKeyUnreadable => gettext("Unable to read the stored API key"),
         KeyStorageFailure::KeyringUnavailable(_keyring_failure) => gettext("Keyring unavailable"),
         KeyStorageFailure::KeyFileUnreadable { read_failure, .. } => gettext(
-            "ClamUI can't read this file: {error}. If it is an agenix or sops-nix secret, set its \
-             owner to your user.",
+            "Lazaret can't read this file: {error}. If it is an agenix or sops-nix secret, set \
+             its owner to your user.",
         )
         .replace("{error}", &read_failure.to_string()),
         KeyStorageFailure::KeyFileContentInvalid { .. } => {

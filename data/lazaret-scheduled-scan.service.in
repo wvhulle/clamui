@@ -1,5 +1,5 @@
 [Unit]
-Description=ClamUI Scheduled Antivirus Scan
+Description=Lazaret Scheduled Antivirus Scan
 
 [Service]
 Type=oneshot

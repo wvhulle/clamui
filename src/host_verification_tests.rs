@@ -148,7 +148,7 @@ async fn verify_blocked_file_flow(scanner_backend: ScannerBackend, quarantine_di
     let downloads_directory =
         PathBuf::from(std::env::var_os("HOME").expect("home directory")).join("Downloads");
     let eicar_path = downloads_directory.join(format!(
-        "clamui-eicar-{}-{scanner_backend:?}.txt",
+        "lazaret-eicar-{}-{scanner_backend:?}.txt",
         std::process::id()
     ));
     fs::write(&eicar_path, eicar_test_bytes()).expect("write into Downloads");
@@ -317,7 +317,7 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     let home_directory = PathBuf::from(std::env::var_os("HOME").expect("home directory"));
     let eicar_path = home_directory
         .join("Downloads")
-        .join(format!("clamui-detection-{}.txt", std::process::id()));
+        .join(format!("lazaret-detection-{}.txt", std::process::id()));
     let verification_root =
         tempfile::tempdir_in(&home_directory).expect("verification root on the same filesystem");
     let activity_history =
@@ -425,7 +425,7 @@ async fn host_refreshing_after_sightings_does_not_feed_back_into_the_journal() {
     let home_directory = PathBuf::from(std::env::var_os("HOME").expect("home directory"));
     let eicar_path = home_directory
         .join("Downloads")
-        .join(format!("clamui-feedback-{}.txt", std::process::id()));
+        .join(format!("lazaret-feedback-{}.txt", std::process::id()));
     let verification_root =
         tempfile::tempdir_in(&home_directory).expect("verification root on the same filesystem");
     let activity_history =

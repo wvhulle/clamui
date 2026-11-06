@@ -8,7 +8,7 @@ SAMPLE_PASSWORD = "sample-password"
 SESSION_BUS = "unix:path=/run/user/1000/bus"
 EICAR_TEXT = r"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 DOWNLOADS = f"/home/{SAMPLE_USER}/Downloads"
-HISTORY_DATABASE = f"/home/{SAMPLE_USER}/.local/share/clamui/history.db"
+HISTORY_DATABASE = f"/home/{SAMPLE_USER}/.local/share/lazaret/history.db"
 
 
 def user_command(command):
@@ -38,9 +38,9 @@ def wait_for_desktop():
     wait_as_user("systemctl --user is-active graphical-session.target", timeout=60)
 
 
-def wait_for_clamui_service():
-    wait_as_user("systemctl --user is-active clamui.service", timeout=60)
-    wait_as_user("busctl --user status io.github.wvhulle.ClamUI", timeout=60)
+def wait_for_lazaret_service():
+    wait_as_user("systemctl --user is-active lazaret.service", timeout=60)
+    wait_as_user("busctl --user status page.codeberg.wvhulle.Lazaret", timeout=60)
     wait_as_user("busctl --user list --no-legend | grep -q StatusNotifierItem", timeout=60)
     time.sleep(2)
 
@@ -118,25 +118,25 @@ def wait_for_notification(expected_text, timeout=60):
     )
 
 
-def clamui_window():
+def lazaret_window():
     tree = json.loads(as_user("swaymsg -t get_tree"))
     pending = [tree]
     while pending:
         node = pending.pop()
-        if node.get("app_id") == "io.github.wvhulle.ClamUI":
+        if node.get("app_id") == "page.codeberg.wvhulle.Lazaret":
             return node
         pending += node.get("nodes", []) + node.get("floating_nodes", [])
     return None
 
 
-def wait_for_clamui_window(timeout=30):
+def wait_for_lazaret_window(timeout=30):
     started_waiting = time.monotonic()
     while time.monotonic() - started_waiting < timeout:
-        window = clamui_window()
+        window = lazaret_window()
         if window is not None and window.get("visible"):
             return window
         time.sleep(1)
-    raise AssertionError("the ClamUI window never became visible")
+    raise AssertionError("the Lazaret window never became visible")
 
 
 def click_at(horizontal, vertical):
@@ -150,8 +150,8 @@ def click_at(horizontal, vertical):
 
 def activate_application_action(action_name):
     as_user(
-        "gdbus call --session --dest io.github.wvhulle.ClamUI "
-        "--object-path /io/github/wvhulle/ClamUI "
+        "gdbus call --session --dest page.codeberg.wvhulle.Lazaret "
+        "--object-path /page/codeberg/wvhulle/Lazaret "
         "--method org.gtk.Actions.Activate "
         f"{action_name} '[]' '{{}}'"
     )
@@ -162,7 +162,7 @@ def tray_status():
     tray_names = [
         line.split()[0] for line in names.splitlines() if "StatusNotifierItem" in line.split()[0]
     ]
-    assert tray_names, f"ClamUI registered no tray item:\n{names}"
+    assert tray_names, f"Lazaret registered no tray item:\n{names}"
     status = as_user(
         f"busctl --user get-property {tray_names[0]} /StatusNotifierItem "
         "org.kde.StatusNotifierItem Status"

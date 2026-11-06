@@ -344,7 +344,7 @@ impl BackgroundDetectionsPage {
     fn list_description(&self) -> String {
         match &self.journal_access {
             JournalAccess::JournalUnreadable => gettext(
-                "ClamUI can't read the system journal, so new background detections won't appear \
+                "Lazaret can't read the system journal, so new background detections won't appear \
                  here. This does not mean nothing was found. Add your user to the systemd-journal \
                  group.",
             ),

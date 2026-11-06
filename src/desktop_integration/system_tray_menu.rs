@@ -42,7 +42,7 @@ impl ksni::Tray for SystemTrayMenu {
     }
 
     fn title(&self) -> String {
-        "ClamUI".to_owned()
+        "Lazaret".to_owned()
     }
 
     fn icon_name(&self) -> String {
@@ -67,7 +67,7 @@ impl ksni::Tray for SystemTrayMenu {
 
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         vec![
-            tray_menu_item(gettext("Show ClamUI"), "show-window"),
+            tray_menu_item(gettext("Show Lazaret"), "show-window"),
             tray_menu_item(gettext("Show Detections"), OPEN_DETECTIONS_ACTION),
             tray_menu_item(gettext("Quick Scan"), "quick-scan"),
             tray_menu_item(gettext("Update Definitions"), "update-definitions"),

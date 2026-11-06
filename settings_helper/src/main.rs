@@ -24,14 +24,14 @@ use crate::{
     },
 };
 
-const HELPER_BUS_NAME: &str = "io.github.wvhulle.ClamUI.SettingsHelper";
-const HELPER_OBJECT_PATH: &str = "/io/github/wvhulle/ClamUI/SettingsHelper";
-const APPLY_ACTION_ID: &str = "io.github.wvhulle.ClamUI.apply-settings";
+const HELPER_BUS_NAME: &str = "page.codeberg.wvhulle.Lazaret.SettingsHelper";
+const HELPER_OBJECT_PATH: &str = "/page/codeberg/wvhulle/Lazaret/SettingsHelper";
+const APPLY_ACTION_ID: &str = "page.codeberg.wvhulle.Lazaret.apply-settings";
 const POLKIT_BUS_NAME: &str = "org.freedesktop.PolicyKit1";
 const POLKIT_OBJECT_PATH: &str = "/org/freedesktop/PolicyKit1/Authority";
 const POLKIT_INTERFACE: &str = "org.freedesktop.PolicyKit1.Authority";
 const ALLOW_USER_INTERACTION: u32 = 1;
-const CHANGE_DETAIL_KEY: &str = "clamui.change";
+const CHANGE_DETAIL_KEY: &str = "lazaret.change";
 const DEFAULT_LOCAL_SOCKET: &str = "/run/clamav/clamd.ctl";
 const IDLE_EXIT_PAUSE: Duration = Duration::from_secs(60);
 
@@ -122,7 +122,7 @@ impl Drop for FinishedRequestMarker {
     }
 }
 
-#[interface(name = "io.github.wvhulle.ClamUI.SettingsHelper")]
+#[interface(name = "page.codeberg.wvhulle.Lazaret.SettingsHelper")]
 impl SettingsHelperService {
     fn get_tunable_settings(&self) -> fdo::Result<Vec<String>> {
         read_tunable_settings(&self.settings_paths)
@@ -227,7 +227,7 @@ fn main() -> ExitCode {
         "serve" => serve_settings_helper().map_err(|bus_failure| bus_failure.to_string()),
         "merge" => write_merged_config(&SettingsPaths::on_this_host())
             .map_err(|merge_failure| merge_failure.to_string()),
-        _unknown_mode => Err("usage: clamui-settings-helper serve|merge".to_owned()),
+        _unknown_mode => Err("usage: lazaret-settings-helper serve|merge".to_owned()),
     };
     match mode_outcome {
         Ok(()) => ExitCode::SUCCESS,
@@ -274,7 +274,7 @@ mod settings_helper_tests {
 
     #[test]
     fn the_action_retains_no_authorization() {
-        let policy_text = include_str!("../../data/io.github.wvhulle.ClamUI.policy");
+        let policy_text = include_str!("../../data/page.codeberg.wvhulle.Lazaret.policy");
         assert!(policy_text.contains(&format!("id=\"{APPLY_ACTION_ID}\"")));
         assert!(policy_text.contains("<allow_active>auth_admin</allow_active>"));
         assert!(!policy_text.contains("auth_admin_keep"));
@@ -283,7 +283,8 @@ mod settings_helper_tests {
 
     #[test]
     fn the_bus_configuration_names_this_service() {
-        let bus_policy = include_str!("../../data/io.github.wvhulle.ClamUI.SettingsHelper.conf");
+        let bus_policy =
+            include_str!("../../data/page.codeberg.wvhulle.Lazaret.SettingsHelper.conf");
         assert!(bus_policy.contains(&format!("own=\"{HELPER_BUS_NAME}\"")));
         assert!(bus_policy.contains(&format!("send_destination=\"{HELPER_BUS_NAME}\"")));
     }

@@ -45,19 +45,19 @@ use crate::{
     startup_arguments::parse_startup_arguments,
 };
 
-pub(crate) const RELEASE_APPLICATION_ID: &str = "io.github.wvhulle.ClamUI";
+pub(crate) const RELEASE_APPLICATION_ID: &str = "page.codeberg.wvhulle.Lazaret";
 pub(crate) const SETTINGS_SCHEMA_ID: &str = RELEASE_APPLICATION_ID;
 pub(crate) const APPLICATION_ICON_NAME: &str = RELEASE_APPLICATION_ID;
 #[cfg(not(debug_assertions))]
 pub(crate) const APPLICATION_ID: &str = RELEASE_APPLICATION_ID;
 #[cfg(debug_assertions)]
-pub(crate) const APPLICATION_ID: &str = "io.github.wvhulle.ClamUI.Devel";
+pub(crate) const APPLICATION_ID: &str = "page.codeberg.wvhulle.Lazaret.Devel";
 #[cfg(not(debug_assertions))]
-pub(crate) const APPLICATION_DATA_NAME: &str = "clamui";
+pub(crate) const APPLICATION_DATA_NAME: &str = "lazaret";
 #[cfg(debug_assertions)]
-pub(crate) const APPLICATION_DATA_NAME: &str = "clamui-devel";
-const TRANSLATION_DOMAIN: &str = "clamui";
-const INSTALLED_LOCALE_DIRECTORY: &str = match option_env!("CLAMUI_LOCALE_DIRECTORY") {
+pub(crate) const APPLICATION_DATA_NAME: &str = "lazaret-devel";
+const TRANSLATION_DOMAIN: &str = "lazaret";
+const INSTALLED_LOCALE_DIRECTORY: &str = match option_env!("LAZARET_LOCALE_DIRECTORY") {
     Some(locale_directory) => locale_directory,
     None => "/usr/local/share/locale",
 };
@@ -81,7 +81,7 @@ fn main() -> ExitCode {
         eprintln!(
             "{}",
             gettext(
-                "The ClamUI settings schema is not installed. Run make install, or set \
+                "The Lazaret settings schema is not installed. Run make install, or set \
                  GSETTINGS_SCHEMA_DIR."
             )
         );

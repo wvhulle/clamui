@@ -540,13 +540,13 @@ mod host_systemd_units_tests {
     async fn host_bus_reports_real_units() {
         assert!(systemd_is_available().await);
         assert_eq!(
-            probe_unit_state("no-such-clamui-unit.service").await,
+            probe_unit_state("no-such-lazaret-unit.service").await,
             UnitState::UnitNotFound
         );
         println!("{:?}", service_unit_snapshot("clamdscan.service").await);
         println!("{:?}", timer_unit_snapshot("clamdscan.timer").await);
         assert_eq!(
-            user_timer_snapshot("no-such-clamui-unit.timer")
+            user_timer_snapshot("no-such-lazaret-unit.timer")
                 .await
                 .unit_state,
             UnitState::UnitNotFound

@@ -241,7 +241,7 @@ impl Component for SchedulePreferencesPage {
                 #[name = "quarantine_row"]
                 adw::SwitchRow {
                     set_title: &gettext("Auto-Quarantine"),
-                    set_subtitle: &gettext("Automatically quarantine threats found by scheduled scans. While ClamUI is open, threats are only reported."),
+                    set_subtitle: &gettext("Automatically quarantine threats found by scheduled scans. While Lazaret is open, threats are only reported."),
                 },
             },
 

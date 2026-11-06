@@ -333,7 +333,7 @@ impl Component for ProfileManagerDialog {
                         relm4::spawn_local(async move {
                             let export_outcome = save_text_with_dialog(
                                 &parent_widget,
-                                "clamui-profile.json",
+                                "lazaret-profile.json",
                                 exported_json,
                             )
                             .await;

@@ -54,7 +54,7 @@ mod startup_arguments_tests {
     #[test]
     fn no_arguments_open_the_protection_page_without_targets() {
         assert_eq!(
-            parsed_arguments(&["clamui"]),
+            parsed_arguments(&["lazaret"]),
             StartupRequest {
                 startup_page: DEFAULT_STARTUP_PAGE.to_owned(),
                 scan_targets: Vec::new(),
@@ -66,7 +66,7 @@ mod startup_arguments_tests {
     #[test]
     fn page_selection_and_scan_targets_are_separated() {
         assert_eq!(
-            parsed_arguments(&["clamui", "--page=quarantine", "/scan/one", "/scan/two"]),
+            parsed_arguments(&["lazaret", "--page=quarantine", "/scan/one", "/scan/two"]),
             StartupRequest {
                 startup_page: "quarantine".to_owned(),
                 scan_targets: vec![PathBuf::from("/scan/one"), PathBuf::from("/scan/two")],
@@ -77,7 +77,7 @@ mod startup_arguments_tests {
 
     #[test]
     fn the_background_flag_is_not_mistaken_for_a_scan_target() {
-        let startup_request = parsed_arguments(&["clamui", "--background"]);
+        let startup_request = parsed_arguments(&["lazaret", "--background"]);
         assert!(startup_request.start_in_background);
         assert!(startup_request.scan_targets.is_empty());
     }

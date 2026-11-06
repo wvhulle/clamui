@@ -35,9 +35,9 @@ impl SettingsPaths {
     pub fn on_this_host() -> Self {
         Self {
             base_config: PathBuf::from("/etc/clamav/clamd.conf"),
-            overrides_file: PathBuf::from("/var/lib/clamui/clamd-overrides.conf"),
-            allowlist_file: PathBuf::from("/etc/clamui/tunable-settings"),
-            merged_config: PathBuf::from("/run/clamui/clamd.conf"),
+            overrides_file: PathBuf::from("/var/lib/lazaret/clamd-overrides.conf"),
+            allowlist_file: PathBuf::from("/etc/lazaret/tunable-settings"),
+            merged_config: PathBuf::from("/run/lazaret/clamd.conf"),
         }
     }
 }

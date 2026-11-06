@@ -43,9 +43,9 @@ impl FileManagerKind {
 
     const fn relative_action_path(self) -> &'static str {
         match self {
-            Self::Nautilus => "nautilus/scripts/Scan with ClamUI",
-            Self::Nemo => "nemo/actions/io.github.wvhulle.ClamUI.nemo_action",
-            Self::Dolphin => "kio/servicemenus/io.github.wvhulle.ClamUI.desktop",
+            Self::Nautilus => "nautilus/scripts/Scan with Lazaret",
+            Self::Nemo => "nemo/actions/page.codeberg.wvhulle.Lazaret.nemo_action",
+            Self::Dolphin => "kio/servicemenus/page.codeberg.wvhulle.Lazaret.desktop",
         }
     }
 
@@ -115,7 +115,7 @@ mod file_manager_actions_tests {
     #[test]
     fn installing_and_removing_only_touches_the_action_file() {
         let data_root = tempfile::tempdir().expect("data root");
-        let launcher_path = Path::new("/usr/bin/clamui");
+        let launcher_path = Path::new("/usr/bin/lazaret");
         SUPPORTED_FILE_MANAGERS.iter().for_each(|file_manager| {
             assert!(!file_manager_action_installed(
                 *file_manager,
@@ -131,7 +131,7 @@ mod file_manager_actions_tests {
             assert!(
                 fs::read_to_string(&action_path)
                     .expect("action text")
-                    .contains("\"/usr/bin/clamui\"")
+                    .contains("\"/usr/bin/lazaret\"")
             );
             assert_eq!(
                 fs::metadata(&action_path)
@@ -155,8 +155,8 @@ mod file_manager_actions_tests {
     fn launcher_paths_cannot_escape_their_quotes() {
         let action_text = file_manager_action_text(
             FileManagerKind::Nautilus,
-            Path::new("/opt/a\"$(touch x)`b`\\/clamui"),
+            Path::new("/opt/a\"$(touch x)`b`\\/lazaret"),
         );
-        assert!(action_text.contains("exec \"/opt/a\\\"\\$(touch x)\\`b\\`\\\\/clamui\" \"$@\""));
+        assert!(action_text.contains("exec \"/opt/a\\\"\\$(touch x)\\`b\\`\\\\/lazaret\" \"$@\""));
     }
 }

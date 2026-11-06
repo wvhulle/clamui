@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=ClamUI
+Name=Lazaret
 Comment=Scan files and manage quarantine with ClamAV
-Exec=clamui
-Icon=io.github.wvhulle.ClamUI
+Exec=lazaret
+Icon=page.codeberg.wvhulle.Lazaret
 Categories=System;Security;
 StartupNotify=true
 Terminal=false

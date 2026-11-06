@@ -30,7 +30,7 @@ fn quarantine_seed_sql(payload_path: &str) -> String {
 }
 
 fn seed_quarantine_database(session_root: &Path) -> Result<(), TaskFailure> {
-    let application_data = session_root.join("data/clamui");
+    let application_data = session_root.join("data/lazaret");
     let quarantine_directory = application_data.join("quarantine");
     fs::create_dir_all(&quarantine_directory)?;
     let payload_path = quarantine_directory.join(QUARANTINE_FIXTURE_NAME);
@@ -58,7 +58,7 @@ fn seed_quarantine_database(session_root: &Path) -> Result<(), TaskFailure> {
 }
 
 fn seed_detection_history(session_root: &Path) -> Result<(), TaskFailure> {
-    let application_data = session_root.join("data/clamui");
+    let application_data = session_root.join("data/lazaret");
     let downloads_directory = session_root.join("home/Downloads");
     fs::create_dir_all(&downloads_directory)?;
     let unresolved_path = downloads_directory.join("invoice.pdf.exe");

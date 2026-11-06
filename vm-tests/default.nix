@@ -1,12 +1,12 @@
-{ clamuiModule }:
+{ lazaretModule }:
 let
   machineModule = machineName: {
     imports = [
-      clamuiModule
+      lazaretModule
       ./shared/common.nix
       ./${machineName}/machine.nix
     ];
-    networking.hostName = "clamui-${machineName}";
+    networking.hostName = "lazaret-${machineName}";
   };
 
   machineDescriptions = {

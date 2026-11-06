@@ -1,6 +1,6 @@
 {
   pkgs,
-  clamui,
+  lazaret,
   xtask,
 }:
 let
@@ -20,7 +20,7 @@ let
           --add-flags $taskName \
           --prefix PATH : ${
             pkgs.lib.makeBinPath [
-              clamui
+              lazaret
               pkgs.dbus
               pkgs.grim
               pkgs.sqlite
@@ -63,7 +63,7 @@ let
           }
       '';
 
-  screenshots = pkgs.runCommand "clamui-screenshots" { } ''
+  screenshots = pkgs.runCommand "lazaret-screenshots" { } ''
     ${pkgs.lib.getExe renderScreenshots} $out
   '';
 in

@@ -166,7 +166,7 @@ fn finished_scan_notification_body(
     )
     .replace("{count}", &threat_count.to_string());
     if quarantined_count == 0 {
-        format!("{found_text}. {}", gettext("Open ClamUI to review them."))
+        format!("{found_text}. {}", gettext("Open Lazaret to review them."))
     } else {
         format!(
             "{found_text}. {}",
@@ -246,7 +246,7 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
         ActivityStatus::ScanFailed => {
             send_session_notification(
                 &gettext("Scheduled scan failed"),
-                &gettext("Open ClamUI to read the log."),
+                &gettext("Open Lazaret to read the log."),
             );
             ExitCode::from(SCAN_FAILED_EXIT_CODE)
         }
@@ -290,12 +290,12 @@ mod headless_scheduled_scan_tests {
     #[test]
     fn only_the_scheduled_flag_selects_headless_mode() {
         assert_eq!(
-            parse_scheduled_scan_options(arguments_of(&["clamui", "/scan"])),
+            parse_scheduled_scan_options(arguments_of(&["lazaret", "/scan"])),
             None
         );
         assert_eq!(
             parse_scheduled_scan_options(arguments_of(&[
-                "clamui",
+                "lazaret",
                 "--scheduled-scan",
                 "--skip-on-battery",
                 "--auto-quarantine",

@@ -16,8 +16,8 @@ use crate::{
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
         protection_evidence::{
-            ProtectionEvidence, WATCHED_SERVICE_UNITS, clamui_schedule_is_enabled,
-            detection_notifications_are_enabled, gather_protection_evidence,
+            ProtectionEvidence, WATCHED_SERVICE_UNITS, detection_notifications_are_enabled,
+            gather_protection_evidence, lazaret_schedule_is_enabled,
         },
         protection_timeline_presentation::{AlertReadiness, protection_timeline},
     },
@@ -164,10 +164,10 @@ impl ProtectionTimelinePage {
             return;
         }
         self.evidence_refresh = EvidenceRefresh::GatheringOnce;
-        let clamui_schedule_enabled = clamui_schedule_is_enabled();
+        let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
         sender.oneshot_command(async move {
             ProtectionTimelinePageCommand::EvidenceGathered(Box::new(
-                gather_protection_evidence(clamui_schedule_enabled).await,
+                gather_protection_evidence(lazaret_schedule_enabled).await,
             ))
         });
     }

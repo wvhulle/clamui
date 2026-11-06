@@ -47,7 +47,7 @@ fn protected_setting_row(config_setting: &ConfigSetting) -> gtk::Widget {
         .subtitle_selectable(true)
         .build();
     setting_row.add_suffix(&lock_indicator(&gettext(
-        "This setting runs commands or changes who ClamAV runs as, so ClamUI never offers to \
+        "This setting runs commands or changes who ClamAV runs as, so Lazaret never offers to \
          change it",
     )));
     setting_row.upcast()
@@ -321,7 +321,7 @@ fn snippet_setting_row(
         .show_apply_button(true)
         .build();
     setting_row.add_suffix(&lock_indicator(&gettext(
-        "Managed outside ClamUI. Unless the setting is unlocked, applying copies the change \
+        "Managed outside Lazaret. Unless the setting is unlocked, applying copies the change \
          instead of making it.",
     )));
     setting_row.connect_apply(move |edited_row| {

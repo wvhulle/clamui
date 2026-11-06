@@ -1,6 +1,6 @@
 { machine, ... }:
 {
-  name = "clamui-live-tuning";
+  name = "lazaret-live-tuning";
 
   enableOCR = true;
 

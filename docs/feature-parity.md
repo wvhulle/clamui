@@ -1,4 +1,4 @@
-# Feature parity with upstream ClamUI
+# Feature parity with upstream Lazaret
 
 Compares the headless renders from `nix build path:.#screenshots` with upstream's screenshots and sources on the `master` bookmark. Update this list as features land.
 
@@ -80,11 +80,11 @@ Settings sit with the part of the app they affect, as a Settings group at the bo
 - [x] Close action and starting in the background, with the tray.
 - [x] Exclusions: presets, custom paths and patterns.
 - [x] Database and scanner settings, locked because the system owns them. Editing a value copies the line to add to the configuration. Settings that run commands or change identity, such as `VirusEvent`, stay read-only.
-- [x] Optional live changes through `services.clamui.liveTuning`: a D-Bus-activated root helper checks polkit for each change and enforces a deny-by-default allowlist, then rolls back if ClamAV doesn't come back healthy. Without it, there's no root helper at all.
+- [x] Optional live changes through `services.lazaret.liveTuning`: a D-Bus-activated root helper checks polkit for each change and enforces a deny-by-default allowlist, then rolls back if ClamAV doesn't come back healthy. Without it, there's no root helper at all.
 - [x] Scheduled scans with user systemd timers, locked when the system already has a scan timer. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
 - [x] On-access settings, locked in the same way.
 - [x] MalwareBazaar lookups by signature name, with an abuse.ch key in the system keyring. Only the signature name is sent, so blocked files can be looked up too.
-- [x] Reputation check on each quarantine entry, using the SHA-256 stored at quarantine time: CIRCL hashlookup (no key; also reports files it lists as malicious), MalwareBazaar (abuse.ch key), and VirusTotal when its key is set. Only the hash is sent; files are never uploaded. Keys come from a file set through `services.clamui.apiKeyFiles` (agenix or sops-nix), in which case no paste field is shown, or otherwise from the system keyring, with no plaintext fallback.
+- [x] Reputation check on each quarantine entry, using the SHA-256 stored at quarantine time: CIRCL hashlookup (no key; also reports files it lists as malicious), MalwareBazaar (abuse.ch key), and VirusTotal when its key is set. Only the hash is sent; files are never uploaded. Keys come from a file set through `services.lazaret.apiKeyFiles` (agenix or sops-nix), in which case no paste field is shown, or otherwise from the system keyring, with no plaintext fallback.
 - [x] Device auto-scan for removable and external drives, without auto-quarantine or network and internal volumes.
 
 Debug logs and the in-app language picker are deliberately not ported: this fork has no debug logging, and the language follows the system locale.
@@ -92,7 +92,7 @@ Debug logs and the in-app language picker are deliberately not ported: this fork
 ## Desktop integration
 
 - [x] Tray with `ksni`, showing an attention state for unresolved detections.
-- [x] Alerts for background detections, and one summary of what was missed while ClamUI wasn't running.
+- [x] Alerts for background detections, and one summary of what was missed while Lazaret wasn't running.
 - [x] Notifications with `gio::Notification`, and over D-Bus from scheduled scans.
 - [x] A second launch forwards its paths to the running window.
 - [x] File manager actions for Nautilus, Nemo and Dolphin. Scan only, with no VirusTotal action.

@@ -10,9 +10,9 @@ SECOND_FILE = f"{DOWNLOADS}/while-closed.exe"
 machine.start()
 wait_for_desktop()
 
-with subtest("logging in starts ClamUI through the module, without a window"):
-    wait_for_clamui_service()
-    assert clamui_window() is None or not clamui_window().get("visible"), "started with a window"
+with subtest("logging in starts Lazaret through the module, without a window"):
+    wait_for_lazaret_service()
+    assert lazaret_window() is None or not lazaret_window().get("visible"), "started with a window"
 
 with subtest("on-access scanning is ready"):
     machine.succeed("systemctl start clamav-daemon.service")
@@ -55,7 +55,7 @@ with subtest("the tray shows that something needs attention"):
 
 with subtest("clicking the notification opens the detection"):
     as_user("makoctl invoke")
-    wait_for_clamui_window()
+    wait_for_lazaret_window()
     time.sleep(3)
     machine.screenshot("incident_after_notification")
 
@@ -69,7 +69,7 @@ with subtest("quarantining from the timeline clears the blocked file"):
     )
     wait_for_tray_status("Active")
     quarantined = as_user(
-        f"sqlite3 -readonly /home/{SAMPLE_USER}/.local/share/clamui/quarantine.db "
+        f"sqlite3 -readonly /home/{SAMPLE_USER}/.local/share/lazaret/quarantine.db "
         "\"select threat_name from quarantine\""
     )
     assert "Win.Fixture.Agent-1" in quarantined, f"lost the signature: {quarantined}"
@@ -105,13 +105,13 @@ with subtest("deleting takes two choices and withdraws the alert that is still s
 
 with subtest("detections missed while closed are summarised once at the next start"):
     as_user("makoctl dismiss --all")
-    as_user("systemctl --user stop clamui.service")
+    as_user("systemctl --user stop lazaret.service")
     write_eicar_file(SECOND_FILE)
     machine.wait_until_succeeds(
         user_command(f"cat {SECOND_FILE} 2>&1 | grep -q 'not permitted'"), timeout=timedelta(seconds=60)
     )
     time.sleep(2)
-    as_user("systemctl --user start clamui.service")
-    wait_for_notification("while ClamUI wasn't running")
+    as_user("systemctl --user start lazaret.service")
+    wait_for_notification("while Lazaret wasn't running")
     assert not notifications_mentioning(SECOND_FILE), "alerted individually about a missed file"
     assert_lines_stay_at(ON_ACCESS_UNIT, SECOND_FILE, settle_seconds=10)

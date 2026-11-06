@@ -1,8 +1,8 @@
-# ClamUI contributor guide
+# Lazaret contributor guide
 
-The `clamui` crate at the repository root, plus `xtask/` for repository tasks. It uses Relm4 and libadwaita. Source is organised by feature: `src/malware_scan/` and `src/file_quarantine/` hold logic next to pages. `data/` holds the desktop entry and icons, `po/` the translations.
+The `lazaret` crate at the repository root, plus `xtask/` for repository tasks. It uses Relm4 and libadwaita. Source is organised by feature: `src/malware_scan/` and `src/file_quarantine/` hold logic next to pages. `data/` holds the desktop entry and icons, `po/` the translations.
 
-- **Purpose:** ClamUI adds value on top of a backend that's already running. Keep only features related to virus or exploit blocking.
+- **Purpose:** Lazaret adds value on top of a backend that's already running. Keep only features related to virus or exploit blocking.
 - **Host ClamAV:** never bundle the engine. Scanning runs `clamdscan --fdpass` or `clamscan` from `PATH`.
 - **Host services:** use `src/systemd_bus/` (D-Bus) for units and `src/systemd_journal/` (libsystemd) for the journal. Don't run `systemctl` or `journalctl`, and don't refresh on timers: react to bus signals and journal wakeups.
 - **Privilege:** the GUI never runs as root. `settings_helper/` is the only privileged code: it authorizes each request with polkit and enforces `data/protected-clamav-settings.txt` itself, so never rely on the UI for that. Its `nix/module-checks.nix` VM test must keep passing.

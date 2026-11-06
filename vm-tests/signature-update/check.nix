@@ -1,6 +1,6 @@
 { machine, ... }:
 {
-  name = "clamui-signature-update";
+  name = "lazaret-signature-update";
 
   enableOCR = true;
 

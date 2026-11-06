@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="io.github.wvhulle.ClamUI" path="/io/github/wvhulle/ClamUI/">
+  <schema id="page.codeberg.wvhulle.Lazaret" path="/page/codeberg/wvhulle/Lazaret/">
     <key name="show-live-progress" type="b">
       <default>true</default>
     </key>

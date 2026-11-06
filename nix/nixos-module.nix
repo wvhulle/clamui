@@ -1,4 +1,4 @@
-clamuiFlake:
+lazaretFlake:
 {
   config,
   lib,
@@ -6,18 +6,18 @@ clamuiFlake:
   ...
 }:
 let
-  clamuiSettings = config.services.clamui;
-  liveTuning = clamuiSettings.liveTuning;
+  lazaretSettings = config.services.lazaret;
+  liveTuning = lazaretSettings.liveTuning;
   apiKeyFileSettings = lib.filterAttrs (settingName: keyFilePath: keyFilePath != null) {
-    virustotal-key-file = clamuiSettings.apiKeyFiles.virustotal;
-    abuse-ch-key-file = clamuiSettings.apiKeyFiles.abuseCh;
+    virustotal-key-file = lazaretSettings.apiKeyFiles.virustotal;
+    abuse-ch-key-file = lazaretSettings.apiKeyFiles.abuseCh;
   };
   isOutsideStore =
     keyFilePath: lib.hasPrefix "/" keyFilePath && !lib.hasPrefix builtins.storeDir keyFilePath;
   clamavSettings = config.services.clamav;
   system = pkgs.stdenv.hostPlatform.system;
-  mergedConfigPath = "/run/clamui/clamd.conf";
-  helperBusName = "io.github.wvhulle.ClamUI.SettingsHelper";
+  mergedConfigPath = "/run/lazaret/clamd.conf";
+  helperBusName = "page.codeberg.wvhulle.Lazaret.SettingsHelper";
 
   protectedSettings = builtins.filter (protectedKey: protectedKey != "") (
     lib.splitString "\n" (builtins.readFile ../data/protected-clamav-settings.txt)
@@ -27,29 +27,29 @@ let
     builtins.any (protectedKey: lib.toLower protectedKey == lib.toLower settingKey) protectedSettings;
   refusedSettings = builtins.filter isProtectedSetting liveTuning.allowedSettings;
 
-  helperDataFiles = pkgs.linkFarm "clamui-settings-helper-data" [
+  helperDataFiles = pkgs.linkFarm "lazaret-settings-helper-data" [
     {
-      name = "share/polkit-1/actions/io.github.wvhulle.ClamUI.policy";
-      path = ../data/io.github.wvhulle.ClamUI.policy;
+      name = "share/polkit-1/actions/page.codeberg.wvhulle.Lazaret.policy";
+      path = ../data/page.codeberg.wvhulle.Lazaret.policy;
     }
     {
       name = "share/dbus-1/system.d/${helperBusName}.conf";
-      path = ../data/io.github.wvhulle.ClamUI.SettingsHelper.conf;
+      path = ../data/page.codeberg.wvhulle.Lazaret.SettingsHelper.conf;
     }
     {
       name = "share/dbus-1/system-services/${helperBusName}.service";
-      path = ../data/io.github.wvhulle.ClamUI.SettingsHelper.service;
+      path = ../data/page.codeberg.wvhulle.Lazaret.SettingsHelper.service;
     }
   ];
 in
 {
-  options.services.clamui = {
-    enable = lib.mkEnableOption "ClamUI in the background for every graphical user session, so detections raise alerts";
+  options.services.lazaret = {
+    enable = lib.mkEnableOption "Lazaret in the background for every graphical user session, so detections raise alerts";
     package = lib.mkOption {
       type = lib.types.package;
-      default = clamuiFlake.packages.${system}.default;
-      defaultText = lib.literalExpression "clamui.packages.\${pkgs.stdenv.hostPlatform.system}.default";
-      description = "The ClamUI package to run.";
+      default = lazaretFlake.packages.${system}.default;
+      defaultText = lib.literalExpression "lazaret.packages.\${pkgs.stdenv.hostPlatform.system}.default";
+      description = "The Lazaret package to run.";
     };
     apiKeyFiles = {
       virustotal = lib.mkOption {
@@ -59,7 +59,7 @@ in
         description = ''
           Runtime path of a file holding the VirusTotal API key, for example an agenix or
           sops-nix secret owned by the desktop user. Only the path is stored, as a system-wide
-          dconf default, never the key. When set, ClamUI uses this file and doesn't offer to
+          dconf default, never the key. When set, Lazaret uses this file and doesn't offer to
           paste a key.
         '';
       };
@@ -75,14 +75,14 @@ in
     };
     liveTuning = {
       enable = lib.mkEnableOption ''
-        changing allowed clamd settings from ClamUI at runtime. Each change asks for administrator
+        changing allowed clamd settings from Lazaret at runtime. Each change asks for administrator
         authorization. Changes are stored outside the Nix configuration, so they drift from it
         until you copy them over
       '';
       helperPackage = lib.mkOption {
         type = lib.types.package;
-        default = clamuiFlake.packages.${system}.settings-helper;
-        defaultText = lib.literalExpression "clamui.packages.\${pkgs.stdenv.hostPlatform.system}.settings-helper";
+        default = lazaretFlake.packages.${system}.settings-helper;
+        defaultText = lib.literalExpression "lazaret.packages.\${pkgs.stdenv.hostPlatform.system}.settings-helper";
         description = "The root helper that validates and applies changes.";
       };
       allowedSettings = lib.mkOption {
@@ -101,10 +101,10 @@ in
   };
 
   config = lib.mkMerge [
-    (lib.mkIf clamuiSettings.enable {
-      environment.systemPackages = [ clamuiSettings.package ];
-      systemd.packages = [ clamuiSettings.package ];
-      systemd.user.services.clamui = {
+    (lib.mkIf lazaretSettings.enable {
+      environment.systemPackages = [ lazaretSettings.package ];
+      systemd.packages = [ lazaretSettings.package ];
+      systemd.user.services.lazaret = {
         wantedBy = [ "graphical-session.target" ];
         path = [ "/run/current-system/sw" ];
       };
@@ -112,12 +112,12 @@ in
     (lib.mkIf (apiKeyFileSettings != { }) {
       assertions = lib.mapAttrsToList (settingName: keyFilePath: {
         assertion = isOutsideStore keyFilePath;
-        message = "services.clamui.apiKeyFiles: ${keyFilePath} must be an absolute path outside the Nix store, so the key never ends up in it";
+        message = "services.lazaret.apiKeyFiles: ${keyFilePath} must be an absolute path outside the Nix store, so the key never ends up in it";
       }) apiKeyFileSettings;
       programs.dconf = {
         enable = true;
         profiles.user.databases = [
-          { settings."io/github/wvhulle/ClamUI" = apiKeyFileSettings; }
+          { settings."page/codeberg/wvhulle/Lazaret" = apiKeyFileSettings; }
         ];
       };
     })
@@ -125,32 +125,32 @@ in
       assertions = [
         {
           assertion = refusedSettings == [ ];
-          message = "services.clamui.liveTuning.allowedSettings contains settings that can never change at runtime: ${lib.concatStringsSep ", " refusedSettings}";
+          message = "services.lazaret.liveTuning.allowedSettings contains settings that can never change at runtime: ${lib.concatStringsSep ", " refusedSettings}";
         }
         {
           assertion = clamavSettings.daemon.enable;
-          message = "services.clamui.liveTuning needs services.clamav.daemon.enable";
+          message = "services.lazaret.liveTuning needs services.clamav.daemon.enable";
         }
       ];
 
-      environment.etc."clamui/tunable-settings".text = lib.concatLines liveTuning.allowedSettings;
+      environment.etc."lazaret/tunable-settings".text = lib.concatLines liveTuning.allowedSettings;
       environment.systemPackages = [ helperDataFiles ];
       services.dbus.packages = [ helperDataFiles ];
       security.polkit.enable = true;
 
-      systemd.tmpfiles.rules = [ "d /var/lib/clamui 0755 root root -" ];
+      systemd.tmpfiles.rules = [ "d /var/lib/lazaret 0755 root root -" ];
 
-      systemd.services.clamui-settings-helper = {
-        description = "ClamUI settings helper";
-        requires = [ "clamui-settings-merge.service" ];
-        after = [ "clamui-settings-merge.service" ];
+      systemd.services.lazaret-settings-helper = {
+        description = "Lazaret settings helper";
+        requires = [ "lazaret-settings-merge.service" ];
+        after = [ "lazaret-settings-merge.service" ];
         serviceConfig = {
           Type = "dbus";
           BusName = helperBusName;
           ExecStart = "${lib.getExe liveTuning.helperPackage} serve";
           ReadWritePaths = [
-            "/var/lib/clamui"
-            "/run/clamui"
+            "/var/lib/lazaret"
+            "/run/lazaret"
           ];
           NoNewPrivileges = true;
           PrivateTmp = true;
@@ -159,7 +159,7 @@ in
         };
       };
 
-      systemd.services.clamui-settings-merge = {
+      systemd.services.lazaret-settings-merge = {
         description = "Merge runtime changes into the clamd configuration";
         before = [
           "clamav-daemon.service"
@@ -174,7 +174,7 @@ in
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
-          RuntimeDirectory = "clamui";
+          RuntimeDirectory = "lazaret";
           RuntimeDirectoryPreserve = true;
           ExecStart = "${lib.getExe liveTuning.helperPackage} merge";
         };

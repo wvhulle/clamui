@@ -310,7 +310,7 @@ pub fn rootkit_coverage_check(distribution_family: DistributionFamily) -> AuditC
     AuditCheck::new(
         gettext("Rootkits"),
         AuditStatus::CheckSkipped,
-        gettext("ClamAV does not cover rootkits, and ClamUI does not check for them."),
+        gettext("ClamAV does not cover rootkits, and Lazaret does not check for them."),
     )
     .with_recommendation(gettext(
         "Run a check yourself. A rootkit can hide from checks made on the running system, so a \

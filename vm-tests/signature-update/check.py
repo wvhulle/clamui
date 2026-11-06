@@ -4,13 +4,13 @@ FIXTURE_KEY = "FIXTUREKEYMUSTNEVERAPPEAR"
 
 machine.start()
 wait_for_desktop()
-wait_for_clamui_service()
+wait_for_lazaret_service()
 machine.succeed("systemctl start clamav-daemon.service")
 machine.wait_until_succeeds("clamdscan --ping 1", timeout=timedelta(seconds=120))
 
 with subtest("the Protection page lists both updaters"):
     activate_application_action("show-window")
-    wait_for_clamui_window()
+    wait_for_lazaret_window()
     time.sleep(3)
     machine.screenshot("protection_with_updaters")
 

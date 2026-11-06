@@ -47,7 +47,7 @@ pub fn send_session_notification(notification_title: &str, notification_body: &s
         return;
     };
     let notification_arguments = (
-        "ClamUI",
+        "Lazaret",
         0_u32,
         APPLICATION_ICON_NAME,
         notification_title,

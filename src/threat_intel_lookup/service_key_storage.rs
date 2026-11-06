@@ -28,8 +28,8 @@ impl ThreatIntelService {
 
     const fn keyring_label(self) -> &'static str {
         match self {
-            Self::VirusTotalService => "ClamUI VirusTotal API key",
-            Self::AbuseChService => "ClamUI abuse.ch Auth-Key",
+            Self::VirusTotalService => "Lazaret VirusTotal API key",
+            Self::AbuseChService => "Lazaret abuse.ch Auth-Key",
         }
     }
 
@@ -94,7 +94,7 @@ impl From<oo7::Error> for KeyStorageFailure {
 
 fn key_attributes(threat_intel_service: ThreatIntelService) -> HashMap<&'static str, &'static str> {
     HashMap::from([
-        ("application", "clamui"),
+        ("application", "lazaret"),
         ("account", threat_intel_service.keyring_account()),
     ])
 }

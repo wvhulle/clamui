@@ -9,7 +9,7 @@ let
     modules = [
       self.nixosModules.default
       {
-        services.clamui.enable = true;
+        services.lazaret.enable = true;
         boot.loader.grub.enable = false;
         fileSystems."/" = {
           device = "nodev";
@@ -28,7 +28,7 @@ let
         self.nixosModules.default
         {
           services.clamav.daemon.enable = true;
-          services.clamui.liveTuning = {
+          services.lazaret.liveTuning = {
             enable = true;
             inherit allowedSettings;
           };
@@ -54,7 +54,7 @@ let
       modules = [
         self.nixosModules.default
         {
-          services.clamui.apiKeyFiles.abuseCh = keyFilePath;
+          services.lazaret.apiKeyFiles.abuseCh = keyFilePath;
           boot.loader.grub.enable = false;
           fileSystems."/" = {
             device = "nodev";
@@ -99,7 +99,7 @@ let
       self.homeManagerModules.default
       homeManagerOptionStubs
       {
-        services.clamui = {
+        services.lazaret = {
           enable = true;
           settings.close-action = "minimize";
           apiKeyFiles.abuseCh = "/run/agenix/abuse-ch-key";
@@ -117,10 +117,10 @@ assert failedKeyFileAssertions "relative/abuse-ch-key" != [ ];
 assert
   (keyFileEvaluation "/run/agenix/abuse-ch-key").config.programs.dconf.profiles.user.databases != [ ];
 {
-  nixos-background-service = backgroundServiceSystem.config.systemd.user.units."clamui.service".unit;
-  home-manager-background-service = pkgs.writeText "clamui-home-manager-service.json" (
+  nixos-background-service = backgroundServiceSystem.config.systemd.user.units."lazaret.service".unit;
+  home-manager-background-service = pkgs.writeText "lazaret-home-manager-service.json" (
     builtins.toJSON {
-      service = homeManagerEvaluation.config.systemd.user.services.clamui;
+      service = homeManagerEvaluation.config.systemd.user.services.lazaret;
       settings = homeManagerEvaluation.config.dconf.settings;
     }
   );

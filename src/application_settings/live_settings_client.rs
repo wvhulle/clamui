@@ -4,9 +4,9 @@ use gettextrs::gettext;
 use zbus::{Connection, proxy};
 
 #[proxy(
-    interface = "io.github.wvhulle.ClamUI.SettingsHelper",
-    default_service = "io.github.wvhulle.ClamUI.SettingsHelper",
-    default_path = "/io/github/wvhulle/ClamUI/SettingsHelper"
+    interface = "page.codeberg.wvhulle.Lazaret.SettingsHelper",
+    default_service = "page.codeberg.wvhulle.Lazaret.SettingsHelper",
+    default_path = "/page/codeberg/wvhulle/Lazaret/SettingsHelper"
 )]
 trait SettingsHelper {
     fn get_tunable_settings(&self) -> zbus::Result<Vec<String>>;

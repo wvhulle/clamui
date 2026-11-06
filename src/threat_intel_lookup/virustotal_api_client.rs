@@ -17,7 +17,7 @@ pub enum VirusTotalFailure {
     UnexpectedStatus { status_code: u16 },
     #[error("VirusTotal could not be reached: {0}")]
     RequestFailed(#[from] reqwest::Error),
-    #[error("VirusTotal sent an answer ClamUI cannot read")]
+    #[error("VirusTotal sent an answer Lazaret cannot read")]
     AnswerUnreadable,
 }
 

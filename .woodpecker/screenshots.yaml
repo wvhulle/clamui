@@ -1,5 +1,5 @@
 when:
-  - repo: wvhulle/clamui
+  - repo: wvhulle/lazaret
     event: [push, manual]
     branch: main
 

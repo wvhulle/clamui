@@ -54,9 +54,9 @@ const SYSTEM_SCAN_UNITS: [SystemScanUnits; 1] = [SystemScanUnits {
 }];
 const THIRD_PARTY_SIGNATURE_EXTENSIONS: [&str; 7] =
     ["ndb", "hdb", "hsb", "ldb", "cdb", "ign2", "yara"];
-const CLAMUI_SCHEDULE_KEY: &str = "schedule-enabled";
+const LAZARET_SCHEDULE_KEY: &str = "schedule-enabled";
 const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
-const BACKGROUND_SERVICE_UNIT: &str = "clamui.service";
+const BACKGROUND_SERVICE_UNIT: &str = "lazaret.service";
 const SECONDS_PER_HOUR: u64 = 3_600;
 
 pub const WATCHED_SERVICE_UNITS: [&str; 10] = [
@@ -162,7 +162,7 @@ pub enum ScheduledScanEvidence {
         last_result: ServiceLastResult,
         last_completed_run: ServiceRunHistory,
     },
-    ClamuiSchedule,
+    LazaretSchedule,
     NoSchedule,
 }
 
@@ -397,7 +397,7 @@ async fn inspect_on_access_evidence() -> OnAccessEvidence {
     on_access_evidence_from_config(on_access_scanner, &config_settings)
 }
 
-async fn inspect_scheduled_scan(clamui_schedule_enabled: bool) -> ScheduledScanEvidence {
+async fn inspect_scheduled_scan(lazaret_schedule_enabled: bool) -> ScheduledScanEvidence {
     for system_scan_units in SYSTEM_SCAN_UNITS {
         let timer_snapshot = timer_unit_snapshot(system_scan_units.timer_unit).await;
         if matches!(
@@ -415,8 +415,8 @@ async fn inspect_scheduled_scan(clamui_schedule_enabled: bool) -> ScheduledScanE
             };
         }
     }
-    if clamui_schedule_enabled {
-        ScheduledScanEvidence::ClamuiSchedule
+    if lazaret_schedule_enabled {
+        ScheduledScanEvidence::LazaretSchedule
     } else {
         ScheduledScanEvidence::NoSchedule
     }
@@ -426,11 +426,11 @@ pub fn detection_notifications_are_enabled() -> bool {
     application_settings().boolean(NOTIFICATIONS_ENABLED_KEY)
 }
 
-pub fn clamui_schedule_is_enabled() -> bool {
-    application_settings().boolean(CLAMUI_SCHEDULE_KEY)
+pub fn lazaret_schedule_is_enabled() -> bool {
+    application_settings().boolean(LAZARET_SCHEDULE_KEY)
 }
 
-pub async fn gather_protection_evidence(clamui_schedule_enabled: bool) -> ProtectionEvidence {
+pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> ProtectionEvidence {
     let engine_installation = inspect_engine_installation().await;
     let engine_banner = match &engine_installation {
         EngineInstallation::VersionReported { version_banner } => version_banner.clone(),
@@ -443,7 +443,7 @@ pub async fn gather_protection_evidence(clamui_schedule_enabled: bool) -> Protec
         signature_evidence: inspect_signature_evidence(&engine_banner).await,
         daemon_evidence: inspect_daemon_evidence().await,
         on_access_evidence: inspect_on_access_evidence().await,
-        scheduled_scan_evidence: inspect_scheduled_scan(clamui_schedule_enabled).await,
+        scheduled_scan_evidence: inspect_scheduled_scan(lazaret_schedule_enabled).await,
         background_service_state: probe_user_unit_state(BACKGROUND_SERVICE_UNIT).await,
     }
 }

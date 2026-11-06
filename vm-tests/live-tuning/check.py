@@ -2,17 +2,17 @@ CONFIRM_APPLY_BUTTON = (705, 462)
 UNLOCK_BUTTON = (863, 132)
 MAX_THREADS_ROW = (600, 697)
 SCANNER_TAB = (679, 745)
-MERGED_CONFIG = "/run/clamui/clamd.conf"
-OVERRIDES_FILE = "/var/lib/clamui/clamd-overrides.conf"
+MERGED_CONFIG = "/run/lazaret/clamd.conf"
+OVERRIDES_FILE = "/var/lib/lazaret/clamd-overrides.conf"
 USER_ANSWER_FILE = "/tmp/helper-answer"
 USER_REQUEST_FILE = "/tmp/helper-request"
 
 
 def apply_command(key, value):
     return (
-        "busctl --timeout=400 call io.github.wvhulle.ClamUI.SettingsHelper "
-        "/io/github/wvhulle/ClamUI/SettingsHelper "
-        "io.github.wvhulle.ClamUI.SettingsHelper ApplyChanges "
+        "busctl --timeout=400 call page.codeberg.wvhulle.Lazaret.SettingsHelper "
+        "/page/codeberg/wvhulle/Lazaret/SettingsHelper "
+        "page.codeberg.wvhulle.Lazaret.SettingsHelper ApplyChanges "
         f"'a(ss)' 1 {key} {value} 2>&1"
     )
 
@@ -39,7 +39,7 @@ def wait_for_clamd():
 
 def merge_again():
     machine.succeed("systemctl reset-failed clamav-daemon.service")
-    machine.succeed("systemctl restart clamui-settings-merge.service")
+    machine.succeed("systemctl restart lazaret-settings-merge.service")
     machine.succeed("systemctl reset-failed clamav-daemon.service")
     machine.succeed("systemctl start clamav-daemon.service")
     wait_for_clamd()
@@ -47,7 +47,7 @@ def merge_again():
 
 machine.start()
 wait_for_desktop()
-machine.wait_for_unit("clamui-settings-merge.service")
+machine.wait_for_unit("lazaret-settings-merge.service")
 machine.succeed("systemctl start clamav-daemon.service")
 machine.wait_for_unit("clamav-daemon.service")
 wait_for_clamd()
@@ -84,9 +84,9 @@ with subtest("authorization is not retained, so a second change asks again"):
     assert "MaxThreads 9" not in machine.succeed(f"cat {MERGED_CONFIG}")
 
 with subtest("the Preferences page offers to unlock allowed settings"):
-    wait_for_clamui_service()
+    wait_for_lazaret_service()
     activate_application_action("show-window")
-    wait_for_clamui_window()
+    wait_for_lazaret_window()
     time.sleep(2)
     activate_application_action("preferences")
     time.sleep(3)
@@ -144,7 +144,7 @@ with subtest("protected and unlisted settings are refused by the helper"):
 
 with subtest("a protected key planted in the overrides is dropped at merge"):
     machine.succeed(f"printf 'VirusEvent /bin/sh\\nUser root\\nMaxThreads 5\\n' > {OVERRIDES_FILE}")
-    machine.succeed("systemctl restart clamui-settings-merge.service")
+    machine.succeed("systemctl restart lazaret-settings-merge.service")
     merged = machine.succeed(f"cat {MERGED_CONFIG}")
     assert "VirusEvent" not in merged and "User root" not in merged
     assert "MaxThreads 5" in merged

@@ -476,7 +476,7 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageInput::ExportAllCsvRequested => {
                 self.export_text(
                     root,
-                    "clamui-logs.csv",
+                    "lazaret-logs.csv",
                     activity_entries_as_csv(&self.listed_entries),
                     &sender,
                 );
@@ -484,7 +484,7 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageInput::ExportAllJsonRequested => {
                 match activity_entries_as_json(&self.listed_entries) {
                     Ok(exported_json) => {
-                        self.export_text(root, "clamui-logs.json", exported_json, &sender);
+                        self.export_text(root, "lazaret-logs.json", exported_json, &sender);
                     }
                     Err(json_failure) => {
                         root.add_toast(adw::Toast::new(&json_failure.to_string()));
@@ -496,7 +496,12 @@ impl Component for ActivityLogsPage {
                 root.add_toast(adw::Toast::new(&gettext("Log details copied to clipboard")));
             }
             ActivityLogsPageInput::ExportDetailRequested => {
-                self.export_text(root, "clamui-log.txt", self.selected_detail_text(), &sender);
+                self.export_text(
+                    root,
+                    "lazaret-log.txt",
+                    self.selected_detail_text(),
+                    &sender,
+                );
             }
             ActivityLogsPageInput::RefreshDaemonLogRequested => self.refresh_daemon_log(&sender),
             ActivityLogsPageInput::LiveDaemonLogToggled => match &self.daemon_log_refresh {

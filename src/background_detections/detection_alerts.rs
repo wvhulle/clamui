@@ -103,8 +103,8 @@ fn live_detection_notification(detection_record: &JournalDetectionRecord) -> gio
 fn missed_detections_notification(missed_count: usize) -> gio::Notification {
     let notification = gio::Notification::new(
         &ngettext(
-            "{count} detection while ClamUI wasn't running",
-            "{count} detections while ClamUI wasn't running",
+            "{count} detection while Lazaret wasn't running",
+            "{count} detections while Lazaret wasn't running",
             u32::try_from(missed_count).unwrap_or(u32::MAX),
         )
         .replace("{count}", &missed_count.to_string()),

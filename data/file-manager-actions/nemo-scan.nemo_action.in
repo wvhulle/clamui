@@ -1,7 +1,7 @@
 [Nemo Action]
-Name=Scan with ClamUI
+Name=Scan with Lazaret
 Comment=Scan the selection for viruses
 Exec="@LAUNCHER@" %F
-Icon-Name=io.github.wvhulle.ClamUI
+Icon-Name=page.codeberg.wvhulle.Lazaret
 Selection=notnone
 Extensions=any;

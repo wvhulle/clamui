@@ -1,6 +1,6 @@
 { machine, ... }:
 {
-  name = "clamui-scheduled-scan";
+  name = "lazaret-scheduled-scan";
 
   enableOCR = true;
 

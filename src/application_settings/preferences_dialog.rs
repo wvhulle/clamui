@@ -73,7 +73,7 @@ fn window_group(settings: &gio::Settings) -> adw::PreferencesGroup {
     let window_group = adw::PreferencesGroup::builder()
         .title(gettext("Window Behavior"))
         .description(gettext(
-            "Detection alerts only work while ClamUI is running.",
+            "Detection alerts only work while Lazaret is running.",
         ))
         .build();
     let close_labels = [

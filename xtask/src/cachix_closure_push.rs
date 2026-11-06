@@ -97,12 +97,12 @@ mod cachix_closure_push_tests {
     fn derivation_files_are_left_out_of_the_push() {
         assert_eq!(
             cacheable_store_paths(vec![
-                "/nix/store/aaa-clamui-0.1.0".to_owned(),
-                "/nix/store/bbb-clamui-0.1.0.drv".to_owned(),
+                "/nix/store/aaa-lazaret-0.1.0".to_owned(),
+                "/nix/store/bbb-lazaret-0.1.0.drv".to_owned(),
                 "/nix/store/ccc-cargo-deps".to_owned(),
             ]),
             vec![
-                "/nix/store/aaa-clamui-0.1.0".to_owned(),
+                "/nix/store/aaa-lazaret-0.1.0".to_owned(),
                 "/nix/store/ccc-cargo-deps".to_owned(),
             ]
         );

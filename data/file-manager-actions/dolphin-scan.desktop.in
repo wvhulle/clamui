@@ -2,9 +2,9 @@
 Type=Service
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=all/all;
-Actions=clamuiScan;
+Actions=lazaretScan;
 
-[Desktop Action clamuiScan]
-Name=Scan with ClamUI
-Icon=io.github.wvhulle.ClamUI
+[Desktop Action lazaretScan]
+Name=Scan with Lazaret
+Icon=page.codeberg.wvhulle.Lazaret
 Exec="@LAUNCHER@" %F
