@@ -18,6 +18,9 @@ use crate::{
                 ConfigSetting, HostConfigView, is_on_access_setting, read_clamd_config,
                 read_freshclam_config,
             },
+            detection_options::{
+                DETECTION_OPTIONS, DetectionOption, configured_values, effective_switch,
+            },
             setting_provenance::{
                 ClamavConfigKind, ConfigFileOwner, change_snippet, drift_snippet_text,
                 inspect_config_file_owner, managed_config_description, setting_lock_for_key,
@@ -33,8 +36,14 @@ use crate::{
             protection_change_rules::ProtectionReduction,
         },
     },
-    shared_widgets::engine_settings::config_setting_row::{
-        ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput, ConfigSettingRowOutput,
+    shared_widgets::engine_settings::{
+        config_setting_row::{
+            ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput, ConfigSettingRowOutput,
+        },
+        detection_switch_row::{
+            DetectionSwitchRow, DetectionSwitchRowInput, DetectionSwitchRowOutput,
+            DetectionSwitchState, SwitchAvailability,
+        },
     },
 };
 
@@ -113,9 +122,15 @@ enum UnlockState {
     Unlocked { relock_generation: u64 },
 }
 
+#[derive(Clone, Debug)]
+pub enum ChangedRow {
+    ConfigRow(DynamicIndex),
+    DetectionSwitch(DetectionOption),
+}
+
 enum ChangeProgress {
     NoChangeRunning,
-    ChangeRunning { row_index: DynamicIndex },
+    ChangeRunning { changed_row: ChangedRow },
 }
 
 pub struct EngineSettingsPage {
@@ -126,6 +141,8 @@ pub struct EngineSettingsPage {
     unlock_count: u64,
     change_progress: ChangeProgress,
     setting_rows: FactoryVecDeque<ConfigSettingRow>,
+    detection_switches: FactoryVecDeque<DetectionSwitchRow>,
+    configured_settings: Vec<ConfigSetting>,
     toaster: Toaster,
 }
 
@@ -140,9 +157,13 @@ pub enum EngineSettingsPageInput {
         edited_text: String,
     },
     LiveChangeConfirmed {
-        row_index: DynamicIndex,
+        changed_row: ChangedRow,
         setting_key: String,
         new_values: Vec<String>,
+    },
+    DetectionSwitchRequested {
+        detection_option: DetectionOption,
+        switched_on: bool,
     },
     DriftSnippetCopyRequested,
 }
@@ -190,7 +211,7 @@ fn live_tunable_config_description(config_path: &str) -> String {
 
 fn present_live_change_confirmation(
     parent_widget: &impl IsA<gtk::Widget>,
-    row_index: DynamicIndex,
+    changed_row: ChangedRow,
     setting_key: String,
     current_values: &[String],
     new_values: Vec<String>,
@@ -223,7 +244,7 @@ fn present_live_change_confirmation(
     let input_sender = sender.input_sender().clone();
     confirmation_dialog.connect_response(Some("apply"), move |_dialog, _response| {
         input_sender.emit(EngineSettingsPageInput::LiveChangeConfirmed {
-            row_index: row_index.clone(),
+            changed_row: changed_row.clone(),
             setting_key: setting_key.clone(),
             new_values: new_values.clone(),
         });
@@ -346,6 +367,60 @@ impl EngineSettingsPage {
         }
     }
 
+    const fn shows_detection_switches(&self) -> bool {
+        matches!(self.settings_section, EngineSettingsSection::ScannerEngine)
+            && matches!(self.config_load, ConfigLoad::ConfigShown { .. })
+    }
+
+    fn detection_values(&self, detection_option: DetectionOption) -> Vec<String> {
+        self.current_setting_values(
+            detection_option.setting_key(),
+            &configured_values(&self.configured_settings, detection_option.setting_key()),
+        )
+    }
+
+    fn detection_switch_state(&self, detection_option: DetectionOption) -> DetectionSwitchState {
+        let setting_key = detection_option.setting_key();
+        let tunable = self.offers_live_changes()
+            && self
+                .tuning_state
+                .tunable_settings
+                .iter()
+                .any(|tunable_key| tunable_key == setting_key);
+        DetectionSwitchState {
+            detection_option,
+            switched_on: effective_switch(
+                &self.detection_values(detection_option),
+                detection_option,
+            ),
+            switch_availability: match (tunable, self.is_unlocked()) {
+                (true, true) => SwitchAvailability::ChangeableNow,
+                (true, false) => SwitchAvailability::LockedUntilUnlocked,
+                (false, _not_tunable) => SwitchAvailability::NotAllowedAtRuntime,
+            },
+            change_running: matches!(
+                &self.change_progress,
+                ChangeProgress::ChangeRunning {
+                    changed_row: ChangedRow::DetectionSwitch(running_option)
+                } if *running_option == detection_option
+            ),
+        }
+    }
+
+    fn refresh_detection_switches(&self) {
+        DETECTION_OPTIONS
+            .iter()
+            .enumerate()
+            .for_each(|(switch_position, detection_option)| {
+                self.detection_switches.send(
+                    switch_position,
+                    DetectionSwitchRowInput::SwitchStateChanged(
+                        self.detection_switch_state(*detection_option),
+                    ),
+                );
+            });
+    }
+
     fn unlock_label(&self) -> String {
         if self.is_unlocked() {
             gettext("Lock")
@@ -414,6 +489,17 @@ impl Component for EngineSettingsPage {
                 },
 
                 #[local_ref]
+                detection_switch_group -> adw::PreferencesGroup {
+                    set_title: &gettext("Detection"),
+                    set_description: Some(&gettext(
+                        "What ClamAV reports in every scan on this computer. Lazaret passes the \
+                         same choices to clamscan, so both scanners agree.",
+                    )),
+                    #[watch]
+                    set_visible: model.shows_detection_switches(),
+                },
+
+                #[local_ref]
                 setting_rows_group -> adw::PreferencesGroup {
                     set_title: &model.settings_section.group_title(),
                     #[watch]
@@ -453,6 +539,17 @@ impl Component for EngineSettingsPage {
                     edited_text,
                 },
             });
+        let detection_switches = FactoryVecDeque::builder()
+            .launch(adw::PreferencesGroup::default())
+            .forward(sender.input_sender(), |switch_output| match switch_output {
+                DetectionSwitchRowOutput::SwitchChangeRequested {
+                    detection_option,
+                    switched_on,
+                } => EngineSettingsPageInput::DetectionSwitchRequested {
+                    detection_option,
+                    switched_on,
+                },
+            });
         let model = Self {
             settings_section,
             config_load: ConfigLoad::LoadingConfig,
@@ -461,9 +558,12 @@ impl Component for EngineSettingsPage {
             unlock_count: 0,
             change_progress: ChangeProgress::NoChangeRunning,
             setting_rows,
+            detection_switches,
+            configured_settings: Vec::new(),
             toaster: Toaster::new(&root),
         };
         let setting_rows_group = model.setting_rows.widget();
+        let detection_switch_group = model.detection_switches.widget();
         let widgets = view_output!();
         sender.oneshot_command(async move {
             let host_config = settings_section.read_host_config();
@@ -498,6 +598,7 @@ impl Component for EngineSettingsPage {
                 self.unlock_count += 1;
                 let relock_generation = self.unlock_count;
                 self.unlock_state = UnlockState::Unlocked { relock_generation };
+                self.refresh_detection_switches();
                 sender.oneshot_command(async move {
                     tokio::time::sleep(UNLOCK_DURATION).await;
                     EngineSettingsPageCommand::RelockDue { relock_generation }
@@ -505,6 +606,34 @@ impl Component for EngineSettingsPage {
             }
             EngineSettingsPageInput::UnlockToggled(false) => {
                 self.unlock_state = UnlockState::Locked;
+                self.refresh_detection_switches();
+            }
+            EngineSettingsPageInput::DetectionSwitchRequested {
+                detection_option,
+                switched_on,
+            } => {
+                let setting_key = detection_option.setting_key().to_owned();
+                if self.allows_live_change(&setting_key) {
+                    let current_values = self.detection_values(detection_option);
+                    let shown_current_values = if current_values.is_empty() {
+                        vec![if detection_option.enabled_by_default() {
+                            "yes".to_owned()
+                        } else {
+                            "no".to_owned()
+                        }]
+                    } else {
+                        current_values
+                    };
+                    present_live_change_confirmation(
+                        root,
+                        ChangedRow::DetectionSwitch(detection_option),
+                        setting_key,
+                        &shown_current_values,
+                        vec![if switched_on { "yes" } else { "no" }.to_owned()],
+                        &sender,
+                    );
+                }
+                self.refresh_detection_switches();
             }
             EngineSettingsPageInput::ValueApplied {
                 row_index,
@@ -519,7 +648,7 @@ impl Component for EngineSettingsPage {
                     let new_values = values_with_edit(&current_values, value_position, edited_text);
                     present_live_change_confirmation(
                         root,
-                        row_index,
+                        ChangedRow::ConfigRow(row_index),
                         setting_key,
                         &current_values,
                         new_values,
@@ -538,15 +667,18 @@ impl Component for EngineSettingsPage {
                 }
             }
             EngineSettingsPageInput::LiveChangeConfirmed {
-                row_index,
+                changed_row,
                 setting_key,
                 new_values,
             } => {
-                self.setting_rows.send(
-                    row_index.current_index(),
-                    ConfigSettingRowInput::ChangeRunningChanged(true),
-                );
-                self.change_progress = ChangeProgress::ChangeRunning { row_index };
+                if let ChangedRow::ConfigRow(row_index) = &changed_row {
+                    self.setting_rows.send(
+                        row_index.current_index(),
+                        ConfigSettingRowInput::ChangeRunningChanged(true),
+                    );
+                }
+                self.change_progress = ChangeProgress::ChangeRunning { changed_row };
+                self.refresh_detection_switches();
                 sender.oneshot_command(async move {
                     let change_outcome = apply_live_change(setting_key, new_values).await;
                     EngineSettingsPageCommand::LiveChangeFinished {
@@ -579,6 +711,10 @@ impl Component for EngineSettingsPage {
                         config_path,
                         config_settings,
                     } => {
+                        let mut switch_guard = self.detection_switches.guard();
+                        switch_guard.clear();
+                        drop(switch_guard);
+                        self.configured_settings.clone_from(&config_settings);
                         let mut row_guard = self.setting_rows.guard();
                         setting_row_inits(&config_settings, self.settings_section)
                             .into_iter()
@@ -590,6 +726,12 @@ impl Component for EngineSettingsPage {
                             config_path,
                             config_file_owner,
                         };
+                        let switch_states = DETECTION_OPTIONS
+                            .map(|detection_option| self.detection_switch_state(detection_option));
+                        let mut switch_guard = self.detection_switches.guard();
+                        switch_states.into_iter().for_each(|switch_state| {
+                            switch_guard.push_back(switch_state);
+                        });
                     }
                     HostConfigView::ConfigNotFound => self.config_load = ConfigLoad::ConfigMissing,
                 }
@@ -601,14 +743,16 @@ impl Component for EngineSettingsPage {
                         if unlocked_generation == relock_generation
                 ) {
                     self.unlock_state = UnlockState::Locked;
+                    self.refresh_detection_switches();
                 }
             }
             EngineSettingsPageCommand::LiveChangeFinished {
                 change_outcome,
                 tuning_state,
             } => {
-                if let ChangeProgress::ChangeRunning { row_index } =
-                    std::mem::replace(&mut self.change_progress, ChangeProgress::NoChangeRunning)
+                if let ChangeProgress::ChangeRunning {
+                    changed_row: ChangedRow::ConfigRow(row_index),
+                } = std::mem::replace(&mut self.change_progress, ChangeProgress::NoChangeRunning)
                 {
                     self.setting_rows.send(
                         row_index.current_index(),
@@ -618,6 +762,7 @@ impl Component for EngineSettingsPage {
                 self.toaster
                     .add_toast(shown_toast(&describe_live_change_outcome(&change_outcome)));
                 self.tuning_state = tuning_state;
+                self.refresh_detection_switches();
             }
         }
     }

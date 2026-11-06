@@ -15,6 +15,7 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityStatus, NewActivityEntry,
         },
+        clamav_config::detection_options::host_clamscan_detection_arguments,
         clamav_scanner::{
             scan_exclusion_rules::ScanExclusions,
             scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
@@ -211,6 +212,7 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
             &read_exclusion_entries(&settings),
             &glib::home_dir(),
         ),
+        detection_arguments: host_clamscan_detection_arguments(),
     })
     .fold(
         CompletedScanOutcome::default(),

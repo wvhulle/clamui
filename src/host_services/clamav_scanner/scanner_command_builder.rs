@@ -61,6 +61,7 @@ pub enum ScannerInvocation<'invocation> {
         target_path: &'invocation Path,
         scanner_work_directory: &'invocation Path,
         scan_exclusions: &'invocation ScanExclusions,
+        detection_arguments: &'invocation [OsString],
     },
     ClamdFileList {
         file_list_path: &'invocation Path,
@@ -109,11 +110,13 @@ pub fn build_scanner_command(
             target_path,
             scanner_work_directory,
             scan_exclusions,
+            detection_arguments,
         } => standalone_clamscan_command(
             scanner_programs,
             target_path,
             scanner_work_directory,
             scan_exclusions,
+            detection_arguments,
         )?,
         ScannerInvocation::ClamdFileList { file_list_path } => {
             let mut file_list_command = clamd_base_command(scanner_programs)?;
@@ -145,6 +148,7 @@ fn standalone_clamscan_command(
     target_path: &Path,
     scanner_work_directory: &Path,
     scan_exclusions: &ScanExclusions,
+    detection_arguments: &[OsString],
 ) -> Result<std::process::Command, ProgramRefusal> {
     let mut clamscan_command =
         host_program_command(scanner_programs.clamscan_program.runnable_path()?, &[]);
@@ -157,6 +161,7 @@ fn standalone_clamscan_command(
         .arg("-v")
         .arg(work_directory_argument)
         .args(scan_exclusions.clamscan_arguments())
+        .args(detection_arguments)
         .stdin(Stdio::null());
     clamscan_command
         .arg("--")

@@ -4,6 +4,7 @@ use gettextrs::gettext;
 use tokio::time::timeout;
 
 use crate::host_services::{
+    clamav_config::detection_options::host_clamscan_detection_arguments,
     clamav_scanner::{
         scanner_command_builder::{ScannerBackend, ScannerProgramPaths, probe_clamd_availability},
         scanner_output_parser::sanitize_scanner_line,
@@ -64,9 +65,15 @@ pub async fn scan_content_with_current_signatures(
         tokio::task::spawn_blocking(ScannerProgramPaths::locate_trusted_programs)
             .await
             .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
-    let scanner_location = match probe_clamd_availability(&scanner_programs).await {
-        ScannerBackend::ClamdDaemon => &scanner_programs.clamdscan_program,
-        ScannerBackend::StandaloneClamscan => &scanner_programs.clamscan_program,
+    let scanner_backend = probe_clamd_availability(&scanner_programs).await;
+    let (scanner_location, detection_arguments) = match scanner_backend {
+        ScannerBackend::ClamdDaemon => (&scanner_programs.clamdscan_program, Vec::new()),
+        ScannerBackend::StandaloneClamscan => (
+            &scanner_programs.clamscan_program,
+            tokio::task::spawn_blocking(host_clamscan_detection_arguments)
+                .await
+                .unwrap_or_default(),
+        ),
     };
     let scanner_path = match scanner_location.runnable_path() {
         Ok(scanner_path) => scanner_path.to_path_buf(),
@@ -86,7 +93,9 @@ pub async fn scan_content_with_current_signatures(
     };
     let mut verdict_command = host_program_async_command(&scanner_path, &[("LC_ALL", "C")]);
     verdict_command
-        .args(["--no-summary", "-"])
+        .arg("--no-summary")
+        .args(detection_arguments)
+        .arg("-")
         .stdin(Stdio::from(content_pipe))
         .kill_on_drop(true);
     match timeout(VERDICT_TIMEOUT, verdict_command.output()).await {

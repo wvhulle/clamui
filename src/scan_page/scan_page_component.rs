@@ -25,6 +25,7 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
         },
+        clamav_config::detection_options::host_clamscan_detection_arguments,
         clamav_scanner::{
             scan_exclusion_rules::{ExclusionEntry, ScanExclusions},
             scan_progress_estimates::{RefreshThrottle, file_progress_text},
@@ -494,12 +495,17 @@ impl ScanPage {
                     .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
             let scanner_backend =
                 choose_scanner_backend(backend_preference, &scanner_programs).await;
+            let detection_arguments =
+                tokio::task::spawn_blocking(host_clamscan_detection_arguments)
+                    .await
+                    .unwrap_or_default();
             ScanRequest {
                 scan_exclusions,
                 scan_targets,
                 scanner_backend,
                 scanner_programs,
                 file_list_directory,
+                detection_arguments,
             }
         })
         .flat_map(scan_progress_events);

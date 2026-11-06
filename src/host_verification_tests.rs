@@ -49,6 +49,7 @@ fn host_scan_request(
         scanner_programs: ScannerProgramPaths::locate_trusted_programs(),
         file_list_directory: file_list_directory.to_path_buf(),
         scan_exclusions: ScanExclusions::default(),
+        detection_arguments: Vec::new(),
     }
 }
 

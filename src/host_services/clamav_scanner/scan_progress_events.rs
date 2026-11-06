@@ -61,6 +61,7 @@ pub struct ScanRequest {
     pub scanner_programs: ScannerProgramPaths,
     pub file_list_directory: PathBuf,
     pub scan_exclusions: ScanExclusions,
+    pub detection_arguments: Vec<std::ffi::OsString>,
 }
 
 #[derive(Debug)]
@@ -577,6 +578,7 @@ fn prepare_phase_parts(
                         target_path: &target_path,
                         scanner_work_directory: work_directory.path(),
                         scan_exclusions: &scan_request.scan_exclusions,
+                        detection_arguments: &scan_request.detection_arguments,
                     },
                 )?,
                 phase_transcript: new_phase_transcript(
@@ -822,6 +824,7 @@ mod scan_progress_events_tests {
             scanner_programs: ScannerProgramPaths::locate_trusted_programs(),
             file_list_directory: temporary_root.path().join("data"),
             scan_exclusions: ScanExclusions::default(),
+            detection_arguments: Vec::new(),
         }
     }
 
