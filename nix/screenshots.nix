@@ -46,10 +46,32 @@ let
           --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.gitMinimal ]}
       '';
 
+  cachixPush =
+    pkgs.runCommand "push-to-cachix"
+      {
+        nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+        meta.mainProgram = "push-to-cachix";
+      }
+      ''
+        makeWrapper ${pkgs.lib.getExe xtask} $out/bin/push-to-cachix \
+          --add-flags push-to-cachix \
+          --prefix PATH : ${
+            pkgs.lib.makeBinPath [
+              pkgs.cachix
+              pkgs.nix
+            ]
+          }
+      '';
+
   screenshots = pkgs.runCommand "clamui-screenshots" { } ''
     ${pkgs.lib.getExe renderScreenshots} $out
   '';
 in
 {
-  inherit publishScreenshots renderScreenshots screenshots;
+  inherit
+    cachixPush
+    publishScreenshots
+    renderScreenshots
+    screenshots
+    ;
 }

@@ -1,3 +1,4 @@
+mod cachix_closure_push;
 mod fixture_clamav_programs;
 mod fixture_systemd_service;
 mod page_screenshots;
@@ -10,6 +11,7 @@ use std::{path::PathBuf, process::ExitCode};
 use clap::{Parser, Subcommand};
 
 use crate::{
+    cachix_closure_push::push_build_closure,
     fixture_clamav_programs::{invoked_as_fixture_program, run_fixture_program},
     page_screenshots::{list_visible_widgets, render_page_screenshots},
     screenshot_publishing::publish_screenshots,
@@ -35,6 +37,10 @@ enum RepositoryTask {
     PublishScreenshots {
         screenshots_directory: PathBuf,
     },
+    PushToCachix {
+        #[arg(required = true)]
+        installables: Vec<String>,
+    },
 }
 
 fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailure> {
@@ -42,6 +48,7 @@ fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailur
         RepositoryTask::RenderScreenshots { output_directory } => {
             render_page_screenshots(&output_directory)
         }
+        RepositoryTask::PushToCachix { installables } => push_build_closure(&installables),
         RepositoryTask::PublishScreenshots {
             screenshots_directory,
         } => publish_screenshots(&screenshots_directory),

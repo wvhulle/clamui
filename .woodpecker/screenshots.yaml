@@ -19,7 +19,7 @@ steps:
     image: nixos/nix:latest
     environment: *nix_environment
     commands:
-      - nix build --quiet --print-build-logs .#screenshots
+      - nix build --quiet .#screenshots .#publish-screenshots
       - cp -r --no-preserve=mode result screenshots
 
   - name: publish-screenshots
@@ -30,3 +30,13 @@ steps:
         from_secret: bot_token
     commands:
       - nix run --quiet .#publish-screenshots -- screenshots
+
+  - name: push-to-cachix
+    image: nixos/nix:latest
+    failure: ignore
+    environment:
+      <<: *nix_environment
+      CACHIX_AUTH_TOKEN:
+        from_secret: cachix_auth_token
+    commands:
+      - nix run --quiet .#push-to-cachix -- .#screenshots .#publish-screenshots

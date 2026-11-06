@@ -207,6 +207,7 @@ in
     settings-helper = settingsHelperPackage;
     render-screenshots = screenshotRendering.renderScreenshots;
     publish-screenshots = screenshotRendering.publishScreenshots;
+    push-to-cachix = screenshotRendering.cachixPush;
     inherit (screenshotRendering) screenshots;
   };
 
@@ -239,6 +240,10 @@ in
     publish-screenshots = {
       type = "app";
       program = lib.getExe screenshotRendering.publishScreenshots;
+    };
+    push-to-cachix = {
+      type = "app";
+      program = lib.getExe screenshotRendering.cachixPush;
     };
   };
 
