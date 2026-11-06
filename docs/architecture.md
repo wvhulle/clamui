@@ -102,6 +102,8 @@ A move always runs in this order: copy, pending row, remove source, commit. Ever
 
 Payloads are stored neutralized: a header with a random per-file key, followed by the content XORed with that key. Other scanners, indexers and thumbnailers then see nothing they recognize, and a payload can't be run by accident. The recorded SHA-256 is always that of the original content, and every read decodes the payload first. A payload stored raw, such as one renamed into quarantine because on-access scanning blocked reading it, is neutralized afterwards by writing an encoded copy next to it, checking its hash and renaming it over the raw file. A crash leaves either the raw or the encoded payload, and both read back the same.
 
+Quarantined content is checked again by piping the decoded payload into `clamdscan -` (or `clamscan -` without clamd), so it never has to be written back to disk to be scanned. This happens before every restore and after every successful signature update.
+
 ## Live tuning
 
 ```mermaid

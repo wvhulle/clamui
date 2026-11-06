@@ -102,6 +102,7 @@ pub enum DatabaseUpdatePageCommand {
 #[derive(Debug)]
 pub enum DatabaseUpdatePageOutput {
     ActivityRecorded,
+    SignaturesUpdated,
 }
 
 fn service_description(service_state: FreshclamServiceState) -> String {
@@ -676,6 +677,12 @@ impl Component for DatabaseUpdatePage {
                     });
             }
             DatabaseUpdatePageCommand::UpdateStreamFinished => {
+                if matches!(
+                    self.observed_exit,
+                    ObservedUpdateExit::ExitObserved { exit_code: 0 }
+                ) {
+                    let _shell_closed = sender.output(DatabaseUpdatePageOutput::SignaturesUpdated);
+                }
                 self.update_summary = self.finished_update_summary();
                 self.record_finished_update(&sender);
                 notify_outside_the_window(

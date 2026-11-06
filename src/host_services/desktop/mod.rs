@@ -1,3 +1,4 @@
+pub mod content_pipe;
 pub mod desktop_notifications;
 pub mod file_manager_actions;
 pub mod file_process_lock;

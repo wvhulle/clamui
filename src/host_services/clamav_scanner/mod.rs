@@ -1,3 +1,4 @@
+pub mod content_verdict;
 pub mod scan_exclusion_rules;
 pub mod scan_progress_estimates;
 pub mod scan_progress_events;

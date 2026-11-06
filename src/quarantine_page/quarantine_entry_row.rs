@@ -10,7 +10,10 @@ use relm4::{
 use crate::{
     host_services::{
         clamav_programs::false_positive_submission::SubmittedContent,
-        clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
+        clamav_scanner::{
+            content_verdict::ContentVerdict,
+            scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
+        },
         quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
         settings_helper::trust_requests::{FileFingerprint, TrustChoice},
         threat_intel::file_reputation_check::{
@@ -20,9 +23,17 @@ use crate::{
     shared_widgets::false_positive_report_dialog::ReportedDetection,
 };
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RowRecheckState {
+    NotRechecked,
+    Rechecking,
+    Rechecked(ContentVerdict),
+}
+
 pub struct QuarantineEntryRow {
     entry_record: QuarantineEntryRecord,
     reputation_answers: ReputationAnswers,
+    recheck_state: RowRecheckState,
 }
 
 #[derive(Debug)]
@@ -33,6 +44,7 @@ pub enum QuarantineEntryRowInput {
     OnlineLookupsRequested,
     TrustFileRequested,
     FalsePositiveReportRequested,
+    RecheckStateChanged(RowRecheckState),
 }
 
 #[derive(Debug)]
@@ -52,6 +64,34 @@ pub enum QuarantineEntryRowCommand {
 }
 
 impl QuarantineEntryRow {
+    pub const fn entry_id(&self) -> i64 {
+        self.entry_record.entry_id
+    }
+
+    fn recheck_label(&self) -> String {
+        match &self.recheck_state {
+            RowRecheckState::Rechecking => gettext("Checking…"),
+            RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected) => {
+                gettext("No longer detected")
+            }
+            RowRecheckState::Rechecked(ContentVerdict::StillDetected { .. }) => {
+                gettext("Still detected")
+            }
+            RowRecheckState::Rechecked(ContentVerdict::VerdictUnavailable { .. })
+            | RowRecheckState::NotRechecked => String::new(),
+        }
+    }
+
+    fn recheck_style(&self) -> &'static str {
+        match &self.recheck_state {
+            RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected) => "success",
+            RowRecheckState::Rechecked(ContentVerdict::StillDetected { .. }) => "warning",
+            RowRecheckState::Rechecking
+            | RowRecheckState::Rechecked(ContentVerdict::VerdictUnavailable { .. })
+            | RowRecheckState::NotRechecked => "dim-label",
+        }
+    }
+
     fn reputation_check_running(&self) -> bool {
         self.reputation_answers.circl_answer == SourceAnswer::Checking
     }
@@ -94,6 +134,17 @@ impl FactoryComponent for QuarantineEntryRow {
                 ByteSize::b(self.entry_record.file_size),
             ),
             set_subtitle_lines: 0,
+
+            add_suffix = &gtk::Label {
+                add_css_class: "caption-heading",
+                set_valign: gtk::Align::Center,
+                #[watch]
+                set_visible: !self.recheck_label().is_empty(),
+                #[watch]
+                set_label: &self.recheck_label(),
+                #[watch]
+                set_css_classes: &["caption-heading", self.recheck_style()],
+            },
 
             add_suffix = &gtk::Button {
                 set_label: &gettext("Restore"),
@@ -209,6 +260,7 @@ impl FactoryComponent for QuarantineEntryRow {
         Self {
             entry_record,
             reputation_answers: ReputationAnswers::all_set_to(&SourceAnswer::NotChecked),
+            recheck_state: RowRecheckState::NotRechecked,
         }
     }
 
@@ -243,6 +295,9 @@ impl FactoryComponent for QuarantineEntryRow {
                         ),
                     },
                 ));
+            }
+            QuarantineEntryRowInput::RecheckStateChanged(recheck_state) => {
+                self.recheck_state = recheck_state;
             }
             QuarantineEntryRowInput::FalsePositiveReportRequested => {
                 let _page_closed = sender.output(

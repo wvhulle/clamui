@@ -32,7 +32,7 @@ After a scan, the results appear on the Scan page: how many files were scanned o
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/results-quarantined.png" width="800" alt="Scan results after both threats were moved to quarantine">
 
-An interrupted move never loses the file. The Quarantine page lists every quarantined file. Expand an entry to check its reputation, restore it to where it came from, or delete it for good. **Clear Old Items** deletes files that have been in quarantine for more than 30 days.
+An interrupted move never loses the file. The Quarantine page lists every quarantined file. Expand an entry to check its reputation, restore it to where it came from, or delete it for good. **Clear Old Items** deletes files that have been in quarantine for more than 30 days. Before a file is restored, Lazaret checks it again with today's signatures and shows where it will go. After a signature update, and whenever you press **Check Again**, it checks every quarantined file and marks the ones that are no longer detected, so you can restore false positives once a signature update fixes them.
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/quarantine.png" width="800" alt="The Quarantine page listing quarantined files">
 

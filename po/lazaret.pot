@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 16:02+0100\n"
+"POT-Creation-Date: 2026-11-06 16:06+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -42,19 +42,19 @@ msgstr ""
 
 #: src/application_window/application_pages.rs:49
 #: src/detections_page/incident_timeline_presentation.rs:314
-#: src/quarantine_page/quarantine_entries_page.rs:265
+#: src/quarantine_page/quarantine_entries_page.rs:476
 #: src/scan_page/scan_results_section/detected_threat_row.rs:174
 #: src/scan_page/scan_results_section/scan_results_component.rs:161
 msgid "Quarantine"
 msgstr ""
 
 #: src/application_window/application_pages.rs:50
-#: src/application_window/page_navigation.rs:575
+#: src/application_window/page_navigation.rs:579
 msgid "Signatures"
 msgstr ""
 
 #: src/application_window/application_pages.rs:51
-#: src/application_window/page_navigation.rs:586
+#: src/application_window/page_navigation.rs:590
 msgid "Hardening"
 msgstr ""
 
@@ -70,36 +70,36 @@ msgstr ""
 msgid "The quarantine database could not be locked"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:240
+#: src/application_window/page_navigation.rs:241
 #: src/preferences_dialog/preferences_dialog_component.rs:115
 msgid "Preferences"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:241
+#: src/application_window/page_navigation.rs:242
 msgid "About Lazaret"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:242
+#: src/application_window/page_navigation.rs:243
 #: src/application_window/system_tray_menu.rs:75
 #: src/application_window/window_close_behavior.rs:47
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:251
+#: src/application_window/page_navigation.rs:252
 msgid "Update signatures"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:425
+#: src/application_window/page_navigation.rs:426
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:577
+#: src/application_window/page_navigation.rs:581
 msgid ""
 "Where ClamAV's malware signatures come from, and which other sources you "
 "could add."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:588
+#: src/application_window/page_navigation.rs:592
 msgid ""
 "Protections outside ClamAV that make exploits harder. They are listed for "
 "reference and don't affect the Protection summary."
@@ -209,15 +209,16 @@ msgstr ""
 #: src/application_window/window_close_behavior.rs:46
 #: src/detections_page/incident_timeline_presentation.rs:306
 #: src/logs_page/activity_logs_page.rs:180
-#: src/quarantine_page/quarantine_entries_page.rs:210
-#: src/quarantine_page/quarantine_entries_page.rs:226
+#: src/quarantine_page/quarantine_entries_page.rs:296
+#: src/quarantine_page/quarantine_entries_page.rs:421
+#: src/quarantine_page/quarantine_entries_page.rs:437
 #: src/scan_page/scan_page_component.rs:671
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:87
 #: src/scan_page/scan_results_section/scan_results_component.rs:160
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:209
 #: src/shared_widgets/false_positive_report_dialog.rs:55
 #: src/shared_widgets/trust_confirmation_dialog.rs:91
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:555
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:556
 msgid "Cancel"
 msgstr ""
 
@@ -604,32 +605,40 @@ msgid ""
 "press the check mark to copy the line to put in that file."
 msgstr ""
 
-#: src/host_services/clamav_programs/false_positive_submission.rs:159
+#: src/host_services/clamav_programs/false_positive_submission.rs:149
 msgid "the upload took too long"
 msgstr ""
 
-#: src/host_services/clamav_programs/false_positive_submission.rs:167
+#: src/host_services/clamav_programs/false_positive_submission.rs:157
 msgid ""
 "Report sent. If the ClamAV team agrees, a later signature update stops the "
 "detection."
 msgstr ""
 
-#: src/host_services/clamav_programs/false_positive_submission.rs:170
+#: src/host_services/clamav_programs/false_positive_submission.rs:160
 msgid "Enter your name and a valid email address to send a report"
 msgstr ""
 
-#: src/host_services/clamav_programs/false_positive_submission.rs:173
+#: src/host_services/clamav_programs/false_positive_submission.rs:163
 msgid ""
 "Reporting needs clamsubmit, which comes with ClamAV but isn't installed here"
 msgstr ""
 
-#: src/host_services/clamav_programs/false_positive_submission.rs:176
+#: src/host_services/clamav_programs/false_positive_submission.rs:166
 msgid "Lazaret refused to run clamsubmit, because your account can replace it"
 msgstr ""
 
-#: src/host_services/clamav_programs/false_positive_submission.rs:179
+#: src/host_services/clamav_programs/false_positive_submission.rs:169
 #, rust-format
 msgid "The report was not sent: {error}"
+msgstr ""
+
+#: src/host_services/clamav_scanner/content_verdict.rs:46
+msgid "an unnamed detection"
+msgstr ""
+
+#: src/host_services/clamav_scanner/content_verdict.rs:102
+msgid "the scan took too long"
 msgstr ""
 
 #: src/host_services/clamav_scanner/scan_progress_estimates.rs:35
@@ -767,11 +776,12 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:549
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:171
 #: src/protection_page/protection_timeline_page.rs:344
+#: src/quarantine_page/quarantine_entry_row.rs:73
 #: src/scan_page/scan_page_component.rs:252
 #: src/scan_page/scan_schedule_page/scan_schedule_component.rs:324
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:305
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:312
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:306
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:313
 msgid "Checking…"
 msgstr ""
 
@@ -938,7 +948,7 @@ msgid "Database update failed"
 msgstr ""
 
 #: src/logs_page/activity_export_formats.rs:39
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:461
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:462
 msgid "Database update cancelled"
 msgstr ""
 
@@ -1014,7 +1024,7 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:274
 #: src/logs_page/activity_logs_page.rs:429
 #: src/logs_page/activity_logs_page.rs:483
-#: src/quarantine_page/quarantine_entries_page.rs:295
+#: src/quarantine_page/quarantine_entries_page.rs:515
 msgid "Refresh"
 msgstr ""
 
@@ -1720,52 +1730,99 @@ msgid ""
 "that you or your administrator added them on purpose."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:41
+#: src/quarantine_page/quarantine_entries_page.rs:49
 msgid "File hash mismatch — file may be corrupted"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:44
+#: src/quarantine_page/quarantine_entries_page.rs:52
 msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:48
+#: src/quarantine_page/quarantine_entries_page.rs:56
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:51
+#: src/quarantine_page/quarantine_entries_page.rs:59
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:59
+#: src/quarantine_page/quarantine_entries_page.rs:67
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
 "{error}. File may be orphaned at: {path}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:68
+#: src/quarantine_page/quarantine_entries_page.rs:76
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:178
+#: src/quarantine_page/quarantine_entries_page.rs:187
+msgid "Restore This File?"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:188
+msgid "ClamAV no longer detects this file with today's signatures."
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:189
+#: src/quarantine_page/quarantine_entry_row.rs:150
+msgid "Restore"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:193
+msgid "Restore a File ClamAV Still Detects?"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:195
+#, rust-format
+msgid ""
+"ClamAV still detects this file as {detection} with today's signatures. Only "
+"restore it if you are sure it is a false positive, and consider trusting it "
+"first."
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:200
+#: src/quarantine_page/quarantine_entries_page.rs:209
+msgid "Restore Anyway"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:204
+msgid "Restore an Unchecked File?"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:206
+#, rust-format
+msgid "The file could not be checked again before restoring it: {error}"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:220
+msgid "This location is outside your home folder."
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:271
+msgid "The file goes back to:"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:387
 #, rust-format
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:200
+#: src/quarantine_page/quarantine_entries_page.rs:411
 msgid "Clear Old Items?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:203
+#: src/quarantine_page/quarantine_entries_page.rs:414
 #, rust-format
 msgid ""
 "{count} quarantined file older than 30 days will be permanently deleted."
@@ -1774,120 +1831,146 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:211
-#: src/quarantine_page/quarantine_entries_page.rs:227
-#: src/quarantine_page/quarantine_entry_row.rs:107
+#: src/quarantine_page/quarantine_entries_page.rs:422
+#: src/quarantine_page/quarantine_entries_page.rs:438
+#: src/quarantine_page/quarantine_entry_row.rs:158
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:310
 #: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:80
 msgid "Delete"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:223
+#: src/quarantine_page/quarantine_entries_page.rs:434
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:224
+#: src/quarantine_page/quarantine_entries_page.rs:435
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:272
+#: src/quarantine_page/quarantine_entries_page.rs:483
 #: src/scan_page/scan_options_section.rs:109
 #: src/scan_page/scan_page_component.rs:616
 msgid "More"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:276
+#: src/quarantine_page/quarantine_entries_page.rs:487
 msgid "Clear Old Items…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:301
+#: src/quarantine_page/quarantine_entries_page.rs:505
+msgid "Check Again"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:506
+msgid "Scan every quarantined file with the current signatures"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:521
 msgid "Search"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:322
+#: src/quarantine_page/quarantine_entries_page.rs:542
 msgid "Search by threat name or path"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:337
+#: src/quarantine_page/quarantine_entries_page.rs:557
 msgid "Quarantine Storage"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:338
+#: src/quarantine_page/quarantine_entries_page.rs:558
 msgid ""
 "Detected threats isolated from your system. Expand an entry to check its "
 "reputation."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:341
+#: src/quarantine_page/quarantine_entries_page.rs:561
 msgid "Total Size"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:418
+#: src/quarantine_page/quarantine_entries_page.rs:640
 msgid "Loading quarantine…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:422
+#: src/quarantine_page/quarantine_entries_page.rs:644
 msgid "Quarantine is empty"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:423
+#: src/quarantine_page/quarantine_entries_page.rs:645
 msgid "Threats you quarantine will appear here"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:441
+#: src/quarantine_page/quarantine_entries_page.rs:663
 msgid "Hash copied to clipboard"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:499
+#: src/quarantine_page/quarantine_entries_page.rs:721
 msgid "report it from the scan results"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:99
-msgid "Restore"
+#: src/quarantine_page/quarantine_entries_page.rs:826
+msgid "Every quarantined file is still detected or couldn't be checked"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:116
+#: src/quarantine_page/quarantine_entries_page.rs:829
+#, rust-format
+msgid ""
+"{count} quarantined file is no longer detected. Check it before restoring it."
+msgid_plural ""
+"{count} quarantined files are no longer detected. Check them before "
+"restoring them."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:75
+msgid "No longer detected"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:78
+msgid "Still detected"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:167
 msgid "Reputation"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:117
+#: src/quarantine_page/quarantine_entry_row.rs:168
 msgid ""
 "Only the file's SHA-256 hash is sent. The file itself never leaves this "
 "computer."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:121
+#: src/quarantine_page/quarantine_entry_row.rs:172
 msgid "Check"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:139
-#: src/quarantine_page/quarantine_entry_row.rs:152
+#: src/quarantine_page/quarantine_entry_row.rs:190
+#: src/quarantine_page/quarantine_entry_row.rs:203
 msgid "Add Key"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:160
+#: src/quarantine_page/quarantine_entry_row.rs:211
 msgid "View Report"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:169
+#: src/quarantine_page/quarantine_entry_row.rs:220
 msgid "False Positive"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:170
+#: src/quarantine_page/quarantine_entry_row.rs:221
 msgid ""
 "Trust this exact file so ClamAV stops reporting it on this computer, then "
 "restore it. Report it so a signature update fixes the detection for everyone."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:174
+#: src/quarantine_page/quarantine_entry_row.rs:225
 msgid "Report…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:180
+#: src/quarantine_page/quarantine_entry_row.rs:231
 msgid "Trust…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:195
+#: src/quarantine_page/quarantine_entry_row.rs:246
 msgid "Copy Hash"
 msgstr ""
 
@@ -3068,181 +3151,181 @@ msgstr ""
 msgid "In use"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:109
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:110
 msgid "Active"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:110
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:111
 msgid "Scheduled by a systemd timer"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:111
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:112
 msgid "Installed but stopped"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:113
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:114
 msgid "No freshclam service detected; updates run manually"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:124
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:125
 #, rust-format
 msgid "{count} day old"
 msgid_plural "{count} days old"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:130
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:131
 msgid "No readable virus database was found"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:149
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:150
 msgid ""
 "Authentication cancelled. Database update requires administrator privileges."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:152
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:153
 msgid "Authorization failed. Please try again and enter your password."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:155
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:156
 msgid "Update rate limited by mirror. Please wait a few minutes and try again."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:158
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:159
 msgid ""
 "Update blocked by CDN. This may be due to rate limiting. Please wait and try "
 "again later."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:162
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:163
 msgid "ClamAV mirror is currently unavailable. Please try again later."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:165
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:166
 msgid "SSL/TLS certificate error. The mirror may have configuration issues."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:168
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:169
 msgid "Connection timed out. Please check your network connection."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:171
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:172
 msgid "Database is locked. Another freshclam instance may be running."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:174
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:175
 msgid ""
 "Permission denied. You may need elevated privileges to update the database."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:177
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:178
 msgid "Connection error. Please check your network connection."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:180
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:181
 msgid "DNS resolution failed. Please check your network settings."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:186
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:480
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:187
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:481
 msgid "Update failed with an unknown error. Check the logs for details."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:193
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:194
 #, rust-format
 msgid "Updated: {databases}"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:197
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:198
 #, rust-format
 msgid "Already current: {databases}"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:206
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:207
 #, rust-format
 msgid "Rate limited: {database}"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:209
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:210
 #, rust-format
 msgid "Rate limited: {database} until {cooldown}"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:226
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:227
 msgid "Database update completed"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:229
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:230
 msgid "Database is already up to date"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:246
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:247
 msgid "Install freshclam before requesting database updates."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:288
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:289
 msgid "Checking freshclam…"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:292
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:293
 msgid "Not installed"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:294
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:295
 #, rust-format
 msgid "Refused {path}, because your account can replace it"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:473
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:474
 msgid ""
 "The service accepted the signal; it performs the update asynchronously. "
 "Check its logs for completion."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:497
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:498
 msgid "Database"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:500
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:501
 msgid "Virus definitions"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:504
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:505
 msgid "Refresh status"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:521
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:522
 msgid "Update service"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:529
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:530
 msgid "Database freshness"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:539
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:548
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:540
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:549
 msgid "Update database"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:540
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:541
 msgid ""
 "Updates run through the system's updater services, such as freshclam and "
 "fangfrisch, so your system may ask for authorization."
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:548
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:549
 msgid "Updating…"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:576
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:577
 msgid "Update log"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:683
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:690
 msgid "Database update finished"
 msgstr ""
 
-#: src/signatures_page/signature_update_dialog/database_update_page.rs:697
+#: src/signatures_page/signature_update_dialog/database_update_page.rs:704
 #, rust-format
 msgid "The update could not be added to the history: {error}"
 msgstr ""

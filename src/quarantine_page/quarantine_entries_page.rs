@@ -1,4 +1,7 @@
-use std::time::{Duration, SystemTime};
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime},
+};
 
 use bytesize::ByteSize;
 use futures::{StreamExt, stream};
@@ -15,7 +18,10 @@ use crate::{
             FalsePositiveReport, SubmissionOutcome, SubmittedContent, submission_outcome_text,
             submit_false_positive,
         },
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        clamav_scanner::{
+            content_verdict::{ContentVerdict, scan_content_with_current_signatures},
+            scanner_output_parser::sanitize_scanner_line,
+        },
         quarantine_vault::{
             quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
             quarantine_file_moves::QuarantineMoveFailure,
@@ -25,7 +31,9 @@ use crate::{
         },
     },
     preferences_dialog::preferences_dialog_component::PreferencesPageName,
-    quarantine_page::quarantine_entry_row::{QuarantineEntryRow, QuarantineEntryRowOutput},
+    quarantine_page::quarantine_entry_row::{
+        QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput, RowRecheckState,
+    },
     shared_widgets::{
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
@@ -108,12 +116,22 @@ pub struct QuarantineEntriesPage {
     first_load: FirstLoad,
     search_mode_enabled: bool,
     toaster: Toaster,
+    recheck_states: HashMap<i64, RowRecheckState>,
+    recheck_progress: RecheckProgress,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RecheckProgress {
+    RecheckIdle,
+    RecheckRunning,
 }
 
 #[derive(Debug)]
 pub enum QuarantineEntriesPageInput {
     ReloadEntriesRequested,
     RestoreEntryRequested { entry_id: i64 },
+    RestoreEntryConfirmed { entry_id: i64 },
+    RecheckAllRequested,
     DeleteEntryRequested { entry_id: i64 },
     DeleteEntryConfirmed { entry_id: i64 },
     SearchTextChanged(String),
@@ -136,6 +154,71 @@ pub enum QuarantineEntriesPageCommand {
     OldEntriesCleared(Vec<Result<QuarantineEntryRecord, QuarantineMoveFailure>>),
     TrustChangeFinished(TrustOutcome),
     FalsePositiveReportFinished(SubmissionOutcome),
+    RestoreCheckFinished {
+        entry_id: i64,
+        content_verdict: ContentVerdict,
+    },
+    RecheckVerdictArrived {
+        entry_id: i64,
+        content_verdict: ContentVerdict,
+    },
+    RecheckFinished,
+}
+
+async fn verdict_for_entry(quarantine_vault: &QuarantineVault, entry_id: i64) -> ContentVerdict {
+    match quarantine_vault.read_payload_plaintext(entry_id).await {
+        Ok(payload_plaintext) => scan_content_with_current_signatures(payload_plaintext).await,
+        Err(read_failure) => ContentVerdict::VerdictUnavailable {
+            failure_text: read_failure.to_string(),
+        },
+    }
+}
+
+struct RestoreConfirmationText {
+    heading: String,
+    verdict_text: String,
+    confirm_label: String,
+    restores_detected_file: bool,
+}
+
+fn restore_confirmation_text(content_verdict: &ContentVerdict) -> RestoreConfirmationText {
+    match content_verdict {
+        ContentVerdict::NoLongerDetected => RestoreConfirmationText {
+            heading: gettext("Restore This File?"),
+            verdict_text: gettext("ClamAV no longer detects this file with today's signatures."),
+            confirm_label: gettext("Restore"),
+            restores_detected_file: false,
+        },
+        ContentVerdict::StillDetected { detection_name } => RestoreConfirmationText {
+            heading: gettext("Restore a File ClamAV Still Detects?"),
+            verdict_text: gettext(
+                "ClamAV still detects this file as {detection} with today's signatures. Only \
+                 restore it if you are sure it is a false positive, and consider trusting it \
+                 first.",
+            )
+            .replace("{detection}", detection_name),
+            confirm_label: gettext("Restore Anyway"),
+            restores_detected_file: true,
+        },
+        ContentVerdict::VerdictUnavailable { failure_text } => RestoreConfirmationText {
+            heading: gettext("Restore an Unchecked File?"),
+            verdict_text: gettext(
+                "The file could not be checked again before restoring it: {error}",
+            )
+            .replace("{error}", failure_text),
+            confirm_label: gettext("Restore Anyway"),
+            restores_detected_file: true,
+        },
+    }
+}
+
+fn restore_destination_note(entry_record: &QuarantineEntryRecord) -> String {
+    let home_directory = gtk::glib::home_dir();
+    if entry_record.original_path.starts_with(&home_directory) {
+        String::new()
+    } else {
+        gettext("This location is outside your home folder.")
+    }
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -146,6 +229,132 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
 }
 
 impl QuarantineEntriesPage {
+    fn send_recheck_states(&self) {
+        self.entry_rows
+            .iter()
+            .enumerate()
+            .for_each(|(row_position, entry_row)| {
+                self.entry_rows.send(
+                    row_position,
+                    QuarantineEntryRowInput::RecheckStateChanged(
+                        self.recheck_states
+                            .get(&entry_row.entry_id())
+                            .cloned()
+                            .unwrap_or(RowRecheckState::NotRechecked),
+                    ),
+                );
+            });
+    }
+
+    fn present_restore_confirmation(
+        &self,
+        entry_id: i64,
+        content_verdict: &ContentVerdict,
+        root: &adw::ToastOverlay,
+        sender: &ComponentSender<Self>,
+    ) {
+        let Some(entry_record) = self
+            .listed_entries
+            .iter()
+            .find(|listed_entry| listed_entry.entry_id == entry_id)
+        else {
+            return;
+        };
+        let RestoreConfirmationText {
+            heading,
+            verdict_text,
+            confirm_label,
+            restores_detected_file,
+        } = restore_confirmation_text(content_verdict);
+        let restore_dialog = adw::AlertDialog::new(
+            Some(&heading),
+            Some(&[verdict_text, gettext("The file goes back to:")].join("\n\n")),
+        );
+        let destination_label = gtk::Label::builder()
+            .label(sanitize_scanner_line(
+                &entry_record.original_path.to_string_lossy(),
+            ))
+            .use_markup(false)
+            .selectable(true)
+            .wrap(true)
+            .wrap_mode(gtk::pango::WrapMode::Char)
+            .css_classes(["monospace", "card"])
+            .build();
+        let destination_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        destination_box.append(&destination_label);
+        let destination_note = restore_destination_note(entry_record);
+        if !destination_note.is_empty() {
+            destination_box.append(
+                &gtk::Label::builder()
+                    .label(destination_note)
+                    .wrap(true)
+                    .css_classes(["warning"])
+                    .build(),
+            );
+        }
+        restore_dialog.set_extra_child(Some(&destination_box));
+        restore_dialog.add_response("cancel", &gettext("Cancel"));
+        restore_dialog.add_response("restore", &confirm_label);
+        restore_dialog.set_response_appearance(
+            "restore",
+            if restores_detected_file {
+                adw::ResponseAppearance::Destructive
+            } else {
+                adw::ResponseAppearance::Suggested
+            },
+        );
+        restore_dialog.set_default_response(Some("cancel"));
+        restore_dialog.set_close_response("cancel");
+        let input_sender = sender.input_sender().clone();
+        restore_dialog.connect_response(Some("restore"), move |_dialog, _response| {
+            input_sender.emit(QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id });
+        });
+        restore_dialog.present(Some(root));
+    }
+
+    fn start_recheck(&mut self, sender: &ComponentSender<Self>) {
+        if self.recheck_progress == RecheckProgress::RecheckRunning
+            || self.listed_entries.is_empty()
+        {
+            return;
+        }
+        self.recheck_progress = RecheckProgress::RecheckRunning;
+        let rechecked_ids = self
+            .listed_entries
+            .iter()
+            .map(|listed_entry| listed_entry.entry_id)
+            .collect::<Vec<_>>();
+        rechecked_ids.iter().for_each(|entry_id| {
+            self.recheck_states
+                .insert(*entry_id, RowRecheckState::Rechecking);
+        });
+        self.send_recheck_states();
+        let quarantine_vault = self.quarantine_vault.clone();
+        sender.command(move |command_output, shutdown| {
+            shutdown
+                .register(async move {
+                    stream::iter(rechecked_ids)
+                        .for_each(|entry_id| {
+                            let quarantine_vault = quarantine_vault.clone();
+                            let command_output = command_output.clone();
+                            async move {
+                                let content_verdict =
+                                    verdict_for_entry(&quarantine_vault, entry_id).await;
+                                command_output.emit(
+                                    QuarantineEntriesPageCommand::RecheckVerdictArrived {
+                                        entry_id,
+                                        content_verdict,
+                                    },
+                                );
+                            }
+                        })
+                        .await;
+                    command_output.emit(QuarantineEntriesPageCommand::RecheckFinished);
+                })
+                .drop_on_shutdown()
+        });
+    }
+
     fn reload_entries(&self, sender: &ComponentSender<Self>) {
         let quarantine_vault = self.quarantine_vault.clone();
         sender.oneshot_command(async move {
@@ -192,6 +401,8 @@ impl QuarantineEntriesPage {
             .for_each(|entry_record| {
                 entry_rows_guard.push_back(entry_record);
             });
+        drop(entry_rows_guard);
+        self.send_recheck_states();
     }
 
     fn confirm_clearing_old_entries(&self, sender: &ComponentSender<Self>) {
@@ -288,6 +499,15 @@ impl Component for QuarantineEntriesPage {
                                 },
                             },
                         },
+                    },
+
+                    pack_end = &gtk::Button {
+                        set_label: &gettext("Check Again"),
+                        set_tooltip_text: Some(&gettext("Scan every quarantined file with the current signatures")),
+                        #[watch]
+                        set_sensitive: model.recheck_progress == RecheckProgress::RecheckIdle
+                            && !model.listed_entries.is_empty(),
+                        connect_clicked => QuarantineEntriesPageInput::RecheckAllRequested,
                     },
 
                     pack_end = &gtk::Button {
@@ -411,6 +631,8 @@ impl Component for QuarantineEntriesPage {
             first_load: FirstLoad::StillLoading,
             search_mode_enabled: false,
             toaster: Toaster::new(&root),
+            recheck_states: HashMap::new(),
+            recheck_progress: RecheckProgress::RecheckIdle,
         };
         model.reload_entries(&sender);
         let entry_list = model.entry_rows.widget();
@@ -505,6 +727,18 @@ impl Component for QuarantineEntriesPage {
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {
+                self.recheck_states
+                    .insert(entry_id, RowRecheckState::Rechecking);
+                self.send_recheck_states();
+                sender.oneshot_command(async move {
+                    QuarantineEntriesPageCommand::RestoreCheckFinished {
+                        entry_id,
+                        content_verdict: verdict_for_entry(&quarantine_vault, entry_id).await,
+                    }
+                });
+            }
+            QuarantineEntriesPageInput::RecheckAllRequested => self.start_recheck(&sender),
+            QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id } => {
                 run_command_to_completion(&sender, async move {
                     QuarantineEntriesPageCommand::EntryOperationFinished(
                         quarantine_vault.restore_quarantined_file(entry_id).await,
@@ -555,9 +789,52 @@ impl Component for QuarantineEntriesPage {
         &mut self,
         page_command: QuarantineEntriesPageCommand,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match page_command {
+            QuarantineEntriesPageCommand::RestoreCheckFinished {
+                entry_id,
+                content_verdict,
+            } => {
+                self.recheck_states.insert(
+                    entry_id,
+                    RowRecheckState::Rechecked(content_verdict.clone()),
+                );
+                self.send_recheck_states();
+                self.present_restore_confirmation(entry_id, &content_verdict, root, &sender);
+            }
+            QuarantineEntriesPageCommand::RecheckVerdictArrived {
+                entry_id,
+                content_verdict,
+            } => {
+                self.recheck_states
+                    .insert(entry_id, RowRecheckState::Rechecked(content_verdict));
+                self.send_recheck_states();
+            }
+            QuarantineEntriesPageCommand::RecheckFinished => {
+                self.recheck_progress = RecheckProgress::RecheckIdle;
+                let cleared_count = self
+                    .recheck_states
+                    .values()
+                    .filter(|recheck_state| {
+                        **recheck_state
+                            == RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected)
+                    })
+                    .count();
+                self.toaster
+                    .add_toast(plain_text_toast(&if cleared_count == 0 {
+                        gettext("Every quarantined file is still detected or couldn't be checked")
+                    } else {
+                        ngettext(
+                            "{count} quarantined file is no longer detected. Check it before \
+                             restoring it.",
+                            "{count} quarantined files are no longer detected. Check them before \
+                             restoring them.",
+                            u32::try_from(cleared_count).unwrap_or(u32::MAX),
+                        )
+                        .replace("{count}", &cleared_count.to_string())
+                    }));
+            }
             QuarantineEntriesPageCommand::FalsePositiveReportFinished(submission_outcome) => {
                 self.toaster
                     .add_toast(plain_text_toast(&submission_outcome_text(

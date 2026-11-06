@@ -173,6 +173,7 @@ pub enum PageNavigationInput {
     DetectionRequestedForFile(PathBuf),
     QuarantineEntriesChanged,
     ActivityRecorded,
+    SignaturesUpdated,
     JournalAccessChanged(JournalAccess),
     UnresolvedDetectionsChanged(usize),
 }
@@ -555,6 +556,9 @@ impl Component for PageNavigation {
             .launch(activity_history.clone())
             .forward(sender.input_sender(), |update_output| match update_output {
                 DatabaseUpdatePageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+                DatabaseUpdatePageOutput::SignaturesUpdated => {
+                    PageNavigationInput::SignaturesUpdated
+                }
             });
         let protection_page = ProtectionTimelinePage::builder().launch(()).forward(
             sender.input_sender(),
@@ -701,6 +705,10 @@ impl Component for PageNavigation {
             PageNavigationInput::QuarantineEntriesChanged => {
                 self.quarantine_page
                     .emit(QuarantineEntriesPageInput::ReloadEntriesRequested);
+            }
+            PageNavigationInput::SignaturesUpdated => {
+                self.quarantine_page
+                    .emit(QuarantineEntriesPageInput::RecheckAllRequested);
             }
             PageNavigationInput::ActivityRecorded => {
                 self.logs_page

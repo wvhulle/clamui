@@ -15,7 +15,7 @@ use crate::host_services::{
         ClamavProgram, ProgramRefusal, locate_trusted_program,
     },
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-    desktop::flatpak_sandbox::host_program_async_command,
+    desktop::{content_pipe::pipe_content_for_child, flatpak_sandbox::host_program_async_command},
 };
 
 const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(300);
@@ -45,16 +45,6 @@ pub fn open_detected_file(file_path: &Path) -> io::Result<File> {
         .read(true)
         .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
         .open(file_path)
-}
-
-fn piped_content(
-    mut plaintext_source: impl Read + Send + 'static,
-) -> io::Result<std::os::fd::OwnedFd> {
-    let (pipe_reader, pipe_writer) = rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC)?;
-    std::thread::spawn(move || {
-        let _reader_closed = io::copy(&mut plaintext_source, &mut File::from(pipe_writer));
-    });
-    Ok(pipe_reader)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -126,7 +116,7 @@ pub async fn submit_false_positive(
             return SubmissionOutcome::SubmitterReplaceable;
         }
     };
-    let content_pipe = match piped_content(plaintext_source) {
+    let content_pipe = match pipe_content_for_child(plaintext_source) {
         Ok(content_pipe) => content_pipe,
         Err(pipe_failure) => {
             return SubmissionOutcome::SubmissionFailed {
