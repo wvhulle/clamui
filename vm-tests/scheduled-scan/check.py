@@ -1,6 +1,5 @@
 ENABLE_SCHEDULE_TOGGLE = (1030, 195)
 APPLY_SCHEDULE_BUTTON = (1029, 113)
-RUN_NOW_BUTTON = (979, 744)
 SIDEBAR_COLUMN = 80
 SIGNATURES_ROW = 259
 HARDENING_ROW = 297
@@ -21,7 +20,9 @@ with subtest("the Protection page shows the system timer"):
     machine.screenshot("protection_page")
 
 with subtest("Run Now asks for a password and runs the system scan"):
-    click_at(RUN_NOW_BUTTON[0], RUN_NOW_BUTTON[1])
+    click_on_text("Scheduled scan")
+    time.sleep(2)
+    click_on_text("Run Now")
     time.sleep(3)
     machine.screenshot("password_prompt")
     answer_password_prompt()

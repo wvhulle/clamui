@@ -1,5 +1,6 @@
 import json
 import shlex
+import subprocess
 import time
 from datetime import timedelta
 
@@ -146,6 +147,79 @@ def click_at(horizontal, vertical):
         "swaymsg 'seat seat0 cursor release button1'"
     )
     time.sleep(1)
+
+
+TESSERACT_FIELD_COUNT = 12
+TESSERACT_WORD_LEVEL = "5"
+
+
+def recognised_word_rows():
+    machine.screenshot("text_lookup")
+    tesseract_run = subprocess.run(
+        [
+            "tesseract",
+            str(machine.out_dir / "text_lookup.png"),
+            "-",
+            "--oem",
+            "2",
+            "-c",
+            "debug_file=/dev/null",
+            "--psm",
+            "11",
+            "tsv",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if tesseract_run.returncode != 0:
+        raise AssertionError(f"tesseract failed: {tesseract_run.stderr}")
+    split_rows = [output_line.split("\t") for output_line in tesseract_run.stdout.splitlines()[1:]]
+    return [
+        word_fields
+        for word_fields in split_rows
+        if len(word_fields) == TESSERACT_FIELD_COUNT
+        and word_fields[0] == TESSERACT_WORD_LEVEL
+        and word_fields[11].strip()
+    ]
+
+
+def normalised_word(word_text):
+    return word_text.strip().strip(".,:;…").lower()
+
+
+def text_center_on_screen(expected_text):
+    expected_words = [normalised_word(expected_word) for expected_word in expected_text.split()]
+    word_rows = recognised_word_rows()
+    for first_position in range(len(word_rows) - len(expected_words) + 1):
+        candidate_words = word_rows[first_position : first_position + len(expected_words)]
+        first_top = int(candidate_words[0][7])
+        first_height = int(candidate_words[0][9])
+        same_line = all(
+            abs(int(word_fields[7]) - first_top) <= first_height // 2
+            for word_fields in candidate_words
+        )
+        words_match = all(
+            normalised_word(word_fields[11]) == expected_word
+            for word_fields, expected_word in zip(candidate_words, expected_words)
+        )
+        if same_line and words_match:
+            left_edge = int(candidate_words[0][6])
+            right_edge = int(candidate_words[-1][6]) + int(candidate_words[-1][8])
+            top_edge = min(int(word_fields[7]) for word_fields in candidate_words)
+            bottom_edge = max(int(word_fields[7]) + int(word_fields[9]) for word_fields in candidate_words)
+            return ((left_edge + right_edge) // 2, (top_edge + bottom_edge) // 2)
+    return None
+
+
+def click_on_text(expected_text, timeout=30):
+    started_waiting = time.monotonic()
+    while time.monotonic() - started_waiting < timeout:
+        text_center = text_center_on_screen(expected_text)
+        if text_center is not None:
+            click_at(text_center[0], text_center[1])
+            return
+        time.sleep(2)
+    raise AssertionError(f"the text {expected_text!r} never appeared on screen")
 
 
 def activate_application_action(action_name):
