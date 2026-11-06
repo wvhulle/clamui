@@ -19,6 +19,9 @@ use crate::{
         },
         systemd_journal::unit_journal_reader::unit_messages_since,
     },
+    protection_page::signature_update_run::updater_exit_status::{
+        FreshclamExit, classify_freshclam_wait,
+    },
     signatures_page::signature_provider_catalogue::hide_addresses_in_text,
 };
 
@@ -34,10 +37,17 @@ pub enum DatabaseUpdatePlan {
 }
 
 #[derive(Debug)]
+pub enum UpdaterFinish {
+    FreshclamExited(FreshclamExit),
+    ServiceUnitRan(UnitStartOutcome),
+    RunningDaemonSignalled(UnitStartOutcome),
+    UpdaterNeverStarted(ScanStartFailure),
+}
+
+#[derive(Debug)]
 pub enum DatabaseUpdateEvent {
     UpdateOutputLine(String),
-    UpdaterExited { exit_code: i32 },
-    UpdaterUnstartable(ScanStartFailure),
+    UpdaterFinished(UpdaterFinish),
 }
 
 pub fn plan_database_update(service_state: FreshclamServiceState) -> DatabaseUpdatePlan {
@@ -65,26 +75,6 @@ fn build_freshclam_command() -> Result<Command, ProgramRefusal> {
     Ok(Command::from(update_command))
 }
 
-fn events_from_unit_outcome(start_outcome: UnitStartOutcome) -> Vec<DatabaseUpdateEvent> {
-    let exited_cleanly = DatabaseUpdateEvent::UpdaterExited { exit_code: 0 };
-    let exited_with_failure = DatabaseUpdateEvent::UpdaterExited { exit_code: 1 };
-    match start_outcome {
-        UnitStartOutcome::UnitFinished => vec![exited_cleanly],
-        UnitStartOutcome::JobEnded { job_result } => vec![
-            DatabaseUpdateEvent::UpdateOutputLine(format!("service job ended: {job_result}")),
-            exited_with_failure,
-        ],
-        UnitStartOutcome::AuthorizationRefused => vec![
-            DatabaseUpdateEvent::UpdateOutputLine("access denied".to_owned()),
-            exited_with_failure,
-        ],
-        UnitStartOutcome::BusFailure(bus_failure) => vec![
-            DatabaseUpdateEvent::UpdateOutputLine(bus_failure.to_string()),
-            exited_with_failure,
-        ],
-    }
-}
-
 fn lossy_output_line(output_line: &[u8]) -> String {
     String::from_utf8_lossy(output_line).into_owned()
 }
@@ -95,12 +85,9 @@ fn update_event_from_process(process_event: ScannerProcessEvent) -> DatabaseUpda
         | ScannerProcessEvent::DiagnosticLine(output_line) => {
             DatabaseUpdateEvent::UpdateOutputLine(lossy_output_line(&output_line))
         }
-        ScannerProcessEvent::Exited(exit_status) => DatabaseUpdateEvent::UpdaterExited {
-            exit_code: exit_status
-                .ok()
-                .and_then(|exit_status| exit_status.code())
-                .unwrap_or(-1),
-        },
+        ScannerProcessEvent::Exited(wait_outcome) => DatabaseUpdateEvent::UpdaterFinished(
+            UpdaterFinish::FreshclamExited(classify_freshclam_wait(wait_outcome)),
+        ),
     }
 }
 
@@ -122,17 +109,8 @@ async fn third_party_update_lines(started_after: Timestamp) -> Vec<String> {
     ) {
         return Vec::new();
     }
-    let outcome_line = match start_system_unit(FANGFRISCH_SERVICE_UNIT).await {
-        UnitStartOutcome::UnitFinished => "fangfrisch finished".to_owned(),
-        UnitStartOutcome::JobEnded { job_result } => format!("fangfrisch ended: {job_result}"),
-        UnitStartOutcome::AuthorizationRefused => "fangfrisch: access denied".to_owned(),
-        UnitStartOutcome::BusFailure(bus_failure) => format!("fangfrisch: {bus_failure}"),
-    };
-    service_journal_lines(FANGFRISCH_UNIT_NAME, started_after)
-        .await
-        .into_iter()
-        .chain(std::iter::once(outcome_line))
-        .collect()
+    let _fangfrisch_outcome = start_system_unit(FANGFRISCH_SERVICE_UNIT).await;
+    service_journal_lines(FANGFRISCH_UNIT_NAME, started_after).await
 }
 
 pub fn database_update_events(
@@ -141,16 +119,13 @@ pub fn database_update_events(
     let started_after = Timestamp::now();
     match update_plan {
         DatabaseUpdatePlan::SignalRunningDaemon { service_unit } => stream::once(async move {
-            events_from_unit_outcome(
+            DatabaseUpdateEvent::UpdaterFinished(UpdaterFinish::RunningDaemonSignalled(
                 signal_system_unit(&format!("{service_unit}.service"), UPDATE_NOW_SIGNAL).await,
-            )
+            ))
         })
-        .flat_map(stream::iter)
         .boxed(),
         DatabaseUpdatePlan::StartServiceUnit { service_unit } => stream::once(async move {
-            let unit_events = events_from_unit_outcome(
-                start_system_unit(&format!("{service_unit}.service")).await,
-            );
+            let unit_outcome = start_system_unit(&format!("{service_unit}.service")).await;
             service_journal_lines(service_unit, started_after)
                 .await
                 .into_iter()
@@ -158,7 +133,9 @@ pub fn database_update_events(
                 .map(|output_line| {
                     DatabaseUpdateEvent::UpdateOutputLine(hide_addresses_in_text(&output_line))
                 })
-                .chain(unit_events)
+                .chain(std::iter::once(DatabaseUpdateEvent::UpdaterFinished(
+                    UpdaterFinish::ServiceUnitRan(unit_outcome),
+                )))
                 .collect::<Vec<_>>()
         })
         .flat_map(stream::iter)
@@ -169,8 +146,8 @@ pub fn database_update_events(
                 scanner_process_events(freshclam_command, RetainedScannerFiles::NoRetainedFiles)
             }) {
             Ok(process_events) => process_events.map(update_event_from_process).boxed(),
-            Err(start_failure) => stream::once(ready(DatabaseUpdateEvent::UpdaterUnstartable(
-                start_failure,
+            Err(start_failure) => stream::once(ready(DatabaseUpdateEvent::UpdaterFinished(
+                UpdaterFinish::UpdaterNeverStarted(start_failure),
             )))
             .boxed(),
         },
@@ -203,25 +180,5 @@ mod database_update_events_tests {
             plan_database_update(FreshclamServiceState::ServiceNotFound),
             DatabaseUpdatePlan::RunFreshclamDirectly
         );
-    }
-
-    #[test]
-    fn a_refused_authorization_is_reported_as_a_failed_update() {
-        let refused_events = events_from_unit_outcome(UnitStartOutcome::AuthorizationRefused);
-        assert!(matches!(
-            refused_events.as_slice(),
-            [
-                DatabaseUpdateEvent::UpdateOutputLine(_),
-                DatabaseUpdateEvent::UpdaterExited { exit_code: 1 }
-            ]
-        ));
-    }
-
-    #[test]
-    fn a_finished_unit_is_a_clean_exit() {
-        assert!(matches!(
-            events_from_unit_outcome(UnitStartOutcome::UnitFinished).as_slice(),
-            [DatabaseUpdateEvent::UpdaterExited { exit_code: 0 }]
-        ));
     }
 }

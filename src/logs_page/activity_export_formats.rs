@@ -16,6 +16,7 @@ pub fn activity_status_text(activity_status: ActivityStatus) -> String {
         ActivityStatus::UpdateApplied => gettext("Success"),
         ActivityStatus::UpdateAlreadyCurrent => gettext("Up to date"),
         ActivityStatus::UpdateRequested => gettext("Requested"),
+        ActivityStatus::UpdateResultUnknown => gettext("Ran"),
     }
 }
 
@@ -34,6 +35,9 @@ pub fn activity_summary_text(activity_entry: &ActivityEntryRecord) -> String {
         ActivityStatus::UpdateApplied => gettext("Virus definitions updated"),
         ActivityStatus::UpdateAlreadyCurrent => gettext("Virus definitions are up to date"),
         ActivityStatus::UpdateRequested => gettext("Update requested from the service"),
+        ActivityStatus::UpdateResultUnknown => {
+            gettext("The update service ran without reporting a result")
+        }
         ActivityStatus::UpdateFailed => gettext("Database update failed"),
         ActivityStatus::UpdateCancelled => gettext("Database update cancelled"),
     }

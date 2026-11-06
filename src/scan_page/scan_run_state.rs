@@ -47,7 +47,7 @@ pub fn scanner_program_trust(scanner_programs: &ScannerProgramPaths) -> ScannerP
     }
 }
 
-fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
+pub fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
     match start_failure {
         ScanStartFailure::ScannerProgramMissing => {
             gettext("The ClamAV scanner is not installed or not on the search path.")

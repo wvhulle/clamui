@@ -15,17 +15,21 @@ use crate::{
             trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
         },
         clamav_scanner::{
+            scanner_exit_classification::AbnormalScannerExit,
             scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
             scanner_process_events::ScanStartFailure,
         },
     },
     protection_page::signature_update_run::{
-        database_update_events::{DatabaseUpdateEvent, DatabaseUpdatePlan, plan_database_update},
+        database_update_events::{
+            DatabaseUpdateEvent, DatabaseUpdatePlan, UpdaterFinish, plan_database_update,
+        },
         freshclam_output_parser::{
             DatabaseUpdateOutcome, FreshclamReportSummary, RateLimitCooldown, UpdateFailureReason,
-            interpret_update_exit,
+            interpret_unfinished_update, interpret_updater_finish,
         },
     },
+    scan_page::scan_run_state::describe_start_failure as describe_scan_start_failure,
     shared_widgets::component_streams::RunningStream,
 };
 
@@ -36,12 +40,6 @@ pub struct DatabaseHostStatus {
     freshclam_probe: ProgramProbe,
     service_state: FreshclamServiceState,
     directory_status: DatabaseDirectoryStatus,
-}
-
-enum ObservedUpdateExit {
-    ExitNotObserved,
-    ExitObserved { exit_code: i32 },
-    NeverStarted(ScanStartFailure),
 }
 
 #[derive(Clone, Copy)]
@@ -59,16 +57,219 @@ impl UpdateTiming {
     }
 }
 
-enum DatabaseUpdateState {
-    NoActiveUpdate,
+enum LatestUpdaterLine {
+    NothingPrinted,
+    LinePrinted(String),
+}
+
+struct UpdateRunOutput {
+    update_transcript: String,
+    latest_updater_line: LatestUpdaterLine,
+}
+
+impl UpdateRunOutput {
+    const fn nothing_printed() -> Self {
+        Self {
+            update_transcript: String::new(),
+            latest_updater_line: LatestUpdaterLine::NothingPrinted,
+        }
+    }
+
+    fn append_output_line(&mut self, output_line: &str) {
+        let displayed_line = sanitize_scanner_line(output_line);
+        if !displayed_line.trim().is_empty() {
+            self.latest_updater_line =
+                LatestUpdaterLine::LinePrinted(displayed_line.trim().to_owned());
+        }
+        if self.update_transcript.len() + displayed_line.len() < TRANSCRIPT_LIMIT {
+            self.update_transcript.push_str(&displayed_line);
+            self.update_transcript.push('\n');
+        }
+    }
+
+    fn latest_line_text(&self) -> String {
+        match &self.latest_updater_line {
+            LatestUpdaterLine::NothingPrinted => gettext("Starting the update…"),
+            LatestUpdaterLine::LinePrinted(output_line) => output_line.clone(),
+        }
+    }
+}
+
+enum ActiveUpdateRun {
     UpdateRunning {
         update_plan: DatabaseUpdatePlan,
         update_timing: UpdateTiming,
+        run_output: UpdateRunOutput,
+        _update_stream: RunningStream,
+    },
+    UpdaterFinished {
+        update_timing: UpdateTiming,
+        run_output: UpdateRunOutput,
+        updater_finish: UpdaterFinish,
         _update_stream: RunningStream,
     },
     CancellingUpdate {
         update_timing: UpdateTiming,
+        run_output: UpdateRunOutput,
     },
+}
+
+struct EndedUpdateRun {
+    update_timing: UpdateTiming,
+    run_output: UpdateRunOutput,
+    update_outcome: DatabaseUpdateOutcome,
+}
+
+impl ActiveUpdateRun {
+    const fn run_output_mut(&mut self) -> &mut UpdateRunOutput {
+        match self {
+            Self::UpdateRunning { run_output, .. }
+            | Self::UpdaterFinished { run_output, .. }
+            | Self::CancellingUpdate { run_output, .. } => run_output,
+        }
+    }
+
+    fn cancel_requested(self) -> Self {
+        match self {
+            Self::UpdateRunning {
+                update_plan: DatabaseUpdatePlan::RunFreshclamDirectly,
+                update_timing,
+                run_output,
+                ..
+            } => Self::CancellingUpdate {
+                update_timing,
+                run_output,
+            },
+            uncancellable_run @ (Self::UpdateRunning {
+                update_plan:
+                    DatabaseUpdatePlan::SignalRunningDaemon { .. }
+                    | DatabaseUpdatePlan::StartServiceUnit { .. },
+                ..
+            }
+            | Self::UpdaterFinished { .. }
+            | Self::CancellingUpdate { .. }) => uncancellable_run,
+        }
+    }
+
+    fn updater_finished(self, updater_finish: UpdaterFinish) -> Self {
+        match self {
+            Self::UpdateRunning {
+                update_timing,
+                run_output,
+                _update_stream,
+                ..
+            } => Self::UpdaterFinished {
+                update_timing,
+                run_output,
+                updater_finish,
+                _update_stream,
+            },
+            settled_run @ (Self::UpdaterFinished { .. } | Self::CancellingUpdate { .. }) => {
+                settled_run
+            }
+        }
+    }
+
+    fn absorb_update_event(mut self, update_event: DatabaseUpdateEvent) -> Self {
+        match update_event {
+            DatabaseUpdateEvent::UpdateOutputLine(output_line) => {
+                self.run_output_mut().append_output_line(&output_line);
+                self
+            }
+            DatabaseUpdateEvent::UpdaterFinished(updater_finish) => {
+                self.updater_finished(updater_finish)
+            }
+        }
+    }
+
+    fn into_ended_run(self) -> EndedUpdateRun {
+        match self {
+            Self::UpdateRunning {
+                update_timing,
+                run_output,
+                ..
+            } => EndedUpdateRun {
+                update_outcome: interpret_unfinished_update(&run_output.update_transcript),
+                update_timing,
+                run_output,
+            },
+            Self::UpdaterFinished {
+                update_timing,
+                run_output,
+                updater_finish,
+                ..
+            } => EndedUpdateRun {
+                update_outcome: interpret_updater_finish(
+                    &run_output.update_transcript,
+                    updater_finish,
+                ),
+                update_timing,
+                run_output,
+            },
+            Self::CancellingUpdate {
+                update_timing,
+                run_output,
+            } => EndedUpdateRun {
+                update_outcome: DatabaseUpdateOutcome::UpdateCancelled,
+                update_timing,
+                run_output,
+            },
+        }
+    }
+
+    fn into_finished_report(self) -> FinishedUpdateReport {
+        let ended_run = self.into_ended_run();
+        FinishedUpdateReport {
+            summary_text: describe_update_outcome(&ended_run.update_outcome),
+            definitions_changed: definitions_changed(&ended_run.update_outcome),
+            activity_entry: NewActivityEntry {
+                started_at: ended_run.update_timing.started_at,
+                activity_status: activity_status_of(&ended_run.update_outcome),
+                activity_targets: String::new(),
+                inspected_file_count: 0,
+                threat_count: 0,
+                duration_millis: u64::try_from(
+                    ended_run
+                        .update_timing
+                        .started_instant
+                        .elapsed()
+                        .as_millis(),
+                )
+                .unwrap_or(u64::MAX),
+                activity_output: ended_run.run_output.update_transcript,
+            },
+        }
+    }
+
+    fn update_progress(&self) -> SignatureUpdateProgress {
+        match self {
+            Self::UpdateRunning {
+                update_plan: DatabaseUpdatePlan::RunFreshclamDirectly,
+                run_output,
+                ..
+            } => SignatureUpdateProgress::CancellableUpdateRunning {
+                latest_output_line: run_output.latest_line_text(),
+            },
+            Self::UpdateRunning {
+                update_plan:
+                    DatabaseUpdatePlan::SignalRunningDaemon { .. }
+                    | DatabaseUpdatePlan::StartServiceUnit { .. },
+                run_output,
+                ..
+            }
+            | Self::UpdaterFinished { run_output, .. } => {
+                SignatureUpdateProgress::UncancellableUpdateRunning {
+                    latest_output_line: run_output.latest_line_text(),
+                }
+            }
+            Self::CancellingUpdate { .. } => SignatureUpdateProgress::UpdateCancelling,
+        }
+    }
+}
+
+enum DatabaseUpdateState {
+    NoActiveUpdate,
+    ActiveUpdate(Box<ActiveUpdateRun>),
 }
 
 enum HostStatusView {
@@ -80,10 +281,8 @@ enum HostStatusView {
 pub enum SignatureUpdateProgress {
     UpdateUnavailable,
     ReadyToUpdate,
-    UpdateRunning {
-        latest_output_line: String,
-        cancellable: bool,
-    },
+    CancellableUpdateRunning { latest_output_line: String },
+    UncancellableUpdateRunning { latest_output_line: String },
     UpdateCancelling,
 }
 
@@ -110,10 +309,17 @@ pub enum SignatureUpdateView {
     HostStatusKnown(KnownUpdateHost),
 }
 
+#[derive(Debug)]
 pub struct FinishedUpdateReport {
     pub summary_text: String,
     pub definitions_changed: bool,
     pub activity_entry: NewActivityEntry,
+}
+
+#[derive(Debug)]
+pub enum UpdateStreamEnding {
+    UpdateEnded(FinishedUpdateReport),
+    NoUpdateWasRunning,
 }
 
 fn service_description(service_state: FreshclamServiceState) -> String {
@@ -155,13 +361,39 @@ fn directory_path_text(directory_status: &DatabaseDirectoryStatus) -> String {
     }
 }
 
+fn describe_abnormal_freshclam_exit(abnormal_exit: AbnormalScannerExit) -> String {
+    match abnormal_exit {
+        AbnormalScannerExit::ScannerError { exit_code } => {
+            gettext("freshclam failed with exit code {code}.")
+                .replace("{code}", &exit_code.to_string())
+        }
+        AbnormalScannerExit::KilledBySignal { signal_number } => {
+            gettext("freshclam was stopped by signal {signal}.")
+                .replace("{signal}", &signal_number.to_string())
+        }
+        AbnormalScannerExit::UnrecognizedWaitStatus { .. } => {
+            gettext("freshclam ended in a way Lazaret does not recognize.")
+        }
+        AbnormalScannerExit::WaitFailed { .. } => {
+            gettext("Lazaret lost track of freshclam before it finished.")
+        }
+    }
+}
+
 fn describe_failure_reason(failure_reason: &UpdateFailureReason) -> String {
     match failure_reason {
-        UpdateFailureReason::AuthenticationCancelled => {
-            gettext("Authentication cancelled. Database update requires administrator privileges.")
-        }
-        UpdateFailureReason::NotAuthorized => {
+        UpdateFailureReason::AuthorizationRefused => {
             gettext("Authorization failed. Please try again and enter your password.")
+        }
+        UpdateFailureReason::SystemdUnreachable(_bus_failure) => {
+            gettext("Systemd could not be reached to run the update.")
+        }
+        UpdateFailureReason::ServiceJobEnded { job_result } => {
+            gettext("The update service did not finish; systemd reported: {result}")
+                .replace("{result}", &sanitize_scanner_line(job_result))
+        }
+        UpdateFailureReason::FreshclamEndedAbnormally(abnormal_exit) => {
+            describe_abnormal_freshclam_exit(*abnormal_exit)
         }
         UpdateFailureReason::RateLimitedDatabases | UpdateFailureReason::RateLimitedByMirror => {
             gettext("Update rate limited by mirror. Please wait a few minutes and try again.")
@@ -194,7 +426,7 @@ fn describe_failure_reason(failure_reason: &UpdateFailureReason) -> String {
         UpdateFailureReason::ReportedByUpdater { diagnostic_text } => {
             sanitize_scanner_text(diagnostic_text)
         }
-        UpdateFailureReason::UnexplainedFailure => {
+        UpdateFailureReason::UpdaterResultMissing => {
             gettext("Update failed with an unknown error. Check the logs for details.")
         }
     }
@@ -240,10 +472,26 @@ fn describe_update_outcome(update_outcome: &DatabaseUpdateOutcome) -> String {
         DatabaseUpdateOutcome::AlreadyCurrent(report_summary) => {
             (gettext("Database is already up to date"), report_summary)
         }
+        DatabaseUpdateOutcome::ServiceRanWithoutVerdict(report_summary) => (
+            gettext(
+                "The update service ran, but its log does not say whether definitions changed.",
+            ),
+            report_summary,
+        ),
         DatabaseUpdateOutcome::UpdateFailed {
             failure_reason,
             report_summary,
         } => (describe_failure_reason(failure_reason), report_summary),
+        DatabaseUpdateOutcome::UpdateRequestedFromDaemon => {
+            return gettext(
+                "The service accepted the signal; it performs the update asynchronously. Check \
+                 its logs for completion.",
+            );
+        }
+        DatabaseUpdateOutcome::UpdateCancelled => return gettext("Database update cancelled"),
+        DatabaseUpdateOutcome::UpdaterNeverStarted(start_failure) => {
+            return describe_start_failure(start_failure);
+        }
     };
     [headline]
         .into_iter()
@@ -252,12 +500,42 @@ fn describe_update_outcome(update_outcome: &DatabaseUpdateOutcome) -> String {
         .join("\n")
 }
 
+const fn activity_status_of(update_outcome: &DatabaseUpdateOutcome) -> ActivityStatus {
+    match update_outcome {
+        DatabaseUpdateOutcome::DefinitionsUpdated(_) => ActivityStatus::UpdateApplied,
+        DatabaseUpdateOutcome::AlreadyCurrent(_) => ActivityStatus::UpdateAlreadyCurrent,
+        DatabaseUpdateOutcome::ServiceRanWithoutVerdict(_) => ActivityStatus::UpdateResultUnknown,
+        DatabaseUpdateOutcome::UpdateRequestedFromDaemon => ActivityStatus::UpdateRequested,
+        DatabaseUpdateOutcome::UpdateCancelled => ActivityStatus::UpdateCancelled,
+        DatabaseUpdateOutcome::UpdateFailed { .. }
+        | DatabaseUpdateOutcome::UpdaterNeverStarted(_) => ActivityStatus::UpdateFailed,
+    }
+}
+
+const fn definitions_changed(update_outcome: &DatabaseUpdateOutcome) -> bool {
+    match update_outcome {
+        DatabaseUpdateOutcome::DefinitionsUpdated(_) => true,
+        DatabaseUpdateOutcome::AlreadyCurrent(_)
+        | DatabaseUpdateOutcome::ServiceRanWithoutVerdict(_)
+        | DatabaseUpdateOutcome::UpdateRequestedFromDaemon
+        | DatabaseUpdateOutcome::UpdateCancelled
+        | DatabaseUpdateOutcome::UpdateFailed { .. }
+        | DatabaseUpdateOutcome::UpdaterNeverStarted(_) => false,
+    }
+}
+
 fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
     match start_failure {
         ScanStartFailure::ScannerProgramMissing => {
             gettext("Install freshclam before requesting database updates.")
         }
-        other_failure => other_failure.to_string(),
+        ScanStartFailure::ScannerProgramReplaceable { .. }
+        | ScanStartFailure::ScannerSpawnFailed(_)
+        | ScanStartFailure::ScannerOutputUncaptured
+        | ScanStartFailure::ScannerWorkDirectoryUnavailable(_)
+        | ScanStartFailure::ScanInputUnavailable { .. } => {
+            describe_scan_start_failure(start_failure)
+        }
     }
 }
 
@@ -287,20 +565,14 @@ pub async fn load_host_status() -> DatabaseHostStatus {
 pub struct SignatureUpdateSession {
     host_status: HostStatusView,
     update_state: DatabaseUpdateState,
-    observed_exit: ObservedUpdateExit,
-    update_transcript: String,
-    latest_output_line: String,
     last_manual_update: LastManualUpdate,
 }
 
 impl SignatureUpdateSession {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             host_status: HostStatusView::StatusLoading,
             update_state: DatabaseUpdateState::NoActiveUpdate,
-            observed_exit: ObservedUpdateExit::ExitNotObserved,
-            update_transcript: String::new(),
-            latest_output_line: String::new(),
             last_manual_update: LastManualUpdate::NotRunThisSession,
         }
     }
@@ -321,7 +593,10 @@ impl SignatureUpdateSession {
     }
 
     const fn update_is_active(&self) -> bool {
-        !matches!(self.update_state, DatabaseUpdateState::NoActiveUpdate)
+        match self.update_state {
+            DatabaseUpdateState::NoActiveUpdate => false,
+            DatabaseUpdateState::ActiveUpdate(_) => true,
+        }
     }
 
     fn can_request_update(&self) -> bool {
@@ -350,164 +625,62 @@ impl SignatureUpdateSession {
         update_plan: DatabaseUpdatePlan,
         update_stream: RunningStream,
     ) {
-        self.update_transcript.clear();
-        self.latest_output_line = gettext("Starting the update…");
-        self.observed_exit = ObservedUpdateExit::ExitNotObserved;
-        self.update_state = DatabaseUpdateState::UpdateRunning {
-            update_plan,
-            update_timing: UpdateTiming::starting_now(),
-            _update_stream: update_stream,
-        };
+        self.update_state =
+            DatabaseUpdateState::ActiveUpdate(Box::new(ActiveUpdateRun::UpdateRunning {
+                update_plan,
+                update_timing: UpdateTiming::starting_now(),
+                run_output: UpdateRunOutput::nothing_printed(),
+                _update_stream: update_stream,
+            }));
+    }
+
+    fn advance_active_run(
+        &mut self,
+        run_transition: impl FnOnce(ActiveUpdateRun) -> ActiveUpdateRun,
+    ) {
+        self.update_state =
+            match std::mem::replace(&mut self.update_state, DatabaseUpdateState::NoActiveUpdate) {
+                DatabaseUpdateState::NoActiveUpdate => DatabaseUpdateState::NoActiveUpdate,
+                DatabaseUpdateState::ActiveUpdate(active_run) => {
+                    DatabaseUpdateState::ActiveUpdate(Box::new(run_transition(*active_run)))
+                }
+            };
     }
 
     pub fn cancel_requested(&mut self) {
-        if let DatabaseUpdateState::UpdateRunning {
-            update_plan: DatabaseUpdatePlan::RunFreshclamDirectly,
-            update_timing,
-            ..
-        } = self.update_state
-        {
-            self.update_state = DatabaseUpdateState::CancellingUpdate { update_timing };
-        }
-    }
-
-    const fn update_is_cancelling(&self) -> bool {
-        matches!(
-            self.update_state,
-            DatabaseUpdateState::CancellingUpdate { .. }
-        )
-    }
-
-    fn running_update_timing(&self) -> UpdateTiming {
-        match self.update_state {
-            DatabaseUpdateState::UpdateRunning { update_timing, .. }
-            | DatabaseUpdateState::CancellingUpdate { update_timing } => update_timing,
-            DatabaseUpdateState::NoActiveUpdate => UpdateTiming::starting_now(),
-        }
-    }
-
-    fn append_transcript_line(&mut self, output_line: &str) {
-        let displayed_line = sanitize_scanner_line(output_line);
-        if !displayed_line.trim().is_empty() {
-            self.latest_output_line = displayed_line.trim().to_owned();
-        }
-        if self.update_transcript.len() + displayed_line.len() < TRANSCRIPT_LIMIT {
-            self.update_transcript.push_str(&displayed_line);
-            self.update_transcript.push('\n');
-        }
+        self.advance_active_run(ActiveUpdateRun::cancel_requested);
     }
 
     pub fn absorb_update_batch(&mut self, update_batch: Vec<DatabaseUpdateEvent>) {
-        update_batch
-            .into_iter()
-            .for_each(|update_event| match update_event {
-                DatabaseUpdateEvent::UpdateOutputLine(output_line) => {
-                    self.append_transcript_line(&output_line);
-                }
-                DatabaseUpdateEvent::UpdaterExited { exit_code } => {
-                    self.observed_exit = ObservedUpdateExit::ExitObserved { exit_code };
-                }
-                DatabaseUpdateEvent::UpdaterUnstartable(start_failure) => {
-                    self.observed_exit = ObservedUpdateExit::NeverStarted(start_failure);
-                }
-            });
+        self.advance_active_run(|active_run| {
+            update_batch
+                .into_iter()
+                .fold(active_run, ActiveUpdateRun::absorb_update_event)
+        });
     }
 
-    fn finished_update_status(&self) -> ActivityStatus {
-        match (&self.update_state, &self.observed_exit) {
-            (DatabaseUpdateState::CancellingUpdate { .. }, _any_exit) => {
-                ActivityStatus::UpdateCancelled
+    pub fn update_stream_ended(&mut self) -> UpdateStreamEnding {
+        match std::mem::replace(&mut self.update_state, DatabaseUpdateState::NoActiveUpdate) {
+            DatabaseUpdateState::NoActiveUpdate => UpdateStreamEnding::NoUpdateWasRunning,
+            DatabaseUpdateState::ActiveUpdate(active_run) => {
+                let finished_report = active_run.into_finished_report();
+                self.last_manual_update = LastManualUpdate::FinishedAt {
+                    summary_line: finished_report
+                        .summary_text
+                        .lines()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    finished_at: Timestamp::now(),
+                };
+                UpdateStreamEnding::UpdateEnded(finished_report)
             }
-            (
-                _any_state,
-                ObservedUpdateExit::NeverStarted(_) | ObservedUpdateExit::ExitNotObserved,
-            ) => ActivityStatus::UpdateFailed,
-            (
-                DatabaseUpdateState::UpdateRunning {
-                    update_plan: DatabaseUpdatePlan::SignalRunningDaemon { .. },
-                    ..
-                },
-                ObservedUpdateExit::ExitObserved { exit_code: 0 },
-            ) => ActivityStatus::UpdateRequested,
-            (_any_state, ObservedUpdateExit::ExitObserved { exit_code }) => {
-                match interpret_update_exit(&self.update_transcript, *exit_code) {
-                    DatabaseUpdateOutcome::DefinitionsUpdated(_) => ActivityStatus::UpdateApplied,
-                    DatabaseUpdateOutcome::AlreadyCurrent(_) => {
-                        ActivityStatus::UpdateAlreadyCurrent
-                    }
-                    DatabaseUpdateOutcome::UpdateFailed { .. } => ActivityStatus::UpdateFailed,
-                }
-            }
-        }
-    }
-
-    fn finished_update_summary(&self) -> String {
-        match (&self.update_state, &self.observed_exit) {
-            (DatabaseUpdateState::CancellingUpdate { .. }, _any_exit) => {
-                gettext("Database update cancelled")
-            }
-            (_any_state, ObservedUpdateExit::NeverStarted(start_failure)) => {
-                describe_start_failure(start_failure)
-            }
-            (
-                DatabaseUpdateState::UpdateRunning {
-                    update_plan: DatabaseUpdatePlan::SignalRunningDaemon { .. },
-                    ..
-                },
-                ObservedUpdateExit::ExitObserved { exit_code: 0 },
-            ) => gettext(
-                "The service accepted the signal; it performs the update asynchronously. Check \
-                 its logs for completion.",
-            ),
-            (_any_state, ObservedUpdateExit::ExitObserved { exit_code }) => {
-                describe_update_outcome(&interpret_update_exit(&self.update_transcript, *exit_code))
-            }
-            (_any_state, ObservedUpdateExit::ExitNotObserved) => {
-                gettext("Update failed with an unknown error. Check the logs for details.")
-            }
-        }
-    }
-
-    pub fn update_finished(&mut self) -> FinishedUpdateReport {
-        let summary_text = self.finished_update_summary();
-        let definitions_changed = matches!(
-            self.observed_exit,
-            ObservedUpdateExit::ExitObserved { exit_code: 0 }
-        ) && !self.update_is_cancelling();
-        let update_timing = self.running_update_timing();
-        let activity_entry = NewActivityEntry {
-            started_at: update_timing.started_at,
-            activity_status: self.finished_update_status(),
-            activity_targets: String::new(),
-            inspected_file_count: 0,
-            threat_count: 0,
-            duration_millis: u64::try_from(update_timing.started_instant.elapsed().as_millis())
-                .unwrap_or(u64::MAX),
-            activity_output: std::mem::take(&mut self.update_transcript),
-        };
-        self.last_manual_update = LastManualUpdate::FinishedAt {
-            summary_line: summary_text.lines().next().unwrap_or_default().to_owned(),
-            finished_at: Timestamp::now(),
-        };
-        self.update_state = DatabaseUpdateState::NoActiveUpdate;
-        FinishedUpdateReport {
-            summary_text,
-            definitions_changed,
-            activity_entry,
         }
     }
 
     fn update_progress(&self) -> SignatureUpdateProgress {
         match &self.update_state {
-            DatabaseUpdateState::UpdateRunning { update_plan, .. } => {
-                SignatureUpdateProgress::UpdateRunning {
-                    latest_output_line: self.latest_output_line.clone(),
-                    cancellable: *update_plan == DatabaseUpdatePlan::RunFreshclamDirectly,
-                }
-            }
-            DatabaseUpdateState::CancellingUpdate { .. } => {
-                SignatureUpdateProgress::UpdateCancelling
-            }
+            DatabaseUpdateState::ActiveUpdate(active_run) => active_run.update_progress(),
             DatabaseUpdateState::NoActiveUpdate if self.can_request_update() => {
                 SignatureUpdateProgress::ReadyToUpdate
             }
@@ -529,5 +702,161 @@ impl SignatureUpdateSession {
                 directory_description(&host_status.directory_status)
             ),
         })
+    }
+}
+
+#[cfg(test)]
+mod signature_update_session_tests {
+    use super::*;
+    use crate::{
+        host_services::systemd_bus::host_systemd_units::UnitStartOutcome,
+        protection_page::signature_update_run::updater_exit_status::FreshclamExit,
+    };
+
+    const FRESHCLAM_UNIT: &str = "clamav-freshclam";
+
+    fn session_running(update_plan: DatabaseUpdatePlan) -> SignatureUpdateSession {
+        let mut update_session = SignatureUpdateSession::new();
+        update_session.update_started(update_plan, RunningStream::already_stopped());
+        update_session
+    }
+
+    fn ended_report(update_session: &mut SignatureUpdateSession) -> FinishedUpdateReport {
+        match update_session.update_stream_ended() {
+            UpdateStreamEnding::UpdateEnded(finished_report) => finished_report,
+            UpdateStreamEnding::NoUpdateWasRunning => panic!("expected an update to end"),
+        }
+    }
+
+    #[test]
+    fn a_stream_end_without_an_active_update_produces_no_report() {
+        let mut update_session = SignatureUpdateSession::new();
+        assert!(matches!(
+            update_session.update_stream_ended(),
+            UpdateStreamEnding::NoUpdateWasRunning
+        ));
+        assert_eq!(
+            update_session.last_manual_update,
+            LastManualUpdate::NotRunThisSession
+        );
+    }
+
+    #[test]
+    fn a_stream_end_is_reported_once_per_run() {
+        let mut update_session = session_running(DatabaseUpdatePlan::RunFreshclamDirectly);
+        let _first_report = ended_report(&mut update_session);
+        assert!(matches!(
+            update_session.update_stream_ended(),
+            UpdateStreamEnding::NoUpdateWasRunning
+        ));
+    }
+
+    #[test]
+    fn a_signalled_daemon_does_not_count_as_updated_definitions() {
+        let mut update_session = session_running(DatabaseUpdatePlan::SignalRunningDaemon {
+            service_unit: FRESHCLAM_UNIT,
+        });
+        update_session.absorb_update_batch(vec![DatabaseUpdateEvent::UpdaterFinished(
+            UpdaterFinish::RunningDaemonSignalled(UnitStartOutcome::UnitFinished),
+        )]);
+        let finished_report = ended_report(&mut update_session);
+        assert!(!finished_report.definitions_changed);
+        assert_eq!(
+            finished_report.activity_entry.activity_status,
+            ActivityStatus::UpdateRequested
+        );
+    }
+
+    #[test]
+    fn a_unit_run_without_a_version_line_has_an_unknown_result() {
+        let mut update_session = session_running(DatabaseUpdatePlan::StartServiceUnit {
+            service_unit: FRESHCLAM_UNIT,
+        });
+        update_session.absorb_update_batch(vec![
+            DatabaseUpdateEvent::UpdateOutputLine("Starting clamav-freshclam".to_owned()),
+            DatabaseUpdateEvent::UpdaterFinished(UpdaterFinish::ServiceUnitRan(
+                UnitStartOutcome::UnitFinished,
+            )),
+        ]);
+        let finished_report = ended_report(&mut update_session);
+        assert!(!finished_report.definitions_changed);
+        assert_eq!(
+            finished_report.activity_entry.activity_status,
+            ActivityStatus::UpdateResultUnknown
+        );
+    }
+
+    #[test]
+    fn a_refused_authorization_fails_without_writing_to_the_transcript() {
+        let mut update_session = session_running(DatabaseUpdatePlan::StartServiceUnit {
+            service_unit: FRESHCLAM_UNIT,
+        });
+        update_session.absorb_update_batch(vec![DatabaseUpdateEvent::UpdaterFinished(
+            UpdaterFinish::ServiceUnitRan(UnitStartOutcome::AuthorizationRefused),
+        )]);
+        let finished_report = ended_report(&mut update_session);
+        assert_eq!(
+            finished_report.activity_entry.activity_status,
+            ActivityStatus::UpdateFailed
+        );
+        assert_eq!(finished_report.activity_entry.activity_output, "");
+        assert_eq!(
+            finished_report.summary_text,
+            "Authorization failed. Please try again and enter your password."
+        );
+    }
+
+    #[test]
+    fn an_exit_from_a_previous_run_does_not_survive_into_the_next_run() {
+        let mut update_session = session_running(DatabaseUpdatePlan::RunFreshclamDirectly);
+        update_session.absorb_update_batch(vec![
+            DatabaseUpdateEvent::UpdateOutputLine(
+                "daily.cld updated (version: 1, sigs: 2)".to_owned(),
+            ),
+            DatabaseUpdateEvent::UpdaterFinished(UpdaterFinish::FreshclamExited(
+                FreshclamExit::UpdateSucceeded,
+            )),
+        ]);
+        assert!(ended_report(&mut update_session).definitions_changed);
+        update_session.update_started(
+            DatabaseUpdatePlan::RunFreshclamDirectly,
+            RunningStream::already_stopped(),
+        );
+        let next_report = ended_report(&mut update_session);
+        assert!(!next_report.definitions_changed);
+        assert_eq!(
+            next_report.activity_entry.activity_status,
+            ActivityStatus::UpdateFailed
+        );
+        assert_eq!(next_report.activity_entry.activity_output, "");
+    }
+
+    #[test]
+    fn a_cancelled_run_ignores_a_late_exit() {
+        let mut update_session = session_running(DatabaseUpdatePlan::RunFreshclamDirectly);
+        update_session.cancel_requested();
+        update_session.absorb_update_batch(vec![DatabaseUpdateEvent::UpdaterFinished(
+            UpdaterFinish::FreshclamExited(FreshclamExit::UpdateSucceeded),
+        )]);
+        let finished_report = ended_report(&mut update_session);
+        assert!(!finished_report.definitions_changed);
+        assert_eq!(
+            finished_report.activity_entry.activity_status,
+            ActivityStatus::UpdateCancelled
+        );
+    }
+
+    #[test]
+    fn only_a_direct_freshclam_run_can_be_cancelled() {
+        let mut update_session = session_running(DatabaseUpdatePlan::StartServiceUnit {
+            service_unit: FRESHCLAM_UNIT,
+        });
+        update_session.cancel_requested();
+        assert_eq!(
+            update_session.update_progress(),
+            SignatureUpdateProgress::UncancellableUpdateRunning {
+                latest_output_line: "Starting the update…".to_owned()
+            }
+        );
     }
 }

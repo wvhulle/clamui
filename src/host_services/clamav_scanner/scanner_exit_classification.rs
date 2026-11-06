@@ -29,13 +29,17 @@ pub fn classify_scanner_exit_status(exit_status: ExitStatus) -> ScannerExit {
         Some(exit_code) => {
             ScannerExit::ExitedAbnormally(AbnormalScannerExit::ScannerError { exit_code })
         }
-        None => ScannerExit::ExitedAbnormally(exit_status.signal().map_or(
-            AbnormalScannerExit::UnrecognizedWaitStatus {
-                raw_wait_status: exit_status.into_raw(),
-            },
-            |signal_number| AbnormalScannerExit::KilledBySignal { signal_number },
-        )),
+        None => ScannerExit::ExitedAbnormally(classify_exit_without_code(exit_status)),
     }
+}
+
+pub fn classify_exit_without_code(exit_status: ExitStatus) -> AbnormalScannerExit {
+    exit_status.signal().map_or(
+        AbnormalScannerExit::UnrecognizedWaitStatus {
+            raw_wait_status: exit_status.into_raw(),
+        },
+        |signal_number| AbnormalScannerExit::KilledBySignal { signal_number },
+    )
 }
 
 pub fn classify_scanner_wait(wait_outcome: io::Result<ExitStatus>) -> ScannerExit {

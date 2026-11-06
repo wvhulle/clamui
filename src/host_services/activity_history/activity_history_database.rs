@@ -74,6 +74,7 @@ pub enum ActivityStatus {
     UpdateApplied,
     UpdateAlreadyCurrent,
     UpdateRequested,
+    UpdateResultUnknown,
     UpdateFailed,
     UpdateCancelled,
 }
@@ -89,6 +90,7 @@ impl ActivityStatus {
             Self::UpdateApplied => "update_applied",
             Self::UpdateAlreadyCurrent => "update_already_current",
             Self::UpdateRequested => "update_requested",
+            Self::UpdateResultUnknown => "update_result_unknown",
             Self::UpdateFailed => "update_failed",
             Self::UpdateCancelled => "update_cancelled",
         }
@@ -104,6 +106,7 @@ impl ActivityStatus {
             "update_applied" => Ok(Self::UpdateApplied),
             "update_already_current" => Ok(Self::UpdateAlreadyCurrent),
             "update_requested" => Ok(Self::UpdateRequested),
+            "update_result_unknown" => Ok(Self::UpdateResultUnknown),
             "update_failed" => Ok(Self::UpdateFailed),
             "update_cancelled" => Ok(Self::UpdateCancelled),
             _unknown_status => Err(ActivityHistoryFailure::StoredStatusUnknown),

@@ -1,3 +1,16 @@
+use crate::{
+    host_services::{
+        clamav_scanner::{
+            scanner_exit_classification::AbnormalScannerExit,
+            scanner_process_events::ScanStartFailure,
+        },
+        systemd_bus::host_systemd_units::{SystemdBusFailure, UnitStartOutcome},
+    },
+    protection_page::signature_update_run::{
+        database_update_events::UpdaterFinish, updater_exit_status::FreshclamExit,
+    },
+};
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RateLimitCooldown {
     CooldownUnknown,
@@ -17,10 +30,12 @@ pub struct FreshclamReportSummary {
     pub rate_limited_databases: Vec<RateLimitedDatabase>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UpdateFailureReason {
-    AuthenticationCancelled,
-    NotAuthorized,
+    AuthorizationRefused,
+    SystemdUnreachable(SystemdBusFailure),
+    ServiceJobEnded { job_result: String },
+    FreshclamEndedAbnormally(AbnormalScannerExit),
     RateLimitedDatabases,
     RateLimitedByMirror,
     BlockedByCdn,
@@ -32,17 +47,21 @@ pub enum UpdateFailureReason {
     ConnectionFailed,
     NameResolutionFailed,
     ReportedByUpdater { diagnostic_text: String },
-    UnexplainedFailure,
+    UpdaterResultMissing,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum DatabaseUpdateOutcome {
     DefinitionsUpdated(FreshclamReportSummary),
     AlreadyCurrent(FreshclamReportSummary),
+    ServiceRanWithoutVerdict(FreshclamReportSummary),
+    UpdateRequestedFromDaemon,
+    UpdateCancelled,
     UpdateFailed {
         failure_reason: UpdateFailureReason,
         report_summary: FreshclamReportSummary,
     },
+    UpdaterNeverStarted(ScanStartFailure),
 }
 
 const RATE_LIMIT_MARKERS: &[&str] = &[
@@ -163,19 +182,11 @@ pub fn summarize_freshclam_report(report_text: &str) -> FreshclamReportSummary {
 
 fn classify_update_failure(
     report_text: &str,
-    exit_code: i32,
     report_summary: &FreshclamReportSummary,
+    silent_failure_reason: UpdateFailureReason,
 ) -> UpdateFailureReason {
     let lowercase_report = report_text.to_ascii_lowercase();
-    if exit_code == 126 || lowercase_report.contains("authentication cancelled") {
-        UpdateFailureReason::AuthenticationCancelled
-    } else if lowercase_report.contains("not authorized")
-        || lowercase_report.contains("authorization")
-        || lowercase_report.contains("access denied")
-        || lowercase_report.contains("interactive authentication required")
-    {
-        UpdateFailureReason::NotAuthorized
-    } else if !report_summary.rate_limited_databases.is_empty() {
+    if !report_summary.rate_limited_databases.is_empty() {
         UpdateFailureReason::RateLimitedDatabases
     } else if line_mentions_any(&lowercase_report, RATE_LIMIT_MARKERS) {
         UpdateFailureReason::RateLimitedByMirror
@@ -201,7 +212,7 @@ fn classify_update_failure(
     {
         UpdateFailureReason::ConnectionFailed
     } else if report_text.trim().is_empty() {
-        UpdateFailureReason::UnexplainedFailure
+        silent_failure_reason
     } else {
         UpdateFailureReason::ReportedByUpdater {
             diagnostic_text: report_text.trim().to_owned(),
@@ -209,18 +220,128 @@ fn classify_update_failure(
     }
 }
 
-pub fn interpret_update_exit(report_text: &str, exit_code: i32) -> DatabaseUpdateOutcome {
-    let report_summary = summarize_freshclam_report(report_text);
-    if exit_code != 0 {
-        DatabaseUpdateOutcome::UpdateFailed {
-            failure_reason: classify_update_failure(report_text, exit_code, &report_summary),
-            report_summary,
-        }
-    } else if report_summary.updated_databases.is_empty() {
-        DatabaseUpdateOutcome::AlreadyCurrent(report_summary)
-    } else {
-        DatabaseUpdateOutcome::DefinitionsUpdated(report_summary)
+fn failed_update(
+    failure_reason: UpdateFailureReason,
+    report_summary: FreshclamReportSummary,
+) -> DatabaseUpdateOutcome {
+    DatabaseUpdateOutcome::UpdateFailed {
+        failure_reason,
+        report_summary,
     }
+}
+
+fn interpret_unit_run(
+    report_text: &str,
+    unit_outcome: UnitStartOutcome,
+    report_summary: FreshclamReportSummary,
+) -> DatabaseUpdateOutcome {
+    match unit_outcome {
+        UnitStartOutcome::UnitFinished if !report_summary.updated_databases.is_empty() => {
+            DatabaseUpdateOutcome::DefinitionsUpdated(report_summary)
+        }
+        UnitStartOutcome::UnitFinished if !report_summary.current_databases.is_empty() => {
+            DatabaseUpdateOutcome::AlreadyCurrent(report_summary)
+        }
+        UnitStartOutcome::UnitFinished => {
+            DatabaseUpdateOutcome::ServiceRanWithoutVerdict(report_summary)
+        }
+        UnitStartOutcome::JobEnded { job_result } => {
+            let failure_reason = classify_update_failure(
+                report_text,
+                &report_summary,
+                UpdateFailureReason::ServiceJobEnded { job_result },
+            );
+            failed_update(failure_reason, report_summary)
+        }
+        UnitStartOutcome::AuthorizationRefused => {
+            failed_update(UpdateFailureReason::AuthorizationRefused, report_summary)
+        }
+        UnitStartOutcome::BusFailure(bus_failure) => failed_update(
+            UpdateFailureReason::SystemdUnreachable(bus_failure),
+            report_summary,
+        ),
+    }
+}
+
+fn interpret_daemon_signal(
+    signal_outcome: UnitStartOutcome,
+    report_summary: FreshclamReportSummary,
+) -> DatabaseUpdateOutcome {
+    match signal_outcome {
+        UnitStartOutcome::UnitFinished => DatabaseUpdateOutcome::UpdateRequestedFromDaemon,
+        UnitStartOutcome::JobEnded { job_result } => failed_update(
+            UpdateFailureReason::ServiceJobEnded { job_result },
+            report_summary,
+        ),
+        UnitStartOutcome::AuthorizationRefused => {
+            failed_update(UpdateFailureReason::AuthorizationRefused, report_summary)
+        }
+        UnitStartOutcome::BusFailure(bus_failure) => failed_update(
+            UpdateFailureReason::SystemdUnreachable(bus_failure),
+            report_summary,
+        ),
+    }
+}
+
+fn interpret_freshclam_exit(
+    report_text: &str,
+    freshclam_exit: FreshclamExit,
+    report_summary: FreshclamReportSummary,
+) -> DatabaseUpdateOutcome {
+    match freshclam_exit {
+        FreshclamExit::UpdateSucceeded if !report_summary.updated_databases.is_empty() => {
+            DatabaseUpdateOutcome::DefinitionsUpdated(report_summary)
+        }
+        FreshclamExit::UpdateSucceeded | FreshclamExit::UpdateAlreadyCurrent => {
+            DatabaseUpdateOutcome::AlreadyCurrent(report_summary)
+        }
+        FreshclamExit::ExitedAbnormally(
+            abnormal_exit @ AbnormalScannerExit::ScannerError { .. },
+        ) => {
+            let failure_reason = classify_update_failure(
+                report_text,
+                &report_summary,
+                UpdateFailureReason::FreshclamEndedAbnormally(abnormal_exit),
+            );
+            failed_update(failure_reason, report_summary)
+        }
+        FreshclamExit::ExitedAbnormally(
+            abnormal_exit @ (AbnormalScannerExit::KilledBySignal { .. }
+            | AbnormalScannerExit::UnrecognizedWaitStatus { .. }
+            | AbnormalScannerExit::WaitFailed { .. }),
+        ) => failed_update(
+            UpdateFailureReason::FreshclamEndedAbnormally(abnormal_exit),
+            report_summary,
+        ),
+    }
+}
+
+pub fn interpret_updater_finish(
+    report_text: &str,
+    updater_finish: UpdaterFinish,
+) -> DatabaseUpdateOutcome {
+    let report_summary = summarize_freshclam_report(report_text);
+    match updater_finish {
+        UpdaterFinish::FreshclamExited(freshclam_exit) => {
+            interpret_freshclam_exit(report_text, freshclam_exit, report_summary)
+        }
+        UpdaterFinish::ServiceUnitRan(unit_outcome) => {
+            interpret_unit_run(report_text, unit_outcome, report_summary)
+        }
+        UpdaterFinish::RunningDaemonSignalled(signal_outcome) => {
+            interpret_daemon_signal(signal_outcome, report_summary)
+        }
+        UpdaterFinish::UpdaterNeverStarted(start_failure) => {
+            DatabaseUpdateOutcome::UpdaterNeverStarted(start_failure)
+        }
+    }
+}
+
+pub fn interpret_unfinished_update(report_text: &str) -> DatabaseUpdateOutcome {
+    failed_update(
+        UpdateFailureReason::UpdaterResultMissing,
+        summarize_freshclam_report(report_text),
+    )
 }
 
 #[cfg(test)]
@@ -264,56 +385,152 @@ mod freshclam_output_parser_tests {
         assert_eq!(report_summary.updated_databases, vec!["daily.cvd"]);
     }
 
+    fn freshclam_finish(freshclam_exit: FreshclamExit) -> UpdaterFinish {
+        UpdaterFinish::FreshclamExited(freshclam_exit)
+    }
+
+    fn freshclam_error(exit_code: i32) -> UpdaterFinish {
+        freshclam_finish(FreshclamExit::ExitedAbnormally(
+            AbnormalScannerExit::ScannerError { exit_code },
+        ))
+    }
+
     #[test]
-    fn exit_status_decides_the_outcome() {
+    fn freshclam_exit_decides_the_outcome() {
         assert!(matches!(
-            interpret_update_exit("daily.cld updated (version: 1, sigs: 2)", 0),
+            interpret_updater_finish(
+                "daily.cld updated (version: 1, sigs: 2)",
+                freshclam_finish(FreshclamExit::UpdateSucceeded)
+            ),
             DatabaseUpdateOutcome::DefinitionsUpdated(_)
         ));
         assert!(matches!(
-            interpret_update_exit("main.cvd database is up-to-date", 0),
+            interpret_updater_finish(
+                "main.cvd database is up-to-date",
+                freshclam_finish(FreshclamExit::UpdateSucceeded)
+            ),
             DatabaseUpdateOutcome::AlreadyCurrent(_)
         ));
         assert!(matches!(
-            interpret_update_exit("", 0),
+            interpret_updater_finish("", freshclam_finish(FreshclamExit::UpdateAlreadyCurrent)),
             DatabaseUpdateOutcome::AlreadyCurrent(_)
         ));
     }
 
-    fn failure_reason_of(report_text: &str, exit_code: i32) -> UpdateFailureReason {
-        match interpret_update_exit(report_text, exit_code) {
+    #[test]
+    fn a_unit_run_without_a_version_line_is_not_already_current() {
+        assert!(matches!(
+            interpret_updater_finish(
+                "Started clamav-freshclam.service",
+                UpdaterFinish::ServiceUnitRan(UnitStartOutcome::UnitFinished)
+            ),
+            DatabaseUpdateOutcome::ServiceRanWithoutVerdict(_)
+        ));
+        assert!(matches!(
+            interpret_updater_finish(
+                "daily.cld updated (version: 1, sigs: 2)",
+                UpdaterFinish::ServiceUnitRan(UnitStartOutcome::UnitFinished)
+            ),
+            DatabaseUpdateOutcome::DefinitionsUpdated(_)
+        ));
+        assert!(matches!(
+            interpret_updater_finish(
+                "main.cvd database is up-to-date (version: 63)",
+                UpdaterFinish::ServiceUnitRan(UnitStartOutcome::UnitFinished)
+            ),
+            DatabaseUpdateOutcome::AlreadyCurrent(_)
+        ));
+    }
+
+    #[test]
+    fn a_signalled_daemon_only_requested_an_update() {
+        assert!(matches!(
+            interpret_updater_finish(
+                "",
+                UpdaterFinish::RunningDaemonSignalled(UnitStartOutcome::UnitFinished)
+            ),
+            DatabaseUpdateOutcome::UpdateRequestedFromDaemon
+        ));
+    }
+
+    fn failure_reason_of(report_text: &str, updater_finish: UpdaterFinish) -> UpdateFailureReason {
+        match interpret_updater_finish(report_text, updater_finish) {
             DatabaseUpdateOutcome::UpdateFailed { failure_reason, .. } => failure_reason,
             unexpected_outcome => panic!("expected a failure, got {unexpected_outcome:?}"),
         }
     }
 
     #[test]
+    fn a_refused_authorization_is_typed_and_never_read_from_the_transcript() {
+        assert_eq!(
+            failure_reason_of(
+                "",
+                UpdaterFinish::ServiceUnitRan(UnitStartOutcome::AuthorizationRefused)
+            ),
+            UpdateFailureReason::AuthorizationRefused
+        );
+        assert_eq!(
+            failure_reason_of(
+                "",
+                UpdaterFinish::RunningDaemonSignalled(UnitStartOutcome::AuthorizationRefused)
+            ),
+            UpdateFailureReason::AuthorizationRefused
+        );
+        assert_eq!(
+            failure_reason_of("access denied", freshclam_error(2)),
+            UpdateFailureReason::ReportedByUpdater {
+                diagnostic_text: "access denied".to_owned(),
+            }
+        );
+    }
+
+    #[test]
     fn failures_are_classified_from_the_report() {
         assert_eq!(
-            failure_reason_of("", 126),
-            UpdateFailureReason::AuthenticationCancelled
-        );
-        assert_eq!(
-            failure_reason_of("Failed to start unit: Access denied", 1),
-            UpdateFailureReason::NotAuthorized
-        );
-        assert_eq!(
-            failure_reason_of("Failed to lock database directory", 1),
+            failure_reason_of("Failed to lock database directory", freshclam_error(62)),
             UpdateFailureReason::DatabaseLocked
         );
         assert_eq!(
-            failure_reason_of("Can't resolve database.clamav.net", 1),
+            failure_reason_of("Can't resolve database.clamav.net", freshclam_error(52)),
             UpdateFailureReason::NameResolutionFailed
         );
         assert_eq!(
-            failure_reason_of("", 1),
-            UpdateFailureReason::UnexplainedFailure
+            failure_reason_of("", freshclam_error(56)),
+            UpdateFailureReason::FreshclamEndedAbnormally(AbnormalScannerExit::ScannerError {
+                exit_code: 56
+            })
         );
         assert_eq!(
-            failure_reason_of("something odd", 2),
+            failure_reason_of(
+                "",
+                UpdaterFinish::ServiceUnitRan(UnitStartOutcome::JobEnded {
+                    job_result: "failed".to_owned()
+                })
+            ),
+            UpdateFailureReason::ServiceJobEnded {
+                job_result: "failed".to_owned()
+            }
+        );
+        assert_eq!(
+            failure_reason_of("something odd", freshclam_error(2)),
             UpdateFailureReason::ReportedByUpdater {
                 diagnostic_text: "something odd".to_owned(),
             }
+        );
+    }
+
+    #[test]
+    fn a_killed_freshclam_keeps_its_signal() {
+        assert_eq!(
+            failure_reason_of(
+                "Downloading daily.cvd connection",
+                freshclam_finish(FreshclamExit::ExitedAbnormally(
+                    AbnormalScannerExit::KilledBySignal { signal_number: 9 }
+                ))
+            ),
+            UpdateFailureReason::FreshclamEndedAbnormally(AbnormalScannerExit::KilledBySignal {
+                signal_number: 9
+            })
         );
     }
 }

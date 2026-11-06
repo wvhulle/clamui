@@ -40,6 +40,9 @@ use crate::{
         service_run_journal::{
             ScanRunHistory, UpdaterRunHistory, newest_scan_run, newest_update_run,
         },
+        signature_update_run::updater_exit_status::{
+            SignatureUpdaterProgram, UpdaterExitMeaning, classify_updater_exit_status,
+        },
         trusted_detections_page::trust_list_contents::{
             TrustListContents, read_trust_list_contents,
         },
@@ -63,15 +66,15 @@ const DAEMON_SERVICE_UNITS: [&str; 3] = [
 const ON_ACCESS_SERVICE_UNITS: [&str; 2] = ["clamav-clamonacc.service", "clamonacc.service"];
 const SIGNATURE_UPDATER_UNITS: [SignatureUpdaterUnit; 3] = [
     SignatureUpdaterUnit {
-        updater_name: "freshclam",
+        updater_program: SignatureUpdaterProgram::Freshclam,
         service_unit: "clamav-freshclam.service",
     },
     SignatureUpdaterUnit {
-        updater_name: "freshclam",
+        updater_program: SignatureUpdaterProgram::Freshclam,
         service_unit: "freshclam.service",
     },
     SignatureUpdaterUnit {
-        updater_name: "fangfrisch",
+        updater_program: SignatureUpdaterProgram::Fangfrisch,
         service_unit: "clamav-fangfrisch.service",
     },
 ];
@@ -100,7 +103,7 @@ pub const WATCHED_SERVICE_UNITS: [&str; 10] = [
 
 #[derive(Clone, Copy, Debug)]
 struct SignatureUpdaterUnit {
-    updater_name: &'static str,
+    updater_program: SignatureUpdaterProgram,
     service_unit: &'static str,
 }
 
@@ -128,13 +131,13 @@ pub enum ScanUnitResult {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UpdaterUnitResult {
     UpdateSucceeded,
+    UpdateAlreadyCurrent,
     UpdaterError { exit_status: i32 },
     ServiceFailed { failure_kind: ServiceFailureKind },
 }
 
 const SCANNER_CLEAN_STATUS: i32 = 0;
 const SCANNER_FOUND_THREATS_STATUS: i32 = 1;
-const UPDATER_SUCCESS_STATUS: i32 = 0;
 
 pub fn classify_scan_unit_result(last_result: ServiceLastResult) -> ScanUnitResult {
     match last_result {
@@ -154,14 +157,20 @@ pub fn classify_scan_unit_result(last_result: ServiceLastResult) -> ScanUnitResu
     }
 }
 
-pub fn classify_updater_unit_result(last_result: ServiceLastResult) -> UpdaterUnitResult {
+pub fn classify_updater_unit_result(
+    updater_program: SignatureUpdaterProgram,
+    last_result: ServiceLastResult,
+) -> UpdaterUnitResult {
     match last_result {
-        ServiceLastResult::ResultSucceeded
-        | ServiceLastResult::ExitedWithStatus {
-            exit_status: UPDATER_SUCCESS_STATUS,
-        } => UpdaterUnitResult::UpdateSucceeded,
+        ServiceLastResult::ResultSucceeded => UpdaterUnitResult::UpdateSucceeded,
         ServiceLastResult::ExitedWithStatus { exit_status } => {
-            UpdaterUnitResult::UpdaterError { exit_status }
+            match classify_updater_exit_status(updater_program, exit_status) {
+                UpdaterExitMeaning::UpdateSucceeded => UpdaterUnitResult::UpdateSucceeded,
+                UpdaterExitMeaning::UpdateAlreadyCurrent => UpdaterUnitResult::UpdateAlreadyCurrent,
+                UpdaterExitMeaning::UpdaterError { exit_status } => {
+                    UpdaterUnitResult::UpdaterError { exit_status }
+                }
+            }
         }
         ServiceLastResult::FailedWithResult { failure_kind } => {
             UpdaterUnitResult::ServiceFailed { failure_kind }
@@ -171,7 +180,7 @@ pub fn classify_updater_unit_result(last_result: ServiceLastResult) -> UpdaterUn
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdaterEvidence {
-    pub updater_name: &'static str,
+    pub updater_program: SignatureUpdaterProgram,
     pub service_unit: &'static str,
     pub last_result: UpdaterUnitResult,
     pub last_completed_run: UpdaterRunHistory,
@@ -535,22 +544,32 @@ async fn inspect_engine_installation() -> EngineInstallation {
     }
 }
 
-fn updater_last_result(service_snapshot: ServiceUnitSnapshot) -> Option<UpdaterUnitResult> {
+fn updater_last_result(
+    updater_program: SignatureUpdaterProgram,
+    service_snapshot: ServiceUnitSnapshot,
+) -> Option<UpdaterUnitResult> {
     match service_snapshot {
         ServiceUnitSnapshot::LoadedService { last_result, .. } => {
-            Some(classify_updater_unit_result(last_result))
+            Some(classify_updater_unit_result(updater_program, last_result))
         }
         ServiceUnitSnapshot::ServiceNotFound | ServiceUnitSnapshot::SystemdUnreachable(_) => None,
     }
 }
 
 async fn inspect_updater_unit(updater_unit: SignatureUpdaterUnit) -> Option<UpdaterEvidence> {
-    let last_result = updater_last_result(service_unit_snapshot(updater_unit.service_unit).await)?;
+    let last_result = updater_last_result(
+        updater_unit.updater_program,
+        service_unit_snapshot(updater_unit.service_unit).await,
+    )?;
     Some(UpdaterEvidence {
-        updater_name: updater_unit.updater_name,
+        updater_program: updater_unit.updater_program,
         service_unit: updater_unit.service_unit,
         last_result,
-        last_completed_run: newest_update_run(updater_unit.service_unit).await,
+        last_completed_run: newest_update_run(
+            updater_unit.updater_program,
+            updater_unit.service_unit,
+        )
+        .await,
     })
 }
 
@@ -838,19 +857,42 @@ mod protection_evidence_tests {
     }
 
     #[test]
-    fn updater_exit_status_one_is_an_error_not_a_finding() {
+    fn freshclam_exit_one_is_already_current_but_fangfrisch_exit_one_is_an_error() {
         assert_eq!(
-            classify_updater_unit_result(ServiceLastResult::ResultSucceeded),
+            classify_updater_unit_result(
+                SignatureUpdaterProgram::Freshclam,
+                ServiceLastResult::ResultSucceeded
+            ),
             UpdaterUnitResult::UpdateSucceeded
         );
         assert_eq!(
-            classify_updater_unit_result(ServiceLastResult::ExitedWithStatus { exit_status: 1 }),
+            classify_updater_unit_result(
+                SignatureUpdaterProgram::Freshclam,
+                ServiceLastResult::ExitedWithStatus { exit_status: 1 }
+            ),
+            UpdaterUnitResult::UpdateAlreadyCurrent
+        );
+        assert_eq!(
+            classify_updater_unit_result(
+                SignatureUpdaterProgram::Fangfrisch,
+                ServiceLastResult::ExitedWithStatus { exit_status: 1 }
+            ),
             UpdaterUnitResult::UpdaterError { exit_status: 1 }
         );
         assert_eq!(
-            classify_updater_unit_result(ServiceLastResult::FailedWithResult {
-                failure_kind: ServiceFailureKind::KilledBySignal
-            }),
+            classify_updater_unit_result(
+                SignatureUpdaterProgram::Freshclam,
+                ServiceLastResult::ExitedWithStatus { exit_status: 52 }
+            ),
+            UpdaterUnitResult::UpdaterError { exit_status: 52 }
+        );
+        assert_eq!(
+            classify_updater_unit_result(
+                SignatureUpdaterProgram::Freshclam,
+                ServiceLastResult::FailedWithResult {
+                    failure_kind: ServiceFailureKind::KilledBySignal
+                }
+            ),
             UpdaterUnitResult::ServiceFailed {
                 failure_kind: ServiceFailureKind::KilledBySignal
             }
@@ -860,13 +902,17 @@ mod protection_evidence_tests {
     #[test]
     fn a_missing_updater_unit_is_not_reported_as_succeeded() {
         assert_eq!(
-            updater_last_result(ServiceUnitSnapshot::ServiceNotFound),
+            updater_last_result(
+                SignatureUpdaterProgram::Freshclam,
+                ServiceUnitSnapshot::ServiceNotFound
+            ),
             None
         );
         assert_eq!(
-            updater_last_result(ServiceUnitSnapshot::SystemdUnreachable(
-                SystemdBusFailure::UnrecognizedLoadState
-            )),
+            updater_last_result(
+                SignatureUpdaterProgram::Freshclam,
+                ServiceUnitSnapshot::SystemdUnreachable(SystemdBusFailure::UnrecognizedLoadState)
+            ),
             None
         );
     }

@@ -440,7 +440,7 @@ fn database_status_text(
 
 fn updater_failed(updater_evidence: &UpdaterEvidence) -> bool {
     match updater_evidence.last_result {
-        UpdaterUnitResult::UpdateSucceeded => false,
+        UpdaterUnitResult::UpdateSucceeded | UpdaterUnitResult::UpdateAlreadyCurrent => false,
         UpdaterUnitResult::UpdaterError { .. } | UpdaterUnitResult::ServiceFailed { .. } => true,
     }
 }
@@ -491,7 +491,8 @@ fn updater_row(
         String::new()
     };
     timed_evidence_row(
-        gettext("{updater} updated").replace("{updater}", updater_evidence.updater_name),
+        gettext("{updater} updated")
+            .replace("{updater}", updater_evidence.updater_program.program_name()),
         evidence_moment,
         evidence_value,
         moment_context,
@@ -560,14 +561,12 @@ fn update_now_row(
             chosen_action: TimelineStepAction::UpdateSignatures,
             action_suggested: suggest_update,
         },
-        SignatureUpdateProgress::UpdateRunning {
-            cancellable: true, ..
-        } => StepActionSlot::ActionOffered {
+        SignatureUpdateProgress::CancellableUpdateRunning { .. } => StepActionSlot::ActionOffered {
             action_label: gettext("Cancel"),
             chosen_action: TimelineStepAction::CancelSignatureUpdate,
             action_suggested: false,
         },
-        SignatureUpdateProgress::UpdateRunning { .. }
+        SignatureUpdateProgress::UncancellableUpdateRunning { .. }
         | SignatureUpdateProgress::UpdateCancelling
         | SignatureUpdateProgress::UpdateUnavailable => StepActionSlot::NoAction,
     };
@@ -600,12 +599,13 @@ fn update_host_rows(signature_update: &SignatureUpdateView) -> Vec<StepEvidenceR
 
 fn updater_output_rows(update_progress: &SignatureUpdateProgress) -> Vec<StepEvidenceRow> {
     match update_progress {
-        SignatureUpdateProgress::UpdateRunning {
-            latest_output_line, ..
-        } => vec![StepEvidenceRow {
-            evidence_moment: EvidenceMoment::HappeningNow,
-            ..evidence_row(gettext("Updater output"), latest_output_line.clone())
-        }],
+        SignatureUpdateProgress::CancellableUpdateRunning { latest_output_line }
+        | SignatureUpdateProgress::UncancellableUpdateRunning { latest_output_line } => {
+            vec![StepEvidenceRow {
+                evidence_moment: EvidenceMoment::HappeningNow,
+                ..evidence_row(gettext("Updater output"), latest_output_line.clone())
+            }]
+        }
         SignatureUpdateProgress::UpdateCancelling
         | SignatureUpdateProgress::ReadyToUpdate
         | SignatureUpdateProgress::UpdateUnavailable => Vec::new(),
@@ -643,7 +643,8 @@ fn signature_step(
         };
     let update_progress = update_progress_of(signature_update);
     let (node_state, status_text) = match &update_progress {
-        SignatureUpdateProgress::UpdateRunning { .. } => {
+        SignatureUpdateProgress::CancellableUpdateRunning { .. }
+        | SignatureUpdateProgress::UncancellableUpdateRunning { .. } => {
             (StepNodeState::InProgress, gettext("Updating signatures…"))
         }
         SignatureUpdateProgress::UpdateCancelling => {
@@ -1179,7 +1180,10 @@ mod protection_timeline_presentation_tests {
     use bytesize::ByteSize;
 
     use super::*;
-    use crate::host_services::systemd_bus::host_systemd_units::ServiceFailureKind;
+    use crate::{
+        host_services::systemd_bus::host_systemd_units::ServiceFailureKind,
+        protection_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
+    };
 
     const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
 
@@ -1466,10 +1470,11 @@ mod protection_timeline_presentation_tests {
     #[test]
     fn a_running_update_shows_its_progress_and_can_be_cancelled() {
         let running_activity = ProtectionActivity {
-            signature_update: known_update_host(SignatureUpdateProgress::UpdateRunning {
-                latest_output_line: "daily.cld updated".to_owned(),
-                cancellable: true,
-            }),
+            signature_update: known_update_host(
+                SignatureUpdateProgress::CancellableUpdateRunning {
+                    latest_output_line: "daily.cld updated".to_owned(),
+                },
+            ),
             ..idle_activity()
         };
         let running_timeline = timeline_with(&healthy_evidence(), &running_activity);
@@ -1713,7 +1718,7 @@ mod protection_timeline_presentation_tests {
         let failed_updater = ProtectionEvidence {
             signature_evidence: SignatureEvidence {
                 updater_evidence: vec![UpdaterEvidence {
-                    updater_name: "fangfrisch",
+                    updater_program: SignatureUpdaterProgram::Fangfrisch,
                     service_unit: "clamav-fangfrisch.service",
                     last_result: UpdaterUnitResult::UpdaterError { exit_status: 1 },
                     last_completed_run: UpdaterRunHistory::NoCompletedUpdate,

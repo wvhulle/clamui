@@ -39,7 +39,7 @@ use crate::{
         signature_update_run::{
             database_update_events::{DatabaseUpdateEvent, database_update_events},
             signature_update_session::{
-                DatabaseHostStatus, SignatureUpdateSession, load_host_status,
+                DatabaseHostStatus, SignatureUpdateSession, UpdateStreamEnding, load_host_status,
             },
         },
     },
@@ -336,7 +336,10 @@ impl ProtectionTimelinePage {
     }
 
     fn finish_signature_update(&mut self, sender: &ComponentSender<Self>) {
-        let finished_report = self.signature_update_session.update_finished();
+        let finished_report = match self.signature_update_session.update_stream_ended() {
+            UpdateStreamEnding::UpdateEnded(finished_report) => finished_report,
+            UpdateStreamEnding::NoUpdateWasRunning => return,
+        };
         if finished_report.definitions_changed {
             let _shell_closed = sender.output(ProtectionTimelinePageOutput::SignaturesUpdated);
         }

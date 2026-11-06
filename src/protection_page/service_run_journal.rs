@@ -1,8 +1,13 @@
 use jiff::Timestamp;
 use tokio::task::spawn_blocking;
 
-use crate::host_services::systemd_journal::unit_journal_reader::{
-    JournalProcessExit, ManagerUnitRecord, UnitJournalEvent, newest_manager_records_for_unit,
+use crate::{
+    host_services::systemd_journal::unit_journal_reader::{
+        JournalProcessExit, ManagerUnitRecord, UnitJournalEvent, newest_manager_records_for_unit,
+    },
+    protection_page::signature_update_run::updater_exit_status::{
+        SignatureUpdaterProgram, UpdaterExitMeaning, classify_updater_exit_status,
+    },
 };
 
 const JOURNAL_RECORD_LIMIT: usize = 500;
@@ -45,12 +50,24 @@ fn scan_run_findings(unit_journal_event: &UnitJournalEvent) -> Option<ScanRunFin
     }
 }
 
-fn update_completed(unit_journal_event: &UnitJournalEvent) -> bool {
+const fn update_completed(
+    updater_program: SignatureUpdaterProgram,
+    unit_journal_event: &UnitJournalEvent,
+) -> bool {
     match unit_journal_event {
         UnitJournalEvent::UnitDeactivated => true,
-        UnitJournalEvent::MainProcessExited(_) | UnitJournalEvent::UnrecognizedMessage { .. } => {
-            false
-        }
+        UnitJournalEvent::MainProcessExited(JournalProcessExit::ExitedWithStatus {
+            exit_status,
+        }) => match classify_updater_exit_status(updater_program, *exit_status) {
+            UpdaterExitMeaning::UpdateSucceeded | UpdaterExitMeaning::UpdateAlreadyCurrent => true,
+            UpdaterExitMeaning::UpdaterError { .. } => false,
+        },
+        UnitJournalEvent::MainProcessExited(
+            JournalProcessExit::KilledBySignal { .. }
+            | JournalProcessExit::DumpedCore { .. }
+            | JournalProcessExit::UnrecognizedExit { .. },
+        )
+        | UnitJournalEvent::UnrecognizedMessage { .. } => false,
     }
 }
 
@@ -68,10 +85,15 @@ fn newest_completed_scan(manager_records: &[ManagerUnitRecord]) -> ScanRunHistor
         .unwrap_or(ScanRunHistory::NoCompletedScan)
 }
 
-fn newest_completed_update(manager_records: &[ManagerUnitRecord]) -> UpdaterRunHistory {
+fn newest_completed_update(
+    updater_program: SignatureUpdaterProgram,
+    manager_records: &[ManagerUnitRecord],
+) -> UpdaterRunHistory {
     manager_records
         .iter()
-        .find(|manager_record| update_completed(&manager_record.unit_journal_event))
+        .find(|manager_record| {
+            update_completed(updater_program, &manager_record.unit_journal_event)
+        })
         .map_or(UpdaterRunHistory::NoCompletedUpdate, |manager_record| {
             UpdaterRunHistory::CompletedUpdate {
                 finished_at: manager_record.recorded_at,
@@ -91,8 +113,11 @@ pub async fn newest_scan_run(service_unit: &'static str) -> ScanRunHistory {
     newest_completed_scan(&newest_unit_records(service_unit).await)
 }
 
-pub async fn newest_update_run(service_unit: &'static str) -> UpdaterRunHistory {
-    newest_completed_update(&newest_unit_records(service_unit).await)
+pub async fn newest_update_run(
+    updater_program: SignatureUpdaterProgram,
+    service_unit: &'static str,
+) -> UpdaterRunHistory {
+    newest_completed_update(updater_program, &newest_unit_records(service_unit).await)
 }
 
 #[cfg(test)]
@@ -178,16 +203,38 @@ mod service_run_journal_tests {
     }
 
     #[test]
-    fn an_updater_exiting_with_status_one_did_not_complete_an_update() {
+    fn freshclam_exit_one_completed_an_update_but_fangfrisch_exit_one_did_not() {
         assert_eq!(
-            newest_completed_update(&[exited_record(1), killed_record()]),
+            newest_completed_update(
+                SignatureUpdaterProgram::Freshclam,
+                &[exited_record(1), killed_record()]
+            ),
+            UpdaterRunHistory::CompletedUpdate {
+                finished_at: RECORDED_AT
+            }
+        );
+        assert_eq!(
+            newest_completed_update(
+                SignatureUpdaterProgram::Fangfrisch,
+                &[exited_record(1), killed_record()]
+            ),
             UpdaterRunHistory::NoCompletedUpdate
         );
         assert_eq!(
-            newest_completed_update(&[
-                exited_record(1),
-                recorded_event(UnitJournalEvent::UnitDeactivated)
-            ]),
+            newest_completed_update(
+                SignatureUpdaterProgram::Freshclam,
+                &[exited_record(52), killed_record()]
+            ),
+            UpdaterRunHistory::NoCompletedUpdate
+        );
+        assert_eq!(
+            newest_completed_update(
+                SignatureUpdaterProgram::Fangfrisch,
+                &[
+                    exited_record(1),
+                    recorded_event(UnitJournalEvent::UnitDeactivated)
+                ]
+            ),
             UpdaterRunHistory::CompletedUpdate {
                 finished_at: RECORDED_AT
             }
@@ -198,7 +245,11 @@ mod service_run_journal_tests {
     #[ignore = "needs a host where clamav-freshclam.service ran from a timer"]
     async fn host_journal_reports_the_real_update_run() {
         assert!(matches!(
-            newest_update_run("clamav-freshclam.service").await,
+            newest_update_run(
+                SignatureUpdaterProgram::Freshclam,
+                "clamav-freshclam.service"
+            )
+            .await,
             UpdaterRunHistory::CompletedUpdate { .. }
         ));
     }
