@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 16:13+0100\n"
+"POT-Creation-Date: 2026-11-06 16:14+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2837,7 +2837,7 @@ msgid "Intrusion Detection"
 msgstr ""
 
 #: src/shared_widgets/audit_sections/audit_check_results.rs:80
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:317
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:318
 msgid "Rootkits"
 msgstr ""
 
@@ -2854,102 +2854,157 @@ msgstr ""
 msgid "Could not open documentation: {error}"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:78
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:47
+msgid "Process tampering"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:52
+msgid "Programs can't attach to other programs you run, such as Lazaret"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:58
+msgid ""
+"Any program you run can attach to Lazaret and change what it shows, "
+"including scan results"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:63
+msgid ""
+"Set kernel.yama.ptrace_scope to 1, so only a program's parent can attach to "
+"it."
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:75
+msgid "The kernel doesn't report whether programs may attach to each other"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:162
+msgid "clamd socket"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:167
+#, rust-format
+msgid "Only the system can replace {path}"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:177
+#, rust-format
+msgid ""
+"Your account can replace {replaceable}, so a program running as you could "
+"put a fake clamd at {path} that reports every file as clean"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:184
+msgid ""
+"Let clamd create its socket in a directory that only root or the clamav user "
+"can write, such as /run/clamav."
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:190
+#, rust-format
+msgid "No clamd socket at {path}, so clamd isn't running or listens elsewhere"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:196
+msgid "The Flatpak sandbox can't see who owns the clamd socket"
+msgstr ""
+
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:79
 msgid "AppArmor"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:84
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:85
 msgid "AppArmor is enabled"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:90
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:96
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:91
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:97
 msgid "AppArmor module is loaded but not enabled"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:98
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:99
 msgid "Enable AppArmor for application sandboxing"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:104
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:105
 msgid "SELinux"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:110
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:111
 msgid "SELinux is enforcing"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:115
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:116
 msgid "SELinux is in permissive mode"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:118
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:119
 msgid "Consider switching to enforcing mode for stronger protection"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:124
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:130
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:125
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:131
 msgid "SELinux is disabled"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:132
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:133
 msgid "Enable SELinux for mandatory access control"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:136
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:137
 msgid "SELinux mode could not be determined"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:153
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:154
 msgid "MAC Framework"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:155
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:156
 msgid "No mandatory access control framework detected"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:157
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:158
 msgid "Consider enabling AppArmor or SELinux"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:208
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:209
 msgid "fail2ban is active and protecting services"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:209
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:210
 msgid "CrowdSec is active with community threat intelligence"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:215
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:216
 msgid "Start fail2ban to protect against brute force attacks"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:216
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:217
 msgid "Start CrowdSec for collaborative intrusion prevention"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:244
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:245
 #, rust-format
 msgid "{name} is installed but not running"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:276
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:277
 msgid "Intrusion Prevention"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:278
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:279
 msgid "No intrusion detection system found"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:281
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:282
 msgid "Install fail2ban or CrowdSec to protect against attacks"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:319
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:320
 msgid "ClamAV does not cover rootkits, and Lazaret does not check for them."
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:322
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:323
 msgid ""
 "Run a check yourself. A rootkit can hide from checks made on the running "
 "system, so a clean result is only weak evidence."
