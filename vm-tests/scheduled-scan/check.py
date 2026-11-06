@@ -2,7 +2,7 @@ ENABLE_SCHEDULE_TOGGLE = (868, 225)
 APPLY_SCHEDULE_BUTTON = (867, 143)
 SCHEDULED_TAB = (526, 745)
 SCANNER_TAB = (679, 745)
-RUN_NOW_BUTTON = (979, 727)
+RUN_NOW_BUTTON = (979, 744)
 SIDEBAR_COLUMN = 80
 SIGNATURES_ROW = 259
 HARDENING_ROW = 297
@@ -35,6 +35,12 @@ with subtest("Run Now asks for a password and runs the system scan"):
     exit_status = machine.succeed(f"systemctl show -p ExecMainStatus --value {SCAN_UNIT}").strip()
     assert exit_status == "1", f"a detection should exit 1: {exit_status}"
 
+with subtest("finding malware is not shown as a scanner failure"):
+    machine.screenshot("scan_finished_toast")
+    machine.wait_for_text("found malware", timeout=timedelta(seconds=30))
+    screen = machine.get_screen_text()
+    assert "did not finish cleanly" not in screen, screen
+
 with subtest("the scan's journal line becomes a detection that is not called blocked"):
     wait_for_stored_detection(SCANNED_FILE)
     detection = stored_detection(SCANNED_FILE).split("|")
@@ -44,12 +50,7 @@ with subtest("the scan's journal line becomes a detection that is not called blo
     assert not notifications_mentioning("Malware blocked"), matching
     time.sleep(2)
     machine.screenshot("protection_after_scan")
-
-with subtest("finding malware is not shown as a scanner failure"):
-    machine.wait_for_text("found malware", timeout=timedelta(seconds=30))
-    screen = machine.get_screen_text()
-    assert "did not finish cleanly" not in screen, screen
-    assert "ended with an error" not in screen, screen
+    assert "ended with an error" not in machine.get_screen_text(), "a found threat was shown as a failed scan"
 
 with subtest("the ClamUI schedule is locked because the system has a timer"):
     activate_application_action("preferences")

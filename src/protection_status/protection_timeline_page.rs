@@ -33,6 +33,7 @@ use crate::{
 };
 
 const SCANNER_FOUND_THREATS_STATUS: i32 = 1;
+const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EvidenceRefresh {
@@ -107,17 +108,31 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .build()
 }
 
-pub fn unit_run_toast_text(
-    start_outcome: &UnitStartOutcome,
-    last_result: &ServiceLastResult,
-) -> String {
-    if matches!(start_outcome, UnitStartOutcome::JobEnded { .. })
+fn scan_found_threats(start_outcome: &UnitStartOutcome, last_result: &ServiceLastResult) -> bool {
+    matches!(start_outcome, UnitStartOutcome::JobEnded { .. })
         && *last_result
             == (ServiceLastResult::ExitedWithStatus {
                 exit_status: SCANNER_FOUND_THREATS_STATUS,
             })
-    {
-        return gettext("The scan found malware. See Detections.");
+}
+
+fn unit_run_toast(start_outcome: &UnitStartOutcome, last_result: &ServiceLastResult) -> adw::Toast {
+    let run_toast = plain_text_toast(&unit_run_toast_text(start_outcome, last_result));
+    if scan_found_threats(start_outcome, last_result) {
+        run_toast.set_button_label(Some(&gettext("Review")));
+        run_toast.set_action_name(Some("win.show-page"));
+        run_toast.set_action_target_value(Some(&"detections".to_variant()));
+        run_toast.set_timeout(FOUND_THREATS_TOAST_SECONDS);
+    }
+    run_toast
+}
+
+pub fn unit_run_toast_text(
+    start_outcome: &UnitStartOutcome,
+    last_result: &ServiceLastResult,
+) -> String {
+    if scan_found_threats(start_outcome, last_result) {
+        return gettext("The scan found malware");
     }
     match start_outcome {
         UnitStartOutcome::UnitFinished => gettext("The scan finished"),
@@ -373,10 +388,7 @@ impl Component for ProtectionTimelinePage {
                 start_outcome,
                 last_result,
             } => {
-                root.add_toast(plain_text_toast(&unit_run_toast_text(
-                    &start_outcome,
-                    &last_result,
-                )));
+                root.add_toast(unit_run_toast(&start_outcome, &last_result));
                 self.start_evidence_refresh(&sender);
             }
         }
@@ -397,7 +409,7 @@ mod protection_timeline_page_tests {
                 &failed_job,
                 &ServiceLastResult::ExitedWithStatus { exit_status: 1 }
             ),
-            "The scan found malware. See Detections."
+            "The scan found malware"
         );
         assert!(
             unit_run_toast_text(
