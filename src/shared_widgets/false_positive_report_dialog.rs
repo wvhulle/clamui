@@ -1,8 +1,11 @@
 use gettextrs::gettext;
 use relm4::{Sender, adw, adw::prelude::*, gtk};
 
-use crate::host_services::clamav_programs::false_positive_submission::{
-    FalsePositiveReport, ReporterContact, SubmittedContent, contact_is_complete,
+use crate::{
+    host_services::clamav_programs::false_positive_submission::{
+        FalsePositiveReport, ReporterContact, SubmittedContent, contact_is_complete,
+    },
+    shared_widgets::awaited_dialogs::{alert_response, deliver_local_outcome},
 };
 
 const SEND_RESPONSE: &str = "send";
@@ -69,12 +72,17 @@ pub fn present_false_positive_report<Message: 'static>(
             );
         });
     });
-    report_dialog.connect_response(Some(SEND_RESPONSE), move |_dialog, _response| {
-        message_sender.emit(confirmed_message(FalsePositiveReport {
-            reporter_contact: contact_from_rows(&name_row, &email_row),
-            detection_name: reported_detection.detection_name.clone(),
-            submitted_content: reported_detection.submitted_content.clone(),
-        }));
-    });
-    report_dialog.present(Some(parent_widget));
+    deliver_local_outcome(
+        message_sender,
+        alert_response(report_dialog, parent_widget.clone().upcast()),
+        move |chosen_response| {
+            (chosen_response == SEND_RESPONSE).then(|| {
+                confirmed_message(FalsePositiveReport {
+                    reporter_contact: contact_from_rows(&name_row, &email_row),
+                    detection_name: reported_detection.detection_name,
+                    submitted_content: reported_detection.submitted_content,
+                })
+            })
+        },
+    );
 }

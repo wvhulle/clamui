@@ -8,7 +8,7 @@ use crate::{
         profile_value_row::{ProfileValueRow, ProfileValueRowOutput},
         scan_profile_store::{ProfileStoreFailure, ScanProfile, ScanProfileStore},
     },
-    shared_widgets::file_dialog_requests::request_folder_to_open,
+    shared_widgets::awaited_dialogs::{chosen_folders_to_open, deliver_local_outcome},
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -291,12 +291,16 @@ impl Component for ProfileEditorDialog {
             ProfileEditorDialogInput::DescriptionChanged(profile_description) => {
                 self.edited_profile.profile_description = profile_description;
             }
-            ProfileEditorDialogInput::AddFolderRequested => request_folder_to_open(
-                gettext("Add Folder"),
+            ProfileEditorDialogInput::AddFolderRequested => deliver_local_outcome(
                 sender.input_sender().clone(),
-                |folder_path| ProfileEditorDialogInput::ListValueAdded {
-                    list_kind: ProfileListKind::ScanTargets,
-                    added_value: folder_path.to_string_lossy().into_owned(),
+                chosen_folders_to_open(gettext("Add Folder")),
+                |chosen_paths| {
+                    chosen_paths.first().map(|folder_path| {
+                        ProfileEditorDialogInput::ListValueAdded {
+                            list_kind: ProfileListKind::ScanTargets,
+                            added_value: folder_path.to_string_lossy().into_owned(),
+                        }
+                    })
                 },
             ),
             ProfileEditorDialogInput::ListValueAdded {

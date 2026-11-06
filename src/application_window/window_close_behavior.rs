@@ -5,7 +5,10 @@ use relm4::{
     gtk::{gio, gio::prelude::SettingsExt},
 };
 
-use crate::host_services::desktop::stored_settings::CLOSE_ACTION_KEY;
+use crate::{
+    host_services::desktop::stored_settings::CLOSE_ACTION_KEY,
+    shared_widgets::awaited_dialogs::{alert_response, deliver_local_outcome},
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CloseAction {
@@ -48,12 +51,15 @@ pub fn present_close_confirmation<Message: 'static>(
     close_dialog.add_response("minimize", &gettext("Keep Running"));
     close_dialog.set_default_response(Some("minimize"));
     close_dialog.set_close_response("cancel");
-    close_dialog.connect_response(None, move |_dialog, close_response| {
-        answer_sender.emit(answered_message(match close_response {
-            "quit" => CloseAnswer::QuitChosen,
-            "minimize" => CloseAnswer::KeepRunningChosen,
-            _cancelled => CloseAnswer::CloseCancelled,
-        }));
-    });
-    close_dialog.present(Some(window_root));
+    deliver_local_outcome(
+        answer_sender,
+        alert_response(close_dialog, window_root.clone().upcast()),
+        move |chosen_response| {
+            Some(answered_message(match chosen_response.as_str() {
+                "quit" => CloseAnswer::QuitChosen,
+                "minimize" => CloseAnswer::KeepRunningChosen,
+                _cancelled => CloseAnswer::CloseCancelled,
+            }))
+        },
+    );
 }

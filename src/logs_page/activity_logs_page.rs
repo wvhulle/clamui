@@ -22,8 +22,11 @@ use crate::{
         system_change_row::SystemChangeRow,
     },
     shared_widgets::{
+        awaited_dialogs::{
+            TextExportOutcome, alert_response, deliver_local_outcome, describe_export_failure,
+            exported_text as exported_text_file,
+        },
         component_streams::{RunningStream, run_stream},
-        file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
     },
 };
@@ -124,11 +127,10 @@ impl ActivityLogsPage {
         exported_text: String,
         sender: &ComponentSender<Self>,
     ) {
-        request_text_export(
-            suggested_name.to_owned(),
-            exported_text,
+        deliver_local_outcome(
             sender.command_sender().clone(),
-            ActivityLogsPageCommand::TextExportFinished,
+            exported_text_file(suggested_name.to_owned(), exported_text),
+            |export_outcome| Some(ActivityLogsPageCommand::TextExportFinished(export_outcome)),
         );
     }
 
@@ -162,11 +164,13 @@ impl ActivityLogsPage {
         confirmation_dialog.add_response("clear", &gettext("Clear All"));
         confirmation_dialog.set_response_appearance("clear", adw::ResponseAppearance::Destructive);
         confirmation_dialog.set_close_response("cancel");
-        let input_sender = sender.input_sender().clone();
-        confirmation_dialog.connect_response(Some("clear"), move |_dialog, _response| {
-            input_sender.emit(ActivityLogsPageInput::ClearAllConfirmed);
-        });
-        confirmation_dialog.present(Some(root));
+        deliver_local_outcome(
+            sender.input_sender().clone(),
+            alert_response(confirmation_dialog, root.clone().upcast()),
+            |chosen_response| {
+                (chosen_response == "clear").then_some(ActivityLogsPageInput::ClearAllConfirmed)
+            },
+        );
     }
 }
 

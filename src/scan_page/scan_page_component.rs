@@ -69,8 +69,8 @@ use crate::{
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
     },
     shared_widgets::{
+        awaited_dialogs::{chosen_files_to_open, chosen_folders_to_open, deliver_local_outcome},
         component_streams::{RunningStream, run_stream_then},
-        file_dialog_requests::{request_files_to_open, request_folder_to_open},
     },
 };
 
@@ -956,15 +956,21 @@ impl Component for ScanPage {
     ) {
         self.profile_names_replaced = false;
         match page_input {
-            ScanPageInput::ChooseFilesRequested => request_files_to_open(
-                gettext("Choose Files to Scan"),
+            ScanPageInput::ChooseFilesRequested => deliver_local_outcome(
                 sender.input_sender().clone(),
-                ScanPageInput::ScanTargetsAdded,
+                chosen_files_to_open(gettext("Choose Files to Scan")),
+                |chosen_paths| {
+                    (!chosen_paths.is_empty())
+                        .then_some(ScanPageInput::ScanTargetsAdded(chosen_paths))
+                },
             ),
-            ScanPageInput::ChooseFolderRequested => request_folder_to_open(
-                gettext("Choose a Folder to Scan"),
+            ScanPageInput::ChooseFolderRequested => deliver_local_outcome(
                 sender.input_sender().clone(),
-                |folder_path| ScanPageInput::ScanTargetsAdded(vec![folder_path]),
+                chosen_folders_to_open(gettext("Choose a Folder to Scan")),
+                |chosen_paths| {
+                    (!chosen_paths.is_empty())
+                        .then_some(ScanPageInput::ScanTargetsAdded(chosen_paths))
+                },
             ),
             ScanPageInput::ScanTargetsChosen(scan_targets) => {
                 self.add_scan_targets(scan_targets);

@@ -18,9 +18,9 @@ use crate::{
             ProfileStoreFailure, ScanProfile, ScanProfileStore, exported_profile_json,
         },
     },
-    shared_widgets::file_dialog_requests::{
-        ImportedFileOutcome, TextExportOutcome, describe_export_failure, request_file_to_import,
-        request_text_export,
+    shared_widgets::awaited_dialogs::{
+        ImportedFileOutcome, TextExportOutcome, alert_response, deliver_local_outcome,
+        describe_export_failure, exported_text, imported_file,
     },
 };
 
@@ -88,13 +88,14 @@ fn present_change_confirmation(
     confirmation_dialog.add_response("confirm", &confirm_label);
     confirmation_dialog.set_response_appearance("confirm", adw::ResponseAppearance::Destructive);
     confirmation_dialog.set_close_response("cancel");
-    let input_sender = sender.input_sender().clone();
-    confirmation_dialog.connect_response(Some("confirm"), move |_dialog, _response| {
-        input_sender.emit(ProfileManagerDialogInput::ChangeConfirmed(
-            confirmed_change.clone(),
-        ));
-    });
-    confirmation_dialog.present(Some(root));
+    deliver_local_outcome(
+        sender.input_sender().clone(),
+        alert_response(confirmation_dialog, root.clone().upcast()),
+        move |chosen_response| {
+            (chosen_response == "confirm")
+                .then_some(ProfileManagerDialogInput::ChangeConfirmed(confirmed_change))
+        },
+    );
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -273,10 +274,14 @@ impl Component for ProfileManagerDialog {
             ProfileManagerDialogInput::NewProfileRequested => {
                 self.open_profile_editor(ScanProfile::default(), root, &sender);
             }
-            ProfileManagerDialogInput::ImportRequested => request_file_to_import(
-                gettext("Import"),
+            ProfileManagerDialogInput::ImportRequested => deliver_local_outcome(
                 sender.command_sender().clone(),
-                ProfileManagerDialogCommand::ImportedFileRead,
+                imported_file(gettext("Import")),
+                |import_outcome| {
+                    Some(ProfileManagerDialogCommand::ImportedFileRead(
+                        import_outcome,
+                    ))
+                },
             ),
             ProfileManagerDialogInput::RestoreDefaultsRequested => present_change_confirmation(
                 gettext("Restore Default Profiles"),
@@ -337,11 +342,12 @@ impl Component for ProfileManagerDialog {
                     .profile_at(&row_index)
                     .map(|exported_profile| exported_profile_json(&exported_profile))
                 {
-                    Some(Ok(exported_json)) => request_text_export(
-                        "lazaret-profile.json".to_owned(),
-                        exported_json,
+                    Some(Ok(exported_json)) => deliver_local_outcome(
                         sender.command_sender().clone(),
-                        ProfileManagerDialogCommand::ExportFinished,
+                        exported_text("lazaret-profile.json".to_owned(), exported_json),
+                        |export_outcome| {
+                            Some(ProfileManagerDialogCommand::ExportFinished(export_outcome))
+                        },
                     ),
                     Some(Err(export_failure)) => self
                         .toaster

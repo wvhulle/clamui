@@ -36,13 +36,17 @@ use crate::{
             protection_change_rules::ProtectionReduction,
         },
     },
-    shared_widgets::engine_settings::{
-        config_setting_row::{
-            ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput, ConfigSettingRowOutput,
-        },
-        detection_switch_row::{
-            DetectionSwitchRow, DetectionSwitchRowInput, DetectionSwitchRowOutput,
-            DetectionSwitchState, SwitchAvailability,
+    shared_widgets::{
+        awaited_dialogs::{alert_response, deliver_local_outcome},
+        engine_settings::{
+            config_setting_row::{
+                ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput,
+                ConfigSettingRowOutput,
+            },
+            detection_switch_row::{
+                DetectionSwitchRow, DetectionSwitchRowInput, DetectionSwitchRowOutput,
+                DetectionSwitchState, SwitchAvailability,
+            },
         },
     },
 };
@@ -241,15 +245,17 @@ fn present_live_change_confirmation(
     }
     confirmation_dialog.set_default_response(Some("cancel"));
     confirmation_dialog.set_close_response("cancel");
-    let input_sender = sender.input_sender().clone();
-    confirmation_dialog.connect_response(Some("apply"), move |_dialog, _response| {
-        input_sender.emit(EngineSettingsPageInput::LiveChangeConfirmed {
-            changed_row: changed_row.clone(),
-            setting_key: setting_key.clone(),
-            new_values: new_values.clone(),
-        });
-    });
-    confirmation_dialog.present(Some(parent_widget));
+    deliver_local_outcome(
+        sender.input_sender().clone(),
+        alert_response(confirmation_dialog, parent_widget.clone().upcast()),
+        move |chosen_response| {
+            (chosen_response == "apply").then_some(EngineSettingsPageInput::LiveChangeConfirmed {
+                changed_row,
+                setting_key,
+                new_values,
+            })
+        },
+    );
 }
 
 fn shown_toast(toast_text: &str) -> adw::Toast {

@@ -35,6 +35,7 @@ use crate::{
         QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput, RowRecheckState,
     },
     shared_widgets::{
+        awaited_dialogs::{alert_response, deliver_local_outcome},
         component_streams::{RunningStream, run_stream, run_stream_to_completion},
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
@@ -305,11 +306,14 @@ impl QuarantineEntriesPage {
         );
         restore_dialog.set_default_response(Some("cancel"));
         restore_dialog.set_close_response("cancel");
-        let input_sender = sender.input_sender().clone();
-        restore_dialog.connect_response(Some("restore"), move |_dialog, _response| {
-            input_sender.emit(QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id });
-        });
-        restore_dialog.present(Some(root));
+        deliver_local_outcome(
+            sender.input_sender().clone(),
+            alert_response(restore_dialog, root.clone().upcast()),
+            move |chosen_response| {
+                (chosen_response == "restore")
+                    .then_some(QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id })
+            },
+        );
     }
 
     fn start_recheck(&mut self, sender: &ComponentSender<Self>) {
@@ -399,7 +403,11 @@ impl QuarantineEntriesPage {
         self.send_recheck_states();
     }
 
-    fn confirm_clearing_old_entries(&self, sender: &ComponentSender<Self>) {
+    fn confirm_clearing_old_entries(
+        &self,
+        root: &adw::ToastOverlay,
+        sender: &ComponentSender<Self>,
+    ) {
         let old_entry_count = self.old_entries().len();
         let confirmation_dialog = adw::AlertDialog::new(
             Some(&gettext("Clear Old Items?")),
@@ -416,14 +424,22 @@ impl QuarantineEntriesPage {
         confirmation_dialog.add_response("delete", &gettext("Delete"));
         confirmation_dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
         confirmation_dialog.set_close_response("cancel");
-        let input_sender = sender.input_sender().clone();
-        confirmation_dialog.connect_response(Some("delete"), move |_dialog, _response| {
-            input_sender.emit(QuarantineEntriesPageInput::ClearOldEntriesConfirmed);
-        });
-        confirmation_dialog.present(relm4::main_application().active_window().as_ref());
+        deliver_local_outcome(
+            sender.input_sender().clone(),
+            alert_response(confirmation_dialog, root.clone().upcast()),
+            |chosen_response| {
+                (chosen_response == "delete")
+                    .then_some(QuarantineEntriesPageInput::ClearOldEntriesConfirmed)
+            },
+        );
     }
 
-    fn confirm_entry_deletion(&self, entry_id: i64, sender: &ComponentSender<Self>) {
+    fn confirm_entry_deletion(
+        &self,
+        entry_id: i64,
+        root: &adw::ToastOverlay,
+        sender: &ComponentSender<Self>,
+    ) {
         let confirmation_dialog = adw::AlertDialog::new(
             Some(&gettext("Delete Quarantined File?")),
             Some(&gettext("The file will be permanently deleted.")),
@@ -431,11 +447,14 @@ impl QuarantineEntriesPage {
         confirmation_dialog.add_response("cancel", &gettext("Cancel"));
         confirmation_dialog.add_response("delete", &gettext("Delete"));
         confirmation_dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
-        let input_sender = sender.input_sender().clone();
-        confirmation_dialog.connect_response(Some("delete"), move |_dialog, _response| {
-            input_sender.emit(QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id });
-        });
-        confirmation_dialog.present(relm4::main_application().active_window().as_ref());
+        deliver_local_outcome(
+            sender.input_sender().clone(),
+            alert_response(confirmation_dialog, root.clone().upcast()),
+            move |chosen_response| {
+                (chosen_response == "delete")
+                    .then_some(QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id })
+            },
+        );
     }
 }
 
@@ -747,7 +766,7 @@ impl Component for QuarantineEntriesPage {
                 self.show_matching_entries();
             }
             QuarantineEntriesPageInput::ClearOldEntriesRequested => {
-                self.confirm_clearing_old_entries(&sender);
+                self.confirm_clearing_old_entries(root, &sender);
             }
             QuarantineEntriesPageInput::ClearOldEntriesConfirmed => {
                 let old_entry_ids = self
@@ -773,7 +792,7 @@ impl Component for QuarantineEntriesPage {
                 );
             }
             QuarantineEntriesPageInput::DeleteEntryRequested { entry_id } => {
-                self.confirm_entry_deletion(entry_id, &sender);
+                self.confirm_entry_deletion(entry_id, root, &sender);
             }
             QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id } => {
                 run_stream_to_completion(

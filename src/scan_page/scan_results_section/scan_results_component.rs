@@ -40,9 +40,12 @@ use crate::{
         },
     },
     shared_widgets::{
+        awaited_dialogs::{
+            TextExportOutcome, alert_response, deliver_local_outcome, describe_export_failure,
+            exported_text,
+        },
         component_streams::run_stream_to_completion,
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
-        file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -163,13 +166,14 @@ impl ScanResultsSection {
         confirmation_dialog
             .set_response_appearance("quarantine", adw::ResponseAppearance::Destructive);
         confirmation_dialog.set_close_response("cancel");
-        let input_sender = sender.input_sender().clone();
-        confirmation_dialog.connect_response(Some("quarantine"), move |_dialog, _response| {
-            input_sender.emit(ScanResultsSectionInput::QuarantineConfirmed(
-                confirmed_rows.clone(),
-            ));
-        });
-        confirmation_dialog.present(Some(root));
+        deliver_local_outcome(
+            sender.input_sender().clone(),
+            alert_response(confirmation_dialog, root.clone().upcast()),
+            move |chosen_response| {
+                (chosen_response == "quarantine")
+                    .then_some(ScanResultsSectionInput::QuarantineConfirmed(confirmed_rows))
+            },
+        );
     }
 
     fn start_threat_moves(
@@ -510,11 +514,14 @@ impl Component for ScanResultsSection {
             }
             ScanResultsSectionInput::ExportReportRequested => {
                 let exported_report = format_scan_report(&self.results_view);
-                request_text_export(
-                    EXPORT_FILE_NAME.to_owned(),
-                    exported_report,
+                deliver_local_outcome(
                     sender.command_sender().clone(),
-                    ScanResultsSectionCommand::ReportExportFinished,
+                    exported_text(EXPORT_FILE_NAME.to_owned(), exported_report),
+                    |export_outcome| {
+                        Some(ScanResultsSectionCommand::ReportExportFinished(
+                            export_outcome,
+                        ))
+                    },
                 );
             }
         }

@@ -1,7 +1,10 @@
 use gettextrs::gettext;
 use relm4::{Sender, adw, adw::prelude::*, gtk};
 
-use crate::host_services::settings_helper::trust_requests::TrustChoice;
+use crate::{
+    host_services::settings_helper::trust_requests::TrustChoice,
+    shared_widgets::awaited_dialogs::{alert_response, deliver_local_outcome},
+};
 
 const CONFIRM_RESPONSE: &str = "confirm";
 const CANCEL_RESPONSE: &str = "cancel";
@@ -100,10 +103,13 @@ pub fn present_trust_confirmation<Message: 'static>(
     );
     confirmation_dialog.set_default_response(Some(CANCEL_RESPONSE));
     confirmation_dialog.set_close_response(CANCEL_RESPONSE);
-    confirmation_dialog.connect_response(Some(CONFIRM_RESPONSE), move |_dialog, _response| {
-        message_sender.emit(confirmed_message(trust_choice.clone()));
-    });
-    confirmation_dialog.present(Some(parent_widget));
+    deliver_local_outcome(
+        message_sender,
+        alert_response(confirmation_dialog, parent_widget.clone().upcast()),
+        move |chosen_response| {
+            (chosen_response == CONFIRM_RESPONSE).then(|| confirmed_message(trust_choice))
+        },
+    );
 }
 
 #[cfg(test)]
