@@ -11,6 +11,9 @@ use relm4::{
 use crate::{
     application_window::application_actions::PreferencesPageAction,
     host_services::{
+        clamav_programs::false_positive_submission::{
+            FalsePositiveReport, SubmissionOutcome, submission_outcome_text, submit_false_positive,
+        },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         quarantine_vault::{
             quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
@@ -23,6 +26,7 @@ use crate::{
     preferences_dialog::preferences_dialog_component::PreferencesPageName,
     quarantine_page::quarantine_entry_row::{QuarantineEntryRow, QuarantineEntryRowOutput},
     shared_widgets::{
+        false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
         page_widget_templates::ClampedPage,
         trust_confirmation_dialog::present_trust_confirmation,
@@ -120,6 +124,8 @@ pub enum QuarantineEntriesPageInput {
     ReportLinkRequested(String),
     TrustRequested(TrustChoice),
     TrustConfirmed(TrustChoice),
+    FalsePositiveReportRequested(ReportedDetection),
+    FalsePositiveReportConfirmed(FalsePositiveReport),
 }
 
 #[derive(Debug)]
@@ -128,6 +134,7 @@ pub enum QuarantineEntriesPageCommand {
     EntryOperationFinished(Result<QuarantineEntryRecord, QuarantineMoveFailure>),
     OldEntriesCleared(Vec<Result<QuarantineEntryRecord, QuarantineMoveFailure>>),
     TrustChangeFinished(TrustOutcome),
+    FalsePositiveReportFinished(SubmissionOutcome),
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -390,6 +397,9 @@ impl Component for QuarantineEntriesPage {
                 QuarantineEntryRowOutput::TrustRequested(trust_choice) => {
                     QuarantineEntriesPageInput::TrustRequested(trust_choice)
                 }
+                QuarantineEntryRowOutput::FalsePositiveReportRequested(reported_detection) => {
+                    QuarantineEntriesPageInput::FalsePositiveReportRequested(reported_detection)
+                }
             });
         let model = Self {
             quarantine_vault,
@@ -460,6 +470,21 @@ impl Component for QuarantineEntriesPage {
                     )
                 });
             }
+            QuarantineEntriesPageInput::FalsePositiveReportRequested(reported_detection) => {
+                present_false_positive_report(
+                    root,
+                    reported_detection,
+                    sender.input_sender().clone(),
+                    QuarantineEntriesPageInput::FalsePositiveReportConfirmed,
+                );
+            }
+            QuarantineEntriesPageInput::FalsePositiveReportConfirmed(false_positive_report) => {
+                sender.oneshot_command(async move {
+                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(
+                        submit_false_positive(false_positive_report).await,
+                    )
+                });
+            }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {
                 run_command_to_completion(&sender, async move {
@@ -515,6 +540,12 @@ impl Component for QuarantineEntriesPage {
         _root: &Self::Root,
     ) {
         match page_command {
+            QuarantineEntriesPageCommand::FalsePositiveReportFinished(submission_outcome) => {
+                self.toaster
+                    .add_toast(plain_text_toast(&submission_outcome_text(
+                        &submission_outcome,
+                    )));
+            }
             QuarantineEntriesPageCommand::TrustChangeFinished(trust_outcome) => {
                 self.toaster
                     .add_toast(plain_text_toast(&trust_outcome_text(&trust_outcome)));

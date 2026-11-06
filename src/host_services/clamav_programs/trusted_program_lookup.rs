@@ -23,6 +23,7 @@ pub enum ClamavProgram {
     ClamdClient,
     StandaloneScanner,
     SignatureUpdater,
+    SampleSubmitter,
 }
 
 impl ClamavProgram {
@@ -31,6 +32,7 @@ impl ClamavProgram {
             Self::ClamdClient => "clamdscan",
             Self::StandaloneScanner => "clamscan",
             Self::SignatureUpdater => "freshclam",
+            Self::SampleSubmitter => "clamsubmit",
         }
     }
 }

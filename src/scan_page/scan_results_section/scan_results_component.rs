@@ -9,6 +9,9 @@ use relm4::{
 
 use crate::{
     host_services::{
+        clamav_programs::false_positive_submission::{
+            FalsePositiveReport, SubmissionOutcome, submission_outcome_text, submit_false_positive,
+        },
         clamav_scanner::{
             scan_exclusion_rules::exclusion_entry_for_threat,
             scanner_output_parser::{DetectedThreat, sanitize_scanner_line},
@@ -36,6 +39,7 @@ use crate::{
         },
     },
     shared_widgets::{
+        false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
         trust_confirmation_dialog::present_trust_confirmation,
     },
@@ -62,6 +66,8 @@ pub enum ScanResultsSectionInput {
     TrustFileRequested(DynamicIndex),
     IgnoreSignatureRequested(DynamicIndex),
     TrustChangeConfirmed(TrustChoice),
+    FalsePositiveReportRequested(DynamicIndex),
+    FalsePositiveReportConfirmed(FalsePositiveReport),
     CopyReportRequested,
     ExportReportRequested,
     NewScanRequested,
@@ -87,6 +93,7 @@ pub enum ScanResultsSectionCommand {
         fingerprint_outcome: std::io::Result<FileFingerprint>,
     },
     TrustChangeFinished(TrustOutcome),
+    FalsePositiveReportFinished(SubmissionOutcome),
 }
 
 struct PendingThreatMove {
@@ -110,6 +117,9 @@ fn forwarded_threat_output(row_output: DetectedThreatRowOutput) -> ScanResultsSe
         }
         DetectedThreatRowOutput::IgnoreSignatureRequested(row_index) => {
             ScanResultsSectionInput::IgnoreSignatureRequested(row_index)
+        }
+        DetectedThreatRowOutput::FalsePositiveReportRequested(row_index) => {
+            ScanResultsSectionInput::FalsePositiveReportRequested(row_index)
         }
     }
 }
@@ -447,6 +457,30 @@ impl Component for ScanResultsSection {
                     )
                 });
             }
+            ScanResultsSectionInput::FalsePositiveReportRequested(row_index) => {
+                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
+                    let detected_threat = &threat_row.detected_threat;
+                    present_false_positive_report(
+                        root,
+                        ReportedDetection {
+                            detection_name: detected_threat.threat_name.clone(),
+                            submitted_path: detected_threat.file_path.clone(),
+                            shown_path: sanitize_scanner_line(
+                                &detected_threat.file_path.to_string_lossy(),
+                            ),
+                        },
+                        sender.input_sender().clone(),
+                        ScanResultsSectionInput::FalsePositiveReportConfirmed,
+                    );
+                }
+            }
+            ScanResultsSectionInput::FalsePositiveReportConfirmed(false_positive_report) => {
+                sender.oneshot_command(async move {
+                    ScanResultsSectionCommand::FalsePositiveReportFinished(
+                        submit_false_positive(false_positive_report).await,
+                    )
+                });
+            }
             ScanResultsSectionInput::CopyReportRequested => {
                 root.clipboard()
                     .set_text(&format_scan_report(&self.results_view));
@@ -496,6 +530,11 @@ impl Component for ScanResultsSection {
             } => {
                 let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
                     fingerprint_failure_text(&fingerprint_failure),
+                ));
+            }
+            ScanResultsSectionCommand::FalsePositiveReportFinished(submission_outcome) => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                    submission_outcome_text(&submission_outcome),
                 ));
             }
             ScanResultsSectionCommand::TrustChangeFinished(trust_outcome) => {

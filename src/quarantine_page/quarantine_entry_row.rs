@@ -7,11 +7,16 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::host_services::{
-    clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
-    quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
-    settings_helper::trust_requests::{FileFingerprint, TrustChoice},
-    threat_intel::file_reputation_check::{ReputationAnswers, SourceAnswer, check_hash_reputation},
+use crate::{
+    host_services::{
+        clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
+        quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
+        settings_helper::trust_requests::{FileFingerprint, TrustChoice},
+        threat_intel::file_reputation_check::{
+            ReputationAnswers, SourceAnswer, check_hash_reputation,
+        },
+    },
+    shared_widgets::false_positive_report_dialog::ReportedDetection,
 };
 
 pub struct QuarantineEntryRow {
@@ -26,6 +31,7 @@ pub enum QuarantineEntryRowInput {
     VirusTotalReportRequested,
     OnlineLookupsRequested,
     TrustFileRequested,
+    FalsePositiveReportRequested,
 }
 
 #[derive(Debug)]
@@ -33,6 +39,7 @@ pub enum QuarantineEntryRowOutput {
     RestoreRequested { entry_id: i64 },
     DeletionRequested { entry_id: i64 },
     TrustRequested(TrustChoice),
+    FalsePositiveReportRequested(ReportedDetection),
     HashCopyRequested(String),
     OnlineLookupsRequested,
     ReportLinkRequested(String),
@@ -159,8 +166,14 @@ impl FactoryComponent for QuarantineEntryRow {
 
             add_row = &adw::ActionRow {
                 set_title: &gettext("False Positive"),
-                set_subtitle: &gettext("Trust this exact file so ClamAV stops reporting it on this computer. Then restore it."),
+                set_subtitle: &gettext("Trust this exact file so ClamAV stops reporting it on this computer, then restore it. Report it so a signature update fixes the detection for everyone."),
                 set_subtitle_lines: 0,
+
+                add_suffix = &gtk::Button {
+                    set_label: &gettext("Report…"),
+                    set_valign: gtk::Align::Center,
+                    connect_clicked => QuarantineEntryRowInput::FalsePositiveReportRequested,
+                },
 
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Trust…"),
@@ -229,6 +242,17 @@ impl FactoryComponent for QuarantineEntryRow {
                         ),
                     },
                 ));
+            }
+            QuarantineEntryRowInput::FalsePositiveReportRequested => {
+                let _page_closed = sender.output(
+                    QuarantineEntryRowOutput::FalsePositiveReportRequested(ReportedDetection {
+                        detection_name: self.entry_record.threat_name.clone(),
+                        submitted_path: self.entry_record.quarantine_path.clone(),
+                        shown_path: sanitize_scanner_line(
+                            &self.entry_record.original_path.to_string_lossy(),
+                        ),
+                    }),
+                );
             }
             QuarantineEntryRowInput::VirusTotalReportRequested => {
                 let _page_closed = sender.output(QuarantineEntryRowOutput::ReportLinkRequested(

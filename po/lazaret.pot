@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 15:52+0100\n"
+"POT-Creation-Date: 2026-11-06 15:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -42,9 +42,9 @@ msgstr ""
 
 #: src/application_window/application_pages.rs:49
 #: src/detections_page/incident_timeline_presentation.rs:314
-#: src/quarantine_page/quarantine_entries_page.rs:257
-#: src/scan_page/scan_results_section/detected_threat_row.rs:164
-#: src/scan_page/scan_results_section/scan_results_component.rs:150
+#: src/quarantine_page/quarantine_entries_page.rs:264
+#: src/scan_page/scan_results_section/detected_threat_row.rs:174
+#: src/scan_page/scan_results_section/scan_results_component.rs:160
 msgid "Quarantine"
 msgstr ""
 
@@ -209,12 +209,13 @@ msgstr ""
 #: src/application_window/window_close_behavior.rs:46
 #: src/detections_page/incident_timeline_presentation.rs:306
 #: src/logs_page/activity_logs_page.rs:180
-#: src/quarantine_page/quarantine_entries_page.rs:202
-#: src/quarantine_page/quarantine_entries_page.rs:218
+#: src/quarantine_page/quarantine_entries_page.rs:209
+#: src/quarantine_page/quarantine_entries_page.rs:225
 #: src/scan_page/scan_page_component.rs:671
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:87
-#: src/scan_page/scan_results_section/scan_results_component.rs:149
+#: src/scan_page/scan_results_section/scan_results_component.rs:159
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:209
+#: src/shared_widgets/false_positive_report_dialog.rs:57
 #: src/shared_widgets/trust_confirmation_dialog.rs:91
 #: src/signatures_page/signature_update_dialog/database_update_page.rs:555
 msgid "Cancel"
@@ -603,6 +604,34 @@ msgid ""
 "press the check mark to copy the line to put in that file."
 msgstr ""
 
+#: src/host_services/clamav_programs/false_positive_submission.rs:132
+msgid "the upload took too long"
+msgstr ""
+
+#: src/host_services/clamav_programs/false_positive_submission.rs:140
+msgid ""
+"Report sent. If the ClamAV team agrees, a later signature update stops the "
+"detection."
+msgstr ""
+
+#: src/host_services/clamav_programs/false_positive_submission.rs:143
+msgid "Enter your name and a valid email address to send a report"
+msgstr ""
+
+#: src/host_services/clamav_programs/false_positive_submission.rs:146
+msgid ""
+"Reporting needs clamsubmit, which comes with ClamAV but isn't installed here"
+msgstr ""
+
+#: src/host_services/clamav_programs/false_positive_submission.rs:149
+msgid "Lazaret refused to run clamsubmit, because your account can replace it"
+msgstr ""
+
+#: src/host_services/clamav_programs/false_positive_submission.rs:152
+#, rust-format
+msgid "The report was not sent: {error}"
+msgstr ""
+
 #: src/host_services/clamav_scanner/scan_progress_estimates.rs:35
 #, rust-format
 msgid "{done} of {total} file"
@@ -985,7 +1014,7 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:274
 #: src/logs_page/activity_logs_page.rs:429
 #: src/logs_page/activity_logs_page.rs:483
-#: src/quarantine_page/quarantine_entries_page.rs:287
+#: src/quarantine_page/quarantine_entries_page.rs:294
 msgid "Refresh"
 msgstr ""
 
@@ -1691,52 +1720,52 @@ msgid ""
 "that you or your administrator added them on purpose."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:36
+#: src/quarantine_page/quarantine_entries_page.rs:40
 msgid "File hash mismatch — file may be corrupted"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:39
+#: src/quarantine_page/quarantine_entries_page.rs:43
 msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:43
+#: src/quarantine_page/quarantine_entries_page.rs:47
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:46
+#: src/quarantine_page/quarantine_entries_page.rs:50
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:54
+#: src/quarantine_page/quarantine_entries_page.rs:58
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
 "{error}. File may be orphaned at: {path}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:63
+#: src/quarantine_page/quarantine_entries_page.rs:67
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:170
+#: src/quarantine_page/quarantine_entries_page.rs:177
 #, rust-format
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:192
+#: src/quarantine_page/quarantine_entries_page.rs:199
 msgid "Clear Old Items?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:195
+#: src/quarantine_page/quarantine_entries_page.rs:202
 #, rust-format
 msgid ""
 "{count} quarantined file older than 30 days will be permanently deleted."
@@ -1745,112 +1774,116 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:203
-#: src/quarantine_page/quarantine_entries_page.rs:219
-#: src/quarantine_page/quarantine_entry_row.rs:99
+#: src/quarantine_page/quarantine_entries_page.rs:210
+#: src/quarantine_page/quarantine_entries_page.rs:226
+#: src/quarantine_page/quarantine_entry_row.rs:106
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:310
 #: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:80
 msgid "Delete"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:215
+#: src/quarantine_page/quarantine_entries_page.rs:222
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:216
+#: src/quarantine_page/quarantine_entries_page.rs:223
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:264
+#: src/quarantine_page/quarantine_entries_page.rs:271
 #: src/scan_page/scan_options_section.rs:109
 #: src/scan_page/scan_page_component.rs:616
 msgid "More"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:268
+#: src/quarantine_page/quarantine_entries_page.rs:275
 msgid "Clear Old Items…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:293
+#: src/quarantine_page/quarantine_entries_page.rs:300
 msgid "Search"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:314
+#: src/quarantine_page/quarantine_entries_page.rs:321
 msgid "Search by threat name or path"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:329
+#: src/quarantine_page/quarantine_entries_page.rs:336
 msgid "Quarantine Storage"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:330
+#: src/quarantine_page/quarantine_entries_page.rs:337
 msgid ""
 "Detected threats isolated from your system. Expand an entry to check its "
 "reputation."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:333
+#: src/quarantine_page/quarantine_entries_page.rs:340
 msgid "Total Size"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:407
+#: src/quarantine_page/quarantine_entries_page.rs:417
 msgid "Loading quarantine…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:411
+#: src/quarantine_page/quarantine_entries_page.rs:421
 msgid "Quarantine is empty"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:412
+#: src/quarantine_page/quarantine_entries_page.rs:422
 msgid "Threats you quarantine will appear here"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:430
+#: src/quarantine_page/quarantine_entries_page.rs:440
 msgid "Hash copied to clipboard"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:91
+#: src/quarantine_page/quarantine_entry_row.rs:98
 msgid "Restore"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:108
+#: src/quarantine_page/quarantine_entry_row.rs:115
 msgid "Reputation"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:109
+#: src/quarantine_page/quarantine_entry_row.rs:116
 msgid ""
 "Only the file's SHA-256 hash is sent. The file itself never leaves this "
 "computer."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:113
+#: src/quarantine_page/quarantine_entry_row.rs:120
 msgid "Check"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:131
-#: src/quarantine_page/quarantine_entry_row.rs:144
+#: src/quarantine_page/quarantine_entry_row.rs:138
+#: src/quarantine_page/quarantine_entry_row.rs:151
 msgid "Add Key"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:152
+#: src/quarantine_page/quarantine_entry_row.rs:159
 msgid "View Report"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:161
+#: src/quarantine_page/quarantine_entry_row.rs:168
 msgid "False Positive"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:162
+#: src/quarantine_page/quarantine_entry_row.rs:169
 msgid ""
-"Trust this exact file so ClamAV stops reporting it on this computer. Then "
-"restore it."
+"Trust this exact file so ClamAV stops reporting it on this computer, then "
+"restore it. Report it so a signature update fixes the detection for everyone."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:166
+#: src/quarantine_page/quarantine_entry_row.rs:173
+msgid "Report…"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:179
 msgid "Trust…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:181
+#: src/quarantine_page/quarantine_entry_row.rs:194
 msgid "Copy Hash"
 msgstr ""
 
@@ -2235,45 +2268,49 @@ msgid_plural "Finding files… {count} found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:29
+#: src/scan_page/scan_results_section/detected_threat_row.rs:34
 msgid "Trust This File…"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:34
+#: src/scan_page/scan_results_section/detected_threat_row.rs:39
 msgid "Ignore This Detection Everywhere…"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:40
+#: src/scan_page/scan_results_section/detected_threat_row.rs:44
+msgid "Report False Positive…"
+msgstr ""
+
+#: src/scan_page/scan_results_section/detected_threat_row.rs:49
 msgid "Skip This Path in Lazaret Scans"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:43
+#: src/scan_page/scan_results_section/detected_threat_row.rs:52
 msgid "Copy Path"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:94
+#: src/scan_page/scan_results_section/detected_threat_row.rs:104
 msgid "Critical"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:95
+#: src/scan_page/scan_results_section/detected_threat_row.rs:105
 msgid "High"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:96
+#: src/scan_page/scan_results_section/detected_threat_row.rs:106
 msgid "Medium"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:97
+#: src/scan_page/scan_results_section/detected_threat_row.rs:107
 msgid "Low"
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:117
+#: src/scan_page/scan_results_section/detected_threat_row.rs:127
 #, rust-format
 msgid ""
 "Moved to quarantine: {path}. Check its reputation on the Quarantine page."
 msgstr ""
 
-#: src/scan_page/scan_results_section/detected_threat_row.rs:175
+#: src/scan_page/scan_results_section/detected_threat_row.rs:185
 msgid "More Actions"
 msgstr ""
 
@@ -2288,62 +2325,62 @@ msgstr[1] ""
 msgid "Scan details"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:128
+#: src/scan_page/scan_results_section/scan_results_component.rs:138
 #, rust-format
 msgid "Quarantine {count} Threat"
 msgid_plural "Quarantine {count} Threats"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:143
+#: src/scan_page/scan_results_section/scan_results_component.rs:153
 msgid "Move to Quarantine?"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:146
+#: src/scan_page/scan_results_section/scan_results_component.rs:156
 msgid "This removes each original file from its current location."
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:294
+#: src/scan_page/scan_results_section/scan_results_component.rs:304
 msgid "New Scan"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:302
+#: src/scan_page/scan_results_section/scan_results_component.rs:312
 msgid "Detected Threats"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:314
+#: src/scan_page/scan_results_section/scan_results_component.rs:324
 msgid "Problems"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:359
+#: src/scan_page/scan_results_section/scan_results_component.rs:369
 #, rust-format
 msgid "Move '{path}' to quarantine?"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:377
+#: src/scan_page/scan_results_section/scan_results_component.rs:387
 #, rust-format
 msgid "Move {count} detected file to quarantine?"
 msgid_plural "Move {count} detected files to quarantine?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:392
+#: src/scan_page/scan_results_section/scan_results_component.rs:402
 msgid "Path copied to clipboard"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:403
+#: src/scan_page/scan_results_section/scan_results_component.rs:413
 msgid "This file will be skipped in future scans"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:405
+#: src/scan_page/scan_results_section/scan_results_component.rs:415
 msgid "This exclusion already exists"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:454
+#: src/scan_page/scan_results_section/scan_results_component.rs:488
 msgid "Results copied to clipboard"
 msgstr ""
 
-#: src/scan_page/scan_results_section/scan_results_component.rs:530
+#: src/scan_page/scan_results_section/scan_results_component.rs:569
 msgid "Results exported"
 msgstr ""
 
@@ -2884,6 +2921,33 @@ msgstr ""
 
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:536
 msgid "Copied. Add it to your configuration to apply it."
+msgstr ""
+
+#: src/shared_widgets/false_positive_report_dialog.rs:34
+msgid "Report a False Positive?"
+msgstr ""
+
+#: src/shared_widgets/false_positive_report_dialog.rs:37
+#, rust-format
+msgid ""
+"Lazaret uploads this file to Cisco Talos, the team behind ClamAV, together "
+"with your name and email address, so they can check the detection and "
+"contact you. Only send files that contain nothing private.\n"
+"\n"
+"{detection}\n"
+"{path}"
+msgstr ""
+
+#: src/shared_widgets/false_positive_report_dialog.rs:45
+msgid "Your Name"
+msgstr ""
+
+#: src/shared_widgets/false_positive_report_dialog.rs:47
+msgid "Your Email Address"
+msgstr ""
+
+#: src/shared_widgets/false_positive_report_dialog.rs:58
+msgid "Send Report"
 msgstr ""
 
 #: src/shared_widgets/file_dialog_requests.rs:24

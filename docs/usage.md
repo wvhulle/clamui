@@ -40,6 +40,8 @@ An interrupted move never loses the file. The Quarantine page lists every quaran
 
 When you are sure a detection is wrong, trust the file instead of excluding its path. Open the menu of a detected threat and choose **Trust This File…**, or press **Trust…** on a quarantined file. The file is then never reported again on this computer, but a changed copy of it is still checked. **Ignore This Detection Everywhere…** stops reporting a detection for every file, so prefer trusting the file when only one file is wrong.
 
+To get the detection fixed for everyone, choose **Report False Positive…** or press **Report…** on a quarantined file. This uploads the file, with your name and email address, to the ClamAV team.
+
 Both ask for your administrator password. Review and remove trusted files under **Protection → Trusted Detections**, and see who changed what on the **System Changes** tab of the Logs page. Trusting files is not available in the Flatpak.
 
 ## Reputation lookups

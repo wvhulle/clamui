@@ -1,5 +1,6 @@
 pub mod audit_sections;
 pub mod engine_settings;
+pub mod false_positive_report_dialog;
 pub mod file_dialog_requests;
 pub mod loading_indicators;
 pub mod page_widget_templates;

@@ -22,6 +22,11 @@ relm4::new_stateless_action!(TrustFileAction, ThreatRowActions, "trust-file");
 relm4::new_stateless_action!(IgnoreSignatureAction, ThreatRowActions, "ignore-signature");
 relm4::new_stateless_action!(ExcludeFromScansAction, ThreatRowActions, "exclude");
 relm4::new_stateless_action!(CopyPathAction, ThreatRowActions, "copy-path");
+relm4::new_stateless_action!(
+    ReportFalsePositiveAction,
+    ThreatRowActions,
+    "report-false-positive"
+);
 
 fn threat_actions_menu(signature_ignorable: bool) -> gio::Menu {
     let trust_section = gio::Menu::new();
@@ -35,6 +40,10 @@ fn threat_actions_menu(signature_ignorable: bool) -> gio::Menu {
             Some("threat-row.ignore-signature"),
         );
     }
+    trust_section.append(
+        Some(&gettext("Report False Positive…")),
+        Some("threat-row.report-false-positive"),
+    );
     let scan_section = gio::Menu::new();
     scan_section.append(
         Some(&gettext("Skip This Path in Lazaret Scans")),
@@ -87,6 +96,7 @@ pub enum DetectedThreatRowOutput {
     ExclusionRequested(DynamicIndex),
     TrustFileRequested(DynamicIndex),
     IgnoreSignatureRequested(DynamicIndex),
+    FalsePositiveReportRequested(DynamicIndex),
 }
 
 fn severity_badge_text(threat_severity: ThreatSeverity) -> String {
@@ -212,6 +222,11 @@ impl FactoryComponent for DetectedThreatRow {
             &sender,
             index,
             DetectedThreatRowOutput::IgnoreSignatureRequested,
+        ));
+        row_actions.add_action(row_action::<ReportFalsePositiveAction>(
+            &sender,
+            index,
+            DetectedThreatRowOutput::FalsePositiveReportRequested,
         ));
         row_actions.add_action(row_action::<ExcludeFromScansAction>(
             &sender,
