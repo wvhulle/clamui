@@ -8,7 +8,10 @@ use relm4::{
 
 use crate::{
     host_services::clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-    scan_page::scan_profiles_dialog::scan_profile_store::ScanProfile,
+    scan_page::scan_profiles_dialog::{
+        profile_display_text::{displayed_profile_description, displayed_profile_name},
+        scan_profile_store::{ProfileOrigin, ScanProfile},
+    },
 };
 
 pub struct ScanProfileRow {
@@ -23,21 +26,33 @@ pub enum ScanProfileRowOutput {
     ExportRequested(DynamicIndex),
 }
 
+fn profile_is_deletable(scan_profile: &ScanProfile) -> bool {
+    match scan_profile.profile_origin {
+        ProfileOrigin::Builtin(_builtin_profile) => false,
+        ProfileOrigin::Custom { .. } => true,
+    }
+}
+
 fn profile_subtitle(scan_profile: &ScanProfile) -> String {
-    let target_count = scan_profile.scan_targets.len();
+    let target_count = scan_profile.profile_draft.scan_targets.len();
     let target_text = ngettext(
         "{count} target",
         "{count} targets",
         u32::try_from(target_count).unwrap_or(u32::MAX),
     )
     .replace("{count}", &target_count.to_string());
-    let builtin_text = scan_profile.is_builtin.then(|| gettext("Default profile"));
-    std::iter::once(sanitize_scanner_line(&scan_profile.displayed_description()))
-        .filter(|description_text| !description_text.is_empty())
-        .chain(std::iter::once(target_text))
-        .chain(builtin_text)
-        .collect::<Vec<_>>()
-        .join(" • ")
+    let builtin_text = match scan_profile.profile_origin {
+        ProfileOrigin::Builtin(_builtin_profile) => Some(gettext("Default profile")),
+        ProfileOrigin::Custom { .. } => None,
+    };
+    std::iter::once(sanitize_scanner_line(&displayed_profile_description(
+        scan_profile,
+    )))
+    .filter(|description_text| !description_text.is_empty())
+    .chain(std::iter::once(target_text))
+    .chain(builtin_text)
+    .collect::<Vec<_>>()
+    .join(" • ")
 }
 
 #[relm4::factory(pub)]
@@ -51,7 +66,7 @@ impl FactoryComponent for ScanProfileRow {
     view! {
         adw::ActionRow {
             set_use_markup: false,
-            set_title: &sanitize_scanner_line(&self.scan_profile.displayed_name()),
+            set_title: &sanitize_scanner_line(&displayed_profile_name(&self.scan_profile)),
             set_subtitle: &profile_subtitle(&self.scan_profile),
             set_subtitle_lines: 0,
 
@@ -80,7 +95,7 @@ impl FactoryComponent for ScanProfileRow {
                 set_tooltip_text: Some(&gettext("Delete")),
                 set_valign: gtk::Align::Center,
                 add_css_class: "flat",
-                set_sensitive: !self.scan_profile.is_builtin,
+                set_sensitive: profile_is_deletable(&self.scan_profile),
                 connect_clicked[sender, index] => move |_clicked_button| {
                     let _parent_gone = sender.output(ScanProfileRowOutput::DeletionRequested(index.clone()));
                 },

@@ -5,8 +5,14 @@ use relm4::{
 
 use crate::{
     scan_page::scan_profiles_dialog::{
+        profile_display_text::{
+            builtin_profile_description, builtin_profile_name, describe_profile_store_failure,
+        },
         profile_value_row::{ProfileValueRow, ProfileValueRowOutput},
-        scan_profile_store::{ProfileStoreFailure, ScanProfile, ScanProfileStore},
+        scan_profile_store::{
+            EditTarget, ProfileDraft, ProfileOrigin, ProfileStoreFailure, ScanProfileStore,
+            run_blocking_profile_task,
+        },
     },
     shared_widgets::awaited_dialogs::{chosen_folders_to_open, deliver_local_outcome},
 };
@@ -19,11 +25,17 @@ pub enum ProfileListKind {
 
 pub struct ProfileEditorDialog {
     profile_store: ScanProfileStore,
-    edited_profile: ScanProfile,
-    editor_notice: String,
+    edit_target: EditTarget,
+    profile_draft: ProfileDraft,
+    save_notice: SaveNotice,
     target_rows: FactoryVecDeque<ProfileValueRow>,
     pattern_rows: FactoryVecDeque<ProfileValueRow>,
     cleared_entry: ClearedEntry,
+}
+
+enum SaveNotice {
+    NoSaveFailure,
+    SaveFailed(ProfileStoreFailure),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,7 +46,8 @@ enum ClearedEntry {
 
 pub struct ProfileEditorDialogInit {
     pub profile_store: ScanProfileStore,
-    pub edited_profile: ScanProfile,
+    pub edit_target: EditTarget,
+    pub profile_draft: ProfileDraft,
 }
 
 #[derive(Debug)]
@@ -63,16 +76,6 @@ pub enum ProfileEditorDialogCommand {
     ProfileSaveFinished(Result<(), ProfileStoreFailure>),
 }
 
-fn describe_store_failure(store_failure: &ProfileStoreFailure) -> String {
-    match store_failure {
-        ProfileStoreFailure::ProfileNameMissing => gettext("Profile name is required"),
-        ProfileStoreFailure::ProfileNameTooLong => gettext("Name must be 50 characters or less"),
-        ProfileStoreFailure::ProfileNameTaken => gettext("Another profile already uses this name"),
-        ProfileStoreFailure::ProfileTargetsMissing => gettext("Add at least one target"),
-        other_failure => other_failure.to_string(),
-    }
-}
-
 fn value_rows(
     listed_values: &[String],
     list_kind: ProfileListKind,
@@ -99,8 +102,46 @@ fn value_rows(
 impl ProfileEditorDialog {
     fn edited_values(&mut self, list_kind: ProfileListKind) -> &mut Vec<String> {
         match list_kind {
-            ProfileListKind::ScanTargets => &mut self.edited_profile.scan_targets,
-            ProfileListKind::ExcludedPatterns => &mut self.edited_profile.excluded_patterns,
+            ProfileListKind::ScanTargets => &mut self.profile_draft.scan_targets,
+            ProfileListKind::ExcludedPatterns => &mut self.profile_draft.excluded_patterns,
+        }
+    }
+
+    const fn naming_is_editable(&self) -> bool {
+        match self.edit_target {
+            EditTarget::NewProfile | EditTarget::ExistingProfile(ProfileOrigin::Custom { .. }) => {
+                true
+            }
+            EditTarget::ExistingProfile(ProfileOrigin::Builtin(_builtin_profile)) => false,
+        }
+    }
+
+    fn shown_profile_name(&self) -> String {
+        match self.edit_target {
+            EditTarget::ExistingProfile(ProfileOrigin::Builtin(builtin_profile)) => {
+                builtin_profile_name(builtin_profile)
+            }
+            EditTarget::NewProfile | EditTarget::ExistingProfile(ProfileOrigin::Custom { .. }) => {
+                self.profile_draft.profile_name.clone()
+            }
+        }
+    }
+
+    fn shown_profile_description(&self) -> String {
+        match self.edit_target {
+            EditTarget::ExistingProfile(ProfileOrigin::Builtin(builtin_profile)) => {
+                builtin_profile_description(builtin_profile)
+            }
+            EditTarget::NewProfile | EditTarget::ExistingProfile(ProfileOrigin::Custom { .. }) => {
+                self.profile_draft.profile_description.clone()
+            }
+        }
+    }
+
+    fn save_notice_text(&self) -> String {
+        match &self.save_notice {
+            SaveNotice::NoSaveFailure => String::new(),
+            SaveNotice::SaveFailed(save_failure) => describe_profile_store_failure(save_failure),
         }
     }
 
@@ -147,7 +188,8 @@ impl Component for ProfileEditorDialog {
                     add = &adw::PreferencesGroup {
                         adw::EntryRow {
                             set_title: &gettext("Name"),
-                            set_text: &model.edited_profile.profile_name,
+                            set_text: &model.shown_profile_name(),
+                            set_sensitive: model.naming_is_editable(),
                             connect_changed[sender] => move |edited_row| {
                                 sender.input(ProfileEditorDialogInput::NameChanged(edited_row.text().to_string()));
                             },
@@ -155,7 +197,8 @@ impl Component for ProfileEditorDialog {
 
                         adw::EntryRow {
                             set_title: &gettext("Description"),
-                            set_text: &model.edited_profile.profile_description,
+                            set_text: &model.shown_profile_description(),
+                            set_sensitive: model.naming_is_editable(),
                             connect_changed[sender] => move |edited_row| {
                                 sender.input(ProfileEditorDialogInput::DescriptionChanged(edited_row.text().to_string()));
                             },
@@ -235,9 +278,9 @@ impl Component for ProfileEditorDialog {
                             set_wrap: true,
                             add_css_class: "error",
                             #[watch]
-                            set_visible: !model.editor_notice.is_empty(),
+                            set_visible: matches!(model.save_notice, SaveNotice::SaveFailed(_)),
                             #[watch]
-                            set_label: &model.editor_notice,
+                            set_label: &model.save_notice_text(),
                         },
                     },
                 },
@@ -250,25 +293,22 @@ impl Component for ProfileEditorDialog {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut edited_profile = dialog_init.edited_profile;
-        let inherited_paths = std::mem::take(&mut edited_profile.excluded_paths);
-        edited_profile
-            .excluded_patterns
-            .splice(0..0, inherited_paths);
+        let profile_draft = dialog_init.profile_draft;
         let model = Self {
             profile_store: dialog_init.profile_store,
+            edit_target: dialog_init.edit_target,
             target_rows: value_rows(
-                &edited_profile.scan_targets,
+                &profile_draft.scan_targets,
                 ProfileListKind::ScanTargets,
                 &sender,
             ),
             pattern_rows: value_rows(
-                &edited_profile.excluded_patterns,
+                &profile_draft.excluded_patterns,
                 ProfileListKind::ExcludedPatterns,
                 &sender,
             ),
-            edited_profile,
-            editor_notice: String::new(),
+            profile_draft,
+            save_notice: SaveNotice::NoSaveFailure,
             cleared_entry: ClearedEntry::NoEntryCleared,
         };
         let target_list = model.target_rows.widget();
@@ -286,10 +326,10 @@ impl Component for ProfileEditorDialog {
         self.cleared_entry = ClearedEntry::NoEntryCleared;
         match editor_input {
             ProfileEditorDialogInput::NameChanged(profile_name) => {
-                self.edited_profile.profile_name = profile_name;
+                self.profile_draft.profile_name = profile_name;
             }
             ProfileEditorDialogInput::DescriptionChanged(profile_description) => {
-                self.edited_profile.profile_description = profile_description;
+                self.profile_draft.profile_description = profile_description;
             }
             ProfileEditorDialogInput::AddFolderRequested => deliver_local_outcome(
                 sender.input_sender().clone(),
@@ -334,20 +374,16 @@ impl Component for ProfileEditorDialog {
             }
             ProfileEditorDialogInput::SaveRequested => {
                 let profile_store = self.profile_store.clone();
-                let saved_profile = self.edited_profile.clone();
+                let edit_target = self.edit_target.clone();
+                let profile_draft = self.profile_draft.clone();
                 sender.oneshot_command(async move {
                     ProfileEditorDialogCommand::ProfileSaveFinished(
-                        tokio::task::spawn_blocking(move || {
+                        run_blocking_profile_task(move || {
                             profile_store
-                                .save_profile(saved_profile)
+                                .save_profile(edit_target, profile_draft)
                                 .map(|_saved_profile| ())
                         })
-                        .await
-                        .unwrap_or_else(|interrupted_saving| {
-                            Err(ProfileStoreFailure::from(std::io::Error::other(
-                                interrupted_saving,
-                            )))
-                        }),
+                        .await,
                     )
                 });
             }
@@ -367,7 +403,7 @@ impl Component for ProfileEditorDialog {
                 root.close();
             }
             ProfileEditorDialogCommand::ProfileSaveFinished(Err(save_failure)) => {
-                self.editor_notice = describe_store_failure(&save_failure);
+                self.save_notice = SaveNotice::SaveFailed(save_failure);
             }
         }
     }

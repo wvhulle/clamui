@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 21:55+0100\n"
+"POT-Creation-Date: 2026-11-06 22:05+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -31,8 +31,8 @@ msgid "Detections"
 msgstr ""
 
 #: src/application_window/application_pages.rs:47
-#: src/scan_page/scan_page_component.rs:271
-#: src/scan_page/scan_page_component.rs:543
+#: src/scan_page/scan_page_component.rs:278
+#: src/scan_page/scan_page_component.rs:541
 msgid "Scan"
 msgstr ""
 
@@ -103,7 +103,7 @@ msgstr ""
 
 #: src/application_window/settings_navigation.rs:65
 #: src/scan_page/exclusions_page/scan_exclusions_page.rs:107
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:203
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:246
 msgid "Exclusions"
 msgstr ""
 
@@ -114,7 +114,7 @@ msgstr ""
 
 #: src/application_window/settings_navigation.rs:67
 #: src/scan_page/device_auto_scan_page/device_scan_page.rs:42
-#: src/scan_page/scan_page_component.rs:972
+#: src/scan_page/scan_page_component.rs:967
 msgid "Device Auto-Scan"
 msgstr ""
 
@@ -195,7 +195,7 @@ msgid "Show Detections"
 msgstr ""
 
 #: src/application_window/system_tray_menu.rs:72
-#: src/scan_page/scan_profiles_dialog/scan_profile_store.rs:56
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:9
 msgid "Quick Scan"
 msgstr ""
 
@@ -220,8 +220,8 @@ msgstr ""
 #: src/quarantine_page/quarantine_entries_page.rs:388
 #: src/quarantine_page/quarantine_entries_page.rs:500
 #: src/quarantine_page/quarantine_entries_page.rs:524
-#: src/scan_page/scan_page_component.rs:621
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:87
+#: src/scan_page/scan_page_component.rs:619
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:96
 #: src/scan_page/scan_results_section/scan_results_component.rs:164
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:252
 #: src/shared_widgets/false_positive_report_dialog.rs:58
@@ -652,7 +652,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:240
-#: src/scan_page/scan_page_component.rs:483
+#: src/scan_page/scan_page_component.rs:481
 #: src/scan_page/scan_results_section/scan_results_state.rs:105
 msgid "Threats Detected"
 msgstr ""
@@ -982,8 +982,8 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/logs_page/activity_export_formats.rs:31
-#: src/scan_page/scan_page_component.rs:306
-#: src/scan_page/scan_page_component.rs:484
+#: src/scan_page/scan_page_component.rs:313
+#: src/scan_page/scan_page_component.rs:482
 #: src/scan_page/scan_results_section/scan_results_state.rs:106
 msgid "No threats found"
 msgstr ""
@@ -993,14 +993,14 @@ msgid "Scheduled scan skipped (on battery power)"
 msgstr ""
 
 #: src/logs_page/activity_export_formats.rs:33
-#: src/scan_page/scan_page_component.rs:304
-#: src/scan_page/scan_page_component.rs:485
+#: src/scan_page/scan_page_component.rs:311
+#: src/scan_page/scan_page_component.rs:483
 #: src/scan_page/scan_results_section/scan_results_state.rs:107
 msgid "The scan did not finish cleanly"
 msgstr ""
 
 #: src/logs_page/activity_export_formats.rs:34
-#: src/scan_page/scan_page_component.rs:295
+#: src/scan_page/scan_page_component.rs:302
 #: src/scan_page/scan_results_section/scan_results_state.rs:108
 msgid "Scan cancelled by user"
 msgstr ""
@@ -1088,7 +1088,7 @@ msgstr ""
 #: src/protection_page/protection_timeline_page.rs:518
 #: src/quarantine_page/quarantine_entry_row.rs:80
 #: src/quarantine_page/quarantine_entry_row.rs:140
-#: src/scan_page/scan_page_component.rs:226
+#: src/scan_page/scan_page_component.rs:233
 #: src/scan_page/scan_schedule_page/scan_schedule_component.rs:311
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
 msgid "Checking…"
@@ -2391,8 +2391,8 @@ msgstr[1] ""
 #: src/quarantine_page/quarantine_entries_page.rs:501
 #: src/quarantine_page/quarantine_entries_page.rs:525
 #: src/quarantine_page/quarantine_entry_row.rs:240
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:315
-#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:80
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:337
+#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:95
 msgid "Delete"
 msgstr ""
 
@@ -2406,7 +2406,7 @@ msgstr ""
 
 #: src/quarantine_page/quarantine_entries_page.rs:573
 #: src/scan_page/scan_options_section.rs:109
-#: src/scan_page/scan_page_component.rs:566
+#: src/scan_page/scan_page_component.rs:564
 msgid "More"
 msgstr ""
 
@@ -2652,93 +2652,93 @@ msgstr ""
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:228
+#: src/scan_page/scan_page_component.rs:192
+msgid "No Profile (Manual)"
+msgstr ""
+
+#: src/scan_page/scan_page_component.rs:235
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:231
+#: src/scan_page/scan_page_component.rs:238
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:272
+#: src/scan_page/scan_page_component.rs:279
 #: src/scan_page/scan_progress_view.rs:39
 msgid "Preparing…"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:276
+#: src/scan_page/scan_page_component.rs:283
 msgid "Cancelling…"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:283
+#: src/scan_page/scan_page_component.rs:290
 #, rust-format
 msgid "Scanning {name}"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:286
+#: src/scan_page/scan_page_component.rs:293
 #, rust-format
 msgid "Scanning {count} location"
 msgid_plural "Scanning {count} locations"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scan_page/scan_page_component.rs:299
+#: src/scan_page/scan_page_component.rs:306
 #: src/scan_page/scan_results_section/scan_results_state.rs:160
 msgid "Threats found"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:325
-msgid "No Profile (Manual)"
-msgstr ""
-
-#: src/scan_page/scan_page_component.rs:526
+#: src/scan_page/scan_page_component.rs:524
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:550
+#: src/scan_page/scan_page_component.rs:548
 msgid "Add Files"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:558
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:170
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:296
+#: src/scan_page/scan_page_component.rs:556
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:213
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:336
 msgid "Add Folder"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:575
+#: src/scan_page/scan_page_component.rs:573
 msgid "Run EICAR Test"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:586
+#: src/scan_page/scan_page_component.rs:584
 msgid "Copy Results"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:597
+#: src/scan_page/scan_page_component.rs:595
 msgid "Export Results…"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:611
+#: src/scan_page/scan_page_component.rs:609
 msgid "Start Scan"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:632
+#: src/scan_page/scan_page_component.rs:630
 msgid "Lazaret refuses a ClamAV program that your account could replace"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:633
+#: src/scan_page/scan_page_component.rs:631
 msgid "Details"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:677
+#: src/scan_page/scan_page_component.rs:675
 msgid "Scan Profile"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:682
+#: src/scan_page/scan_page_component.rs:680
 msgid "Profile"
 msgstr ""
 
 #: src/scan_page/scan_page_component.rs:695
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:181
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:191
 msgid "Manage Profiles"
 msgstr ""
 
@@ -2762,170 +2762,190 @@ msgstr ""
 msgid "Found so far"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:901
+#: src/scan_page/scan_page_component.rs:899
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:909
+#: src/scan_page/scan_page_component.rs:907
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:974
+#: src/scan_page/scan_page_component.rs:969
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
-#: src/scan_page/scan_page_component.rs:1114
+#: src/scan_page/scan_page_component.rs:1115
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:68
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:10
+msgid "Full Scan"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:11
+msgid "Home Folder"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:18
+msgid "Fast scan of the Downloads folder for quick threat detection"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:21
+msgid "Comprehensive system-wide scan of all accessible directories"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:24
+msgid "Scan of the user's home directory and personal files"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:46
+#, rust-format
+msgid "The profile file could not be accessed: {error}"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:50
+#, rust-format
+msgid "The profile data is not valid: {error}"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:54
+#, rust-format
+msgid "The profile file could not be replaced: {error}"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:58
+#, rust-format
+msgid "The profile task was interrupted: {error}"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:61
 msgid "Profile name is required"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:69
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:62
 msgid "Name must be 50 characters or less"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:70
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:63
 msgid "Another profile already uses this name"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:71
+#: src/scan_page/scan_profiles_dialog/profile_display_text.rs:64
 msgid "Add at least one target"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:131
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:172
 msgid "Edit Profile"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:139
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:180
 msgid "Save"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:149
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:190
 msgid "Name"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:157
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:199
 msgid "Description"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:166
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:209
 msgid "Targets"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:181
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:224
 msgid "Add Path"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:204
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:247
 msgid "Added to the exclusions from Preferences while this profile runs."
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:211
+#: src/scan_page/scan_profiles_dialog/profile_editor_dialog.rs:254
 msgid "Add Pattern"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:193
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:292
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:112
+msgid "Default profiles restored"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:113
+msgid "Profile deleted"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:114
+msgid "Profile imported"
+msgstr ""
+
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:203
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:307
 msgid "Restore Defaults"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:199
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:209
 msgid "New Profile"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:206
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:279
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:216
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:294
 msgid "Import"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:214
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:224
 msgid "Scan Profiles"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:215
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:225
 msgid "Select a profile to edit or use for scanning"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:287
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:302
 msgid "Restore Default Profiles"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:289
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:304
 msgid ""
 "Restore the built-in default profiles? Any customizations to default "
 "profiles will be reset; custom profiles are preserved."
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:312
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:334
 msgid "Delete Profile"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:313
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:335
 #, rust-format
 msgid "Delete the profile '{name}'?"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:329
-msgid "Default profiles restored"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:336
-msgid "Profile deleted"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:381
-msgid "Profile imported"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:408
+#: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:447
 msgid "Profile exported"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:29
+#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:39
 #, rust-format
 msgid "{count} target"
 msgid_plural "{count} targets"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:34
+#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:45
 msgid "Default profile"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:60
+#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:75
 msgid "Run"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:70
+#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:85
 msgid "Edit"
 msgstr ""
 
-#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:91
+#: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:106
 #: src/shared_widgets/awaited_dialogs.rs:101
 msgid "Export"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/scan_profile_store.rs:57
-msgid "Full Scan"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/scan_profile_store.rs:58
-msgid "Home Folder"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/scan_profile_store.rs:66
-msgid "Fast scan of the Downloads folder for quick threat detection"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/scan_profile_store.rs:69
-msgid "Comprehensive system-wide scan of all accessible directories"
-msgstr ""
-
-#: src/scan_page/scan_profiles_dialog/scan_profile_store.rs:72
-msgid "Scan of the user's home directory and personal files"
 msgstr ""
 
 #: src/scan_page/scan_progress_view.rs:43

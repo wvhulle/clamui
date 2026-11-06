@@ -21,7 +21,7 @@ use crate::{
         },
         clamav_config::detection_options::host_clamscan_detection_arguments,
         clamav_scanner::{
-            scan_exclusion_rules::{ExclusionEntry, ScanExclusions},
+            scan_exclusion_rules::ScanExclusions,
             scan_progress_estimates::file_progress_text,
             scan_progress_events::{ScanProgressEvent, ScanRequest, scan_progress_events},
             scanner_command_builder::{
@@ -52,9 +52,14 @@ use crate::{
             ScanPageState, ScanRun, ScanRunNumber, ScanStartPermission, ScanStartPermit,
             ScanStreamEnding, TemporaryScanTarget,
         },
+        scan_profile_selection::{ProfileChoiceRow, ScanProfileChoice, TargetRowsChange},
         scan_profiles_dialog::{
+            profile_display_text::{describe_profile_store_failure, displayed_profile_name},
             profile_manager_dialog::{ProfileManagerDialog, ProfileManagerDialogOutput},
-            scan_profile_store::{ScanProfile, ScanProfileStore},
+            scan_profile_store::{
+                ProfileStoreFailure, ScanProfile, ScanProfileStore, expanded_profile_targets,
+                run_blocking_profile_task,
+            },
         },
         scan_progress_view::ScanProgressBar,
         scan_results_section::{
@@ -76,11 +81,6 @@ use crate::{
 };
 
 const PROGRESS_BATCH_SIZE: usize = 256;
-
-enum SelectedScanProfile {
-    ManualTargets,
-    ProfileChosen(ScanProfile),
-}
 
 enum ProfileManagerView {
     ManagerClosed,
@@ -104,11 +104,9 @@ pub struct ScanPageInit {
 pub struct ScanPage {
     activity_history: ActivityHistory,
     profile_store: ScanProfileStore,
-    known_profiles: Vec<ScanProfile>,
-    selected_profile: SelectedScanProfile,
+    profile_choice: ScanProfileChoice,
     profile_manager_view: ProfileManagerView,
-    profile_names: Vec<String>,
-    profile_names_replaced: bool,
+    profile_list_reloaded: bool,
     file_list_directory: PathBuf,
     scan_page_state: ScanPageState,
     next_scan_run_number: ScanRunNumber,
@@ -170,7 +168,7 @@ pub enum ScanPageCommand {
         scanner_program_trust: ScannerProgramTrust,
     },
     ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
-    ProfilesLoaded(Result<Vec<ScanProfile>, String>),
+    ProfilesLoaded(Result<Vec<ScanProfile>, ProfileStoreFailure>),
     EicarTestFileWritten(Result<NamedTempFile, EicarTestFileFailure>),
     DeviceSettled {
         mount_path: PathBuf,
@@ -186,6 +184,15 @@ fn close_enclosing_popover(clicked_button: &gtk::Button) {
         .and_downcast::<gtk::Popover>()
     {
         enclosing_popover.popdown();
+    }
+}
+
+fn profile_choice_label(choice_row: &ProfileChoiceRow) -> String {
+    match choice_row {
+        ProfileChoiceRow::ManualTargetsRow => gettext("No Profile (Manual)"),
+        ProfileChoiceRow::StoredProfileRow(stored_profile) => {
+            sanitize_scanner_line(&displayed_profile_name(stored_profile))
+        }
     }
 }
 
@@ -311,40 +318,31 @@ impl ScanPage {
         let profile_store = self.profile_store.clone();
         sender.oneshot_command(async move {
             ScanPageCommand::ProfilesLoaded(
-                tokio::task::spawn_blocking(move || profile_store.load_profiles())
-                    .await
-                    .map_err(|interrupted_loading| interrupted_loading.to_string())
-                    .and_then(|load_outcome| {
-                        load_outcome.map_err(|load_failure| load_failure.to_string())
-                    }),
+                run_blocking_profile_task(move || profile_store.load_profiles()).await,
             )
         });
     }
 
-    fn show_known_profiles(&mut self, known_profiles: Vec<ScanProfile>) {
-        self.profile_names = std::iter::once(gettext("No Profile (Manual)"))
-            .chain(
-                known_profiles
-                    .iter()
-                    .map(|known_profile| sanitize_scanner_line(&known_profile.displayed_name())),
-            )
-            .collect();
-        self.profile_names_replaced = true;
-        self.known_profiles = known_profiles;
+    fn profile_choice_labels(&self) -> gtk::StringList {
+        let choice_labels = self
+            .profile_choice
+            .choice_rows()
+            .iter()
+            .map(profile_choice_label)
+            .collect::<Vec<_>>();
+        gtk::StringList::new(&choice_labels.iter().map(String::as_str).collect::<Vec<_>>())
     }
 
-    fn apply_profile(&mut self, chosen_profile: ScanProfile) {
-        let profile_targets = chosen_profile.expanded_targets(&glib::home_dir());
-        self.scan_target_rows.guard().clear();
-        self.add_scan_targets(profile_targets);
-        self.selected_profile = SelectedScanProfile::ProfileChosen(chosen_profile);
-    }
-
-    fn profile_exclusion_entries(&self) -> Vec<ExclusionEntry> {
-        match &self.selected_profile {
-            SelectedScanProfile::ManualTargets => Vec::new(),
-            SelectedScanProfile::ProfileChosen(chosen_profile) => {
-                chosen_profile.exclusion_entries()
+    fn change_target_rows(&mut self, target_rows_change: TargetRowsChange) {
+        match target_rows_change {
+            TargetRowsChange::KeepTargetRows => {}
+            TargetRowsChange::ClearTargetRows => self.scan_target_rows.guard().clear(),
+            TargetRowsChange::ReplaceTargetRows { profile_targets } => {
+                self.scan_target_rows.guard().clear();
+                self.add_scan_targets(expanded_profile_targets(
+                    &profile_targets,
+                    &glib::home_dir(),
+                ));
             }
         }
     }
@@ -403,7 +401,7 @@ impl ScanPage {
         let scan_exclusions = ScanExclusions::from_entries(
             &read_exclusion_entries(&settings)
                 .into_iter()
-                .chain(self.profile_exclusion_entries())
+                .chain(self.profile_choice.selected_exclusion_entries())
                 .collect::<Vec<_>>(),
             &glib::home_dir(),
         );
@@ -680,15 +678,17 @@ impl Component for ScanPage {
 
                             adw::ComboRow {
                                 set_title: &gettext("Profile"),
-                                #[track(model.profile_names_replaced)]
-                                set_model: Some(&gtk::StringList::new(
-                                    &model.profile_names.iter().map(String::as_str).collect::<Vec<_>>(),
-                                )),
+                                #[track(model.profile_list_reloaded)]
+                                #[block_signal(profile_selection_handler)]
+                                set_model: Some(&model.profile_choice_labels()),
+                                #[watch]
+                                #[block_signal(profile_selection_handler)]
+                                set_selected: model.profile_choice.selected_row_position(),
                                 connect_selected_notify[sender] => move |profile_row| {
                                     sender.input(ScanPageInput::ProfileRowSelected {
                                         row_position: profile_row.selected() as usize,
                                     });
-                                },
+                                } @profile_selection_handler,
 
                                 add_suffix = &gtk::Button {
                                     set_icon_name: "emblem-system-symbolic",
@@ -841,11 +841,9 @@ impl Component for ScanPage {
         });
         let model = Self {
             profile_store: page_init.profile_store,
-            known_profiles: Vec::new(),
-            selected_profile: SelectedScanProfile::ManualTargets,
+            profile_choice: ScanProfileChoice::without_profiles(),
             profile_manager_view: ProfileManagerView::ManagerClosed,
-            profile_names: Vec::new(),
-            profile_names_replaced: false,
+            profile_list_reloaded: false,
             activity_history: page_init.activity_history,
             file_list_directory: page_init.file_list_directory,
             scan_page_state: ScanPageState::WaitingForTargets,
@@ -894,7 +892,7 @@ impl Component for ScanPage {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
-        self.profile_names_replaced = false;
+        self.profile_list_reloaded = false;
         match page_input {
             ScanPageInput::ChooseFilesRequested => deliver_local_outcome(
                 sender.input_sender().clone(),
@@ -921,20 +919,17 @@ impl Component for ScanPage {
                 self.scan_page_state.return_to_targets();
             }
             ScanPageInput::ProfileRowSelected { row_position } => {
-                match row_position
-                    .checked_sub(1)
-                    .and_then(|profile_position| self.known_profiles.get(profile_position))
-                {
-                    Some(chosen_profile) => self.apply_profile(chosen_profile.clone()),
-                    None => self.selected_profile = SelectedScanProfile::ManualTargets,
-                }
+                let target_rows_change = self.profile_choice.choose_row(row_position);
+                self.change_target_rows(target_rows_change);
             }
             ScanPageInput::ManageProfilesRequested => {
                 self.open_profile_manager(root, &sender);
             }
             ScanPageInput::ProfilesChanged => self.reload_known_profiles(&sender),
             ScanPageInput::RunProfileRequested(run_profile) => {
-                self.apply_profile(run_profile);
+                let target_rows_change = self.profile_choice.run_profile(run_profile);
+                self.profile_list_reloaded = true;
+                self.change_target_rows(target_rows_change);
                 self.start_chosen_targets_scan(&sender);
             }
             ScanPageInput::DeviceMountAdded(mounted_device) => {
@@ -1027,12 +1022,18 @@ impl Component for ScanPage {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        self.profile_names_replaced = false;
+        self.profile_list_reloaded = false;
         match page_command {
-            ScanPageCommand::ProfilesLoaded(Ok(known_profiles)) => {
-                self.show_known_profiles(known_profiles);
+            ScanPageCommand::ProfilesLoaded(Ok(reloaded_profiles)) => {
+                let target_rows_change = self
+                    .profile_choice
+                    .replace_known_profiles(reloaded_profiles);
+                self.profile_list_reloaded = true;
+                self.change_target_rows(target_rows_change);
             }
-            ScanPageCommand::ProfilesLoaded(Err(load_failure)) => self.page_notice = load_failure,
+            ScanPageCommand::ProfilesLoaded(Err(load_failure)) => {
+                self.page_notice = describe_profile_store_failure(&load_failure);
+            }
             ScanPageCommand::EicarTestFileWritten(write_outcome) => {
                 if let ScanStartPermission::ScanMayStart(start_permit) =
                     self.scan_page_state.written_eicar_file_permission()

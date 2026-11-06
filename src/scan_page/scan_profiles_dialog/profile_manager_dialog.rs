@@ -10,12 +10,14 @@ use relm4::{
 
 use crate::{
     scan_page::scan_profiles_dialog::{
+        profile_display_text::{describe_profile_store_failure, displayed_profile_name},
         profile_editor_dialog::{
             ProfileEditorDialog, ProfileEditorDialogInit, ProfileEditorDialogOutput,
         },
         scan_profile_row::{ScanProfileRow, ScanProfileRowOutput},
         scan_profile_store::{
-            ProfileStoreFailure, ScanProfile, ScanProfileStore, exported_profile_json,
+            EditTarget, ProfileDraft, ProfileId, ProfileOrigin, ProfileStoreFailure, ScanProfile,
+            ScanProfileStore, exported_profile_json, run_blocking_profile_task,
         },
     },
     shared_widgets::awaited_dialogs::{
@@ -41,7 +43,14 @@ pub struct ProfileManagerDialog {
 #[derive(Clone, Debug)]
 pub enum ConfirmedProfileChange {
     DefaultsRestored,
-    ProfileDeleted { profile_id: String },
+    ProfileDeleted { profile_id: ProfileId },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CompletedProfileChange {
+    DefaultsRestored,
+    ProfileDeleted,
+    ProfileImported,
 }
 
 #[derive(Debug)]
@@ -65,11 +74,11 @@ pub enum ProfileManagerDialogOutput {
 
 #[derive(Debug)]
 pub enum ProfileManagerDialogCommand {
-    ProfilesLoaded(Result<Vec<ScanProfile>, String>),
+    ProfilesLoaded(Result<Vec<ScanProfile>, ProfileStoreFailure>),
     ImportedFileRead(ImportedFileOutcome),
     StoreChangeFinished {
-        success_toast: String,
-        change_outcome: Result<(), String>,
+        completed_change: CompletedProfileChange,
+        change_outcome: Result<(), ProfileStoreFailure>,
     },
     ExportFinished(TextExportOutcome),
 }
@@ -98,6 +107,14 @@ fn present_change_confirmation(
     );
 }
 
+fn completed_change_text(completed_change: CompletedProfileChange) -> String {
+    match completed_change {
+        CompletedProfileChange::DefaultsRestored => gettext("Default profiles restored"),
+        CompletedProfileChange::ProfileDeleted => gettext("Profile deleted"),
+        CompletedProfileChange::ProfileImported => gettext("Profile imported"),
+    }
+}
+
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
     adw::Toast::builder()
         .title(toast_text)
@@ -110,12 +127,7 @@ impl ProfileManagerDialog {
         let profile_store = self.profile_store.clone();
         sender.oneshot_command(async move {
             ProfileManagerDialogCommand::ProfilesLoaded(
-                tokio::task::spawn_blocking(move || profile_store.load_profiles())
-                    .await
-                    .map_err(|interrupted_loading| interrupted_loading.to_string())
-                    .and_then(|load_outcome| {
-                        load_outcome.map_err(|load_failure| load_failure.to_string())
-                    }),
+                run_blocking_profile_task(move || profile_store.load_profiles()).await,
             )
         });
     }
@@ -123,19 +135,15 @@ impl ProfileManagerDialog {
     fn change_store(
         &self,
         sender: &ComponentSender<Self>,
-        success_toast: String,
+        completed_change: CompletedProfileChange,
         store_change: impl FnOnce(&ScanProfileStore) -> Result<(), ProfileStoreFailure> + Send + 'static,
     ) {
         let profile_store = self.profile_store.clone();
         sender.oneshot_command(async move {
             ProfileManagerDialogCommand::StoreChangeFinished {
-                success_toast,
-                change_outcome: tokio::task::spawn_blocking(move || store_change(&profile_store))
-                    .await
-                    .map_err(|interrupted_change| interrupted_change.to_string())
-                    .and_then(|change_outcome| {
-                        change_outcome.map_err(|change_failure| change_failure.to_string())
-                    }),
+                completed_change,
+                change_outcome: run_blocking_profile_task(move || store_change(&profile_store))
+                    .await,
             }
         });
     }
@@ -148,14 +156,16 @@ impl ProfileManagerDialog {
 
     fn open_profile_editor(
         &mut self,
-        edited_profile: ScanProfile,
+        edit_target: EditTarget,
+        profile_draft: ProfileDraft,
         root: &adw::Dialog,
         sender: &ComponentSender<Self>,
     ) {
         let profile_editor = ProfileEditorDialog::builder()
             .launch(ProfileEditorDialogInit {
                 profile_store: self.profile_store.clone(),
-                edited_profile,
+                edit_target,
+                profile_draft,
             })
             .forward(sender.input_sender(), |editor_output| match editor_output {
                 ProfileEditorDialogOutput::ProfileSaved => {
@@ -272,7 +282,12 @@ impl Component for ProfileManagerDialog {
                 let _page_closed = sender.output(ProfileManagerDialogOutput::ProfilesChanged);
             }
             ProfileManagerDialogInput::NewProfileRequested => {
-                self.open_profile_editor(ScanProfile::default(), root, &sender);
+                self.open_profile_editor(
+                    EditTarget::NewProfile,
+                    ProfileDraft::default(),
+                    root,
+                    &sender,
+                );
             }
             ProfileManagerDialogInput::ImportRequested => deliver_local_outcome(
                 sender.command_sender().clone(),
@@ -303,22 +318,29 @@ impl Component for ProfileManagerDialog {
             }
             ProfileManagerDialogInput::EditRequested(row_index) => {
                 if let Some(edited_profile) = self.profile_at(&row_index) {
-                    self.open_profile_editor(edited_profile, root, &sender);
+                    self.open_profile_editor(
+                        EditTarget::ExistingProfile(edited_profile.profile_origin),
+                        edited_profile.profile_draft,
+                        root,
+                        &sender,
+                    );
                 }
             }
             ProfileManagerDialogInput::DeleteRequested(row_index) => {
                 if let Some(deleted_profile) = self.profile_at(&row_index) {
-                    present_change_confirmation(
-                        gettext("Delete Profile"),
-                        gettext("Delete the profile '{name}'?")
-                            .replace("{name}", &deleted_profile.profile_name),
-                        gettext("Delete"),
-                        ConfirmedProfileChange::ProfileDeleted {
-                            profile_id: deleted_profile.profile_id,
-                        },
-                        root,
-                        &sender,
-                    );
+                    let deleted_name = displayed_profile_name(&deleted_profile);
+                    match deleted_profile.profile_origin {
+                        ProfileOrigin::Custom { profile_id } => present_change_confirmation(
+                            gettext("Delete Profile"),
+                            gettext("Delete the profile '{name}'?")
+                                .replace("{name}", &deleted_name),
+                            gettext("Delete"),
+                            ConfirmedProfileChange::ProfileDeleted { profile_id },
+                            root,
+                            &sender,
+                        ),
+                        ProfileOrigin::Builtin(_protected_builtin) => {}
+                    }
                 }
             }
             ProfileManagerDialogInput::ChangeConfirmed(
@@ -326,16 +348,18 @@ impl Component for ProfileManagerDialog {
             ) => {
                 self.change_store(
                     &sender,
-                    gettext("Default profiles restored"),
+                    CompletedProfileChange::DefaultsRestored,
                     ScanProfileStore::restore_builtin_profiles,
                 );
             }
             ProfileManagerDialogInput::ChangeConfirmed(
                 ConfirmedProfileChange::ProfileDeleted { profile_id },
             ) => {
-                self.change_store(&sender, gettext("Profile deleted"), move |profile_store| {
-                    profile_store.delete_profile(&profile_id)
-                });
+                self.change_store(
+                    &sender,
+                    CompletedProfileChange::ProfileDeleted,
+                    move |profile_store| profile_store.delete_custom_profile(&profile_id),
+                );
             }
             ProfileManagerDialogInput::ExportRequested(row_index) => {
                 match self
@@ -349,9 +373,12 @@ impl Component for ProfileManagerDialog {
                             Some(ProfileManagerDialogCommand::ExportFinished(export_outcome))
                         },
                     ),
-                    Some(Err(export_failure)) => self
-                        .toaster
-                        .add_toast(plain_text_toast(&export_failure.to_string())),
+                    Some(Err(export_failure)) => {
+                        self.toaster
+                            .add_toast(plain_text_toast(&describe_profile_store_failure(
+                                &export_failure,
+                            )))
+                    }
                     None => {}
                 }
             }
@@ -373,16 +400,23 @@ impl Component for ProfileManagerDialog {
                 });
             }
             ProfileManagerDialogCommand::ProfilesLoaded(Err(load_failure)) => {
-                self.toaster.add_toast(plain_text_toast(&load_failure));
+                self.toaster
+                    .add_toast(plain_text_toast(&describe_profile_store_failure(
+                        &load_failure,
+                    )));
             }
             ProfileManagerDialogCommand::ImportedFileRead(ImportedFileOutcome::FileRead(
                 imported_bytes,
             )) => {
-                self.change_store(&sender, gettext("Profile imported"), move |profile_store| {
-                    profile_store
-                        .import_profile(&imported_bytes)
-                        .map(|_imported_profile| ())
-                });
+                self.change_store(
+                    &sender,
+                    CompletedProfileChange::ProfileImported,
+                    move |profile_store| {
+                        profile_store
+                            .import_profile(&imported_bytes)
+                            .map(|_imported_profile| ())
+                    },
+                );
             }
             ProfileManagerDialogCommand::ImportedFileRead(ImportedFileOutcome::ImportCancelled)
             | ProfileManagerDialogCommand::ExportFinished(TextExportOutcome::ExportCancelled) => {}
@@ -393,16 +427,21 @@ impl Component for ProfileManagerDialog {
                     .add_toast(plain_text_toast(&describe_export_failure(&read_failure)));
             }
             ProfileManagerDialogCommand::StoreChangeFinished {
-                success_toast,
+                completed_change,
                 change_outcome: Ok(()),
             } => {
-                self.toaster.add_toast(plain_text_toast(&success_toast));
+                self.toaster
+                    .add_toast(plain_text_toast(&completed_change_text(completed_change)));
                 sender.input(ProfileManagerDialogInput::ReloadRequested);
             }
             ProfileManagerDialogCommand::StoreChangeFinished {
                 change_outcome: Err(change_failure),
                 ..
-            } => self.toaster.add_toast(plain_text_toast(&change_failure)),
+            } => self
+                .toaster
+                .add_toast(plain_text_toast(&describe_profile_store_failure(
+                    &change_failure,
+                ))),
             ProfileManagerDialogCommand::ExportFinished(TextExportOutcome::TextSaved) => {
                 self.toaster
                     .add_toast(plain_text_toast(&gettext("Profile exported")));
