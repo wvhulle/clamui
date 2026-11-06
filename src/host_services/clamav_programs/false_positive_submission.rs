@@ -1,4 +1,11 @@
-use std::{fs::File, os::unix::fs::OpenOptionsExt, path::PathBuf, process::Stdio, time::Duration};
+use std::{
+    fs::File,
+    io::{self, Read},
+    os::unix::fs::OpenOptionsExt,
+    path::{Path, PathBuf},
+    process::Stdio,
+    time::Duration,
+};
 
 use gettextrs::gettext;
 use tokio::time::timeout;
@@ -21,10 +28,33 @@ pub struct ReporterContact {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SubmittedContent {
+    DetectedFile { file_path: PathBuf },
+    QuarantinedEntry { entry_id: i64 },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FalsePositiveReport {
     pub reporter_contact: ReporterContact,
     pub detection_name: String,
-    pub submitted_path: PathBuf,
+    pub submitted_content: SubmittedContent,
+}
+
+pub fn open_detected_file(file_path: &Path) -> io::Result<File> {
+    File::options()
+        .read(true)
+        .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
+        .open(file_path)
+}
+
+fn piped_content(
+    mut plaintext_source: impl Read + Send + 'static,
+) -> io::Result<std::os::fd::OwnedFd> {
+    let (pipe_reader, pipe_writer) = rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC)?;
+    std::thread::spawn(move || {
+        let _reader_closed = io::copy(&mut plaintext_source, &mut File::from(pipe_writer));
+    });
+    Ok(pipe_reader)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -78,6 +108,7 @@ pub fn submission_arguments(false_positive_report: &FalsePositiveReport) -> Vec<
 
 pub async fn submit_false_positive(
     false_positive_report: FalsePositiveReport,
+    plaintext_source: impl Read + Send + 'static,
 ) -> SubmissionOutcome {
     if !contact_is_complete(&false_positive_report.reporter_contact) {
         return SubmissionOutcome::ContactIncomplete;
@@ -95,22 +126,18 @@ pub async fn submit_false_positive(
             return SubmissionOutcome::SubmitterReplaceable;
         }
     };
-    let submitted_file = match File::options()
-        .read(true)
-        .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
-        .open(&false_positive_report.submitted_path)
-    {
-        Ok(submitted_file) => submitted_file,
-        Err(open_failure) => {
+    let content_pipe = match piped_content(plaintext_source) {
+        Ok(content_pipe) => content_pipe,
+        Err(pipe_failure) => {
             return SubmissionOutcome::SubmissionFailed {
-                failure_text: open_failure.to_string(),
+                failure_text: pipe_failure.to_string(),
             };
         }
     };
     let mut submission_command = host_program_async_command(&submitter_path, &[]);
     submission_command
         .args(submission_arguments(&false_positive_report))
-        .stdin(Stdio::from(submitted_file))
+        .stdin(Stdio::from(content_pipe))
         .kill_on_drop(true);
     match timeout(SUBMISSION_TIMEOUT, submission_command.output()).await {
         Ok(Ok(submission_output)) if submission_output.status.success() => {
@@ -188,7 +215,9 @@ mod false_positive_submission_tests {
         let submitted_arguments = submission_arguments(&FalsePositiveReport {
             reporter_contact: contact("Alex Doe", " alex@example.org "),
             detection_name: "Win.Test.EICAR_HDB-1".to_owned(),
-            submitted_path: PathBuf::from("/home/alex/-rf"),
+            submitted_content: SubmittedContent::DetectedFile {
+                file_path: PathBuf::from("/home/alex/-rf"),
+            },
         });
         assert_eq!(
             submitted_arguments,

@@ -9,11 +9,16 @@ use futures::{TryStreamExt, stream};
 use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Database, Row, Value};
 
-use crate::host_services::quarantine_vault::quarantine_file_moves::{
-    QuarantineMoveFailure, UNKNOWN_PAYLOAD_HASH, copy_file_into_quarantine, delete_payload_file,
-    discard_copied_payload, ensure_quarantine_directory, lexically_normalized_path,
-    payload_content_hash, pin_database_file, plan_blocked_file_rename, remove_quarantined_source,
-    rename_blocked_file_into_quarantine, restore_payload_file, secure_database_files,
+use crate::host_services::quarantine_vault::{
+    quarantine_file_moves::{
+        QuarantineMoveFailure, UNKNOWN_PAYLOAD_HASH, copy_file_into_quarantine,
+        delete_payload_file, discard_copied_payload, ensure_quarantine_directory,
+        lexically_normalized_path, neutralize_payload_in_place, open_payload_plaintext,
+        payload_content_hash, pin_database_file, plan_blocked_file_rename,
+        remove_quarantined_source, remove_stale_neutralizing_copies,
+        rename_blocked_file_into_quarantine, restore_payload_file, secure_database_files,
+    },
+    quarantine_payload_format::PlaintextReader,
 };
 
 const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -148,7 +153,50 @@ impl QuarantineVault {
             .reconcile_pending_entries(&schema_connection)
             .await?;
         secure_database_files(&quarantine_vault.database_path);
+        quarantine_vault.neutralize_listed_payloads().await;
         Ok(quarantine_vault)
+    }
+
+    async fn neutralize_listed_payloads(&self) {
+        let quarantine_directory = self.quarantine_directory.clone();
+        let listed_entries = self.list_quarantine_entries().await.unwrap_or_default();
+        let _interrupted_neutralizing = spawn_blocking(move || {
+            remove_stale_neutralizing_copies(&quarantine_directory);
+            listed_entries.iter().for_each(|listed_entry| {
+                let _payload_stays_raw = neutralize_payload_in_place(
+                    &quarantine_directory,
+                    &listed_entry.quarantine_path,
+                    &listed_entry.file_hash,
+                );
+            });
+        })
+        .await;
+    }
+
+    async fn neutralize_committed_payload(&self, recorded_payload: &RecordedPayload) {
+        let quarantine_directory = self.quarantine_directory.clone();
+        let payload_path = recorded_payload.destination_path.clone();
+        let expected_hash = recorded_payload.file_hash.clone();
+        let _payload_stays_raw = spawn_blocking(move || {
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, &expected_hash)
+        })
+        .await;
+    }
+
+    pub async fn read_payload_plaintext(
+        &self,
+        entry_id: i64,
+    ) -> Result<PlaintextReader<std::fs::File>, QuarantineMoveFailure> {
+        let database_connection = self.open_connection().await?;
+        let entry_record = self
+            .find_quarantine_entry(&database_connection, entry_id)
+            .await?;
+        drop(database_connection);
+        let quarantine_directory = self.quarantine_directory.clone();
+        spawn_blocking(move || {
+            open_payload_plaintext(&quarantine_directory, &entry_record.quarantine_path)
+        })
+        .await?
     }
 
     async fn open_connection(&self) -> Result<Connection, QuarantineMoveFailure> {
@@ -431,6 +479,7 @@ impl QuarantineVault {
             .await
         {
             Ok(entry_id) => {
+                self.neutralize_committed_payload(&recorded_payload).await;
                 let database_connection = self.open_connection().await?;
                 self.find_quarantine_entry(&database_connection, entry_id)
                     .await
@@ -605,6 +654,18 @@ mod quarantine_entry_database_tests {
 
     use super::*;
 
+    fn stored_plaintext(payload_path: &Path) -> Vec<u8> {
+        use std::io::Read;
+        let mut plaintext = Vec::new();
+        crate::host_services::quarantine_vault::quarantine_payload_format::open_plaintext_reader(
+            std::fs::File::open(payload_path).expect("payload"),
+        )
+        .expect("payload reader")
+        .read_to_end(&mut plaintext)
+        .expect("plaintext");
+        plaintext
+    }
+
     struct VaultFixture {
         temporary_root: TempDir,
         quarantine_vault: QuarantineVault,
@@ -701,7 +762,7 @@ mod quarantine_entry_database_tests {
             .expect("quarantined");
         assert!(!source_path.exists());
         assert_eq!(
-            fs::read(&entry_record.quarantine_path).expect("payload"),
+            stored_plaintext(&entry_record.quarantine_path),
             b"malicious bytes"
         );
         assert_eq!(
@@ -804,7 +865,7 @@ mod quarantine_entry_database_tests {
         ));
         assert!(!source_path.exists());
         assert_eq!(
-            fs::read(&entry_record.quarantine_path).expect("payload"),
+            stored_plaintext(&entry_record.quarantine_path),
             b"tampered payload"
         );
         assert_eq!(
@@ -1154,7 +1215,7 @@ mod quarantine_entry_database_tests {
         assert_eq!(listed_entries.len(), 1);
         assert_eq!(listed_entries[0].original_path, source_path);
         assert_eq!(
-            fs::read(&listed_entries[0].quarantine_path).expect("payload"),
+            stored_plaintext(&listed_entries[0].quarantine_path),
             b"crash payload"
         );
         assert_eq!(pending_row_count(&temporary_root), 0);

@@ -9,6 +9,7 @@ use relm4::{
 
 use crate::{
     host_services::{
+        clamav_programs::false_positive_submission::SubmittedContent,
         clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
         settings_helper::trust_requests::{FileFingerprint, TrustChoice},
@@ -247,7 +248,9 @@ impl FactoryComponent for QuarantineEntryRow {
                 let _page_closed = sender.output(
                     QuarantineEntryRowOutput::FalsePositiveReportRequested(ReportedDetection {
                         detection_name: self.entry_record.threat_name.clone(),
-                        submitted_path: self.entry_record.quarantine_path.clone(),
+                        submitted_content: SubmittedContent::QuarantinedEntry {
+                            entry_id: self.entry_record.entry_id,
+                        },
                         shown_path: sanitize_scanner_line(
                             &self.entry_record.original_path.to_string_lossy(),
                         ),

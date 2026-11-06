@@ -1,10 +1,8 @@
-use std::path::PathBuf;
-
 use gettextrs::gettext;
 use relm4::{Sender, adw, adw::prelude::*, gtk};
 
 use crate::host_services::clamav_programs::false_positive_submission::{
-    FalsePositiveReport, ReporterContact, contact_is_complete,
+    FalsePositiveReport, ReporterContact, SubmittedContent, contact_is_complete,
 };
 
 const SEND_RESPONSE: &str = "send";
@@ -13,7 +11,7 @@ const CANCEL_RESPONSE: &str = "cancel";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReportedDetection {
     pub detection_name: String,
-    pub submitted_path: PathBuf,
+    pub submitted_content: SubmittedContent,
     pub shown_path: String,
 }
 
@@ -75,7 +73,7 @@ pub fn present_false_positive_report<Message: 'static>(
         message_sender.emit(confirmed_message(FalsePositiveReport {
             reporter_contact: contact_from_rows(&name_row, &email_row),
             detection_name: reported_detection.detection_name.clone(),
-            submitted_path: reported_detection.submitted_path.clone(),
+            submitted_content: reported_detection.submitted_content.clone(),
         }));
     });
     report_dialog.present(Some(parent_widget));

@@ -12,7 +12,8 @@ use crate::{
     application_window::application_actions::PreferencesPageAction,
     host_services::{
         clamav_programs::false_positive_submission::{
-            FalsePositiveReport, SubmissionOutcome, submission_outcome_text, submit_false_positive,
+            FalsePositiveReport, SubmissionOutcome, SubmittedContent, submission_outcome_text,
+            submit_false_positive,
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         quarantine_vault::{
@@ -479,10 +480,27 @@ impl Component for QuarantineEntriesPage {
                 );
             }
             QuarantineEntriesPageInput::FalsePositiveReportConfirmed(false_positive_report) => {
+                let quarantine_vault = self.quarantine_vault.clone();
                 sender.oneshot_command(async move {
-                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(
-                        submit_false_positive(false_positive_report).await,
-                    )
+                    let submission_outcome = match &false_positive_report.submitted_content {
+                        SubmittedContent::QuarantinedEntry { entry_id } => {
+                            match quarantine_vault.read_payload_plaintext(*entry_id).await {
+                                Ok(payload_plaintext) => {
+                                    submit_false_positive(false_positive_report, payload_plaintext)
+                                        .await
+                                }
+                                Err(read_failure) => SubmissionOutcome::SubmissionFailed {
+                                    failure_text: read_failure.to_string(),
+                                },
+                            }
+                        }
+                        SubmittedContent::DetectedFile { .. } => {
+                            SubmissionOutcome::SubmissionFailed {
+                                failure_text: gettext("report it from the scan results"),
+                            }
+                        }
+                    };
+                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(submission_outcome)
                 });
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),

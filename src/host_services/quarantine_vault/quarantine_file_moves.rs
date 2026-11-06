@@ -16,6 +16,10 @@ use rustix::{
 };
 use sha2::{Digest, Sha256};
 
+use crate::host_services::quarantine_vault::quarantine_payload_format::{
+    PayloadEncoding, PayloadWriter, PlaintextReader, fresh_scrambling_key, open_plaintext_reader,
+};
+
 const DATABASE_FILE_MODE: u32 = 0o600;
 const QUARANTINE_DIRECTORY_MODE: u32 = 0o700;
 const QUARANTINE_FILE_MODE: u32 = 0o400;
@@ -304,20 +308,23 @@ pub fn lexically_normalized_path(unnormalized_path: &Path) -> PathBuf {
 }
 
 fn copy_hash_and_sync(
-    source_file: &mut File,
+    source_content: &mut impl Read,
     destination_file: &mut File,
     destination_mode: u32,
+    payload_encoding: PayloadEncoding,
 ) -> Result<String, QuarantineMoveFailure> {
     let mut content_hash = Sha256::new();
     let mut copy_buffer = vec![0_u8; COPY_BUFFER_SIZE];
+    let mut payload_writer = PayloadWriter::starting(&mut *destination_file, payload_encoding)?;
     loop {
-        let read_length = source_file.read(&mut copy_buffer)?;
+        let read_length = source_content.read(&mut copy_buffer)?;
         if read_length == 0 {
             break;
         }
         content_hash.update(&copy_buffer[..read_length]);
-        destination_file.write_all(&copy_buffer[..read_length])?;
+        payload_writer.write_all(&copy_buffer[..read_length])?;
     }
+    payload_writer.flush()?;
     destination_file.sync_all()?;
     change_file_mode(destination_file, destination_mode)?;
     Ok(format!("{:x}", content_hash.finalize()))
@@ -358,10 +365,14 @@ pub fn copy_file_into_quarantine(
         OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW,
         QUARANTINE_FILE_MODE,
     )?;
+    let neutralized_encoding = PayloadEncoding::NeutralizedPayload {
+        scrambling_key: fresh_scrambling_key()?,
+    };
     let file_hash = match copy_hash_and_sync(
         &mut source_file,
         &mut destination_file,
         QUARANTINE_FILE_MODE,
+        neutralized_encoding,
     ) {
         Ok(file_hash) => file_hash,
         Err(copy_failure) => {
@@ -629,7 +640,7 @@ pub fn restore_payload_file(
     let destination_path = lexically_normalized_path(destination_path);
     validate_restore_path(&destination_path)?;
     let payload_parent = pin_parent_directory(payload_path)?;
-    let mut payload_file = open_relative_entry(
+    let payload_file = open_relative_entry(
         &payload_parent.parent_directory,
         &payload_parent.entry_name,
         OFlags::RDONLY | OFlags::NOFOLLOW,
@@ -639,6 +650,7 @@ pub fn restore_payload_file(
     if !payload_metadata.is_file() {
         return Err(QuarantineMoveFailure::PayloadNotRegularFile);
     }
+    let mut plaintext_reader = open_plaintext_reader(payload_file)?;
     let restore_parent = open_restore_parent(&destination_path)?;
     let restore_mode = original_permissions & 0o777;
     let mut restored_file = open_relative_entry(
@@ -647,18 +659,20 @@ pub fn restore_payload_file(
         OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW,
         restore_mode,
     )?;
-    let restored_hash =
-        match copy_hash_and_sync(&mut payload_file, &mut restored_file, restore_mode) {
-            Ok(restored_hash) => restored_hash,
-            Err(copy_failure) => {
-                drop(restored_file);
-                let _nothing_to_clean = unlink_relative_entry(
-                    &restore_parent.parent_directory,
-                    &restore_parent.entry_name,
-                );
-                return Err(copy_failure);
-            }
-        };
+    let restored_hash = match copy_hash_and_sync(
+        &mut plaintext_reader,
+        &mut restored_file,
+        restore_mode,
+        PayloadEncoding::RawPayload,
+    ) {
+        Ok(restored_hash) => restored_hash,
+        Err(copy_failure) => {
+            drop(restored_file);
+            let _nothing_to_clean =
+                unlink_relative_entry(&restore_parent.parent_directory, &restore_parent.entry_name);
+            return Err(copy_failure);
+        }
+    };
     drop(restored_file);
     if restored_hash != expected_hash {
         let _nothing_to_clean =
@@ -696,14 +710,119 @@ pub fn delete_payload_file(
 }
 
 pub fn payload_content_hash(payload_path: &Path) -> Result<String, QuarantineMoveFailure> {
-    let mut payload_file = open_absolute_path(payload_path, OFlags::RDONLY | OFlags::NOFOLLOW, 0)?;
+    let payload_file = open_absolute_path(payload_path, OFlags::RDONLY | OFlags::NOFOLLOW, 0)?;
     if !payload_file.metadata()?.is_file() {
         return Err(QuarantineMoveFailure::PayloadNotRegularFile);
     }
-    let mut content_hash = Sha256::new();
-    io::copy(&mut payload_file, &mut content_hash)?;
     change_file_mode(&payload_file, QUARANTINE_FILE_MODE)?;
+    let mut content_hash = Sha256::new();
+    io::copy(&mut open_plaintext_reader(payload_file)?, &mut content_hash)?;
     Ok(format!("{:x}", content_hash.finalize()))
+}
+
+pub fn open_payload_plaintext(
+    quarantine_directory: &Path,
+    payload_path: &Path,
+) -> Result<PlaintextReader<File>, QuarantineMoveFailure> {
+    validate_quarantine_path(quarantine_directory, payload_path)?;
+    let payload_file = open_absolute_path(payload_path, OFlags::RDONLY | OFlags::NOFOLLOW, 0)?;
+    if !payload_file.metadata()?.is_file() {
+        return Err(QuarantineMoveFailure::PayloadNotRegularFile);
+    }
+    Ok(open_plaintext_reader(payload_file)?)
+}
+
+pub const NEUTRALIZING_NAME_PREFIX: &str = ".neutralizing-";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeutralizingOutcome {
+    AlreadyNeutralized,
+    NeutralizedNow,
+}
+
+pub fn neutralize_payload_in_place(
+    quarantine_directory: &Path,
+    payload_path: &Path,
+    expected_hash: &str,
+) -> Result<NeutralizingOutcome, QuarantineMoveFailure> {
+    validate_quarantine_path(quarantine_directory, payload_path)?;
+    let payload_parent = pin_parent_directory(payload_path)?;
+    let payload_file = open_relative_entry(
+        &payload_parent.parent_directory,
+        &payload_parent.entry_name,
+        OFlags::RDONLY | OFlags::NOFOLLOW,
+        0,
+    )?;
+    let payload_metadata = payload_file.metadata()?;
+    if !payload_metadata.is_file() {
+        return Err(QuarantineMoveFailure::PayloadNotRegularFile);
+    }
+    let mut plaintext_reader = open_plaintext_reader(payload_file)?;
+    if plaintext_reader.payload_encoding() != PayloadEncoding::RawPayload {
+        return Ok(NeutralizingOutcome::AlreadyNeutralized);
+    }
+    let staged_name = path_as_c_string(OsStr::new(&format!(
+        "{NEUTRALIZING_NAME_PREFIX}{}",
+        hex::encode(fresh_scrambling_key()?)
+    )))?;
+    let mut staged_file = open_relative_entry(
+        &payload_parent.parent_directory,
+        &staged_name,
+        OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW,
+        QUARANTINE_FILE_MODE,
+    )?;
+    let discard_staged = || {
+        let _nothing_to_clean =
+            unlink_relative_entry(&payload_parent.parent_directory, &staged_name);
+    };
+    let staged_hash = match copy_hash_and_sync(
+        &mut plaintext_reader,
+        &mut staged_file,
+        QUARANTINE_FILE_MODE,
+        PayloadEncoding::NeutralizedPayload {
+            scrambling_key: fresh_scrambling_key()?,
+        },
+    ) {
+        Ok(staged_hash) => staged_hash,
+        Err(copy_failure) => {
+            discard_staged();
+            return Err(copy_failure);
+        }
+    };
+    drop(staged_file);
+    if expected_hash != UNKNOWN_PAYLOAD_HASH && staged_hash != expected_hash {
+        discard_staged();
+        return Err(QuarantineMoveFailure::FileHashMismatch);
+    }
+    if let Err(replaced_failure) = ensure_entry_identity(&payload_parent, &payload_metadata) {
+        discard_staged();
+        return Err(replaced_failure);
+    }
+    rustix::fs::renameat(
+        &payload_parent.parent_directory,
+        staged_name.as_c_str(),
+        &payload_parent.parent_directory,
+        payload_parent.entry_name.as_c_str(),
+    )?;
+    payload_parent.parent_directory.sync_all()?;
+    Ok(NeutralizingOutcome::NeutralizedNow)
+}
+
+pub fn remove_stale_neutralizing_copies(quarantine_directory: &Path) {
+    let Ok(directory_entries) = fs::read_dir(quarantine_directory) else {
+        return;
+    };
+    directory_entries
+        .filter_map(Result::ok)
+        .filter(|directory_entry| {
+            directory_entry
+                .file_name()
+                .as_bytes()
+                .starts_with(NEUTRALIZING_NAME_PREFIX.as_bytes())
+        })
+        .for_each(|stale_entry| {
+            let _already_gone = fs::remove_file(stale_entry.path());
+        });
 }
 
 #[cfg(test)]
@@ -711,6 +830,17 @@ mod quarantine_file_moves_tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
+
+    fn stored_plaintext(payload_path: &Path) -> Vec<u8> {
+        let mut plaintext = Vec::new();
+        crate::host_services::quarantine_vault::quarantine_payload_format::open_plaintext_reader(
+            std::fs::File::open(payload_path).expect("payload"),
+        )
+        .expect("payload reader")
+        .read_to_end(&mut plaintext)
+        .expect("plaintext");
+        plaintext
+    }
 
     #[test]
     fn pinned_payload_parent_cannot_be_redirected_before_unlink() {
@@ -778,7 +908,7 @@ mod quarantine_file_moves_tests {
         let copied_payload =
             copy_file_into_quarantine(&quarantine_directory, &source_path).expect("copied");
         assert_eq!(
-            fs::read(&copied_payload.destination_path).expect("payload"),
+            stored_plaintext(&copied_payload.destination_path),
             b"long name"
         );
     }
@@ -823,6 +953,76 @@ mod quarantine_file_moves_tests {
             fs::read(&planned_rename.destination_path).expect("payload"),
             b"existing"
         );
+    }
+
+    #[test]
+    fn quarantined_copies_are_neutralized_and_restore_to_the_original_bytes() {
+        let temporary_root = tempfile::tempdir().unwrap();
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        let source_path = temporary_root.path().join("eicar.com");
+        let eicar_pattern =
+            b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
+        fs::write(&source_path, eicar_pattern).unwrap();
+        let copied_payload =
+            copy_file_into_quarantine(&quarantine_directory, &source_path).unwrap();
+        let stored_bytes = fs::read(&copied_payload.destination_path).unwrap();
+        assert!(
+            !stored_bytes
+                .windows(eicar_pattern.len())
+                .any(|stored_window| stored_window == eicar_pattern)
+        );
+        assert_eq!(
+            payload_content_hash(&copied_payload.destination_path).unwrap(),
+            copied_payload.file_hash
+        );
+        remove_quarantined_source(&copied_payload).unwrap();
+        restore_payload_file(
+            &quarantine_directory,
+            &copied_payload.destination_path,
+            &source_path,
+            0o644,
+            &copied_payload.file_hash,
+        )
+        .unwrap();
+        assert_eq!(fs::read(&source_path).unwrap(), eicar_pattern);
+    }
+
+    #[test]
+    fn raw_payloads_are_neutralized_in_place_once() {
+        let temporary_root = tempfile::tempdir().unwrap();
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        ensure_quarantine_directory(&quarantine_directory).unwrap();
+        let payload_path = quarantine_directory.join("legacy-payload");
+        fs::write(&payload_path, b"legacy raw payload").unwrap();
+        let expected_hash = payload_content_hash(&payload_path).unwrap();
+        assert_eq!(
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, &expected_hash)
+                .unwrap(),
+            NeutralizingOutcome::NeutralizedNow
+        );
+        assert_ne!(fs::read(&payload_path).unwrap(), b"legacy raw payload");
+        assert_eq!(payload_content_hash(&payload_path).unwrap(), expected_hash);
+        assert_eq!(
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, &expected_hash)
+                .unwrap(),
+            NeutralizingOutcome::AlreadyNeutralized
+        );
+        assert_eq!(fs::read_dir(&quarantine_directory).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn neutralizing_refuses_a_payload_whose_content_changed() {
+        let temporary_root = tempfile::tempdir().unwrap();
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        ensure_quarantine_directory(&quarantine_directory).unwrap();
+        let payload_path = quarantine_directory.join("tampered-payload");
+        fs::write(&payload_path, b"tampered").unwrap();
+        assert!(matches!(
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, "00"),
+            Err(QuarantineMoveFailure::FileHashMismatch)
+        ));
+        assert_eq!(fs::read(&payload_path).unwrap(), b"tampered");
+        assert_eq!(fs::read_dir(&quarantine_directory).unwrap().count(), 1);
     }
 
     #[test]

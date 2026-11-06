@@ -10,7 +10,8 @@ use relm4::{
 use crate::{
     host_services::{
         clamav_programs::false_positive_submission::{
-            FalsePositiveReport, SubmissionOutcome, submission_outcome_text, submit_false_positive,
+            FalsePositiveReport, SubmissionOutcome, SubmittedContent, open_detected_file,
+            submission_outcome_text, submit_false_positive,
         },
         clamav_scanner::{
             scan_exclusion_rules::exclusion_entry_for_threat,
@@ -464,7 +465,9 @@ impl Component for ScanResultsSection {
                         root,
                         ReportedDetection {
                             detection_name: detected_threat.threat_name.clone(),
-                            submitted_path: detected_threat.file_path.clone(),
+                            submitted_content: SubmittedContent::DetectedFile {
+                                file_path: detected_threat.file_path.clone(),
+                            },
                             shown_path: sanitize_scanner_line(
                                 &detected_threat.file_path.to_string_lossy(),
                             ),
@@ -476,9 +479,25 @@ impl Component for ScanResultsSection {
             }
             ScanResultsSectionInput::FalsePositiveReportConfirmed(false_positive_report) => {
                 sender.oneshot_command(async move {
-                    ScanResultsSectionCommand::FalsePositiveReportFinished(
-                        submit_false_positive(false_positive_report).await,
-                    )
+                    let submission_outcome = match &false_positive_report.submitted_content {
+                        SubmittedContent::DetectedFile { file_path } => {
+                            match open_detected_file(file_path) {
+                                Ok(detected_file) => {
+                                    submit_false_positive(false_positive_report, detected_file)
+                                        .await
+                                }
+                                Err(open_failure) => SubmissionOutcome::SubmissionFailed {
+                                    failure_text: fingerprint_failure_text(&open_failure),
+                                },
+                            }
+                        }
+                        SubmittedContent::QuarantinedEntry { .. } => {
+                            SubmissionOutcome::SubmissionFailed {
+                                failure_text: gettext("report it from the Quarantine page"),
+                            }
+                        }
+                    };
+                    ScanResultsSectionCommand::FalsePositiveReportFinished(submission_outcome)
                 });
             }
             ScanResultsSectionInput::CopyReportRequested => {
