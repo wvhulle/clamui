@@ -3,7 +3,7 @@ use ksni::{TrayMethods, menu::StandardItem};
 use relm4::gtk::{gio::prelude::ActionGroupExt, glib};
 
 use crate::{
-    APPLICATION_ICON_NAME, APPLICATION_ID,
+    APPLICATION_ID, TRAY_ATTENTION_ICON_NAME, TRAY_ICON_NAME,
     detections_page::detection_alerts::OPEN_DETECTIONS_ACTION,
 };
 
@@ -46,7 +46,7 @@ impl ksni::Tray for SystemTrayMenu {
     }
 
     fn icon_name(&self) -> String {
-        APPLICATION_ICON_NAME.to_owned()
+        TRAY_ICON_NAME.to_owned()
     }
 
     fn status(&self) -> ksni::Status {
@@ -58,7 +58,7 @@ impl ksni::Tray for SystemTrayMenu {
     }
 
     fn attention_icon_name(&self) -> String {
-        "dialog-warning".to_owned()
+        TRAY_ATTENTION_ICON_NAME.to_owned()
     }
 
     fn activate(&mut self, _horizontal: i32, _vertical: i32) {

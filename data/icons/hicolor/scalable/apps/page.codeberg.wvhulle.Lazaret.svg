@@ -1,19 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-    <rect x="8" y="8" width="112" height="112" rx="24" ry="24" fill="#2c3e50"/>
-
-    <path fill="#ffffff" d="M30,30 L98,30 C102,30 108,50 105,70 C100,95 64,115 64,115 C64,115 28,95 23,70 C20,50 26,30 30,30 Z"/>
-
-    <g transform="translate(27, 35) scale(0.7)">
-
-        <path fill="#3498db" d="M10,20 C10,20 0,45 10,70 C15,85 30,95 50,95 C75,95 95,75 100,55 C105,35 90,15 70,5 C50,-5 25,0 10,20 Z"/>
-
-        <g fill="none" stroke="#2980b9" stroke-width="4" stroke-linecap="round">
-            <path d="M25,15 C40,5 70,10 85,30"/>
-            <path d="M18,45 C30,40 60,40 90,55"/>
-            <path d="M20,75 C35,85 65,85 85,70"/>
-        </g>
-
-        <path fill="none" stroke="#2c3e50" stroke-width="3" stroke-linecap="round" d="M12,24 C8,45 8,55 12,70"/>
-
-    </g>
+  <defs>
+    <linearGradient id="sky-gradient" x1="0" y1="10" x2="0" y2="74" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#99c1f1"/>
+      <stop offset="1" stop-color="#cfe2fa"/>
+    </linearGradient>
+    <clipPath id="badge-clip">
+      <circle cx="64" cy="62" r="54"/>
+    </clipPath>
+  </defs>
+  <circle cx="64" cy="68" r="54" fill="#1a5fb4"/>
+  <g clip-path="url(#badge-clip)">
+    <rect x="0" y="0" width="128" height="74" fill="url(#sky-gradient)"/>
+    <rect x="0" y="74" width="128" height="54" fill="#1c71d8"/>
+    <path d="M14 76 Q64 62 114 76 Z" fill="#865e3c"/>
+    <path d="M22 74 Q64 64 106 74 L106 76 L22 76 Z" fill="#b5835a"/>
+    <rect x="28" y="50" width="72" height="22" fill="#deddda"/>
+    <rect x="26" y="46" width="76" height="6" rx="1" fill="#c64600"/>
+    <rect x="28" y="66" width="72" height="6" fill="#c0bfbc"/>
+    <rect x="34" y="56" width="5" height="9" rx="2.5" fill="#3d3846"/>
+    <rect x="44" y="56" width="5" height="9" rx="2.5" fill="#3d3846"/>
+    <rect x="79" y="56" width="5" height="9" rx="2.5" fill="#3d3846"/>
+    <rect x="89" y="56" width="5" height="9" rx="2.5" fill="#3d3846"/>
+    <rect x="54" y="30" width="20" height="42" fill="#f6f5f4"/>
+    <rect x="54" y="30" width="20" height="42" fill="none" stroke="#c0bfbc" stroke-width="1"/>
+    <path d="M51 32 L64 22 L77 32 Z" fill="#c64600"/>
+    <rect x="60" y="38" width="8" height="12" rx="4" fill="#3d3846"/>
+    <path d="M59 72 L59 62 A5 5 0 0 1 69 62 L69 72 Z" fill="#63452c"/>
+    <path d="M14 88 Q24 83 34 88 T54 88 T74 88 T94 88 T114 88" fill="none" stroke="#62a0ea" stroke-width="3" stroke-linecap="round"/>
+    <path d="M24 100 Q34 95 44 100 T64 100 T84 100 T104 100" fill="none" stroke="#3584e4" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <rect x="63" y="9" width="2" height="14" fill="#3d3846"/>
+  <path d="M65 10 L82 13.5 L65 17 Z" fill="#f6d32d" stroke="#e5a50a" stroke-width="1" stroke-linejoin="round"/>
 </svg>

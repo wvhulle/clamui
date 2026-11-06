@@ -53,6 +53,8 @@ install-desktop-entry:
 
 install-icons:
 	install -Dm644 data/icons/hicolor/scalable/apps/$(APPLICATION_ID).svg $(SHARE_DIRECTORY)/icons/hicolor/scalable/apps/$(APPLICATION_ID).svg
+	install -Dm644 data/icons/hicolor/symbolic/apps/$(APPLICATION_ID)-symbolic.svg $(SHARE_DIRECTORY)/icons/hicolor/symbolic/apps/$(APPLICATION_ID)-symbolic.svg
+	install -Dm644 data/icons/hicolor/symbolic/apps/$(APPLICATION_ID)-attention-symbolic.svg $(SHARE_DIRECTORY)/icons/hicolor/symbolic/apps/$(APPLICATION_ID)-attention-symbolic.svg
 
 install-settings-schema:
 	install -Dm644 data/$(APPLICATION_ID).gschema.xml $(SHARE_DIRECTORY)/glib-2.0/schemas/$(APPLICATION_ID).gschema.xml

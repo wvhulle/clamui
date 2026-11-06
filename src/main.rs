@@ -38,6 +38,9 @@ use crate::{
 pub(crate) const RELEASE_APPLICATION_ID: &str = "page.codeberg.wvhulle.Lazaret";
 pub(crate) const SETTINGS_SCHEMA_ID: &str = RELEASE_APPLICATION_ID;
 pub(crate) const APPLICATION_ICON_NAME: &str = RELEASE_APPLICATION_ID;
+pub(crate) const TRAY_ICON_NAME: &str = "page.codeberg.wvhulle.Lazaret-symbolic";
+pub(crate) const TRAY_ATTENTION_ICON_NAME: &str =
+    "page.codeberg.wvhulle.Lazaret-attention-symbolic";
 #[cfg(not(debug_assertions))]
 pub(crate) const APPLICATION_ID: &str = RELEASE_APPLICATION_ID;
 #[cfg(debug_assertions)]

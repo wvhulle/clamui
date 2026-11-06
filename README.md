@@ -1,3 +1,5 @@
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/main/data/icons/hicolor/scalable/apps/page.codeberg.wvhulle.Lazaret.svg" width="96" align="right" alt="Lazaret icon: a walled quarantine station with a yellow flag on an island">
+
 # Lazaret
 
 A GTK desktop front-end for the ClamAV that is already installed on your system. Lazaret scans files and folders through clamd, or with `clamscan` when clamd isn't running. It moves detections into a quarantine, raises alerts when the ClamAV services in the background find something, and schedules scans with systemd timers. It doesn't bundle a virus scanner of its own.
