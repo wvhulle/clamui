@@ -6,3 +6,514 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.0](https://codeberg.org/wvhulle/lazaret/releases/tag/v0.1.0) - 2026-11-06
+
+### Added
+
+- Enhance scanning functionality with improved UI and file handling
+- Allow duplicate quarantine entries for files with the same path
+- Add tests for `has_scan_history` and improve caching behavior
+- Add `get_scan_trend_data` method and update related tests
+- Add ScanResultsDialog for displaying scan results and tests for view results button
+- Add exclusion filtering for clamdscan and test coverage
+- Add unit tests for `threat_classifier` and `updater` modules
+- *(hooks)* add pre-commit hook to enforce relative imports
+- *(core)* allow /var/home symlinks on immutable distros
+- *(ui)* add scan-in-progress confirmation dialog
+- *(ui)* default to "Quit completely" in close behavior dialog
+- *(logs)* add daemon logs export functionality
+- *(ui)* add GNOME-style navigation sidebar with tests
+- *(packaging)* add AppImage build support
+- *(ui)* add compatibility module for older libadwaita versions
+- *(debug)* add debug logging system with preferences page
+- *(profiles)* add restore default profiles functionality
+- *(database-page)* add URLhaus suggested signature and URL parsing tests
+- *(preferences)* handle multi-value options in freshclam and clamd configs
+- *(updater)* add freshclam service integration via SIGUSR1
+- *(ci)* add GPG signing for AppImage and Debian packages
+- *(scan)* add live scan progress view with real-time file display
+- *(ci)* add GPG signing option for workflows
+- *(i18n)* add internationalization support with 941 translatable strings
+- *(i18n)* add translation validation script and CI workflow
+- *(i18n)* add German (de) translation for ClamUI
+- *(core)* isolate subprocess environment with `get_clean_env`
+- *(core)* add automatic device scanning on mount
+- *(config)* auto-detect ClamAV config paths for multi-distro support
+- *(ui)* extract scan view into modular package with coordinator
+- *(i18n)* extend translation coverage, modularize scan view strings
+- *(cli)* add subcommand pipeline for headless ClamAV management
+- *(ui)* clarify EICAR daemon behavior and add Flatpak a11y permission
+- *(flatpak)* read system config files across sandbox boundary
+- add system security audit dashboard
+- *(audit)* add info links to security check results
+- *(audit)* detect firewall GUIs and add launch button
+- add language override and update related tests
+- notify when security audit finds issues
+- *(i18n)* add French translation
+- add AppImage delta update support via zsync
+- *(audit)* integrate Portmaster privacy filter check
+- *(cli)* add `clamui install-privileged-helper` ([#143](https://codeberg.org/wvhulle/lazaret/pulls/143))
+- *(preferences)* skip elevation prompts when running as root
+- *(i18n)* update French translation
+- *(ui)* close every dialog with Escape (GNOME HIG)
+- *(ui)* confirm before restoring or permanently deleting quarantined files
+- *(i18n)* Add Hungarian translation
+- list contributors and translators in the About dialog
+- *(helper)* add RPM installs and config recovery
+- replace the Tauri app with a native Relm4 frontend
+- *(components)* add ClamAV component status and install guides
+- *(database)* add virus definition status and updates
+- *(shell)* add adaptive sidebar navigation and about dialog
+- *(quarantine)* detect and quarantine files blocked by on-access scanning
+- *(screenshots)* render pages headlessly with cargo xtask
+- *(shell)* show icons in the sidebar and component rows
+- *(scan)* review targets before scanning
+- *(scan)* show results in a dialog with statistics and bulk quarantine
+- *(history)* record scans and updates, with Logs and Statistics pages
+- *(quarantine)* add storage summary, search and clearing old items
+- *(preferences)* add settings, scan exclusions and backend choice
+- *(profiles)* add scan profiles with a selector and manager
+- *(desktop)* add scheduled scans, notifications, tray and single-instance forwarding
+- *(integrations)* add VirusTotal lookups, config view, device scans and file manager actions
+- *(audit)* add system audit and network socket pages
+- *(statistics)* count clamdscan.service runs from the system journal
+- *(protection)* add a protection timeline backed by systemd D-Bus and the journal
+- *(detections)* follow the journal and act on background detections
+- *(alerts)* notify about detections and export NixOS and Home Manager modules
+- *(settings)* lock settings the system owns and copy changes as snippets
+- *(sources)* show signature providers and look up detections on MalwareBazaar
+- *(settings)* change allowed clamd settings at runtime through polkit
+- *(protection)* split Protection and switch pages instantly
+- *(dev)* run debug builds beside the installed ClamUI
+- *(scan)* show live progress while finding and scanning files
+- *(profiles)* skip package and toolchain caches in home scans
+- *(ui)* show loading states and a clearer Protection headline
+- *(scan)* show one progress bar and the results inline
+- *(quarantine)* check a quarantined file's reputation by hash
+- *(ui)* keep settings with their pages and actions in header bars
+- *(scan)* give targets and settings a clear visual hierarchy
+- *(xtask)* drive screenshots with typed widget interactions
+- *(packaging)* build a Debian package
+- *(packaging)* build a Flatpak that scans with host ClamAV
+- *(scan)* refuse ClamAV programs the desktop user could replace
+- *(settings-helper)* trust detections and record every change in the system journal
+- *(trust)* trust false positives by hash or detection name
+
+### Build
+
+- streamline dependencies and harden packaged releases
+
+### CI
+
+- trust GPG key in build-deb workflow for signature verification
+- replace dpkg-sig verification with ar-based method in build-deb workflow
+- *(i18n)* add POTFILES.in consistency check to lint workflow
+- upgrade GitHub Actions to Node.js 24 runtime
+- move dependency audit out of test workflow
+- install additional system dependencies in dependency-audit workflow
+- add website deploy workflow
+- add draft release workflow triggered on tag push
+- cleanup workflows and bump action versions
+- *(website)* switch deploy workflow to bun
+- fix dependency-audit uv export command (YAML scalar folding)
+- publish README screenshots to the screenshots branch
+- push screenshot build closures to Cachix in their own step
+- build, check and release on Codeberg
+
+### Changed
+
+- *(scanner)* Replace GLib.idle_add with async scan workflow
+- Reorder imports in `utils.py` and update tests for flatpak portal paths and path validation error messages.
+- Simplify save page labels and improve layout consistency
+- Reformat mock.patch calls for improved readability in preferences tests
+- Reformat mock.patch calls for improved readability in preferences tests
+- *(profile-dialog)* separate file and folder selection handlers
+- *(scan-view)* add background color to status banners
+- *(tests)* simplify mock calls and remove unused imports
+- *(preferences)* use helper function for switch row creation
+- *(ui)* accept shared QuarantineManager via dependency injection
+- *(app)* extract lifecycle, notifications, tray, and view coordination into collaborator modules
+- apply ruff format and import sort to pre-existing drift
+- *(scheduler)* commit to token-list scheduled-scan commands
+- *(tests)* apply formatter updates
+- remove redundant host and file-manager wrappers
+- *(core)* simplify scanner and configuration handling
+- simplify config, tray, scanner, and path safety flows
+- clarify privileged helper asset validation
+- separate About dialog compatibility paths
+- flatten daemon scan result parsing
+- simplify daemon log path discovery
+- separate file count exclusion preparation
+- separate daemon scan input preparation
+- remove redundant GTK About dialog guards
+- consolidate scanner preference boolean collection
+- extract stateless clamscan result parser
+- deepen preference saves and scan result interpretation
+- *(tests)* replace embedded shell scanners with Rust
+- *(scope)* keep only virus and exploit blocking features
+- *(systemd)* start updates and manage schedules over D-Bus
+- rename ClamUI to Lazaret
+
+### Documentation
+
+- Add QA fix session summary
+- Update QA signoff status for fix session 0
+- Update QA signoff status for fix session 1
+- Add QA fix session 1 to summary
+- document required git hooks installation
+- *(preferences)* expand USER_GUIDE with detailed preferences descriptions
+- *(preferences)* linted the docs and added simpler explanations
+- *(on-access)* expand technical documentation for on-access scanning
+- create optimized Getting Started guide
+- comprehensive documentation cleanup and restructuring
+- add Flatpak build-from-source instructions to INSTALL.md
+- add hierarchical AGENTS.md knowledge base for all major modules
+- update README and guides with CLI subcommands and device scan
+- update README feature descriptions
+- audit and fix documentation against codebase
+- *(agents)* sync AGENTS.md files with current code (v0.2.0)
+- sync docs/ reference + architecture with current code (v0.2.0)
+- *(user-guide)* sync end-user pages with current app behavior (v0.2.0)
+- fix-ups from cross-verification review
+- add community contribution guidelines
+- refresh documentation and website
+- compress agent instructions
+- consolidate documentation into the website
+- refresh compact maintainer guidance and maintenance notes
+- refresh agent guides against current implementation
+- preserve Repowise scan architecture guidance
+- add AUTHORS
+- *(web)* describe the released Rust desktop runtime
+- update v0.5.1 release examples
+- record v0.5.1 release validation
+- *(i18n)* explain TypeScript extraction parser
+- *(changelog)* clarify rfd GTK backend
+- *(changelog)* consolidate merged dependency updates
+- split the README into guides and drop agent files
+- *(usage)* describe what Lazaret does, not how it does it
+
+### Fixed
+
+- Resolve ConnectionPool.acquire() blocking on startup (qa-requested)
+- Add missing fixtures to TestLogManagerAutoMigration (qa-requested)
+- Add instructions on how to find clamav user for scan loop prevention
+- Convert validation errors list to string before displaying in dialog
+- Change Max* config options from integer to size type
+- Resolve connection pool test failures
+- Resolve multiple test failures across statistics, log_manager, and profile_manager
+- Restore missing imports broken by linter
+- Remove obsolete tests and add necessary exception handling
+- Remove Python 3.13 incompatible mock tests from connection pool
+- Resolve quarantine and config test failures
+- Remove outdated UI implementation tests
+- Remove all remaining obsolete UI implementation tests
+- Close database connections in test fixtures to prevent resource warnings
+- Eliminate all remaining ResourceWarnings (100% resolved)
+- Ensure test loops terminate with mock return values
+- Detect venv installation paths for scheduled scan CLI
+- add missing F6 tooltip and document keyboard shortcuts (qa-requested)
+- Add UI clarity for auto-saved vs manual save settings (qa-requested)
+- Replace Gtk.Box with ActionRow for save button (qa-requested)
+- Escape ampersands in Gtk markup and enhance status field (qa-requested)
+- Compact preferences window UI (qa-requested)
+- Address QA test failures (qa-requested)
+- Add missing parent_window argument to OnAccessPage.create_page (qa-requested)
+- Add missing window argument to OnAccessPage test assertion (qa-requested)
+- Remove extra argument from ScheduledPage.create_page() call (qa-requested)
+- *(debian)* lower urllib3 dependency to >= 2.0.0
+- *(flatpak)* use host clamdscan for daemon operations
+- *(debian)* relax keyring and matplotlib dependency constraints
+- *(core)* resolve type errors and improve robustness
+- *(debian)* remove unnecessary version constraints in dependencies
+- *(ci)* resolve PyGObject build failure from girepository-2.0 requirement
+- *(ci)* add permissions block to import-check job
+- *(icons)* add Pillow/cairosvg deps and improve icon cache refresh
+- *(icons)* add Cinnamon-specific icon cache refresh
+- *(scan)* preserve partial results on cancel, fix stream I/O and multi-target progress
+- *(ui)* patch handler_block/unblock for switch-specific signals
+- *(tests)* force C locale to prevent German translation breaking assertions
+- *(i18n)* complete missing German translations for database_page and updater
+- *(tests)* ensure src module references remain valid across module reimports
+- *(integrations)* add missing scan scripts, tri-state detection, and removal support
+- *(packaging)* add missing filesystem integrations to Debian and install.sh
+- pre-initialize quarantine resources to eliminate first-switch lag
+- *(tests)* update mocks for database guard and tray integration refactor
+- *(flatpak)* use host-aware config check for clamd availability
+- *(tray)* restore tray updates and window toggle behavior
+- *(flatpak)* add Debian mirror URLs for Launchpad dependencies
+- *(i18n)* add compat.py to POTFILES.in
+- *(scripts)* forward CLI args through local-run.sh to ClamUI
+- *(tests)* resolve 8 e2e failures and VT malformed report false negative
+- *(release)* correct version to 0.1.5b (was incorrectly set to 0.1.15b)
+- *(release)* correct clamui version to 0.1.5b0
+- *(ci)* upgrade ghaction-import-gpg to v7 for Node 24 support
+- *(quality)* address CodeQL code quality findings
+- drop --fdpass from daemon scanner to fix EICAR false-clean
+- restore clamdscan detection in live progress scans
+- *(flatpak)* drop redundant own-name permission
+- *(audit)* prevent duplicate info icons on UNKNOWN status rows
+- *(audit)* use distinct icons for UNKNOWN/SKIPPED status
+- *(audit)* treat any open ports as warning, risky ports as fail
+- handle non-UTF-8 filenames that crash scanning on Linux
+- filter non-fatal LibClamAV errors to prevent hard scan failures
+- use host-aware path validation for opening folders in Flatpak
+- clamp scan progress to 100% and add overflow indicator
+- repair config duplication and add Flatpak write support
+- Flatpak-aware folder opening, file dialogs, and app launching
+- escape Pango markup in widget titles and subtitles
+- add StartupWMClass to desktop files for proper window matching
+- set estimate_exceeded on progress mock to prevent false overflow branch
+- *(path_validation)* catch ValueError when resolving paths
+- 5 verified bugs (gettext, EOF spin, tray profiles, argv injection, VT timezone)
+- *(security)* close VULN-001/002 privilege escalation in pkexec helper
+- 3 isolated bugs (cron data loss, tray crash detection, quarantine perm mask)
+- harden release regression edge cases
+- *(tray)* improve SNI host compatibility under Flatpak
+- *(scanner)* drain stderr concurrently with stdout to prevent scan hang
+- *(flatpak)* persist config preferences via host helper ([#136](https://codeberg.org/wvhulle/lazaret/pulls/136))
+- *(config)* correct elevation decision, errors, and audit DB date ([#143](https://codeberg.org/wvhulle/lazaret/pulls/143))
+- *(scan)* don't fail scans on benign ClamAV size-limit warnings
+- *(quarantine)* honor quarantine_directory setting
+- *(scanner)* report detections as INFECTED regardless of exit code
+- *(daemon-scanner)* bound exclusion matches and keep detections on exit 2
+- *(clamav-config)* keep '#' as part of config values
+- *(sanitize)* strip Unicode line separators and C1 controls
+- *(scheduler)* quote multi-token commands per token and escape '%'
+- *(virustotal)* re-send full body on retry and support large uploads
+- *(system-audit)* avoid false-secure verdicts
+- *(settings)* deep-copy DEFAULT_SETTINGS to avoid shared mutables
+- *(device-monitor)* cancel orphaned requeue timer
+- *(profiles)* survive malformed entries and normalize names
+- *(cli)* sanitize terminal output and validate history --limit
+- *(core)* harden battery/path/log/pool edge cases
+- *(tray)* don't respawn the subprocess after a deliberate stop
+- *(scanner)* bound exclusion path matching and isolate progress snapshots
+- *(quarantine)* wake pool waiters and avoid orphaning files on cleanup
+- *(virustotal)* count all engine buckets and tolerate malformed results
+- *(profiles)* resolve Quick Scan to Downloads, protect defaults, validate imports
+- *(core)* harden sanitizer, log parsing, audit output, scheduler, clipboard
+- *(cli)* sanitize untrusted profile/scan/quarantine terminal output
+- *(ui)* repair VirusTotal result flow, stuck spinners, tray resync, blocking I/O
+- *(cli)* scan all CLI-provided paths, not just the first
+- *(cli)* honor saved settings (exclusions, backend) in scheduled and one-shot scans
+- *(core)* strip AppImage Python/GI env vars in get_clean_env ([#155](https://codeberg.org/wvhulle/lazaret/pulls/155))
+- *(debian)* depend on pkexec | policykit-1 for Debian 13 compatibility
+- *(core)* parse CVD/CLD database age robustly against binary payload
+- *(prefs)* prevent Save & Apply from clobbering settings of unopened pages
+- *(ui)* avoid GTK 4.10+/4.12+ APIs on the GTK 4.6 baseline
+- *(core)* don't duplicate trailing partial line in accumulated scan output
+- *(core)* harden quarantine copies against short writes; anchor literal-$ globs
+- *(core)* don't treat systemd's 'inactive' as proof a unit is installed
+- *(ui)* assorted view-state and resource fixes
+- *(cli+ui)* honor settings in 'clamui status'; surface profile import/export results
+- *(ui)* scan-package latent bugs, misleading copy buttons, silent failure toast
+- *(ui)* surface config load errors in Preferences; locale-safe export guard
+- *(core)* sanitize env for all host helpers spawned from AppImage builds
+- *(scheduler)* build scheduled-scan commands from tokens, not re-split strings
+- *(scan)* classify more benign ClamAV output and surface nonfatal warnings
+- *(ui)* harden multi-target CLI scans against concurrent invocations
+- *(scan)* report all-failed scans as errors and share exit-2 classification
+- *(ui)* close scan completion race and unify warning presentation
+- *(core)* sanitize env for the remaining host-helper subprocess calls
+- *(flatpak)* save standalone scanner settings without host helper
+- *(updater)* stage forced database updates safely
+- *(flatpak)* ship a trusted host configuration helper
+- *(packaging)* support Python 3.10 helper builds
+- *(ci)* pin Ruff to the locked version
+- *(deps)* update cryptography to 50.0.0
+- *(tests)* preserve Flatpak module across GI mocks
+- *(preferences)* enforce ClamAV recursion limits
+- *(security)* bind privileged writes to canonical paths
+- add distro-aware install recommendations
+- harden preference persistence
+- *(tray)* prefer pixmaps for generated icons
+- *(flatpak)* keep Hatchling dependencies self-contained
+- *(appimage)* bundle GIO desktop launcher
+- *(freshclam)* avoid root-only Fedora config
+- *(system_audit)* update URL for open ports reference
+- *(scan)* preserve full-scan results after output truncation
+- preserve secure host configuration and selected update settings
+- preserve scan filename identity and bound scan content
+- wait for tray registration and honor VirusTotal setup state
+- keep configuration paths readable beside admin actions
+- compact configuration-file actions in preferences
+- render Mermaid diagrams in website documentation
+- *(scheduler)* preserve cron arguments and strengthen property coverage
+- make the Flatpak helper installer work on real hosts
+- sanitize host installer stderr before logging
+- repair Clamd migration, log rotation and builds
+- *(flatpak)* repair immutable release source generation
+- *(scanner)* handle newline-containing paths
+- *(packaging)* install clean-build prerequisites
+- *(release)* make package verification fail closed
+- *(ci)* frame release notes output on its own line
+- *(scanner)* inspect host virus databases in Flatpak
+- *(privileged)* accept trusted host tool symlinks in Flatpak
+- *(privileged)* recognize trusted native helper installations
+- *(ci)* repair shared Rust and translation gates
+- *(deps)* synchronize glib locked offline sources
+- *(deps)* synchronize @tauri-apps/cli locked offline sources
+- *(deps)* synchronize @vitejs/plugin-react locked offline sources
+- *(deps)* synchronize glib locked offline sources
+- *(deps)* synchronize base64 locked offline sources
+- *(deps)* synchronize rusqlite locked offline sources
+- *(deps)* synchronize TypeScript locked offline sources
+- *(deps)* restore tauri offline sources
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* replace removed TypeScript extractor API
+- *(i18n)* stabilize POT extraction order
+- *(deps)* use GTK file dialogs with rfd 0.17.2
+- *(i18n)* stabilize POT extraction order
+- *(i18n)* preserve TypeScript angle assertions
+- *(deps)* restore rfd portal backend
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(i18n)* stabilize POT extraction order
+- *(ci)* handle stable Rust lint and empty AppImage metadata
+- *(flatpak)* avoid Wayland renderer startup crash
+- *(i18n)* extract optional gettext calls with the Babel parser
+- *(tests)* wait for script fixtures to become executable
+- *(detections)* stop refreshes from causing new detections
+- *(tray)* register the tray item even when no host is reported
+- *(sources)* hide scheme-less signature source addresses
+- *(ui)* correct live settings, alerts and systemd subscription handling
+- *(scan)* keep the found-malware toast long enough to act on
+- *(signatures)* give OS-specific steps for paid signature sources
+- *(ci)* copy screenshots out of the store and always push to Cachix
+
+### Miscellaneous
+
+- Update implementation_plan.json with QA fix status
+- Update implementation plan with QA fix session 2
+- Update implementation plan with QA fix session 2
+- Update implementation plan with QA fix session 3
+- update PGP public key with refreshed version
+- update .gitignore to exclude new build artifacts
+- *(i18n)* update clamui.pot header with 2026 copyright and author details
+- *(i18n)* update clamui.pot metadata with new translator and language details
+- *(screenshots)* update all UI screenshots to reflect latest design changes
+- *(gitignore)* generalize AppImage exclusion pattern
+- *(dependencies)* bump `numpy` to 2.4.2 and `coverage` to 7.13.4
+- update screenshot URLs to v0.1.4 and fix translation entity
+- *(i18n)* update POT, complete German translation, add English locale
+- *(i18n)* regenerate POT template and verify en/de translations
+- *(release)* bump version to 0.1.4 and update metadata
+- *(metadata)* update test coverage from 69% to 71% in release notes
+- *(packaging)* bump ClamUI version to v0.1.4 in Flatpak manifest
+- *(packaging)* update Flatpak manifest to new ClamUI commit
+- ignore Claude Code sandbox enforcement stubs
+- *(release)* bump version to 0.1.5 and add changelog
+- *(flatpak)* update ClamAV to 1.5.2 (security patch)
+- *(deps)* bump charset-normalizer from 3.4.4 to 3.4.6
+- *(release)* bump version to 0.1.15b and add changelog
+- *(deps)* bump clamui version to 0.1.15b0
+- *(flatpak)* update ClamUI Git commit and adjust .gitignore
+- *(deps)* bump the uv group across 2 directories with 1 update
+- *(deps)* bump cryptography from 46.0.5 to 46.0.6
+- *(deps)* bump jaraco-context from 6.1.1 to 6.1.2
+- *(deps)* update lockfile
+- *(deps)* bump charset-normalizer, pillow, numpy, requests, more-itertools
+- *(release)* prepare 0.1.6
+- update certifi to 2026.2.25
+- update cryptography to 46.0.7
+- *(deps)* bump Python dependencies
+- *(deps)* refresh python lockfile and bump @astrojs/tailwind to v6
+- *(website)* migrate to Astro 6 + Tailwind 4
+- remove obsolete quarantine-restore-redesign plan
+- *(deps)* bump runtime, build, and workflow dependencies
+- *(deps)* bump Python deps and switch website to bun lockfile
+- *(i18n)* regenerate translation template
+- *(deps)* update Python, Flatpak, and website dependencies to latest
+- *(i18n)* sync POTFILES.in and regenerate the POT template
+- update dependencies and stability fixes
+- *(deps)* bump actions/setup-node from 6 to 7
+- *(deps)* bump jaraco-functools from 4.5.0 to 4.6.0
+- *(deps)* bump astral-sh/setup-uv from 8.0.0 to 9.0.0
+- *(deps)* bump actions/setup-python from 6 to 7
+- *(deps)* bump certifi from 2026.6.17 to 2026.7.22
+- *(deps)* bump matplotlib from 3.11.0 to 3.11.1
+- *(deps)* regenerate Flatpak runtime deps for jaraco-functools 4.6.0
+- *(deps)* bump jaraco-functools to 4.6.0 in uv.lock
+- *(deps)* regenerate lockfiles for matplotlib 3.11.1
+- *(deps)* regenerate lock artifacts for certifi 2026.7.22
+- *(deps)* bump cryptography
+- *(deps)* regenerate Flatpak deps for cryptography 50.0.0
+- *(deps)* bump packaging from 26.2 to 26.3
+- *(deps)* bump actions/download-artifact from 7 to 8
+- *(deps)* bump cffi from 2.1.0 to 2.1.1
+- *(deps)* bump astral-sh/setup-uv from 9.0.0 to 10.0.1
+- *(deps)* update hatchling requirement from >=1.31.0 to >=1.32.0
+- *(deps)* bump idna from 3.18 to 3.19
+- *(deps)* bump charset-normalizer from 3.4.9 to 3.5.1
+- *(flatpak)* regenerate dependency manifests
+- *(deps)* bump astral-sh/setup-uv from 10.0.1 to 10.2.0
+- *(deps)* update hatchling requirement from >=1.32.0 to >=1.32.4
+- *(deps)* bump fonttools from 4.63.0 to 4.65.0
+- *(deps)* bump matplotlib from 3.11.1 to 3.11.2
+- *(deps)* bump kiwisolver from 1.5.0 to 1.5.1
+- *(deps)* bump cryptography from 50.0.0 to 50.0.1
+- *(dev)* refresh workspace index and browser setup
+- *(deps)* bump the cargo group across 1 directory with 2 updates
+- *(deps)* bump rfd from 0.15.4 to 0.17.2
+- *(deps)* bump rusqlite from 0.32.1 to 0.41.0
+- *(deps-dev)* bump @tauri-apps/cli from 2.12.3 to 2.12.4 in /desktop
+- *(deps-dev)* bump @vitejs/plugin-react in /desktop
+- *(deps-dev)* bump typescript from 5.9.3 to 7.0.2 in /desktop
+- *(deps)* bump base64 from 0.22.1 to 0.23.1
+- *(deps)* bump tauri from 2.12.4 to 2.12.5
+- *(dev)* add scoped coding-agent skills and guidance
+- *(i18n)* refresh gettext template source references
+- *(repowise)* refresh workspace index revisions
+- *(deps)* bump glib from 0.18.5 to 0.22.10
+- restore merged master content
+
+### Performance
+
+- *(ui)* move blocking subprocess calls to background threads
+- defer panel data loading and share LogManager across views
+- *(website)* render Mermaid diagrams at build time
+- *(scan)* stream detection deltas and batch live progress
+- reduce scan and desktop data overhead
+
+### Testing
+
+- *(statistics)* Add comprehensive unit tests for caching and functionality in `StatisticsCalculator`
+- reorganize and add packaging tests
+- *(scan_view)* update EICAR test for cache dir location
+- improve test coverage from 69% to 77%
+- *(ui)* replace trivial view_helpers assertions with behavioral checks
+- add 236 tests for previously uncovered modules
+- tidy unused imports and escape regex dot
+- add Hypothesis property-based tests
+- *(e2e)* add real-GTK construction smoke test for views and dialogs
+- *(audit)* cover Flatpak CVD header path and env wiring
+- cover Python 3.14 glob regex anchors
+- add tests for distro-aware install recommendations
+- remove repetitive widget and implementation assertions
+- cover privileged config failure boundaries
+- add docstrings to new privileged-helper tests
+- *(packaging)* fix wheel import path isolation
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(core)* synchronize escaped writer readiness
+- *(screenshots)* drive dialogs with a virtual pointer and verify quarantine
+- *(vm)* add NixOS VM tests for the desktop flows
+- *(vm)* follow the settings that moved out of Preferences
