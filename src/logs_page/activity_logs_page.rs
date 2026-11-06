@@ -32,6 +32,7 @@ use crate::{
             exported_text as exported_text_file,
         },
         component_streams::{RunningStream, run_stream},
+        host_read_failure_text::unit_journal_failure_text,
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
     },
 };
@@ -200,6 +201,10 @@ impl ActivityLogsPage {
             }
             DaemonLogView::DaemonLogRead(DaemonLogContents::NoReadableLog) => {
                 gettext("Daemon log file not found.")
+            }
+            DaemonLogView::DaemonLogRead(DaemonLogContents::JournalUnreadable(read_failure)) => {
+                gettext("Daemon log file not found. {reason}")
+                    .replace("{reason}", &unit_journal_failure_text(*read_failure))
             }
         }
     }

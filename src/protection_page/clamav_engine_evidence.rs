@@ -23,6 +23,7 @@ pub enum DatabaseEvidence {
     BuiltAt { built_at: Timestamp },
     AgeUndetermined,
     DatabaseMissing,
+    InspectionInterrupted,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,6 +31,7 @@ enum DatabaseFileEvidence {
     StampedDatabase { built_at: Timestamp },
     UnstampedDatabase,
     NoDatabaseFile,
+    InspectionInterrupted,
 }
 
 pub fn parse_database_header_build_time(header_bytes: &[u8]) -> Option<Timestamp> {
@@ -116,7 +118,7 @@ pub fn newest_disk_signature_version() -> Option<u64> {
 async fn read_database_file_evidence_off_thread() -> DatabaseFileEvidence {
     spawn_blocking(read_database_file_evidence)
         .await
-        .unwrap_or(DatabaseFileEvidence::NoDatabaseFile)
+        .unwrap_or(DatabaseFileEvidence::InspectionInterrupted)
 }
 
 const fn database_evidence_from_files(file_evidence: DatabaseFileEvidence) -> DatabaseEvidence {
@@ -126,6 +128,7 @@ const fn database_evidence_from_files(file_evidence: DatabaseFileEvidence) -> Da
         }
         DatabaseFileEvidence::UnstampedDatabase => DatabaseEvidence::AgeUndetermined,
         DatabaseFileEvidence::NoDatabaseFile => DatabaseEvidence::DatabaseMissing,
+        DatabaseFileEvidence::InspectionInterrupted => DatabaseEvidence::InspectionInterrupted,
     }
 }
 
@@ -140,11 +143,11 @@ pub async fn inspect_database_evidence_with_banner(version_banner: &str) -> Data
             DatabaseFileEvidence::StampedDatabase { built_at } => {
                 DatabaseEvidence::BuiltAt { built_at }
             }
-            DatabaseFileEvidence::UnstampedDatabase | DatabaseFileEvidence::NoDatabaseFile => {
-                DatabaseEvidence::BuiltAt {
-                    built_at: banner_built_at,
-                }
-            }
+            DatabaseFileEvidence::UnstampedDatabase
+            | DatabaseFileEvidence::NoDatabaseFile
+            | DatabaseFileEvidence::InspectionInterrupted => DatabaseEvidence::BuiltAt {
+                built_at: banner_built_at,
+            },
         },
         None => database_evidence_from_files(file_evidence),
     }
@@ -153,6 +156,14 @@ pub async fn inspect_database_evidence_with_banner(version_banner: &str) -> Data
 #[cfg(test)]
 mod clamav_engine_evidence_tests {
     use super::*;
+
+    #[test]
+    fn an_interrupted_database_inspection_is_not_a_missing_database() {
+        assert_eq!(
+            database_evidence_from_files(DatabaseFileEvidence::InspectionInterrupted),
+            DatabaseEvidence::InspectionInterrupted
+        );
+    }
 
     const HEADER_TEXT: &str =
         "ClamAV-VDB:03 Nov 2026 07-27 +0000:28173:355000:90:md5sum:signature:builder:1793688000  ";

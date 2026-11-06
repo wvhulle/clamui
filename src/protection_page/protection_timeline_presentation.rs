@@ -13,15 +13,17 @@ use crate::{
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
+        systemd_journal::unit_journal_reader::UnitJournalReadFailure,
     },
     protection_page::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
             AccountSettingFinding, ClamdConfigReadFailure, DaemonEvidence, EngineInstallation,
             LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessResponse, OnAccessScanner,
-            OnAccessSizeLimit, OverridesChangeTime, ProgramTrustFinding, ProtectionEvidence,
-            ReducedSetting, RuntimeReductions, ScanServiceEvidence, ScanUnitResult,
-            ScheduledScanEvidence, SignatureEvidence, ThirdPartySignatureFile, TimerState,
+            OnAccessSizeLimit, OverridesChangeTime, OverridesReadFailure, ProgramTrustFinding,
+            ProgramTrustInspection, ProtectionEvidence, ReducedSetting, RuntimeReductions,
+            ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence, SignatureEvidence,
+            SignatureLineCount, ThirdPartySignatureFile, ThirdPartySignatureListing, TimerState,
             UpdaterEvidence, UpdaterUnitResult, WatchScope, WatchedLocation,
         },
         service_run_journal::{ScanRunFindings, ScanRunHistory, UpdaterRunHistory},
@@ -37,6 +39,7 @@ use crate::{
         },
     },
     shared_widgets::{
+        host_read_failure_text::{database_folder_failure_text, unit_journal_failure_text},
         journal_follow_failure_text::journal_follow_failure_text,
         step_timeline::timeline_step_contents::{
             ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
@@ -267,7 +270,33 @@ fn program_trust_rows(program_trust_finding: &ProgramTrustFinding) -> Vec<StepEv
     }
 }
 
-fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<ProtectionStep> {
+fn program_trust_title() -> String {
+    gettext("Scanner programs can be trusted")
+}
+
+fn program_trust_details() -> String {
+    gettext(
+        "Malware running as you could put a fake clamdscan earlier on your search path that \
+         reports every file as clean. Lazaret only runs ClamAV programs that your account can't \
+         replace, such as the ones installed for the whole system.",
+    )
+}
+
+fn program_trust_step(program_trust: &ProgramTrustInspection) -> Option<ProtectionStep> {
+    match program_trust {
+        ProgramTrustInspection::ProgramsChecked(program_trust_findings) => {
+            program_findings_step(program_trust_findings)
+        }
+        ProgramTrustInspection::CheckInterrupted => Some(no_guidance_step(
+            program_trust_title(),
+            program_trust_details(),
+            SettledNodeState::NeedsReview,
+            gettext("Unknown, because checking the ClamAV programs stopped before it finished"),
+        )),
+    }
+}
+
+fn program_findings_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<ProtectionStep> {
     if program_trust_findings.is_empty() {
         return None;
     }
@@ -294,12 +323,8 @@ fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<
         )
     };
     Some(TimelineStep::settled(
-        gettext("Scanner programs can be trusted"),
-        gettext(
-            "Malware running as you could put a fake clamdscan earlier on your search path that \
-             reports every file as clean. Lazaret only runs ClamAV programs that your account \
-             can't replace, such as the ones installed for the whole system.",
-        ),
+        program_trust_title(),
+        program_trust_details(),
         status_text,
         SettledStep {
             evidence_rows: plain_rows(program_trust_findings.iter().flat_map(program_trust_rows)),
@@ -345,9 +370,36 @@ fn runtime_review_action() -> StepActionSlot<ProtectionStepAction> {
     ))
 }
 
+fn overrides_failure_text(read_failure: OverridesReadFailure) -> String {
+    match read_failure {
+        OverridesReadFailure::OverridesFileUnreadable { failure_kind } => gettext(
+            "Unknown whether settings were reduced, because the runtime changes could not be \
+             read: {error}",
+        )
+        .replace("{error}", &failure_kind.to_string()),
+        OverridesReadFailure::ReadingTaskInterrupted => gettext(
+            "Unknown whether settings were reduced, because reading the runtime changes stopped \
+             before it finished",
+        ),
+    }
+}
+
 fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<ProtectionStep> {
     match runtime_reductions {
         RuntimeReductions::NothingReduced => None,
+        RuntimeReductions::OverridesUnreadable(read_failure) => Some(TimelineStep::settled(
+            gettext("Settings changed at runtime"),
+            gettext(
+                "Someone with the administrator password can change ClamAV settings at runtime. \
+                 Lazaret could not read those changes, so it can't tell whether they check less \
+                 than your configuration does.",
+            ),
+            overrides_failure_text(*read_failure),
+            SettledStep {
+                header_action: runtime_review_action(),
+                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+            },
+        )),
         RuntimeReductions::SettingsReduced {
             change_time,
             reduced_settings,
@@ -618,7 +670,9 @@ fn database_state(
         DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::DatabaseMissing => {
             SettledNodeState::HasFailed
         }
-        DatabaseEvidence::AgeUndetermined => SettledNodeState::NeedsReview,
+        DatabaseEvidence::AgeUndetermined | DatabaseEvidence::InspectionInterrupted => {
+            SettledNodeState::NeedsReview
+        }
     }
 }
 
@@ -646,6 +700,10 @@ fn database_status_text(
             gettext("Definitions exist, but their age could not be determined")
         }
         DatabaseEvidence::DatabaseMissing => gettext("No virus definitions were found"),
+        DatabaseEvidence::InspectionInterrupted => gettext(
+            "The age of the definitions is unknown, because checking them stopped before it \
+             finished",
+        ),
     }
 }
 
@@ -663,6 +721,7 @@ impl From<ScanRunHistory> for EvidenceMoment {
                 happened_at: finished_at,
             },
             ScanRunHistory::NoCompletedScan => Self::NeverHappened,
+            ScanRunHistory::JournalUnreadable(_) => Self::CurrentFact,
         }
     }
 }
@@ -674,6 +733,7 @@ impl From<UpdaterRunHistory> for EvidenceMoment {
                 happened_at: finished_at,
             },
             UpdaterRunHistory::NoCompletedUpdate => Self::NeverHappened,
+            UpdaterRunHistory::JournalUnreadable(_) => Self::CurrentFact,
         }
     }
 }
@@ -696,10 +756,12 @@ fn updater_row(
     let evidence_moment = EvidenceMoment::from(updater_evidence.last_completed_run);
     let evidence_value = if updater_failed(updater_evidence) {
         gettext("Its last update failed")
-    } else if evidence_moment == EvidenceMoment::NeverHappened {
-        gettext("No completed update recorded yet")
     } else {
-        String::new()
+        match updater_evidence.last_completed_run {
+            UpdaterRunHistory::JournalUnreadable(read_failure) => unknown_run_text(read_failure),
+            UpdaterRunHistory::NoCompletedUpdate => gettext("No completed update recorded yet"),
+            UpdaterRunHistory::CompletedUpdate { .. } => String::new(),
+        }
     };
     timed_evidence_row(
         gettext("{updater} updated")
@@ -722,16 +784,40 @@ fn third_party_file_row(
         EvidenceMoment::PastEvent {
             happened_at: signature_file.modified_at,
         },
-        ngettext(
-            "{count} signature, {size} ({file})",
-            "{count} signatures, {size} ({file})",
-            u32::try_from(signature_file.signature_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &signature_file.signature_count.to_string())
+        match signature_file.signature_lines {
+            SignatureLineCount::LinesCounted { signature_count } => ngettext(
+                "{count} signature, {size} ({file})",
+                "{count} signatures, {size} ({file})",
+                u32::try_from(signature_count).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &signature_count.to_string()),
+            SignatureLineCount::FileUnreadable { failure_kind } => gettext(
+                "Unknown number of signatures, the file could not be read: {error}, {size} \
+                 ({file})",
+            )
+            .replace("{error}", &failure_kind.to_string()),
+        }
         .replace("{size}", &byte_size_text(signature_file.file_size))
         .replace("{file}", &signature_file.file_name),
         moment_context,
     )
+}
+
+fn third_party_rows(
+    third_party_listing: &ThirdPartySignatureListing,
+    moment_context: MomentContext,
+) -> Vec<StepEvidenceRow> {
+    match third_party_listing {
+        ThirdPartySignatureListing::FilesListed(signature_files) => signature_files
+            .iter()
+            .map(|signature_file| third_party_file_row(signature_file, moment_context))
+            .collect(),
+        ThirdPartySignatureListing::FolderUnreadable(read_failure) => vec![evidence_row(
+            gettext("Other signature sources"),
+            gettext("Unknown. {reason}")
+                .replace("{reason}", &database_folder_failure_text(*read_failure)),
+        )],
+    }
 }
 
 fn update_progress_of(signature_update: &SignatureUpdateView) -> SignatureUpdateProgress {
@@ -813,8 +899,13 @@ fn signature_step(
         .updater_evidence
         .iter()
         .any(updater_failed);
+    let third_party_unreadable = matches!(
+        signature_evidence.third_party_listing,
+        ThirdPartySignatureListing::FolderUnreadable(_)
+    );
     let any_source_stale = signature_evidence
-        .third_party_files
+        .third_party_listing
+        .listed_files()
         .iter()
         .any(|signature_file| {
             moment_context
@@ -826,12 +917,13 @@ fn signature_step(
         &signature_evidence.database_evidence,
         moment_context.reference_moment,
     );
-    let evidence_state =
-        if base_state == SettledNodeState::Completed && (any_updater_failed || any_source_stale) {
-            SettledNodeState::NeedsReview
-        } else {
-            base_state
-        };
+    let evidence_state = if base_state == SettledNodeState::Completed
+        && (any_updater_failed || any_source_stale || third_party_unreadable)
+    {
+        SettledNodeState::NeedsReview
+    } else {
+        base_state
+    };
     let update_progress = update_progress_of(signature_update);
     let manual_row = manual_update_row(signature_update, moment_context);
     let other_rows = updater_output_rows(&update_progress)
@@ -842,12 +934,10 @@ fn signature_step(
                 .iter()
                 .map(|updater_evidence| updater_row(updater_evidence, moment_context)),
         )
-        .chain(
-            signature_evidence
-                .third_party_files
-                .iter()
-                .map(|signature_file| third_party_file_row(signature_file, moment_context)),
-        )
+        .chain(third_party_rows(
+            &signature_evidence.third_party_listing,
+            moment_context,
+        ))
         .chain(update_host_rows(signature_update))
         .collect::<Vec<_>>();
     let step_title = gettext("Signatures current");
@@ -1127,6 +1217,13 @@ fn on_access_verdict(
     daemon_answering: bool,
 ) -> OnAccessVerdict {
     match on_access_evidence.on_access_scanner {
+        OnAccessScanner::UnitStateUnknown => OnAccessVerdict {
+            node_state: SettledNodeState::NeedsReview,
+            status_text: gettext(
+                "Unknown whether on-access scanning runs, because systemd could not report it",
+            ),
+            suggested_remedies: Vec::new(),
+        },
         OnAccessScanner::NeverSetUp => OnAccessVerdict {
             node_state: SettledNodeState::NeedsReview,
             status_text: gettext("On-access scanning is not set up"),
@@ -1221,6 +1318,7 @@ fn last_run_row(
             ..
         } => gettext("nothing found"),
         ScanRunHistory::NoCompletedScan => gettext("Not run yet"),
+        ScanRunHistory::JournalUnreadable(read_failure) => unknown_run_text(read_failure),
     };
     timed_evidence_row(
         gettext("Last scan"),
@@ -1228,6 +1326,10 @@ fn last_run_row(
         evidence_value,
         moment_context,
     )
+}
+
+fn unknown_run_text(read_failure: UnitJournalReadFailure) -> String {
+    gettext("Unknown. {reason}").replace("{reason}", &unit_journal_failure_text(read_failure))
 }
 
 fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
@@ -1535,9 +1637,7 @@ pub fn protection_timeline(
         ],
         engine_steps: engine_problem
             .into_iter()
-            .chain(program_trust_step(
-                &protection_evidence.program_trust_findings,
-            ))
+            .chain(program_trust_step(&protection_evidence.program_trust))
             .chain([
                 signature_step(
                     &protection_evidence.signature_evidence,
@@ -1564,7 +1664,10 @@ mod protection_timeline_presentation_tests {
 
     use super::*;
     use crate::{
-        host_services::systemd_bus::host_systemd_units::ServiceFailureKind,
+        host_services::{
+            clamav_programs::database_directory_status::DatabaseFolderReadFailure,
+            systemd_bus::host_systemd_units::ServiceFailureKind,
+        },
         protection_page::{
             signature_update_run::updater_exit_status::SignatureUpdaterProgram,
             trusted_detections_page::trust_list_contents::TrustListReadFailure,
@@ -1680,7 +1783,7 @@ mod protection_timeline_presentation_tests {
 
     fn healthy_evidence() -> ProtectionEvidence {
         ProtectionEvidence {
-            program_trust_findings: Vec::new(),
+            program_trust: ProgramTrustInspection::ProgramsChecked(Vec::new()),
             trust_list: TrustListReading::ListsRead(empty_trust_list()),
             runtime_reductions: RuntimeReductions::NothingReduced,
             account_setting_findings: Vec::new(),
@@ -1692,7 +1795,7 @@ mod protection_timeline_presentation_tests {
                     built_at: REFERENCE_MOMENT - SignedDuration::from_hours(5),
                 },
                 updater_evidence: Vec::new(),
-                third_party_files: Vec::new(),
+                third_party_listing: ThirdPartySignatureListing::FilesListed(Vec::new()),
             },
             daemon_evidence: DaemonEvidence::ClamdAnswering {
                 loaded_signatures: LoadedSignatures::MatchesDisk,
@@ -2018,10 +2121,12 @@ mod protection_timeline_presentation_tests {
     #[test]
     fn a_replaceable_scanner_program_fails_first_among_the_engine_steps() {
         let protection_evidence = ProtectionEvidence {
-            program_trust_findings: vec![ProgramTrustFinding::OnlyReplaceableProgram {
-                program_name: "clamdscan",
-                replaceable_paths: vec!["/home/user/.local/bin/clamdscan".to_owned()],
-            }],
+            program_trust: ProgramTrustInspection::ProgramsChecked(vec![
+                ProgramTrustFinding::OnlyReplaceableProgram {
+                    program_name: "clamdscan",
+                    replaceable_paths: vec!["/home/user/.local/bin/clamdscan".to_owned()],
+                },
+            ]),
             ..healthy_evidence()
         };
         let engine_steps = idle_timeline(&protection_evidence).engine_steps;
@@ -2149,11 +2254,13 @@ mod protection_timeline_presentation_tests {
     #[test]
     fn an_ignored_shadowing_program_only_needs_review() {
         let protection_evidence = ProtectionEvidence {
-            program_trust_findings: vec![ProgramTrustFinding::ReplaceableProgramIgnored {
-                program_name: "clamscan",
-                trusted_path: "/usr/bin/clamscan".to_owned(),
-                ignored_paths: vec!["/home/user/.local/bin/clamscan".to_owned()],
-            }],
+            program_trust: ProgramTrustInspection::ProgramsChecked(vec![
+                ProgramTrustFinding::ReplaceableProgramIgnored {
+                    program_name: "clamscan",
+                    trusted_path: "/usr/bin/clamscan".to_owned(),
+                    ignored_paths: vec!["/home/user/.local/bin/clamscan".to_owned()],
+                },
+            ]),
             ..healthy_evidence()
         };
         assert_eq!(
@@ -2288,6 +2395,121 @@ mod protection_timeline_presentation_tests {
             "On-access blocking",
         )
         .clone()
+    }
+
+    #[test]
+    fn an_on_access_unit_systemd_could_not_report_is_unknown_rather_than_not_set_up() {
+        let protection_evidence = ProtectionEvidence {
+            on_access_evidence: OnAccessEvidence {
+                on_access_scanner: OnAccessScanner::UnitStateUnknown,
+                ..healthy_evidence().on_access_evidence
+            },
+            ..healthy_evidence()
+        };
+        let on_access_step = on_access_step_of(&protection_evidence);
+        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
+        assert!(on_access_step.status_text.starts_with("Unknown"));
+        assert!(!on_access_step.status_text.contains("not set up"));
+    }
+
+    #[test]
+    fn unreadable_runtime_changes_are_unknown_rather_than_nothing_reduced() {
+        let protection_evidence = ProtectionEvidence {
+            runtime_reductions: RuntimeReductions::OverridesUnreadable(
+                OverridesReadFailure::OverridesFileUnreadable {
+                    failure_kind: std::io::ErrorKind::PermissionDenied,
+                },
+            ),
+            ..healthy_evidence()
+        };
+        let review_steps = idle_timeline(&protection_evidence).review_steps;
+        assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
+        assert!(
+            review_steps[0]
+                .status_text
+                .starts_with("Unknown whether settings were reduced")
+        );
+    }
+
+    #[test]
+    fn an_interrupted_program_check_is_unknown_rather_than_trusted() {
+        let protection_evidence = ProtectionEvidence {
+            program_trust: ProgramTrustInspection::CheckInterrupted,
+            ..healthy_evidence()
+        };
+        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
+        let trust_step = step_titled(&engine_steps, "Scanner programs can be trusted");
+        assert_eq!(trust_step.node_state(), StepNodeState::NeedsReview);
+        assert!(trust_step.status_text.starts_with("Unknown"));
+    }
+
+    #[test]
+    fn an_unreadable_signature_folder_is_unknown_rather_than_no_other_sources() {
+        let protection_evidence = ProtectionEvidence {
+            signature_evidence: SignatureEvidence {
+                third_party_listing: ThirdPartySignatureListing::FolderUnreadable(
+                    DatabaseFolderReadFailure::ReadingTaskInterrupted,
+                ),
+                ..healthy_evidence().signature_evidence
+            },
+            ..healthy_evidence()
+        };
+        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
+        let signature_step = step_titled(&engine_steps, "Signatures current");
+        assert_eq!(signature_step.node_state(), StepNodeState::NeedsReview);
+        assert_eq!(
+            row_named(signature_step, "Other signature sources").evidence_value,
+            "Unknown. Reading the signature folder stopped before it finished"
+        );
+    }
+
+    #[test]
+    fn an_interrupted_database_check_is_unknown_rather_than_missing() {
+        let protection_evidence = ProtectionEvidence {
+            signature_evidence: SignatureEvidence {
+                database_evidence: DatabaseEvidence::InspectionInterrupted,
+                ..healthy_evidence().signature_evidence
+            },
+            ..healthy_evidence()
+        };
+        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
+        let signature_step = step_titled(&engine_steps, "Signatures current");
+        assert_eq!(signature_step.node_state(), StepNodeState::NeedsReview);
+        assert!(signature_step.status_text.contains("unknown"));
+        assert!(!signature_step.status_text.contains("No virus definitions"));
+    }
+
+    #[test]
+    fn an_unreadable_scan_journal_is_unknown_rather_than_not_run_yet() {
+        let read_failure = UnitJournalReadFailure::ReadingTaskInterrupted;
+        let ScheduledScanEvidence::SystemTimer {
+            service_unit,
+            timer_state,
+            scan_service,
+            ..
+        } = healthy_evidence().scheduled_scan_evidence
+        else {
+            panic!("the healthy evidence has a system timer");
+        };
+        let protection_evidence = ProtectionEvidence {
+            scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
+                service_unit,
+                timer_state,
+                scan_service,
+                last_completed_run: ScanRunHistory::JournalUnreadable(read_failure),
+            },
+            ..healthy_evidence()
+        };
+        let protection_steps = idle_timeline(&protection_evidence).protection_steps;
+        let last_scan_value = &row_named(
+            step_titled(&protection_steps, "Scheduled scan"),
+            "Last scan",
+        )
+        .evidence_value;
+        assert_eq!(
+            last_scan_value,
+            "Unknown. Reading the system journal stopped before it finished"
+        );
     }
 
     #[test]

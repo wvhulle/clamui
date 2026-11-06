@@ -78,6 +78,11 @@ pub fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
         ScanStartFailure::ScannerOutputUncaptured => {
             gettext("The scanner output could not be captured.")
         }
+        ScanStartFailure::DetectionSettingsUnreadable(settings_failure) => gettext(
+            "The scan did not start, because the clamd detection settings could not be read: \
+             {error}",
+        )
+        .replace("{error}", &settings_failure.to_string()),
         ScanStartFailure::ScanInputUnavailable {
             input_path,
             input_failure,
@@ -331,5 +336,22 @@ pub fn results_status(
             ScanResultsStatus::NoThreatsDetected
         }
         ScanEnding::ScanCompleted => ScanResultsStatus::FinishedWithProblems,
+    }
+}
+
+#[cfg(test)]
+mod scan_run_state_tests {
+    use super::*;
+    use crate::host_services::clamav_config::detection_options::DetectionSettingsFailure;
+
+    #[tokio::test]
+    async fn unreadable_detection_settings_stop_the_scan_with_a_reason() {
+        let abandoned_read = tokio::spawn(std::future::pending::<()>());
+        abandoned_read.abort();
+        let interrupted_read = abandoned_read.await.expect_err("the read was aborted");
+        let start_text = describe_start_failure(&ScanStartFailure::DetectionSettingsUnreadable(
+            DetectionSettingsFailure::ReadingTaskInterrupted(interrupted_read),
+        ));
+        assert!(start_text.contains("detection settings could not be read"));
     }
 }

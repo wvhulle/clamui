@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{convert::Infallible, fs, io, path::Path};
 
 use bytesize::ByteSize;
 use futures::future::join_all;
@@ -16,7 +16,7 @@ use crate::{
                 ProbeFailure, ProgramProbe, located_clamd_answers_ping,
                 probe_located_program_version,
             },
-            database_directory_status::configured_database_directory,
+            database_directory_status::{DatabaseFolderReadFailure, configured_database_directory},
             trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
         },
         clamav_scanner::{
@@ -31,8 +31,8 @@ use crate::{
         },
         systemd_bus::host_systemd_units::{
             ServiceFailureKind, ServiceLastResult, ServiceUnitSnapshot, TimerUnitSnapshot,
-            UnitActivity, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
-            probe_user_unit_state, service_unit_snapshot, timer_unit_snapshot,
+            UnitActivity, UnitState, UnitTimestamp, probe_unit_state, probe_user_unit_state,
+            service_unit_snapshot, timer_unit_snapshot,
         },
     },
     protection_page::{
@@ -190,19 +190,40 @@ pub struct UpdaterEvidence {
     pub last_completed_run: UpdaterRunHistory,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SignatureLineCount {
+    LinesCounted { signature_count: u64 },
+    FileUnreadable { failure_kind: io::ErrorKind },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThirdPartySignatureFile {
     pub file_name: String,
     pub modified_at: Timestamp,
     pub file_size: ByteSize,
-    pub signature_count: u64,
+    pub signature_lines: SignatureLineCount,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ThirdPartySignatureListing {
+    FilesListed(Vec<ThirdPartySignatureFile>),
+    FolderUnreadable(DatabaseFolderReadFailure),
+}
+
+impl ThirdPartySignatureListing {
+    pub fn listed_files(&self) -> &[ThirdPartySignatureFile] {
+        match self {
+            Self::FilesListed(signature_files) => signature_files,
+            Self::FolderUnreadable(_) => &[],
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SignatureEvidence {
     pub database_evidence: DatabaseEvidence,
     pub updater_evidence: Vec<UpdaterEvidence>,
-    pub third_party_files: Vec<ThirdPartySignatureFile>,
+    pub third_party_listing: ThirdPartySignatureListing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -228,6 +249,7 @@ pub enum DaemonEvidence {
 pub enum OnAccessScanner {
     MonitorRunning,
     UnitStopped { service_unit: &'static str },
+    UnitStateUnknown,
     NeverSetUp,
 }
 
@@ -346,6 +368,12 @@ pub enum ScheduledScanEvidence {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProgramTrustInspection {
+    ProgramsChecked(Vec<ProgramTrustFinding>),
+    CheckInterrupted,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProgramTrustFinding {
     ReplaceableProgramIgnored {
         program_name: &'static str,
@@ -380,10 +408,18 @@ pub enum OverridesChangeTime {
     ChangeTimeUnknown,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum OverridesReadFailure {
+    #[error("the runtime overrides file could not be read: {failure_kind}")]
+    OverridesFileUnreadable { failure_kind: io::ErrorKind },
+    #[error("the task reading the runtime overrides stopped before it finished")]
+    ReadingTaskInterrupted,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RuntimeReductions {
-    #[default]
     NothingReduced,
+    OverridesUnreadable(OverridesReadFailure),
     SettingsReduced {
         change_time: OverridesChangeTime,
         reduced_settings: Vec<ReducedSetting>,
@@ -418,7 +454,7 @@ pub fn reduced_settings(
             let changed_values = values_for_key(override_settings, &setting_key);
             protection_reduction(
                 &setting_key,
-                &ValuesInEffect::from_config_values(base_values.clone()),
+                &ValuesInEffect::<Infallible>::from_config_values(base_values.clone()),
                 &changed_values,
             )
             .weakens_protection()
@@ -460,37 +496,70 @@ pub fn runtime_reductions_against_base(
 pub fn runtime_reductions_without_base(
     override_settings: &[ConfigSetting],
     change_time: OverridesChangeTime,
+    base_failure_kind: io::ErrorKind,
 ) -> RuntimeReductions {
-    if override_settings.is_empty() {
-        return RuntimeReductions::NothingReduced;
-    }
-    RuntimeReductions::BaseConfigUnreadable {
-        change_time,
-        overridden_settings: override_settings
-            .iter()
-            .map(|override_setting| OverriddenSetting {
-                setting_key: sanitize_scanner_line(&override_setting.setting_key),
-                changed_value: sanitize_scanner_line(&override_setting.setting_value),
-            })
-            .collect(),
+    let unreadable_base = ValuesInEffect::ConfigUnreadable(base_failure_kind);
+    let overridden_settings = override_settings
+        .iter()
+        .filter(|override_setting| {
+            protection_reduction(
+                &override_setting.setting_key,
+                &unreadable_base,
+                &values_for_key(override_settings, &override_setting.setting_key),
+            )
+            .weakens_protection()
+        })
+        .map(|override_setting| OverriddenSetting {
+            setting_key: sanitize_scanner_line(&override_setting.setting_key),
+            changed_value: sanitize_scanner_line(&override_setting.setting_value),
+        })
+        .collect::<Vec<_>>();
+    if overridden_settings.is_empty() {
+        RuntimeReductions::NothingReduced
+    } else {
+        RuntimeReductions::BaseConfigUnreadable {
+            change_time,
+            overridden_settings,
+        }
     }
 }
 
-fn inspect_runtime_reductions() -> RuntimeReductions {
-    let overrides_path = readable_host_path(RUNTIME_OVERRIDES_PATH);
-    let Ok(overrides_text) = fs::read_to_string(&overrides_path) else {
-        return RuntimeReductions::NothingReduced;
+pub fn runtime_reductions_in_files(
+    overrides_path: &Path,
+    base_config_path: &Path,
+) -> RuntimeReductions {
+    let overrides_text = match fs::read_to_string(overrides_path) {
+        Ok(overrides_text) => overrides_text,
+        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => {
+            return RuntimeReductions::NothingReduced;
+        }
+        Err(read_failure) => {
+            return RuntimeReductions::OverridesUnreadable(
+                OverridesReadFailure::OverridesFileUnreadable {
+                    failure_kind: read_failure.kind(),
+                },
+            );
+        }
     };
     let override_settings = parse_config_settings(&overrides_text);
-    let change_time = overrides_change_time(&overrides_path);
-    match fs::read_to_string(readable_host_path(BASE_CLAMD_CONFIG_PATH)) {
+    let change_time = overrides_change_time(overrides_path);
+    match fs::read_to_string(base_config_path) {
         Ok(base_text) => runtime_reductions_against_base(
             &parse_config_settings(&base_text),
             &override_settings,
             change_time,
         ),
-        Err(_unreadable_base) => runtime_reductions_without_base(&override_settings, change_time),
+        Err(unreadable_base) => {
+            runtime_reductions_without_base(&override_settings, change_time, unreadable_base.kind())
+        }
     }
+}
+
+fn inspect_runtime_reductions() -> RuntimeReductions {
+    runtime_reductions_in_files(
+        &readable_host_path(RUNTIME_OVERRIDES_PATH),
+        &readable_host_path(BASE_CLAMD_CONFIG_PATH),
+    )
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -530,7 +599,7 @@ fn inspect_account_settings(lazaret_schedule_enabled: bool) -> Vec<AccountSettin
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionEvidence {
-    pub program_trust_findings: Vec<ProgramTrustFinding>,
+    pub program_trust: ProgramTrustInspection,
     pub trust_list: TrustListReading,
     pub runtime_reductions: RuntimeReductions,
     pub account_setting_findings: Vec<AccountSettingFinding>,
@@ -739,42 +808,52 @@ fn count_lines_with_content(file_bytes: &[u8]) -> u64 {
         .count() as u64
 }
 
-fn count_signature_lines(signature_file: &Path) -> u64 {
-    fs::read(signature_file).map_or(0, |file_bytes| count_lines_with_content(&file_bytes))
+fn count_signature_lines(signature_file: &Path) -> SignatureLineCount {
+    match fs::read(signature_file) {
+        Ok(file_bytes) => SignatureLineCount::LinesCounted {
+            signature_count: count_lines_with_content(&file_bytes),
+        },
+        Err(read_failure) => SignatureLineCount::FileUnreadable {
+            failure_kind: read_failure.kind(),
+        },
+    }
 }
 
-fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySignatureFile> {
-    let mut signature_files = fs::read_dir(database_directory)
-        .map(|directory_entries| {
-            directory_entries
-                .filter_map(Result::ok)
-                .filter(|directory_entry| {
-                    directory_entry
-                        .path()
-                        .extension()
-                        .and_then(|file_extension| file_extension.to_str())
-                        .is_some_and(|file_extension| {
-                            THIRD_PARTY_SIGNATURE_EXTENSIONS.contains(&file_extension)
-                        })
+pub fn third_party_signature_files(database_directory: &Path) -> ThirdPartySignatureListing {
+    let directory_entries = match fs::read_dir(database_directory) {
+        Ok(directory_entries) => directory_entries,
+        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => {
+            return ThirdPartySignatureListing::FilesListed(Vec::new());
+        }
+        Err(read_failure) => {
+            return ThirdPartySignatureListing::FolderUnreadable(read_failure.into());
+        }
+    };
+    let mut signature_files = directory_entries
+        .filter_map(Result::ok)
+        .filter(|directory_entry| {
+            directory_entry
+                .path()
+                .extension()
+                .and_then(|file_extension| file_extension.to_str())
+                .is_some_and(|file_extension| {
+                    THIRD_PARTY_SIGNATURE_EXTENSIONS.contains(&file_extension)
                 })
-                .filter_map(|directory_entry| {
-                    let file_metadata = directory_entry.metadata().ok()?;
-                    let modified_at = Timestamp::try_from(file_metadata.modified().ok()?).ok()?;
-                    Some(ThirdPartySignatureFile {
-                        file_name: sanitize_scanner_line(
-                            &directory_entry.file_name().to_string_lossy(),
-                        ),
-                        modified_at,
-                        file_size: ByteSize::b(file_metadata.len()),
-                        signature_count: count_signature_lines(&directory_entry.path()),
-                    })
-                })
-                .collect::<Vec<_>>()
         })
-        .unwrap_or_default();
+        .filter_map(|directory_entry| {
+            let file_metadata = directory_entry.metadata().ok()?;
+            let modified_at = Timestamp::try_from(file_metadata.modified().ok()?).ok()?;
+            Some(ThirdPartySignatureFile {
+                file_name: sanitize_scanner_line(&directory_entry.file_name().to_string_lossy()),
+                modified_at,
+                file_size: ByteSize::b(file_metadata.len()),
+                signature_lines: count_signature_lines(&directory_entry.path()),
+            })
+        })
+        .collect::<Vec<_>>();
     signature_files
         .sort_by(|first_file, second_file| first_file.file_name.cmp(&second_file.file_name));
-    signature_files
+    ThirdPartySignatureListing::FilesListed(signature_files)
 }
 
 async fn inspect_signature_evidence(engine_installation: &EngineInstallation) -> SignatureEvidence {
@@ -795,11 +874,13 @@ async fn inspect_signature_evidence(engine_installation: &EngineInstallation) ->
             }
         },
         updater_evidence,
-        third_party_files: spawn_blocking(|| {
+        third_party_listing: spawn_blocking(|| {
             third_party_signature_files(&configured_database_directory())
         })
         .await
-        .unwrap_or_default(),
+        .unwrap_or_else(|interrupted_listing| {
+            ThirdPartySignatureListing::FolderUnreadable(interrupted_listing.into())
+        }),
     }
 }
 
@@ -850,20 +931,29 @@ pub fn silent_daemon_evidence(unit_states: &[UnitState]) -> DaemonEvidence {
     }
 }
 
-async fn inspect_on_access_scanner() -> OnAccessScanner {
-    if first_active_unit(&ON_ACCESS_SERVICE_UNITS).await.is_some() {
+pub fn on_access_scanner_from_states(unit_states: &[UnitState]) -> OnAccessScanner {
+    let unit_in_state = |wanted_state: UnitState| {
+        ON_ACCESS_SERVICE_UNITS
+            .iter()
+            .zip(unit_states)
+            .find(|named_state| *named_state.1 == wanted_state)
+            .map(|named_state| *named_state.0)
+    };
+    if unit_in_state(UnitState::UnitLoaded(UnitActivity::UnitActive)).is_some() {
         return OnAccessScanner::MonitorRunning;
     }
-    let unit_states = join_all(ON_ACCESS_SERVICE_UNITS.map(probe_unit_state)).await;
-    ON_ACCESS_SERVICE_UNITS
-        .iter()
-        .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitLoaded(UnitActivity::UnitInactive))
-        .map_or(OnAccessScanner::NeverSetUp, |named_state| {
-            OnAccessScanner::UnitStopped {
-                service_unit: named_state.0,
-            }
-        })
+    if let Some(service_unit) = unit_in_state(UnitState::UnitLoaded(UnitActivity::UnitInactive)) {
+        return OnAccessScanner::UnitStopped { service_unit };
+    }
+    if unit_states.contains(&UnitState::SystemdUnavailable) {
+        OnAccessScanner::UnitStateUnknown
+    } else {
+        OnAccessScanner::NeverSetUp
+    }
+}
+
+async fn inspect_on_access_scanner() -> OnAccessScanner {
+    on_access_scanner_from_states(&join_all(ON_ACCESS_SERVICE_UNITS.map(probe_unit_state)).await)
 }
 
 async fn inspect_on_access_evidence() -> OnAccessEvidence {
@@ -933,13 +1023,14 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
     let engine_installation = inspect_engine_installation().await;
     let signature_evidence = inspect_signature_evidence(&engine_installation).await;
     ProtectionEvidence {
-        program_trust_findings: spawn_blocking(inspect_program_trust)
-            .await
-            .unwrap_or_default(),
+        program_trust: spawn_blocking(inspect_program_trust).await.map_or(
+            ProgramTrustInspection::CheckInterrupted,
+            ProgramTrustInspection::ProgramsChecked,
+        ),
         trust_list: read_configured_trust_list().await,
-        runtime_reductions: spawn_blocking(inspect_runtime_reductions)
-            .await
-            .unwrap_or_default(),
+        runtime_reductions: spawn_blocking(inspect_runtime_reductions).await.unwrap_or(
+            RuntimeReductions::OverridesUnreadable(OverridesReadFailure::ReadingTaskInterrupted),
+        ),
         account_setting_findings: inspect_account_settings(lazaret_schedule_enabled),
         engine_installation,
         signature_evidence,
@@ -1248,12 +1339,95 @@ mod protection_evidence_tests {
     }
 
     #[test]
+    fn an_unreadable_overrides_file_is_not_called_nothing_reduced() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let base_config = temporary_root.path().join("clamd.conf");
+        fs::write(&base_config, "OnAccessPrevention yes\n").expect("base config");
+        assert_eq!(
+            runtime_reductions_in_files(&temporary_root.path().join("missing.conf"), &base_config),
+            RuntimeReductions::NothingReduced
+        );
+        assert!(matches!(
+            runtime_reductions_in_files(temporary_root.path(), &base_config),
+            RuntimeReductions::OverridesUnreadable(
+                OverridesReadFailure::OverridesFileUnreadable { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_signature_folder_is_not_an_empty_listing() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let not_a_folder = temporary_root.path().join("urlhaus.ndb");
+        fs::write(&not_a_folder, "first\nsecond\n").expect("signature file");
+        assert!(matches!(
+            third_party_signature_files(&not_a_folder),
+            ThirdPartySignatureListing::FolderUnreadable(
+                DatabaseFolderReadFailure::FolderUnreadable { .. }
+            )
+        ));
+        assert_eq!(
+            third_party_signature_files(&temporary_root.path().join("missing")),
+            ThirdPartySignatureListing::FilesListed(Vec::new())
+        );
+        let ThirdPartySignatureListing::FilesListed(listed_files) =
+            third_party_signature_files(temporary_root.path())
+        else {
+            panic!("the folder is readable");
+        };
+        assert_eq!(
+            listed_files
+                .iter()
+                .map(|listed_file| listed_file.signature_lines)
+                .collect::<Vec<_>>(),
+            vec![SignatureLineCount::LinesCounted { signature_count: 2 }]
+        );
+    }
+
+    #[test]
+    fn an_on_access_unit_systemd_could_not_report_is_not_never_set_up() {
+        assert_eq!(
+            on_access_scanner_from_states(&[
+                UnitState::SystemdUnavailable,
+                UnitState::UnitNotFound
+            ]),
+            OnAccessScanner::UnitStateUnknown
+        );
+        assert_eq!(
+            on_access_scanner_from_states(&[UnitState::UnitNotFound; 2]),
+            OnAccessScanner::NeverSetUp
+        );
+        assert_eq!(
+            on_access_scanner_from_states(&[
+                UnitState::SystemdUnavailable,
+                UnitState::UnitLoaded(UnitActivity::UnitInactive)
+            ]),
+            OnAccessScanner::UnitStopped {
+                service_unit: "clamonacc.service"
+            }
+        );
+        assert_eq!(
+            on_access_scanner_from_states(&[
+                UnitState::UnitLoaded(UnitActivity::UnitInactive),
+                UnitState::UnitLoaded(UnitActivity::UnitActive)
+            ]),
+            OnAccessScanner::MonitorRunning
+        );
+    }
+
+    #[test]
     fn overrides_against_an_unreadable_base_are_not_called_harmless() {
-        let override_settings = vec![config_setting("OnAccessPrevention", "no")];
+        let base_failure_kind = io::ErrorKind::PermissionDenied;
+        let override_settings = vec![
+            config_setting("OnAccessPrevention", "no"),
+            config_setting("DetectPUA", "yes"),
+            config_setting("MaxThreads", "2"),
+        ];
         assert_eq!(
             runtime_reductions_without_base(
                 &override_settings,
-                OverridesChangeTime::ChangeTimeUnknown
+                OverridesChangeTime::ChangeTimeUnknown,
+                base_failure_kind
             ),
             RuntimeReductions::BaseConfigUnreadable {
                 change_time: OverridesChangeTime::ChangeTimeUnknown,
@@ -1264,7 +1438,19 @@ mod protection_evidence_tests {
             }
         );
         assert_eq!(
-            runtime_reductions_without_base(&[], OverridesChangeTime::ChangeTimeUnknown),
+            runtime_reductions_without_base(
+                &override_settings[1..],
+                OverridesChangeTime::ChangeTimeUnknown,
+                base_failure_kind
+            ),
+            RuntimeReductions::NothingReduced
+        );
+        assert_eq!(
+            runtime_reductions_without_base(
+                &[],
+                OverridesChangeTime::ChangeTimeUnknown,
+                base_failure_kind
+            ),
             RuntimeReductions::NothingReduced
         );
     }

@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use gettextrs::gettext;
 use zbus::{Connection, proxy};
 
@@ -151,7 +153,7 @@ pub fn change_effect(
 ) -> ProtectionReduction {
     protection_reduction(
         setting_key,
-        &ValuesInEffect::from_config_values(current_values.to_vec()),
+        &ValuesInEffect::<Infallible>::from_config_values(current_values.to_vec()),
         new_values,
     )
 }

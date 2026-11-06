@@ -13,7 +13,7 @@ use crate::{
         OverrideSetting, merge_clamd_config, parse_override_settings, render_override_settings,
         write_file_atomically,
     },
-    protection_change_rules::{ConfigReadFailure, ValuesInEffect},
+    protection_change_rules::ValuesInEffect,
     tunable_setting_rules::{SettingRefusal, check_setting_change, parse_tunable_settings},
 };
 
@@ -25,6 +25,18 @@ const RELOAD_REQUEST: &[u8] = b"zRELOAD\0";
 const RELOADING_ANSWER_PREFIX: &[u8] = b"RELOADING";
 const PONG_ANSWER_PREFIX: &[u8] = b"PONG";
 const RESTARTED_UNITS: [&str; 2] = ["clamav-daemon.service", "clamav-clamonacc.service"];
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigReadFailure {
+    #[error(
+        "neither the merged clamd configuration ({merged_failure}) nor the base configuration \
+         ({base_failure}) could be read"
+    )]
+    MergedAndBaseUnreadable {
+        merged_failure: io::Error,
+        base_failure: io::Error,
+    },
+}
 
 #[derive(Clone, Debug)]
 pub struct SettingsPaths {
@@ -179,7 +191,7 @@ fn read_text_or_empty(file_path: &PathBuf) -> io::Result<String> {
 pub fn config_values_in_effect(
     settings_paths: &SettingsPaths,
     setting_key: &str,
-) -> ValuesInEffect {
+) -> ValuesInEffect<ConfigReadFailure> {
     let config_text = match fs::read_to_string(&settings_paths.merged_config) {
         Ok(merged_text) => merged_text,
         Err(merged_failure) => match fs::read_to_string(&settings_paths.base_config) {

@@ -9,7 +9,9 @@ use gettextrs::gettext;
 use tokio::time::timeout;
 
 use crate::host_services::{
-    clamav_config::detection_options::host_clamscan_detection_arguments,
+    clamav_config::detection_options::{
+        DetectionSettingsFailure, read_host_clamscan_detection_arguments,
+    },
     clamav_programs::trusted_program_lookup::ProgramRefusal,
     clamav_scanner::{
         scanner_command_builder::{ScannerBackend, ScannerProgramPaths, probe_clamd_availability},
@@ -42,6 +44,8 @@ pub enum VerdictFailure {
     ScannerExitedAbnormally(AbnormalScannerExit),
     #[error("the quarantined content could not be read: {0}")]
     PayloadUnreadable(QuarantineMoveFailure),
+    #[error("the clamd detection settings could not be read: {0}")]
+    DetectionSettingsUnreadable(#[from] DetectionSettingsFailure),
 }
 
 #[derive(Clone, Debug)]
@@ -103,12 +107,14 @@ pub async fn scan_content_with_current_signatures(
     let scanner_backend = probe_clamd_availability(&scanner_programs).await;
     let (scanner_location, detection_arguments) = match scanner_backend {
         ScannerBackend::ClamdDaemon => (&scanner_programs.clamdscan_program, Vec::new()),
-        ScannerBackend::StandaloneClamscan => (
-            &scanner_programs.clamscan_program,
-            tokio::task::spawn_blocking(host_clamscan_detection_arguments)
-                .await
-                .unwrap_or_default(),
-        ),
+        ScannerBackend::StandaloneClamscan => {
+            match read_host_clamscan_detection_arguments().await {
+                Ok(detection_arguments) => {
+                    (&scanner_programs.clamscan_program, detection_arguments)
+                }
+                Err(settings_failure) => return VerdictFailure::from(settings_failure).into(),
+            }
+        }
     };
     let scanner_path = match scanner_location.runnable_path() {
         Ok(scanner_path) => scanner_path.to_path_buf(),

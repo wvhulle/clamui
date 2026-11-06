@@ -12,7 +12,8 @@ use crate::{
             DetectionSources, DetectionState, ResolutionKind, StoredDetection,
         },
         threat_intel::{
-            malware_bazaar_client::{KnownSampleLookup, MalwareBazaarFailure},
+            file_reputation_check::malware_family_text,
+            malware_bazaar_client::{KnownSampleLookup, MalwareBazaarFailure, SampleFirstSeen},
             service_key_storage::{KeyStorageFailure, describe_key_failure},
         },
     },
@@ -344,19 +345,20 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
         SignatureLookupState::LookupFinished(KnownSampleLookup::SamplesFound { known_samples }) => {
             let families = known_samples
                 .iter()
-                .map(|known_sample| sanitize_scanner_line(&known_sample.malware_family))
-                .filter(|malware_family| !malware_family.is_empty())
+                .map(|known_sample| &known_sample.malware_family)
                 .collect::<BTreeSet<_>>()
                 .into_iter()
+                .map(malware_family_text)
                 .collect::<Vec<_>>()
                 .join(", ");
             let earliest_seen = known_samples
                 .iter()
-                .map(|known_sample| known_sample.first_seen.as_str())
-                .filter(|first_seen| !first_seen.is_empty())
+                .filter_map(|known_sample| match &known_sample.first_seen {
+                    SampleFirstSeen::SeenAt(seen_at) => Some(seen_at.as_str()),
+                    SampleFirstSeen::FirstSeenUnknown => None,
+                })
                 .min()
-                .map(sanitize_scanner_line)
-                .unwrap_or_default();
+                .map_or_else(|| gettext("unknown"), sanitize_scanner_line);
             Some(
                 gettext("{count} known samples. Families: {families}. Earliest seen: {date}.")
                     .replace("{count}", &known_samples.len().to_string())
@@ -532,7 +534,10 @@ mod incident_timeline_presentation_tests {
 
     use super::*;
     use crate::{
-        host_services::detection_journal::detection_history_store::StoredStateInconsistency,
+        host_services::{
+            detection_journal::detection_history_store::StoredStateInconsistency,
+            threat_intel::malware_bazaar_client::MalwareFamily,
+        },
         shared_widgets::step_timeline::timeline_step_contents::{
             ButtonStyle, StepNodeState, StepPhase,
         },
@@ -843,9 +848,8 @@ mod incident_timeline_presentation_tests {
     fn lookup_results_summarise_families_and_the_earliest_date() {
         let known_sample = |malware_family: &str, first_seen: &str| {
             crate::host_services::threat_intel::malware_bazaar_client::SampleSummary {
-                malware_family: malware_family.to_owned(),
-                first_seen: first_seen.to_owned(),
-                file_type: "exe".to_owned(),
+                malware_family: MalwareFamily::NamedFamily(malware_family.to_owned()),
+                first_seen: SampleFirstSeen::SeenAt(first_seen.to_owned()),
                 sample_tags: Vec::new(),
             }
         };
@@ -859,6 +863,20 @@ mod incident_timeline_presentation_tests {
                 }
             )),
             Some("2 known samples. Families: AgentTesla. Earliest seen: 2026-10-01.".to_owned())
+        );
+        assert_eq!(
+            lookup_summary_text(&SignatureLookupState::LookupFinished(
+                KnownSampleLookup::SamplesFound {
+                    known_samples: vec![
+                        crate::host_services::threat_intel::malware_bazaar_client::SampleSummary {
+                            malware_family: MalwareFamily::UnnamedFamily,
+                            first_seen: SampleFirstSeen::FirstSeenUnknown,
+                            sample_tags: Vec::new(),
+                        }
+                    ],
+                }
+            )),
+            Some("1 known samples. Families: unnamed family. Earliest seen: unknown.".to_owned())
         );
         assert_eq!(
             lookup_summary_text(&SignatureLookupState::NotLookedUp),

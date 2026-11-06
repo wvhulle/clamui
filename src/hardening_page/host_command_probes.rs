@@ -1,5 +1,5 @@
 use std::{
-    env,
+    env, io,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Stdio,
@@ -24,6 +24,15 @@ pub enum CommandProbe {
     StartFailed,
     ProbeTimedOut,
     OutputExceededLimit,
+    OutputReadFailed { failure_kind: io::ErrorKind },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum HostTextReadFailure {
+    #[error("the host file could not be read: {failure_kind}")]
+    FileUnreadable { failure_kind: io::ErrorKind },
+    #[error("the task reading the host file stopped before it finished")]
+    ReadingTaskInterrupted,
 }
 
 impl CommandProbe {
@@ -34,7 +43,8 @@ impl CommandProbe {
             | Self::ProgramMissing
             | Self::StartFailed
             | Self::ProbeTimedOut
-            | Self::OutputExceededLimit => None,
+            | Self::OutputExceededLimit
+            | Self::OutputReadFailed { .. } => None,
         }
     }
 }
@@ -121,7 +131,9 @@ async fn run_program_probe(
     .await
     {
         Ok(Ok(command_probe)) => command_probe,
-        Ok(Err(_read_failure)) => CommandProbe::ExitedWithFailure,
+        Ok(Err(read_failure)) => CommandProbe::OutputReadFailed {
+            failure_kind: read_failure.kind(),
+        },
         Err(_probe_timed_out) => CommandProbe::ProbeTimedOut,
     }
 }
@@ -141,11 +153,14 @@ pub async fn run_command_probe(program_name: &str, program_arguments: &[&str]) -
     .await
 }
 
-pub async fn read_host_text(host_path: &'static str) -> Option<String> {
-    spawn_blocking(move || std::fs::read_to_string(host_path).ok())
-        .await
-        .ok()
-        .flatten()
+pub async fn read_host_text(host_path: &'static str) -> Result<String, HostTextReadFailure> {
+    match spawn_blocking(move || std::fs::read_to_string(host_path)).await {
+        Ok(Ok(host_text)) => Ok(host_text),
+        Ok(Err(read_failure)) => Err(HostTextReadFailure::FileUnreadable {
+            failure_kind: read_failure.kind(),
+        }),
+        Err(_interrupted_task) => Err(HostTextReadFailure::ReadingTaskInterrupted),
+    }
 }
 
 #[cfg(test)]

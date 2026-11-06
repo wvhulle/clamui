@@ -72,18 +72,17 @@ pub fn host_runs_on_battery(power_supply_directory: &Path) -> bool {
         .filter_map(Result::ok)
         .map(|supply_entry| supply_entry.path())
         .collect::<Vec<_>>();
-    let supply_value = |supply_directory: &Path, value_name: &str| {
+    let supply_value_is = |supply_directory: &Path, value_name: &str, expected_value: &str| {
         fs::read_to_string(supply_directory.join(value_name))
-            .map(|value_text| value_text.trim().to_owned())
-            .unwrap_or_default()
+            .is_ok_and(|value_text| value_text.trim() == expected_value)
     };
     let mains_online = supply_directories.iter().any(|supply_directory| {
-        supply_value(supply_directory, "type") == "Mains"
-            && supply_value(supply_directory, "online") == "1"
+        supply_value_is(supply_directory, "type", "Mains")
+            && supply_value_is(supply_directory, "online", "1")
     });
     let battery_discharging = supply_directories.iter().any(|supply_directory| {
-        supply_value(supply_directory, "type") == "Battery"
-            && supply_value(supply_directory, "status") == "Discharging"
+        supply_value_is(supply_directory, "type", "Battery")
+            && supply_value_is(supply_directory, "status", "Discharging")
     });
     !mains_online && battery_discharging
 }

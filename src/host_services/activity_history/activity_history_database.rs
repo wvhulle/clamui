@@ -53,6 +53,8 @@ pub enum ActivityHistoryFailure {
     HistoryFileUnavailable(#[from] QuarantineMoveFailure),
     #[error("the history file check stopped unexpectedly: {0}")]
     HistoryFileCheckInterrupted(#[from] tokio::task::JoinError),
+    #[error("checking the detected files stopped unexpectedly: {0}")]
+    DetectedFileCheckInterrupted(tokio::task::JoinError),
     #[error("the history database path is not valid UTF-8")]
     DatabasePathNotUtf8,
     #[error("a stored history entry has an unknown status")]

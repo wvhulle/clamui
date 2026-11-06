@@ -7,7 +7,7 @@ use systemd::journal::Journal;
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
     settings_helper::protection_change_rules::ProtectionReduction,
-    systemd_journal::unit_journal_reader::{journal_field_text, open_system_journal},
+    systemd_journal::unit_journal_reader::{journal_field_value, open_system_journal},
 };
 
 const HELPER_SERVICE_UNIT: &str = "lazaret-settings-helper.service";
@@ -25,6 +25,16 @@ const OLD_FORGET_FILE_PREFIX: &str = "stop trusting the file with SHA-256 ";
 const OLD_STOP_IGNORING_PREFIX: &str = "report detections named ";
 const OLD_STOP_IGNORING_SUFFIX: &str = " again";
 const SHA256_HEX_LENGTH: usize = 64;
+const RECORDED_PROTECTION_REDUCTIONS: [ProtectionReduction; 8] = [
+    ProtectionReduction::BlockingTurnedOff,
+    ProtectionReduction::CheckTurnedOff,
+    ProtectionReduction::WatchedFolderRemoved,
+    ProtectionReduction::SkippedLocationAdded,
+    ProtectionReduction::ScanLimitLowered,
+    ProtectionReduction::CurrentValuesUnknown,
+    ProtectionReduction::DetectionTrusted,
+    ProtectionReduction::NoReduction,
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditedOutcome {
@@ -32,15 +42,19 @@ pub enum AuditedOutcome {
     ActionRolledBack,
     AuthorizationRefused,
     ActionFailed,
+    OutcomeNotRecorded,
 }
 
 impl AuditedOutcome {
-    fn from_field(outcome_field: &str) -> Self {
+    fn from_field(outcome_field: &JournalFieldPresence) -> Self {
         match outcome_field {
-            "applied" => Self::ActionApplied,
-            "rolled-back" => Self::ActionRolledBack,
-            "refused" => Self::AuthorizationRefused,
-            _failed_or_unknown => Self::ActionFailed,
+            JournalFieldPresence::FieldPresent { field_value } => match field_value.as_str() {
+                "applied" => Self::ActionApplied,
+                "rolled-back" => Self::ActionRolledBack,
+                "refused" => Self::AuthorizationRefused,
+                _failed_or_unknown => Self::ActionFailed,
+            },
+            JournalFieldPresence::FieldAbsent => Self::OutcomeNotRecorded,
         }
     }
 
@@ -50,6 +64,7 @@ impl AuditedOutcome {
             Self::ActionRolledBack => gettext("Rolled back"),
             Self::AuthorizationRefused => gettext("Refused without a password"),
             Self::ActionFailed => gettext("Failed"),
+            Self::OutcomeNotRecorded => gettext("Outcome not recorded"),
         }
     }
 }
@@ -71,10 +86,13 @@ pub enum Requester {
 }
 
 impl Requester {
-    fn from_field(requester_field: &str) -> Self {
-        requester_field
-            .parse::<u32>()
-            .map_or(Self::UnknownUser, |user_id| Self::KnownUser { user_id })
+    fn from_field(requester_field: &JournalFieldPresence) -> Self {
+        match requester_field {
+            JournalFieldPresence::FieldPresent { field_value } => field_value
+                .parse::<u32>()
+                .map_or(Self::UnknownUser, |user_id| Self::KnownUser { user_id }),
+            JournalFieldPresence::FieldAbsent => Self::UnknownUser,
+        }
     }
 }
 
@@ -130,8 +148,8 @@ pub fn latest_applied_entry<'entries>(
 struct AuditJournalFields {
     action_name: String,
     action_subject: String,
-    outcome_field: String,
-    requester_field: String,
+    outcome_field: JournalFieldPresence,
+    requester_field: JournalFieldPresence,
     reduction_field: JournalFieldPresence,
     legacy_weakening_field: JournalFieldPresence,
     sha256_field: JournalFieldPresence,
@@ -225,13 +243,19 @@ fn audited_action_from_fields(journal_fields: &AuditJournalFields) -> AuditedAct
     })
 }
 
+fn reduction_from_journal_field(field_value: &str) -> Option<ProtectionReduction> {
+    RECORDED_PROTECTION_REDUCTIONS
+        .into_iter()
+        .find(|protection_reduction| protection_reduction.journal_field_value() == field_value)
+}
+
 fn recorded_reduction_from_fields(journal_fields: &AuditJournalFields) -> RecordedReduction {
     match (
         &journal_fields.reduction_field,
         &journal_fields.legacy_weakening_field,
     ) {
         (JournalFieldPresence::FieldPresent { field_value }, _legacy_field) => {
-            ProtectionReduction::from_journal_field_value(field_value).map_or_else(
+            reduction_from_journal_field(field_value).map_or_else(
                 || RecordedReduction::UnrecognizedReduction {
                     field_value: sanitize_scanner_line(field_value),
                 },
@@ -271,13 +295,7 @@ fn journal_field_presence(
     journal: &mut Journal,
     field_name: &str,
 ) -> systemd::Result<JournalFieldPresence> {
-    Ok(journal
-        .get_data(field_name)?
-        .and_then(|entry_field| {
-            entry_field
-                .value()
-                .map(|field_value| String::from_utf8_lossy(field_value).into_owned())
-        })
+    Ok(journal_field_value(journal, field_name)?
         .map_or(JournalFieldPresence::FieldAbsent, |field_value| {
             JournalFieldPresence::FieldPresent { field_value }
         }))
@@ -291,15 +309,17 @@ pub fn newest_helper_audit_entries(entry_limit: usize) -> systemd::Result<Vec<He
     journal.seek_tail()?;
     let mut newest_entries = Vec::new();
     while newest_entries.len() < entry_limit && journal.previous()? > 0 {
-        let action_name = journal_field_text(&mut journal, "LAZARET_ACTION")?;
-        if action_name.is_empty() {
+        let Some(action_name) = journal_field_value(&mut journal, "LAZARET_ACTION")?
+            .filter(|action_name| !action_name.is_empty())
+        else {
             continue;
-        }
+        };
         let journal_fields = AuditJournalFields {
             action_name,
-            action_subject: journal_field_text(&mut journal, "LAZARET_SUBJECT")?,
-            outcome_field: journal_field_text(&mut journal, "LAZARET_OUTCOME")?,
-            requester_field: journal_field_text(&mut journal, "LAZARET_REQUESTER_UID")?,
+            action_subject: journal_field_value(&mut journal, "LAZARET_SUBJECT")?
+                .unwrap_or_default(),
+            outcome_field: journal_field_presence(&mut journal, "LAZARET_OUTCOME")?,
+            requester_field: journal_field_presence(&mut journal, "LAZARET_REQUESTER_UID")?,
             reduction_field: journal_field_presence(&mut journal, "LAZARET_PROTECTION_REDUCTION")?,
             legacy_weakening_field: journal_field_presence(
                 &mut journal,
@@ -330,8 +350,8 @@ mod helper_audit_records_tests {
         AuditJournalFields {
             action_name: action_name.to_owned(),
             action_subject: action_subject.to_owned(),
-            outcome_field: "applied".to_owned(),
-            requester_field: "1000".to_owned(),
+            outcome_field: present_field("applied"),
+            requester_field: present_field("1000"),
             ..AuditJournalFields::default()
         }
     }
@@ -343,9 +363,40 @@ mod helper_audit_records_tests {
     const TEST_HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     #[test]
+    fn a_missing_outcome_is_not_reported_as_a_failure() {
+        let audit_entry = entry_of(&AuditJournalFields {
+            outcome_field: JournalFieldPresence::FieldAbsent,
+            requester_field: JournalFieldPresence::FieldAbsent,
+            ..applied_fields("change-settings", "MaxThreads 2")
+        });
+        assert_eq!(
+            audit_entry.audited_outcome,
+            AuditedOutcome::OutcomeNotRecorded
+        );
+        assert_eq!(audit_entry.requester, Requester::UnknownUser);
+        assert_eq!(
+            audit_entry.audited_outcome.described(),
+            "Outcome not recorded"
+        );
+    }
+
+    #[test]
+    fn every_reduction_survives_its_journal_field_value() {
+        RECORDED_PROTECTION_REDUCTIONS
+            .into_iter()
+            .for_each(|protection_reduction| {
+                assert_eq!(
+                    reduction_from_journal_field(protection_reduction.journal_field_value()),
+                    Some(protection_reduction)
+                );
+            });
+        assert_eq!(reduction_from_journal_field("surprise"), None);
+    }
+
+    #[test]
     fn only_applied_weakening_changes_lowered_protection() {
         let audit_entry = entry_of(&AuditJournalFields {
-            outcome_field: "refused".to_owned(),
+            outcome_field: present_field("refused"),
             reduction_field: present_field("detection-trusted"),
             ..applied_fields("trust-file", "")
         });
@@ -416,7 +467,7 @@ mod helper_audit_records_tests {
     #[test]
     fn an_unknown_requester_is_not_a_user_id() {
         let audit_entry = entry_of(&AuditJournalFields {
-            requester_field: "unknown".to_owned(),
+            requester_field: present_field("unknown"),
             ..applied_fields("change-settings", "MaxThreads 2")
         });
         assert_eq!(audit_entry.requester, Requester::UnknownUser);

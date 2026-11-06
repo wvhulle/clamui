@@ -14,6 +14,7 @@ use crate::{
             },
             trust_requests::{TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text},
         },
+        systemd_journal::unit_journal_reader::{UnitJournalReadFailure, read_journal_off_thread},
     },
     protection_page::trusted_detections_page::{
         trust_list_contents::{
@@ -22,15 +23,24 @@ use crate::{
         },
         trust_list_row::{TrustListRow, TrustListRowOutput, TrustRemoval},
     },
-    shared_widgets::trust_confirmation_dialog::present_trust_confirmation,
+    shared_widgets::{
+        host_read_failure_text::unit_journal_failure_text,
+        trust_confirmation_dialog::present_trust_confirmation,
+    },
 };
 
 const AUDIT_ENTRY_LIMIT: usize = 500;
 
 #[derive(Clone, Debug)]
+pub enum AuditHistoryReading {
+    EntriesRead(Vec<HelperAuditEntry>),
+    JournalUnreadable(UnitJournalReadFailure),
+}
+
+#[derive(Clone, Debug)]
 pub struct TrustedDetectionsSnapshot {
     pub trust_list: TrustListReading,
-    pub audit_entries: Vec<HelperAuditEntry>,
+    pub audit_history: AuditHistoryReading,
 }
 
 #[derive(Clone, Debug)]
@@ -57,11 +67,12 @@ impl TrustedDetectionsState {
 pub async fn load_trusted_detections() -> TrustedDetectionsSnapshot {
     TrustedDetectionsSnapshot {
         trust_list: read_configured_trust_list().await,
-        audit_entries: tokio::task::spawn_blocking(|| {
-            newest_helper_audit_entries(AUDIT_ENTRY_LIMIT).unwrap_or_default()
-        })
-        .await
-        .unwrap_or_default(),
+        audit_history: read_journal_off_thread(|| newest_helper_audit_entries(AUDIT_ENTRY_LIMIT))
+            .await
+            .map_or_else(
+                AuditHistoryReading::JournalUnreadable,
+                AuditHistoryReading::EntriesRead,
+            ),
     }
 }
 
@@ -75,7 +86,14 @@ pub fn trust_list_failure_text(read_failure: &TrustListReadFailure) -> String {
     }
 }
 
-fn added_text(audit_entries: &[HelperAuditEntry], adding_action: &AuditedAction) -> String {
+fn added_text(audit_history: &AuditHistoryReading, adding_action: &AuditedAction) -> String {
+    let audit_entries = match audit_history {
+        AuditHistoryReading::EntriesRead(audit_entries) => audit_entries,
+        AuditHistoryReading::JournalUnreadable(read_failure) => {
+            return gettext("Unknown who added this. {reason}")
+                .replace("{reason}", &unit_journal_failure_text(*read_failure));
+        }
+    };
     match latest_applied_entry(audit_entries, adding_action) {
         Some(audit_entry) => match audit_entry.requester {
             Requester::KnownUser { user_id } => gettext("Added {time} by user {uid}")
@@ -127,7 +145,7 @@ fn trust_list_rows(
 
 fn trusted_file_row(
     trusted_file: &TrustedFileEntry,
-    audit_entries: &[HelperAuditEntry],
+    audit_history: &AuditHistoryReading,
 ) -> TrustListRow {
     TrustListRow {
         row_title: trusted_file.sha256_hex.clone(),
@@ -135,7 +153,7 @@ fn trusted_file_row(
             "{} · {}",
             byte_size_text(trusted_file.file_size),
             added_text(
-                audit_entries,
+                audit_history,
                 &AuditedAction::TrustFile {
                     sha256_hex: trusted_file.sha256_hex.clone(),
                 },
@@ -150,11 +168,14 @@ fn trusted_file_row(
     }
 }
 
-fn ignored_signature_row(signature_name: &str, audit_entries: &[HelperAuditEntry]) -> TrustListRow {
+fn ignored_signature_row(
+    signature_name: &str,
+    audit_history: &AuditHistoryReading,
+) -> TrustListRow {
     TrustListRow {
         row_title: signature_name.to_owned(),
         row_subtitle: added_text(
-            audit_entries,
+            audit_history,
             &AuditedAction::IgnoreSignature {
                 signature_name: signature_name.to_owned(),
             },
@@ -232,17 +253,17 @@ struct TrustListGroupRows {
 }
 
 fn trust_list_group_rows(snapshot: &TrustedDetectionsSnapshot) -> TrustListGroupRows {
-    let audit_entries = &snapshot.audit_entries;
+    let audit_history = &snapshot.audit_history;
     match &snapshot.trust_list {
         TrustListReading::ListsRead(trust_list) => TrustListGroupRows {
             trusted_file_rows: lazaret_list_rows(
                 &trust_list.trusted_files,
-                |trusted_file| trusted_file_row(trusted_file, audit_entries),
+                |trusted_file| trusted_file_row(trusted_file, audit_history),
                 gettext("No trusted files"),
             ),
             ignored_signature_rows: lazaret_list_rows(
                 &trust_list.ignored_signatures,
-                |signature_name| ignored_signature_row(signature_name, audit_entries),
+                |signature_name| ignored_signature_row(signature_name, audit_history),
                 gettext("No ignored detections"),
             ),
             foreign_allowlist_rows: trust_list
@@ -416,5 +437,30 @@ impl Component for TrustedDetectionsPage {
                 Self::reload_snapshot(&sender);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod trusted_detections_component_tests {
+    use super::*;
+
+    #[test]
+    fn an_unreadable_audit_journal_does_not_claim_there_is_no_record() {
+        let ignored_action = AuditedAction::IgnoreSignature {
+            signature_name: "Win.Test.EICAR_HDB-1".to_owned(),
+        };
+        let unreadable_text = added_text(
+            &AuditHistoryReading::JournalUnreadable(UnitJournalReadFailure::ReadingTaskInterrupted),
+            &ignored_action,
+        );
+        assert!(unreadable_text.starts_with("Unknown who added this."));
+        assert!(!unreadable_text.contains("No record"));
+        assert_eq!(
+            added_text(
+                &AuditHistoryReading::EntriesRead(Vec::new()),
+                &ignored_action
+            ),
+            "No record of who added this in the system journal"
+        );
     }
 }

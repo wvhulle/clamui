@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{io, path::Path};
 
 use gettextrs::gettext;
 use tokio::task::spawn_blocking;
@@ -7,13 +7,14 @@ use crate::{
     hardening_page::{
         firewall_audit_checks::audit_firewall,
         host_command_probes::{
-            CommandProbe, locate_host_program, read_host_text, run_command_probe,
+            CommandProbe, HostTextReadFailure, locate_host_program, read_host_text,
+            run_command_probe,
         },
         suggested_audit_commands::{SuggestedRemedy, rootkit_check_command, suggested_command},
     },
     host_services::{
         clamav_programs::{
-            database_directory_status::configured_database_directory,
+            database_directory_status::{DatabaseFolderReadFailure, configured_database_directory},
             distribution_install_guides::DistributionFamily,
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, probe_unit_state},
@@ -22,7 +23,9 @@ use crate::{
         audit_check_results::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
         process_isolation_checks::process_isolation_checks,
     },
-    signatures_page::signature_provider_catalogue::signature_source_checks,
+    signatures_page::signature_provider_catalogue::{
+        signature_source_checks, unreadable_source_checks,
+    },
 };
 
 const APPARMOR_DOCUMENTATION_URL: &str = "https://wiki.archlinux.org/title/AppArmor";
@@ -37,6 +40,19 @@ pub enum AppArmorState {
     ModuleEnabled,
     ModuleDisabled,
     NoModule,
+    StateUnreadable(HostTextReadFailure),
+}
+
+pub fn apparmor_state_from_reading(
+    enabled_reading: Result<String, HostTextReadFailure>,
+) -> AppArmorState {
+    match enabled_reading {
+        Ok(enabled_text) => parse_apparmor_state(&enabled_text),
+        Err(HostTextReadFailure::FileUnreadable {
+            failure_kind: io::ErrorKind::NotFound,
+        }) => AppArmorState::NoModule,
+        Err(read_failure) => AppArmorState::StateUnreadable(read_failure),
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -79,6 +95,19 @@ fn apparmor_check(
     let check_name = gettext("AppArmor");
     let apparmor_row = match apparmor_state {
         AppArmorState::NoModule => return None,
+        AppArmorState::StateUnreadable(read_failure) => AuditCheck::new(
+            check_name,
+            AuditStatus::StatusUnknown,
+            match read_failure {
+                HostTextReadFailure::FileUnreadable { failure_kind } => {
+                    gettext("Unknown, because AppArmor's state could not be read: {error}")
+                        .replace("{error}", &failure_kind.to_string())
+                }
+                HostTextReadFailure::ReadingTaskInterrupted => {
+                    gettext("Unknown, because reading AppArmor's state stopped before it finished")
+                }
+            },
+        ),
         AppArmorState::ModuleEnabled => AuditCheck::new(
             check_name,
             AuditStatus::CheckPassed,
@@ -304,15 +333,28 @@ async fn inspect_tool_presence(detection_tool: IntrusionDetectionTool) -> ToolPr
     }
 }
 
-fn signature_file_names(database_directory: &Path) -> Vec<String> {
-    std::fs::read_dir(database_directory)
-        .map(|directory_entries| {
-            directory_entries
-                .filter_map(Result::ok)
-                .map(|directory_entry| directory_entry.file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default()
+fn signature_file_names(
+    database_directory: &Path,
+) -> Result<Vec<String>, DatabaseFolderReadFailure> {
+    match std::fs::read_dir(database_directory) {
+        Ok(directory_entries) => Ok(directory_entries
+            .filter_map(Result::ok)
+            .map(|directory_entry| directory_entry.file_name().to_string_lossy().into_owned())
+            .collect()),
+        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(read_failure) => Err(read_failure.into()),
+    }
+}
+
+async fn signature_sources_section(distribution_family: DistributionFamily) -> Vec<AuditCheck> {
+    match spawn_blocking(|| signature_file_names(&configured_database_directory()))
+        .await
+        .map_err(DatabaseFolderReadFailure::from)
+        .flatten()
+    {
+        Ok(signature_files) => signature_source_checks(&signature_files, distribution_family),
+        Err(read_failure) => unreadable_source_checks(read_failure),
+    }
 }
 
 pub fn rootkit_coverage_check(distribution_family: DistributionFamily) -> AuditCheck {
@@ -335,11 +377,8 @@ pub async fn gather_audit_section(
     let section_checks = match audit_category {
         AuditCategory::FirewallProtection => return audit_firewall(distribution_family).await,
         AuditCategory::AccessControl => {
-            let apparmor_state = read_host_text(APPARMOR_ENABLED_PATH)
-                .await
-                .map_or(AppArmorState::NoModule, |enabled_text| {
-                    parse_apparmor_state(&enabled_text)
-                });
+            let apparmor_state =
+                apparmor_state_from_reading(read_host_text(APPARMOR_ENABLED_PATH).await);
             let selinux_probe = run_command_probe("getenforce", &[]).await;
             access_control_checks(apparmor_state, inspect_selinux_probe(&selinux_probe))
                 .into_iter()
@@ -352,12 +391,7 @@ pub async fn gather_audit_section(
             distribution_family,
         ),
         AuditCategory::RootkitCoverage => vec![rootkit_coverage_check(distribution_family)],
-        AuditCategory::SignatureSources => signature_source_checks(
-            &spawn_blocking(|| signature_file_names(&configured_database_directory()))
-                .await
-                .unwrap_or_default(),
-            distribution_family,
-        ),
+        AuditCategory::SignatureSources => signature_sources_section(distribution_family).await,
     };
     AuditSection {
         audit_category,
@@ -487,6 +521,29 @@ mod security_audit_checks_tests {
             )),
             vec![AuditStatus::NeedsReview]
         );
+    }
+
+    #[test]
+    fn an_unreadable_apparmor_state_is_unknown_rather_than_absent() {
+        let read_failure = HostTextReadFailure::FileUnreadable {
+            failure_kind: io::ErrorKind::PermissionDenied,
+        };
+        assert_eq!(
+            apparmor_state_from_reading(Err(read_failure)),
+            AppArmorState::StateUnreadable(read_failure)
+        );
+        assert_eq!(
+            apparmor_state_from_reading(Err(HostTextReadFailure::FileUnreadable {
+                failure_kind: io::ErrorKind::NotFound,
+            })),
+            AppArmorState::NoModule
+        );
+        let access_checks = access_control_checks(
+            AppArmorState::StateUnreadable(read_failure),
+            SelinuxState::GetenforceMissing,
+        );
+        assert_eq!(access_checks[0].check_status, AuditStatus::StatusUnknown);
+        assert!(access_checks[0].status_detail.starts_with("Unknown"));
     }
 
     #[test]

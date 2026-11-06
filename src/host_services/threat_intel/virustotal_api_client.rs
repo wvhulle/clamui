@@ -28,10 +28,16 @@ pub enum DetectionCategory {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EngineVerdictName {
+    NamedDetection(String),
+    UnnamedDetection,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EngineDetection {
     pub engine_name: String,
     pub detection_category: DetectionCategory,
-    pub detection_name: String,
+    pub detection_name: EngineVerdictName,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,7 +68,6 @@ struct FileObject {
 #[derive(Deserialize)]
 struct FileAttributes {
     sha256: String,
-    #[serde(default)]
     last_analysis_stats: BTreeMap<String, u64>,
     #[serde(default)]
     last_analysis_results: BTreeMap<String, EngineResult>,
@@ -93,9 +98,9 @@ pub fn parse_file_report(answer_bytes: &[u8]) -> Result<VirusTotalReport, VirusT
             .last_analysis_stats
             .get(statistic_name)
             .copied()
-            .unwrap_or(0)
+            .ok_or(VirusTotalFailure::AnswerUnreadable)
     };
-    let detecting_engine_count = statistic("malicious") + statistic("suspicious");
+    let detecting_engine_count = statistic("malicious")? + statistic("suspicious")?;
     let total_engine_count = file_object.attributes.last_analysis_stats.values().sum();
     let engine_detections = file_object
         .attributes
@@ -105,7 +110,15 @@ pub fn parse_file_report(answer_bytes: &[u8]) -> Result<VirusTotalReport, VirusT
             Some(EngineDetection {
                 engine_name: engine_entry.0.clone(),
                 detection_category: detection_category_named(&engine_entry.1.category)?,
-                detection_name: engine_entry.1.result.clone().unwrap_or_default(),
+                detection_name: engine_entry
+                    .1
+                    .result
+                    .clone()
+                    .filter(|detection_name| !detection_name.is_empty())
+                    .map_or(
+                        EngineVerdictName::UnnamedDetection,
+                        EngineVerdictName::NamedDetection,
+                    ),
             })
         })
         .collect();
@@ -191,7 +204,14 @@ mod virustotal_api_client_tests {
         assert_eq!(file_report.detecting_engine_count, 3);
         assert_eq!(file_report.total_engine_count, 63);
         assert_eq!(file_report.engine_detections.len(), 2);
-        assert_eq!(file_report.engine_detections[0].detection_name, "Trojan.X");
+        assert_eq!(
+            file_report.engine_detections[0].detection_name,
+            EngineVerdictName::NamedDetection("Trojan.X".to_owned())
+        );
+        assert_eq!(
+            file_report.engine_detections[1].detection_name,
+            EngineVerdictName::UnnamedDetection
+        );
         assert_eq!(
             file_report.engine_detections[1].detection_category,
             DetectionCategory::Suspicious
@@ -200,6 +220,22 @@ mod virustotal_api_client_tests {
             file_report.report_url,
             "https://www.virustotal.com/gui/file/abc123"
         );
+    }
+
+    #[test]
+    fn missing_detection_counts_are_unreadable_rather_than_clean() {
+        [
+            br#"{"data":{"attributes":{"sha256":"abc123"}}}"#.as_slice(),
+            br#"{"data":{"attributes":{"sha256":"abc123","last_analysis_stats":{"undetected":60}}}}"#
+                .as_slice(),
+        ]
+        .into_iter()
+        .for_each(|answer_bytes| {
+            assert!(matches!(
+                parse_file_report(answer_bytes),
+                Err(VirusTotalFailure::AnswerUnreadable)
+            ));
+        });
     }
 
     #[test]

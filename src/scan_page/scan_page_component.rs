@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
-use futures::{StreamExt, stream};
+use futures::{StreamExt, future::ready, stream};
 use gettextrs::{gettext, ngettext};
 use jiff::Timestamp;
 use relm4::{
@@ -19,7 +19,7 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
         },
-        clamav_config::detection_options::host_clamscan_detection_arguments,
+        clamav_config::detection_options::read_host_clamscan_detection_arguments,
         clamav_scanner::{
             scan_exclusion_rules::ScanExclusions,
             scan_progress_estimates::file_progress_text,
@@ -28,6 +28,7 @@ use crate::{
                 ScannerBackend, ScannerProgramPaths, choose_scanner_backend,
             },
             scanner_output_parser::sanitize_scanner_line,
+            scanner_process_events::ScanStartFailure,
         },
         desktop::{
             desktop_notifications::notify_outside_the_window,
@@ -421,20 +422,24 @@ impl ScanPage {
                     .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
             let scanner_backend =
                 choose_scanner_backend(backend_preference, &scanner_programs).await;
-            let detection_arguments =
-                tokio::task::spawn_blocking(host_clamscan_detection_arguments)
-                    .await
-                    .unwrap_or_default();
-            ScanRequest {
-                scan_exclusions,
-                scan_targets,
-                scanner_backend,
-                scanner_programs,
-                file_list_directory,
-                detection_arguments,
-            }
+            read_host_clamscan_detection_arguments()
+                .await
+                .map(|detection_arguments| ScanRequest {
+                    scan_exclusions,
+                    scan_targets,
+                    scanner_backend,
+                    scanner_programs,
+                    file_list_directory,
+                    detection_arguments,
+                })
         })
-        .flat_map(scan_progress_events);
+        .flat_map(|scan_request| match scan_request {
+            Ok(scan_request) => scan_progress_events(scan_request).left_stream(),
+            Err(settings_failure) => stream::once(ready(ScanProgressEvent::ScanPhaseUnstartable(
+                ScanStartFailure::DetectionSettingsUnreadable(settings_failure),
+            )))
+            .right_stream(),
+        });
         let scan_stream = run_stream_then(
             sender,
             scan_events

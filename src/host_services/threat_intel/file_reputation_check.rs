@@ -5,8 +5,13 @@ use gettextrs::{gettext, ngettext};
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
     threat_intel::{
-        circl_hashlookup_client::{CirclLookupFailure, KnownFileLookup, look_up_known_file},
-        malware_bazaar_client::{KnownSampleLookup, MalwareBazaarFailure, look_up_file_hash},
+        circl_hashlookup_client::{
+            CirclLookupFailure, KnownFileLookup, KnownName, ListingSource, look_up_known_file,
+        },
+        malware_bazaar_client::{
+            KnownSampleLookup, MalwareBazaarFailure, MalwareFamily, SampleFirstSeen,
+            look_up_file_hash,
+        },
         service_key_storage::{
             KeyStorageFailure, ResolvedApiKey, ThreatIntelService, describe_key_failure,
             read_api_key,
@@ -69,28 +74,54 @@ pub struct ReputationAnswers {
     pub virustotal_answer: SourceAnswer,
 }
 
+fn listing_source_text(listing_source: &ListingSource) -> String {
+    match listing_source {
+        ListingSource::NamedSource(source_name) => sanitize_scanner_line(source_name),
+        ListingSource::UnnamedSource => gettext("an unnamed source"),
+    }
+}
+
 pub fn describe_known_file(known_file_lookup: &KnownFileLookup) -> SourceAnswer {
     let verdict_text = match known_file_lookup {
         KnownFileLookup::HashUnknown => gettext("Not in the known-files database"),
         KnownFileLookup::KnownMalicious {
-            file_name,
+            file_name: KnownName::NamedFile(file_name),
             flagged_by,
         } => gettext("Listed as malicious by {source} (as {name})")
-            .replace("{source}", &sanitize_scanner_line(flagged_by))
+            .replace("{source}", &listing_source_text(flagged_by))
             .replace("{name}", &sanitize_scanner_line(file_name)),
+        KnownFileLookup::KnownMalicious {
+            file_name: KnownName::UnnamedFile,
+            flagged_by,
+        } => gettext("Listed as malicious by {source}")
+            .replace("{source}", &listing_source_text(flagged_by)),
         KnownFileLookup::KnownFile {
-            file_name,
+            file_name: KnownName::UnnamedFile,
             source_name,
-        } if file_name.is_empty() => gettext("Listed as a known file by {source}")
-            .replace("{source}", &sanitize_scanner_line(source_name)),
+        } => gettext("Listed as a known file by {source}")
+            .replace("{source}", &listing_source_text(source_name)),
         KnownFileLookup::KnownFile {
-            file_name,
+            file_name: KnownName::NamedFile(file_name),
             source_name,
         } => gettext("Known file {name}, listed by {source}")
-            .replace("{source}", &sanitize_scanner_line(source_name))
+            .replace("{source}", &listing_source_text(source_name))
             .replace("{name}", &sanitize_scanner_line(file_name)),
     };
     SourceAnswer::Answered { verdict_text }
+}
+
+pub fn malware_family_text(malware_family: &MalwareFamily) -> String {
+    match malware_family {
+        MalwareFamily::NamedFamily(family_name) => sanitize_scanner_line(family_name),
+        MalwareFamily::UnnamedFamily => gettext("unnamed family"),
+    }
+}
+
+pub fn first_seen_text(first_seen: &SampleFirstSeen) -> String {
+    match first_seen {
+        SampleFirstSeen::SeenAt(seen_at) => sanitize_scanner_line(seen_at),
+        SampleFirstSeen::FirstSeenUnknown => gettext("an unknown date"),
+    }
 }
 
 pub fn describe_known_samples(sample_lookup: &KnownSampleLookup) -> SourceAnswer {
@@ -99,14 +130,12 @@ pub fn describe_known_samples(sample_lookup: &KnownSampleLookup) -> SourceAnswer
         KnownSampleLookup::SamplesFound { known_samples } => known_samples.first().map_or_else(
             || gettext("Known malware sample"),
             |first_sample| {
-                let family_name = if first_sample.malware_family.is_empty() {
-                    gettext("unnamed family")
-                } else {
-                    sanitize_scanner_line(&first_sample.malware_family)
-                };
                 gettext("Known malware: {family}, first seen {date}")
-                    .replace("{date}", &sanitize_scanner_line(&first_sample.first_seen))
-                    .replace("{family}", &family_name)
+                    .replace("{date}", &first_seen_text(&first_sample.first_seen))
+                    .replace(
+                        "{family}",
+                        &malware_family_text(&first_sample.malware_family),
+                    )
             },
         ),
     };
@@ -272,19 +301,27 @@ mod file_reputation_check_tests {
     fn a_known_file_names_its_source() {
         assert_eq!(
             describe_known_file(&KnownFileLookup::KnownFile {
-                file_name: "./usr/bin/ls".to_owned(),
-                source_name: "NSRL".to_owned(),
+                file_name: KnownName::NamedFile("./usr/bin/ls".to_owned()),
+                source_name: ListingSource::NamedSource("NSRL".to_owned()),
             })
             .displayed_text(),
             "Known file ./usr/bin/ls, listed by NSRL"
         );
         assert_eq!(
             describe_known_file(&KnownFileLookup::KnownMalicious {
-                file_name: "eicar.com".to_owned(),
-                flagged_by: "malshare.com".to_owned(),
+                file_name: KnownName::NamedFile("eicar.com".to_owned()),
+                flagged_by: ListingSource::NamedSource("malshare.com".to_owned()),
             })
             .displayed_text(),
             "Listed as malicious by malshare.com (as eicar.com)"
+        );
+        assert_eq!(
+            describe_known_file(&KnownFileLookup::KnownMalicious {
+                file_name: KnownName::UnnamedFile,
+                flagged_by: ListingSource::UnnamedSource,
+            })
+            .displayed_text(),
+            "Listed as malicious by an unnamed source"
         );
         assert_eq!(
             describe_known_file(&KnownFileLookup::HashUnknown).displayed_text(),
@@ -297,14 +334,24 @@ mod file_reputation_check_tests {
         assert_eq!(
             describe_known_samples(&KnownSampleLookup::SamplesFound {
                 known_samples: vec![SampleSummary {
-                    malware_family: "AgentTesla".to_owned(),
-                    first_seen: "2026-10-01".to_owned(),
-                    file_type: "exe".to_owned(),
+                    malware_family: MalwareFamily::NamedFamily("AgentTesla".to_owned()),
+                    first_seen: SampleFirstSeen::SeenAt("2026-10-01".to_owned()),
                     sample_tags: Vec::new(),
                 }],
             })
             .displayed_text(),
             "Known malware: AgentTesla, first seen 2026-10-01"
+        );
+        assert_eq!(
+            describe_known_samples(&KnownSampleLookup::SamplesFound {
+                known_samples: vec![SampleSummary {
+                    malware_family: MalwareFamily::UnnamedFamily,
+                    first_seen: SampleFirstSeen::FirstSeenUnknown,
+                    sample_tags: Vec::new(),
+                }],
+            })
+            .displayed_text(),
+            "Known malware: unnamed family, first seen an unknown date"
         );
     }
 

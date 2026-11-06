@@ -2,8 +2,14 @@ use gettextrs::gettext;
 use regex::Regex;
 
 use crate::{
-    host_services::clamav_programs::distribution_install_guides::DistributionFamily,
-    shared_widgets::audit_sections::audit_check_results::{AuditCheck, AuditStatus},
+    host_services::clamav_programs::{
+        database_directory_status::DatabaseFolderReadFailure,
+        distribution_install_guides::DistributionFamily,
+    },
+    shared_widgets::{
+        audit_sections::audit_check_results::{AuditCheck, AuditStatus},
+        host_read_failure_text::database_folder_failure_text,
+    },
 };
 
 const HIDDEN_ADDRESS_TEXT: &str = "[address hidden]";
@@ -269,6 +275,20 @@ pub fn signature_source_checks(
         .collect()
 }
 
+pub fn unreadable_source_checks(read_failure: DatabaseFolderReadFailure) -> Vec<AuditCheck> {
+    SIGNATURE_PROVIDERS
+        .iter()
+        .map(|signature_provider| {
+            AuditCheck::new(
+                signature_provider.provider_name.to_owned(),
+                AuditStatus::StatusUnknown,
+                gettext("Unknown. {reason}")
+                    .replace("{reason}", &database_folder_failure_text(read_failure)),
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod signature_provider_catalogue_tests {
     use super::*;
@@ -341,6 +361,17 @@ mod signature_provider_catalogue_tests {
     fn traceback_source_lines_stay_readable() {
         let traceback_line = "raise MaxRetryError(_pool, url, reason) from reason";
         assert_eq!(hide_addresses_in_text(traceback_line), traceback_line);
+    }
+
+    #[test]
+    fn an_unreadable_signature_folder_leaves_every_source_unknown() {
+        let source_checks =
+            unreadable_source_checks(DatabaseFolderReadFailure::ReadingTaskInterrupted);
+        assert_eq!(source_checks.len(), SIGNATURE_PROVIDERS.len());
+        source_checks.iter().for_each(|source_check| {
+            assert_eq!(source_check.check_status, AuditStatus::StatusUnknown);
+            assert!(source_check.status_detail.starts_with("Unknown."));
+        });
     }
 
     #[test]

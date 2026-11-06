@@ -1,5 +1,3 @@
-use std::io;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SwitchRole {
     BlocksAccess,
@@ -106,30 +104,14 @@ const SKIP_LIST_SETTINGS: [&str; 6] = [
 ];
 const WATCHED_FOLDER_SETTING: &str = "OnAccessIncludePath";
 
-#[allow(dead_code)]
-#[derive(Debug, thiserror::Error)]
-pub enum ConfigReadFailure {
-    #[error(
-        "neither the merged clamd configuration ({merged_failure}) nor the base configuration \
-         ({base_failure}) could be read"
-    )]
-    MergedAndBaseUnreadable {
-        merged_failure: io::Error,
-        base_failure: io::Error,
-    },
-}
-
 #[derive(Debug)]
-pub enum ValuesInEffect {
+pub enum ValuesInEffect<ReadFailure> {
     NotConfigured,
-    Configured {
-        setting_values: Vec<String>,
-    },
-    #[allow(dead_code)]
-    ConfigUnreadable(ConfigReadFailure),
+    Configured { setting_values: Vec<String> },
+    ConfigUnreadable(ReadFailure),
 }
 
-impl ValuesInEffect {
+impl<ReadFailure> ValuesInEffect<ReadFailure> {
     pub fn from_config_values(setting_values: Vec<String>) -> Self {
         if setting_values.is_empty() {
             Self::NotConfigured
@@ -188,18 +170,6 @@ pub enum ProtectionReduction {
     NoReduction,
 }
 
-#[allow(dead_code)]
-const ALL_PROTECTION_REDUCTIONS: [ProtectionReduction; 8] = [
-    ProtectionReduction::BlockingTurnedOff,
-    ProtectionReduction::CheckTurnedOff,
-    ProtectionReduction::WatchedFolderRemoved,
-    ProtectionReduction::SkippedLocationAdded,
-    ProtectionReduction::ScanLimitLowered,
-    ProtectionReduction::CurrentValuesUnknown,
-    ProtectionReduction::DetectionTrusted,
-    ProtectionReduction::NoReduction,
-];
-
 impl ProtectionReduction {
     pub const fn weakens_protection(self) -> bool {
         !matches!(self, Self::NoReduction)
@@ -217,13 +187,6 @@ impl ProtectionReduction {
             Self::NoReduction => "no-reduction",
         }
     }
-
-    #[allow(dead_code)]
-    pub fn from_journal_field_value(field_value: &str) -> Option<Self> {
-        ALL_PROTECTION_REDUCTIONS
-            .into_iter()
-            .find(|protection_reduction| protection_reduction.journal_field_value() == field_value)
-    }
 }
 
 const fn switch_reduction(protective_switch: &ProtectiveSwitch) -> ProtectionReduction {
@@ -233,9 +196,9 @@ const fn switch_reduction(protective_switch: &ProtectiveSwitch) -> ProtectionRed
     }
 }
 
-fn switch_change_reduction(
+fn switch_change_reduction<ReadFailure>(
     protective_switch: &ProtectiveSwitch,
-    values_in_effect: &ValuesInEffect,
+    values_in_effect: &ValuesInEffect<ReadFailure>,
     new_values: &[String],
 ) -> ProtectionReduction {
     if new_values.iter().any(|new_value| switch_is_on(new_value)) {
@@ -257,8 +220,8 @@ fn switch_change_reduction(
     }
 }
 
-fn skip_list_reduction(
-    values_in_effect: &ValuesInEffect,
+fn skip_list_reduction<ReadFailure>(
+    values_in_effect: &ValuesInEffect<ReadFailure>,
     new_values: &[String],
 ) -> ProtectionReduction {
     let skipped_before: &[String] = match values_in_effect {
@@ -281,8 +244,8 @@ fn skip_list_reduction(
     }
 }
 
-fn watched_folder_reduction(
-    values_in_effect: &ValuesInEffect,
+fn watched_folder_reduction<ReadFailure>(
+    values_in_effect: &ValuesInEffect<ReadFailure>,
     new_values: &[String],
 ) -> ProtectionReduction {
     match values_in_effect {
@@ -301,9 +264,9 @@ fn watched_folder_reduction(
     }
 }
 
-fn scan_limit_reduction(
+fn scan_limit_reduction<ReadFailure>(
     setting_key: &str,
-    values_in_effect: &ValuesInEffect,
+    values_in_effect: &ValuesInEffect<ReadFailure>,
     new_values: &[String],
 ) -> ProtectionReduction {
     let Some(new_limit) = largest_limit(new_values) else {
@@ -322,9 +285,9 @@ fn scan_limit_reduction(
     }
 }
 
-pub fn protection_reduction(
+pub fn protection_reduction<ReadFailure>(
     setting_key: &str,
-    values_in_effect: &ValuesInEffect,
+    values_in_effect: &ValuesInEffect<ReadFailure>,
     new_values: &[String],
 ) -> ProtectionReduction {
     if let Some(protective_switch) = protective_switch_named(setting_key) {
@@ -344,10 +307,14 @@ pub fn protection_reduction(
 
 #[cfg(test)]
 mod protection_change_rules_tests {
+    use std::io;
+
     use super::*;
 
-    fn configured_values(setting_values: &[&str]) -> ValuesInEffect {
-        ValuesInEffect::from_config_values(values(setting_values))
+    type TestedValues = ValuesInEffect<io::ErrorKind>;
+
+    fn configured_values(setting_values: &[&str]) -> TestedValues {
+        TestedValues::from_config_values(values(setting_values))
     }
 
     fn values(setting_values: &[&str]) -> Vec<String> {
@@ -357,16 +324,13 @@ mod protection_change_rules_tests {
             .collect()
     }
 
-    fn unreadable_config() -> ValuesInEffect {
-        ValuesInEffect::ConfigUnreadable(ConfigReadFailure::MergedAndBaseUnreadable {
-            merged_failure: io::Error::from(io::ErrorKind::PermissionDenied),
-            base_failure: io::Error::from(io::ErrorKind::NotFound),
-        })
+    fn unreadable_config() -> TestedValues {
+        TestedValues::ConfigUnreadable(io::ErrorKind::PermissionDenied)
     }
 
     fn change_weakens(
         setting_key: &str,
-        values_in_effect: &ValuesInEffect,
+        values_in_effect: &TestedValues,
         new_values: &[&str],
     ) -> bool {
         protection_reduction(setting_key, values_in_effect, &values(new_values))
@@ -390,7 +354,7 @@ mod protection_change_rules_tests {
         ));
         assert!(change_weakens(
             "ScanArchive",
-            &ValuesInEffect::NotConfigured,
+            &TestedValues::NotConfigured,
             &["no"]
         ));
         assert!(!change_weakens(
@@ -408,7 +372,7 @@ mod protection_change_rules_tests {
                 assert_eq!(
                     protection_reduction(
                         setting_key,
-                        &ValuesInEffect::NotConfigured,
+                        &TestedValues::NotConfigured,
                         &values(&["no"])
                     ),
                     ProtectionReduction::NoReduction,
@@ -418,7 +382,7 @@ mod protection_change_rules_tests {
         assert_eq!(
             protection_reduction(
                 "HeuristicAlerts",
-                &ValuesInEffect::NotConfigured,
+                &TestedValues::NotConfigured,
                 &values(&["no"])
             ),
             ProtectionReduction::CheckTurnedOff
@@ -479,17 +443,17 @@ mod protection_change_rules_tests {
     fn unset_limits_compare_against_the_clamav_default() {
         assert!(change_weakens(
             "MaxFileSize",
-            &ValuesInEffect::NotConfigured,
+            &TestedValues::NotConfigured,
             &["25M"]
         ));
         assert!(!change_weakens(
             "MaxFileSize",
-            &ValuesInEffect::NotConfigured,
+            &TestedValues::NotConfigured,
             &["200M"]
         ));
         assert!(change_weakens(
             "SomeUnlistedSize",
-            &ValuesInEffect::NotConfigured,
+            &TestedValues::NotConfigured,
             &["1M"]
         ));
     }
@@ -518,23 +482,5 @@ mod protection_change_rules_tests {
             &["yes"]
         ));
         assert!(!change_weakens("MaxThreads", &unreadable_config, &["2"]));
-    }
-
-    #[test]
-    fn every_reduction_survives_its_journal_field_value() {
-        ALL_PROTECTION_REDUCTIONS
-            .into_iter()
-            .for_each(|protection_reduction| {
-                assert_eq!(
-                    ProtectionReduction::from_journal_field_value(
-                        protection_reduction.journal_field_value()
-                    ),
-                    Some(protection_reduction)
-                );
-            });
-        assert_eq!(
-            ProtectionReduction::from_journal_field_value("surprise"),
-            None
-        );
     }
 }

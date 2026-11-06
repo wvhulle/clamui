@@ -30,7 +30,10 @@ use crate::{
         },
     },
     scan_page::scan_run_state::describe_start_failure as describe_scan_start_failure,
-    shared_widgets::component_streams::RunningStream,
+    shared_widgets::{
+        component_streams::RunningStream,
+        host_read_failure_text::{database_folder_failure_text, unit_journal_failure_text},
+    },
 };
 
 const TRANSCRIPT_LIMIT: usize = 4 * 1024 * 1024;
@@ -174,6 +177,11 @@ impl ActiveUpdateRun {
         match update_event {
             DatabaseUpdateEvent::UpdateOutputLine(output_line) => {
                 self.run_output_mut().append_output_line(&output_line);
+                self
+            }
+            DatabaseUpdateEvent::UpdateOutputUnreadable(read_failure) => {
+                self.run_output_mut()
+                    .append_output_line(&unit_journal_failure_text(read_failure));
                 self
             }
             DatabaseUpdateEvent::UpdaterFinished(updater_finish) => {
@@ -347,6 +355,10 @@ fn directory_description(directory_status: &DatabaseDirectoryStatus) -> String {
         DatabaseDirectoryStatus::DefinitionsMissing { .. } => {
             gettext("No readable virus database was found")
         }
+        DatabaseDirectoryStatus::DirectoryUnreadable { read_failure, .. } => {
+            gettext("Unknown. {reason}")
+                .replace("{reason}", &database_folder_failure_text(*read_failure))
+        }
     }
 }
 
@@ -355,9 +367,10 @@ fn directory_path_text(directory_status: &DatabaseDirectoryStatus) -> String {
         DatabaseDirectoryStatus::DefinitionsAvailable {
             database_directory, ..
         }
-        | DatabaseDirectoryStatus::DefinitionsMissing { database_directory } => {
-            sanitize_scanner_line(&database_directory.to_string_lossy())
-        }
+        | DatabaseDirectoryStatus::DefinitionsMissing { database_directory }
+        | DatabaseDirectoryStatus::DirectoryUnreadable {
+            database_directory, ..
+        } => sanitize_scanner_line(&database_directory.to_string_lossy()),
     }
 }
 
@@ -533,6 +546,7 @@ fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
         | ScanStartFailure::ScannerSpawnFailed(_)
         | ScanStartFailure::ScannerOutputUncaptured
         | ScanStartFailure::ScannerWorkDirectoryUnavailable(_)
+        | ScanStartFailure::DetectionSettingsUnreadable(_)
         | ScanStartFailure::ScanInputUnavailable { .. } => {
             describe_scan_start_failure(start_failure)
         }
@@ -551,8 +565,9 @@ pub async fn load_host_status() -> DatabaseHostStatus {
     })
     .await
     .unwrap_or_else(
-        |_interrupted_inspection| DatabaseDirectoryStatus::DefinitionsMissing {
+        |interrupted_inspection| DatabaseDirectoryStatus::DirectoryUnreadable {
             database_directory: configured_database_directory(),
+            read_failure: interrupted_inspection.into(),
         },
     );
     DatabaseHostStatus {
@@ -709,7 +724,11 @@ impl SignatureUpdateSession {
 mod signature_update_session_tests {
     use super::*;
     use crate::{
-        host_services::systemd_bus::host_systemd_units::UnitStartOutcome,
+        host_services::{
+            clamav_programs::database_directory_status::DatabaseFolderReadFailure,
+            systemd_bus::host_systemd_units::UnitStartOutcome,
+            systemd_journal::unit_journal_reader::UnitJournalReadFailure,
+        },
         protection_page::signature_update_run::updater_exit_status::FreshclamExit,
     };
 
@@ -765,6 +784,45 @@ mod signature_update_session_tests {
             finished_report.activity_entry.activity_status,
             ActivityStatus::UpdateRequested
         );
+    }
+
+    #[test]
+    fn an_unreadable_service_journal_is_written_into_the_update_output() {
+        let mut update_session = session_running(DatabaseUpdatePlan::StartServiceUnit {
+            service_unit: FRESHCLAM_UNIT,
+        });
+        update_session.absorb_update_batch(vec![
+            DatabaseUpdateEvent::UpdateOutputUnreadable(
+                UnitJournalReadFailure::ReadingTaskInterrupted,
+            ),
+            DatabaseUpdateEvent::UpdaterFinished(UpdaterFinish::ServiceUnitRan(
+                UnitStartOutcome::UnitFinished,
+            )),
+        ]);
+        let finished_report = ended_report(&mut update_session);
+        assert!(
+            finished_report
+                .activity_entry
+                .activity_output
+                .contains("Reading the system journal stopped before it finished")
+        );
+        assert_eq!(
+            finished_report.activity_entry.activity_status,
+            ActivityStatus::UpdateResultUnknown
+        );
+    }
+
+    #[test]
+    fn an_unreadable_database_folder_is_not_reported_as_missing() {
+        let unreadable_status = DatabaseDirectoryStatus::DirectoryUnreadable {
+            database_directory: std::path::PathBuf::from("/var/lib/clamav"),
+            read_failure: DatabaseFolderReadFailure::ReadingTaskInterrupted,
+        };
+        assert_eq!(
+            directory_description(&unreadable_status),
+            "Unknown. Reading the signature folder stopped before it finished"
+        );
+        assert_eq!(directory_path_text(&unreadable_status), "/var/lib/clamav");
     }
 
     #[test]

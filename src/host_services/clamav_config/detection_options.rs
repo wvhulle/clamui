@@ -1,5 +1,7 @@
 use std::ffi::OsString;
 
+use tokio::task::{JoinError, spawn_blocking};
+
 use crate::host_services::{
     clamav_config::clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
     settings_helper::protection_change_rules::protective_switch_named,
@@ -97,6 +99,17 @@ pub fn host_clamscan_detection_arguments() -> Vec<OsString> {
         } => clamscan_detection_arguments(&config_settings),
         HostConfigView::ConfigNotFound => clamscan_detection_arguments(&[]),
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DetectionSettingsFailure {
+    #[error("reading the clamd detection settings stopped before it finished: {0}")]
+    ReadingTaskInterrupted(#[from] JoinError),
+}
+
+pub async fn read_host_clamscan_detection_arguments()
+-> Result<Vec<OsString>, DetectionSettingsFailure> {
+    Ok(spawn_blocking(host_clamscan_detection_arguments).await?)
 }
 
 #[cfg(test)]

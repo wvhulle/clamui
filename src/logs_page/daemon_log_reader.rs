@@ -12,7 +12,10 @@ use crate::host_services::{
     blocking_iterator_stream::blocking_iterator_stream,
     clamav_scanner::scanner_output_parser::sanitize_scanner_text,
     desktop::flatpak_sandbox::readable_host_path,
-    systemd_journal::unit_journal_reader::{appended_unit_entries, newest_unit_messages},
+    systemd_journal::unit_journal_reader::{
+        UnitJournalReadFailure, appended_unit_entries, newest_unit_messages,
+        read_journal_off_thread,
+    },
 };
 
 const SHOWN_LINE_COUNT: usize = 100;
@@ -37,6 +40,7 @@ pub enum DaemonLogContents {
     FromLogFile { log_path: PathBuf, log_text: String },
     FromSystemJournal { log_text: String },
     NoReadableLog,
+    JournalUnreadable(UnitJournalReadFailure),
 }
 
 pub fn log_path_in_config(config_text: &str) -> Option<PathBuf> {
@@ -140,18 +144,23 @@ pub fn daemon_log_updates() -> impl Stream<Item = DaemonLogContents> + Send + 's
     .then(|_change_burst| read_daemon_log())
 }
 
-async fn read_system_journal() -> Option<DaemonLogContents> {
-    let unit_messages =
-        spawn_blocking(|| newest_unit_messages(&DAEMON_SERVICE_UNITS, SHOWN_LINE_COUNT))
-            .await
-            .ok()?
-            .ok()?;
-    (!unit_messages.is_empty()).then(|| DaemonLogContents::FromSystemJournal {
-        log_text: sanitize_scanner_text(&unit_messages.join(
-            "
-",
-        )),
-    })
+pub fn journal_log_contents(
+    journal_reading: Result<Vec<String>, UnitJournalReadFailure>,
+) -> DaemonLogContents {
+    match journal_reading {
+        Ok(unit_messages) if unit_messages.is_empty() => DaemonLogContents::NoReadableLog,
+        Ok(unit_messages) => DaemonLogContents::FromSystemJournal {
+            log_text: sanitize_scanner_text(&unit_messages.join("\n")),
+        },
+        Err(read_failure) => DaemonLogContents::JournalUnreadable(read_failure),
+    }
+}
+
+async fn read_system_journal() -> DaemonLogContents {
+    journal_log_contents(
+        read_journal_off_thread(|| newest_unit_messages(&DAEMON_SERVICE_UNITS, SHOWN_LINE_COUNT))
+            .await,
+    )
 }
 
 pub async fn read_daemon_log() -> DaemonLogContents {
@@ -161,15 +170,25 @@ pub async fn read_daemon_log() -> DaemonLogContents {
         .flatten();
     match file_contents {
         Some(file_contents) => file_contents,
-        None => read_system_journal()
-            .await
-            .unwrap_or(DaemonLogContents::NoReadableLog),
+        None => read_system_journal().await,
     }
 }
 
 #[cfg(test)]
 mod daemon_log_reader_tests {
     use super::*;
+
+    #[test]
+    fn an_unreadable_journal_is_not_reported_as_no_log() {
+        assert_eq!(
+            journal_log_contents(Err(UnitJournalReadFailure::ReadingTaskInterrupted)),
+            DaemonLogContents::JournalUnreadable(UnitJournalReadFailure::ReadingTaskInterrupted)
+        );
+        assert_eq!(
+            journal_log_contents(Ok(Vec::new())),
+            DaemonLogContents::NoReadableLog
+        );
+    }
 
     #[test]
     fn appending_to_the_log_file_is_reported_and_other_files_are_not() {

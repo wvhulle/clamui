@@ -2,6 +2,7 @@ use std::io;
 
 use jiff::Timestamp;
 use systemd::journal::{Journal, OpenOptions};
+use tokio::task::{JoinError, spawn_blocking};
 
 const MESSAGE_FIELD: &str = "MESSAGE";
 const SYSTEMD_UNIT_FIELD: &str = "_SYSTEMD_UNIT";
@@ -10,6 +11,34 @@ const SENDER_PROCESS_FIELD: &str = "_PID";
 const SERVICE_MANAGER_PROCESS: &str = "1";
 const UNIT_DEACTIVATED_MESSAGE: &str = "7ad2d189f7e94e70a38c781354912448";
 const PROCESS_EXITED_MESSAGE: &str = "98e322203f7a4ed290d09fe03c09fe15";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum UnitJournalReadFailure {
+    #[error("the system journal could not be read: {failure_kind}")]
+    JournalReadFailed { failure_kind: io::ErrorKind },
+    #[error("the task reading the system journal stopped before it finished")]
+    ReadingTaskInterrupted,
+}
+
+impl From<systemd::Error> for UnitJournalReadFailure {
+    fn from(journal_failure: systemd::Error) -> Self {
+        Self::JournalReadFailed {
+            failure_kind: journal_failure.kind(),
+        }
+    }
+}
+
+impl From<JoinError> for UnitJournalReadFailure {
+    fn from(_interrupted_task: JoinError) -> Self {
+        Self::ReadingTaskInterrupted
+    }
+}
+
+pub async fn read_journal_off_thread<JournalAnswer: Send + 'static>(
+    read_journal: impl FnOnce() -> systemd::Result<JournalAnswer> + Send + 'static,
+) -> Result<JournalAnswer, UnitJournalReadFailure> {
+    Ok(spawn_blocking(read_journal).await??)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JournalProcessExit {
@@ -26,6 +55,7 @@ pub enum JournalProcessExit {
         exit_code_field: String,
         exit_status_field: String,
     },
+    ExitFieldsMissing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,6 +63,7 @@ pub enum UnitJournalEvent {
     UnitDeactivated,
     MainProcessExited(JournalProcessExit),
     UnrecognizedMessage { message_id: String },
+    MessageIdMissing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,7 +72,7 @@ pub struct ManagerUnitRecord {
     pub unit_journal_event: UnitJournalEvent,
 }
 
-fn classify_process_exit(exit_code_field: &str, exit_status_field: &str) -> JournalProcessExit {
+pub fn classify_process_exit(exit_code_field: &str, exit_status_field: &str) -> JournalProcessExit {
     match exit_code_field {
         "exited" => exit_status_field.parse().map_or_else(
             |_unparsable_status| JournalProcessExit::UnrecognizedExit {
@@ -65,15 +96,11 @@ fn classify_process_exit(exit_code_field: &str, exit_status_field: &str) -> Jour
 
 pub fn classify_unit_journal_event(
     message_id: &str,
-    exit_code_field: &str,
-    exit_status_field: &str,
+    process_exit: JournalProcessExit,
 ) -> UnitJournalEvent {
     match message_id {
         UNIT_DEACTIVATED_MESSAGE => UnitJournalEvent::UnitDeactivated,
-        PROCESS_EXITED_MESSAGE => UnitJournalEvent::MainProcessExited(classify_process_exit(
-            exit_code_field,
-            exit_status_field,
-        )),
+        PROCESS_EXITED_MESSAGE => UnitJournalEvent::MainProcessExited(process_exit),
         unrecognized_id => UnitJournalEvent::UnrecognizedMessage {
             message_id: unrecognized_id.to_owned(),
         },
@@ -88,25 +115,39 @@ pub fn open_system_journal() -> systemd::Result<Journal> {
         .open()
 }
 
-pub fn journal_field_text(journal: &mut Journal, field_name: &str) -> systemd::Result<String> {
-    Ok(journal
-        .get_data(field_name)?
-        .and_then(|entry_field| {
-            entry_field
-                .value()
-                .map(|field_value| String::from_utf8_lossy(field_value).into_owned())
-        })
-        .unwrap_or_default())
+pub fn journal_field_value(
+    journal: &mut Journal,
+    field_name: &str,
+) -> systemd::Result<Option<String>> {
+    Ok(journal.get_data(field_name)?.and_then(|entry_field| {
+        entry_field
+            .value()
+            .map(|field_value| String::from_utf8_lossy(field_value).into_owned())
+    }))
+}
+
+fn process_exit_at_position(journal: &mut Journal) -> systemd::Result<JournalProcessExit> {
+    Ok(
+        match (
+            journal_field_value(journal, "EXIT_CODE")?,
+            journal_field_value(journal, "EXIT_STATUS")?,
+        ) {
+            (Some(exit_code_field), Some(exit_status_field)) => {
+                classify_process_exit(&exit_code_field, &exit_status_field)
+            }
+            (None, _) | (_, None) => JournalProcessExit::ExitFieldsMissing,
+        },
+    )
 }
 
 fn manager_record_at_position(journal: &mut Journal) -> systemd::Result<ManagerUnitRecord> {
+    let process_exit = process_exit_at_position(journal)?;
     Ok(ManagerUnitRecord {
         recorded_at: Timestamp::try_from(journal.timestamp()?).map_err(io::Error::other)?,
-        unit_journal_event: classify_unit_journal_event(
-            &journal_field_text(journal, "MESSAGE_ID")?,
-            &journal_field_text(journal, "EXIT_CODE")?,
-            &journal_field_text(journal, "EXIT_STATUS")?,
-        ),
+        unit_journal_event: match journal_field_value(journal, "MESSAGE_ID")? {
+            Some(message_id) => classify_unit_journal_event(&message_id, process_exit),
+            None => UnitJournalEvent::MessageIdMissing,
+        },
     })
 }
 
@@ -142,7 +183,7 @@ pub fn newest_unit_messages(
     journal.seek_tail()?;
     let mut newest_first = Vec::new();
     while newest_first.len() < line_limit && journal.previous()? > 0 {
-        newest_first.push(journal_field_text(&mut journal, MESSAGE_FIELD)?);
+        newest_first.extend(journal_field_value(&mut journal, MESSAGE_FIELD)?);
     }
     newest_first.reverse();
     Ok(newest_first)
@@ -159,7 +200,7 @@ pub fn unit_messages_since(
     )?;
     let mut unit_messages = Vec::new();
     while journal.next()? > 0 {
-        unit_messages.push(journal_field_text(&mut journal, MESSAGE_FIELD)?);
+        unit_messages.extend(journal_field_value(&mut journal, MESSAGE_FIELD)?);
     }
     Ok(unit_messages)
 }
@@ -195,23 +236,35 @@ mod unit_journal_reader_tests {
     #[test]
     fn manager_messages_become_typed_unit_events() {
         assert_eq!(
-            classify_unit_journal_event(UNIT_DEACTIVATED_MESSAGE, "", ""),
+            classify_unit_journal_event(
+                UNIT_DEACTIVATED_MESSAGE,
+                JournalProcessExit::ExitFieldsMissing
+            ),
             UnitJournalEvent::UnitDeactivated
         );
         assert_eq!(
-            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "exited", "1"),
+            classify_unit_journal_event(
+                PROCESS_EXITED_MESSAGE,
+                classify_process_exit("exited", "1")
+            ),
             UnitJournalEvent::MainProcessExited(JournalProcessExit::ExitedWithStatus {
                 exit_status: 1
             })
         );
         assert_eq!(
-            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "killed", "TERM"),
+            classify_unit_journal_event(
+                PROCESS_EXITED_MESSAGE,
+                classify_process_exit("killed", "TERM")
+            ),
             UnitJournalEvent::MainProcessExited(JournalProcessExit::KilledBySignal {
                 signal_name: "TERM".to_owned()
             })
         );
         assert_eq!(
-            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "dumped", "SEGV"),
+            classify_unit_journal_event(
+                PROCESS_EXITED_MESSAGE,
+                classify_process_exit("dumped", "SEGV")
+            ),
             UnitJournalEvent::MainProcessExited(JournalProcessExit::DumpedCore {
                 signal_name: "SEGV".to_owned()
             })
@@ -221,20 +274,26 @@ mod unit_journal_reader_tests {
     #[test]
     fn unrecognized_journal_values_keep_their_raw_text() {
         assert_eq!(
-            classify_unit_journal_event("0123456789abcdef", "", ""),
+            classify_unit_journal_event("0123456789abcdef", JournalProcessExit::ExitFieldsMissing),
             UnitJournalEvent::UnrecognizedMessage {
                 message_id: "0123456789abcdef".to_owned()
             }
         );
         assert_eq!(
-            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "trapped", "TRAP"),
+            classify_unit_journal_event(
+                PROCESS_EXITED_MESSAGE,
+                classify_process_exit("trapped", "TRAP")
+            ),
             UnitJournalEvent::MainProcessExited(JournalProcessExit::UnrecognizedExit {
                 exit_code_field: "trapped".to_owned(),
                 exit_status_field: "TRAP".to_owned()
             })
         );
         assert_eq!(
-            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "exited", "not-a-number"),
+            classify_unit_journal_event(
+                PROCESS_EXITED_MESSAGE,
+                classify_process_exit("exited", "not-a-number")
+            ),
             UnitJournalEvent::MainProcessExited(JournalProcessExit::UnrecognizedExit {
                 exit_code_field: "exited".to_owned(),
                 exit_status_field: "not-a-number".to_owned()

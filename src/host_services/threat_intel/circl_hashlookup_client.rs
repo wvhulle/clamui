@@ -17,24 +17,42 @@ pub enum CirclLookupFailure {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KnownName {
+    NamedFile(String),
+    UnnamedFile,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ListingSource {
+    NamedSource(String),
+    UnnamedSource,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum KnownFileLookup {
     KnownMalicious {
-        file_name: String,
-        flagged_by: String,
+        file_name: KnownName,
+        flagged_by: ListingSource,
     },
     KnownFile {
-        file_name: String,
-        source_name: String,
+        file_name: KnownName,
+        source_name: ListingSource,
     },
     HashUnknown,
 }
 
-fn text_field(parsed_answer: &Value, field_name: &str) -> String {
+fn present_text(parsed_answer: &Value, field_name: &str) -> Option<String> {
     parsed_answer
         .get(field_name)
         .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+        .map(str::trim)
+        .filter(|field_text| !field_text.is_empty())
+        .map(str::to_owned)
+}
+
+fn listing_source(parsed_answer: &Value, field_name: &str) -> ListingSource {
+    present_text(parsed_answer, field_name)
+        .map_or(ListingSource::UnnamedSource, ListingSource::NamedSource)
 }
 
 pub fn parse_known_file_answer(answer_bytes: &[u8]) -> Result<KnownFileLookup, CirclLookupFailure> {
@@ -43,18 +61,17 @@ pub fn parse_known_file_answer(answer_bytes: &[u8]) -> Result<KnownFileLookup, C
     if !parsed_answer.is_object() {
         return Err(CirclLookupFailure::AnswerUnreadable);
     }
-    let file_name = text_field(&parsed_answer, "FileName");
-    let flagged_by = text_field(&parsed_answer, "KnownMalicious");
-    Ok(if flagged_by.is_empty() {
-        KnownFileLookup::KnownFile {
+    let file_name = present_text(&parsed_answer, "FileName")
+        .map_or(KnownName::UnnamedFile, KnownName::NamedFile);
+    Ok(match parsed_answer.get("KnownMalicious") {
+        Some(_flagging_value) => KnownFileLookup::KnownMalicious {
             file_name,
-            source_name: text_field(&parsed_answer, "source"),
-        }
-    } else {
-        KnownFileLookup::KnownMalicious {
+            flagged_by: listing_source(&parsed_answer, "KnownMalicious"),
+        },
+        None => KnownFileLookup::KnownFile {
             file_name,
-            flagged_by,
-        }
+            source_name: listing_source(&parsed_answer, "source"),
+        },
     })
 }
 
@@ -90,8 +107,8 @@ mod circl_hashlookup_client_tests {
             )
             .expect("parsed"),
             KnownFileLookup::KnownFile {
-                file_name: "./usr/bin/ls".to_owned(),
-                source_name: "NSRL".to_owned(),
+                file_name: KnownName::NamedFile("./usr/bin/ls".to_owned()),
+                source_name: ListingSource::NamedSource("NSRL".to_owned()),
             }
         );
     }
@@ -104,10 +121,27 @@ mod circl_hashlookup_client_tests {
             )
             .expect("parsed"),
             KnownFileLookup::KnownMalicious {
-                file_name: "eicar.com".to_owned(),
-                flagged_by: "malshare.com".to_owned(),
+                file_name: KnownName::NamedFile("eicar.com".to_owned()),
+                flagged_by: ListingSource::NamedSource("malshare.com".to_owned()),
             }
         );
+    }
+
+    #[test]
+    fn a_malicious_flag_without_a_readable_source_is_still_malicious() {
+        ["null", "\"\"", "[\"malshare.com\"]", "true"]
+            .into_iter()
+            .for_each(|flag_value| {
+                let answer_text = format!(r#"{{"KnownMalicious":{flag_value}}}"#);
+                assert_eq!(
+                    parse_known_file_answer(answer_text.as_bytes()).expect("parsed"),
+                    KnownFileLookup::KnownMalicious {
+                        file_name: KnownName::UnnamedFile,
+                        flagged_by: ListingSource::UnnamedSource,
+                    },
+                    "{flag_value}"
+                );
+            });
     }
 
     #[test]
@@ -115,8 +149,8 @@ mod circl_hashlookup_client_tests {
         assert_eq!(
             parse_known_file_answer(br#"{"SHA-256":"AB"}"#).expect("parsed"),
             KnownFileLookup::KnownFile {
-                file_name: String::new(),
-                source_name: String::new(),
+                file_name: KnownName::UnnamedFile,
+                source_name: ListingSource::UnnamedSource,
             }
         );
     }

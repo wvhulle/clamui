@@ -292,6 +292,10 @@ fn verdict_failure_text(verdict_failure: &VerdictFailure) -> String {
         VerdictFailure::ScannerExitedAbnormally(abnormal_exit) => {
             abnormal_scanner_exit_text(abnormal_exit)
         }
+        VerdictFailure::DetectionSettingsUnreadable(settings_failure) => {
+            gettext("the clamd detection settings could not be read: {error}")
+                .replace("{error}", &settings_failure.to_string())
+        }
         VerdictFailure::PayloadUnreadable(read_failure) => {
             gettext("the quarantined copy could not be read: {error}")
                 .replace("{error}", &read_failure.to_string())

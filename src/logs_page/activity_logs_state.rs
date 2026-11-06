@@ -92,7 +92,10 @@ impl DaemonLogView {
                 DaemonLogContents::FromLogFile { log_text, .. }
                 | DaemonLogContents::FromSystemJournal { log_text },
             ) => Some(log_text),
-            Self::DaemonLogRead(DaemonLogContents::NoReadableLog) | Self::DaemonLogReading => None,
+            Self::DaemonLogRead(
+                DaemonLogContents::NoReadableLog | DaemonLogContents::JournalUnreadable(_),
+            )
+            | Self::DaemonLogReading => None,
         }
     }
 }

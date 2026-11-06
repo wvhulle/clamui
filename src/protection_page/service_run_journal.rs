@@ -1,9 +1,9 @@
 use jiff::Timestamp;
-use tokio::task::spawn_blocking;
 
 use crate::{
     host_services::systemd_journal::unit_journal_reader::{
-        JournalProcessExit, ManagerUnitRecord, UnitJournalEvent, newest_manager_records_for_unit,
+        JournalProcessExit, ManagerUnitRecord, UnitJournalEvent, UnitJournalReadFailure,
+        newest_manager_records_for_unit, read_journal_off_thread,
     },
     protection_page::signature_update_run::updater_exit_status::{
         SignatureUpdaterProgram, UpdaterExitMeaning, classify_updater_exit_status,
@@ -22,6 +22,7 @@ pub enum ScanRunFindings {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScanRunHistory {
     NoCompletedScan,
+    JournalUnreadable(UnitJournalReadFailure),
     CompletedScan {
         finished_at: Timestamp,
         scan_findings: ScanRunFindings,
@@ -31,6 +32,7 @@ pub enum ScanRunHistory {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UpdaterRunHistory {
     NoCompletedUpdate,
+    JournalUnreadable(UnitJournalReadFailure),
     CompletedUpdate { finished_at: Timestamp },
 }
 
@@ -44,9 +46,11 @@ fn scan_run_findings(unit_journal_event: &UnitJournalEvent) -> Option<ScanRunFin
             JournalProcessExit::ExitedWithStatus { .. }
             | JournalProcessExit::KilledBySignal { .. }
             | JournalProcessExit::DumpedCore { .. }
-            | JournalProcessExit::UnrecognizedExit { .. },
+            | JournalProcessExit::UnrecognizedExit { .. }
+            | JournalProcessExit::ExitFieldsMissing,
         )
-        | UnitJournalEvent::UnrecognizedMessage { .. } => None,
+        | UnitJournalEvent::UnrecognizedMessage { .. }
+        | UnitJournalEvent::MessageIdMissing => None,
     }
 }
 
@@ -65,9 +69,11 @@ const fn update_completed(
         UnitJournalEvent::MainProcessExited(
             JournalProcessExit::KilledBySignal { .. }
             | JournalProcessExit::DumpedCore { .. }
-            | JournalProcessExit::UnrecognizedExit { .. },
+            | JournalProcessExit::UnrecognizedExit { .. }
+            | JournalProcessExit::ExitFieldsMissing,
         )
-        | UnitJournalEvent::UnrecognizedMessage { .. } => false,
+        | UnitJournalEvent::UnrecognizedMessage { .. }
+        | UnitJournalEvent::MessageIdMissing => false,
     }
 }
 
@@ -101,23 +107,43 @@ fn newest_completed_update(
         })
 }
 
-async fn newest_unit_records(service_unit: &'static str) -> Vec<ManagerUnitRecord> {
-    spawn_blocking(move || newest_manager_records_for_unit(service_unit, JOURNAL_RECORD_LIMIT))
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .unwrap_or_default()
+async fn newest_unit_records(
+    service_unit: &'static str,
+) -> Result<Vec<ManagerUnitRecord>, UnitJournalReadFailure> {
+    read_journal_off_thread(move || {
+        newest_manager_records_for_unit(service_unit, JOURNAL_RECORD_LIMIT)
+    })
+    .await
+}
+
+pub fn scan_run_from_journal(
+    journal_reading: Result<Vec<ManagerUnitRecord>, UnitJournalReadFailure>,
+) -> ScanRunHistory {
+    match journal_reading {
+        Ok(manager_records) => newest_completed_scan(&manager_records),
+        Err(read_failure) => ScanRunHistory::JournalUnreadable(read_failure),
+    }
+}
+
+pub fn update_run_from_journal(
+    updater_program: SignatureUpdaterProgram,
+    journal_reading: Result<Vec<ManagerUnitRecord>, UnitJournalReadFailure>,
+) -> UpdaterRunHistory {
+    match journal_reading {
+        Ok(manager_records) => newest_completed_update(updater_program, &manager_records),
+        Err(read_failure) => UpdaterRunHistory::JournalUnreadable(read_failure),
+    }
 }
 
 pub async fn newest_scan_run(service_unit: &'static str) -> ScanRunHistory {
-    newest_completed_scan(&newest_unit_records(service_unit).await)
+    scan_run_from_journal(newest_unit_records(service_unit).await)
 }
 
 pub async fn newest_update_run(
     updater_program: SignatureUpdaterProgram,
     service_unit: &'static str,
 ) -> UpdaterRunHistory {
-    newest_completed_update(updater_program, &newest_unit_records(service_unit).await)
+    update_run_from_journal(updater_program, newest_unit_records(service_unit).await)
 }
 
 #[cfg(test)]
@@ -151,6 +177,25 @@ mod service_run_journal_tests {
         recorded_event(UnitJournalEvent::UnrecognizedMessage {
             message_id: String::new(),
         })
+    }
+
+    #[test]
+    fn an_unreadable_journal_is_not_reported_as_no_completed_run() {
+        let read_failure = UnitJournalReadFailure::JournalReadFailed {
+            failure_kind: std::io::ErrorKind::PermissionDenied,
+        };
+        assert_eq!(
+            scan_run_from_journal(Err(read_failure)),
+            ScanRunHistory::JournalUnreadable(read_failure)
+        );
+        assert_eq!(
+            update_run_from_journal(SignatureUpdaterProgram::Freshclam, Err(read_failure)),
+            UpdaterRunHistory::JournalUnreadable(read_failure)
+        );
+        assert_eq!(
+            scan_run_from_journal(Ok(Vec::new())),
+            ScanRunHistory::NoCompletedScan
+        );
     }
 
     #[test]

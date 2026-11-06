@@ -281,7 +281,7 @@ pub async fn load_displayed_detections(
             .collect::<Vec<_>>()
     })
     .await
-    .unwrap_or_default();
+    .map_err(ActivityHistoryFailure::DetectedFileCheckInterrupted)?;
     Ok(displayed_detections)
 }
 

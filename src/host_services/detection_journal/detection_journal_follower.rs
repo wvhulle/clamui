@@ -10,7 +10,7 @@ use crate::host_services::{
         JournalDetectionRecord, ON_ACCESS_SERVICE_UNITS, SCHEDULED_SCAN_SERVICE_UNITS,
         detection_record_from_fields,
     },
-    systemd_journal::unit_journal_reader::{journal_field_text, open_system_journal},
+    systemd_journal::unit_journal_reader::{journal_field_value, open_system_journal},
 };
 
 const FOLLOWER_THREAD_NAME: &str = "detection-journal";
@@ -66,15 +66,19 @@ fn journal_has_readable_files(journal: &Journal) -> systemd::Result<bool> {
 fn detection_at_position(
     journal: &mut Journal,
 ) -> Result<Option<JournalDetectionRecord>, JournalFollowFailure> {
-    let systemd_unit = journal_field_text(journal, SYSTEMD_UNIT_FIELD)?;
+    let Some(systemd_unit) = journal_field_value(journal, SYSTEMD_UNIT_FIELD)? else {
+        return Ok(None);
+    };
     let Ok(observed_at) = Timestamp::try_from(journal.timestamp()?) else {
         return Err(JournalFollowFailure::EntryTimestampInvalid);
     };
     let message_field = journal.get_data(MESSAGE_FIELD)?;
-    let message_bytes = message_field
+    let Some(message_bytes) = message_field
         .as_ref()
         .and_then(|entry_field| entry_field.value())
-        .unwrap_or_default();
+    else {
+        return Ok(None);
+    };
     Ok(detection_record_from_fields(
         &systemd_unit,
         message_bytes,

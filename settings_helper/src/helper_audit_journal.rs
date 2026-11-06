@@ -249,10 +249,8 @@ mod helper_audit_journal_tests {
             protection_reduction: ProtectionReduction::BlockingTurnedOff,
         });
         assert_eq!(
-            field_value(&recorded_fields, PROTECTION_REDUCTION_FIELD)
-                .as_deref()
-                .and_then(ProtectionReduction::from_journal_field_value),
-            Some(ProtectionReduction::BlockingTurnedOff)
+            field_value(&recorded_fields, PROTECTION_REDUCTION_FIELD).as_deref(),
+            Some(ProtectionReduction::BlockingTurnedOff.journal_field_value())
         );
         assert_eq!(
             field_value(&recorded_fields, "LAZARET_REQUESTER_UID").as_deref(),

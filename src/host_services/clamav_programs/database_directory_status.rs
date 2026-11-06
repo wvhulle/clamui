@@ -1,8 +1,10 @@
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
     time::SystemTime,
 };
+
+use tokio::task::JoinError;
 
 use crate::host_services::{
     desktop::flatpak_sandbox::readable_host_path,
@@ -19,6 +21,28 @@ const DEFAULT_DATABASE_DIRECTORY: &str = "/var/lib/clamav";
 const FRESHCLAM_SERVICE_UNITS: [&str; 2] = ["clamav-freshclam", "freshclam"];
 const SECONDS_PER_DAY: u64 = 86_400;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum DatabaseFolderReadFailure {
+    #[error("the signature folder could not be read: {failure_kind}")]
+    FolderUnreadable { failure_kind: io::ErrorKind },
+    #[error("the task reading the signature folder stopped before it finished")]
+    ReadingTaskInterrupted,
+}
+
+impl From<io::Error> for DatabaseFolderReadFailure {
+    fn from(read_failure: io::Error) -> Self {
+        Self::FolderUnreadable {
+            failure_kind: read_failure.kind(),
+        }
+    }
+}
+
+impl From<JoinError> for DatabaseFolderReadFailure {
+    fn from(_interrupted_task: JoinError) -> Self {
+        Self::ReadingTaskInterrupted
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DatabaseDirectoryStatus {
     DefinitionsAvailable {
@@ -28,6 +52,10 @@ pub enum DatabaseDirectoryStatus {
     },
     DefinitionsMissing {
         database_directory: PathBuf,
+    },
+    DirectoryUnreadable {
+        database_directory: PathBuf,
+        read_failure: DatabaseFolderReadFailure,
     },
 }
 
@@ -67,23 +95,33 @@ pub fn inspect_database_directory(
     database_directory: &Path,
     current_time: SystemTime,
 ) -> DatabaseDirectoryStatus {
-    let definition_ages = fs::read_dir(database_directory)
-        .map(|directory_entries| {
-            directory_entries
-                .filter_map(Result::ok)
-                .filter(|directory_entry| is_definition_file(&directory_entry.path()))
-                .filter_map(|directory_entry| directory_entry.metadata().ok())
-                .filter_map(|file_metadata| file_metadata.modified().ok())
-                .map(|modified_time| {
-                    current_time
-                        .duration_since(modified_time)
-                        .unwrap_or_default()
-                        .as_secs()
-                        / SECONDS_PER_DAY
-                })
-                .collect::<Vec<_>>()
+    let directory_entries = match fs::read_dir(database_directory) {
+        Ok(directory_entries) => directory_entries,
+        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => {
+            return DatabaseDirectoryStatus::DefinitionsMissing {
+                database_directory: database_directory.to_path_buf(),
+            };
+        }
+        Err(read_failure) => {
+            return DatabaseDirectoryStatus::DirectoryUnreadable {
+                database_directory: database_directory.to_path_buf(),
+                read_failure: read_failure.into(),
+            };
+        }
+    };
+    let definition_ages = directory_entries
+        .filter_map(Result::ok)
+        .filter(|directory_entry| is_definition_file(&directory_entry.path()))
+        .filter_map(|directory_entry| directory_entry.metadata().ok())
+        .filter_map(|file_metadata| file_metadata.modified().ok())
+        .map(|modified_time| {
+            current_time
+                .duration_since(modified_time)
+                .unwrap_or_default()
+                .as_secs()
+                / SECONDS_PER_DAY
         })
-        .unwrap_or_default();
+        .collect::<Vec<_>>();
     match definition_ages.iter().min() {
         Some(newest_definition_age_days) => DatabaseDirectoryStatus::DefinitionsAvailable {
             database_directory: database_directory.to_path_buf(),
@@ -197,6 +235,20 @@ mod database_directory_status_tests {
         assert!(matches!(
             inspect_database_directory(Path::new("/nonexistent/clamav"), SystemTime::now()),
             DatabaseDirectoryStatus::DefinitionsMissing { .. }
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_directory_is_not_reported_as_missing_definitions() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let not_a_directory = temporary_root.path().join("daily.cvd");
+        fs::write(&not_a_directory, b"fixture").expect("fixture file");
+        assert!(matches!(
+            inspect_database_directory(&not_a_directory, SystemTime::now()),
+            DatabaseDirectoryStatus::DirectoryUnreadable {
+                read_failure: DatabaseFolderReadFailure::FolderUnreadable { .. },
+                ..
+            }
         ));
     }
 
