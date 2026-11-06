@@ -4,6 +4,12 @@ A native GTK desktop frontend for host-installed ClamAV, built with Relm4 and li
 
 This is a hard fork of [ClamUI](https://github.com/linx-systems/clamui). ClamAV itself is not bundled: `clamdscan` or `clamscan` must be on `PATH`.
 
+<img src="https://codeberg.org/wvhulle/clamui/raw/branch/screenshots/scan.png" width="800" alt="The Scan page, with a drop zone for files and folders above the scan options">
+
+<img src="https://codeberg.org/wvhulle/clamui/raw/branch/screenshots/results-before-quarantine.png" width="800" alt="Scan results showing two threats found, with a button to quarantine both">
+
+<img src="https://codeberg.org/wvhulle/clamui/raw/branch/screenshots/protection.png" width="800" alt="The Protection page, summarizing signatures, the daemon, on-access blocking and scheduled scans">
+
 ## NixOS and Home Manager
 
 The flake exports `nixosModules.default` and `homeManagerModules.default`. Either one runs ClamUI in the background, so detections raise alerts. Enable one per user. Neither configures ClamAV itself.
@@ -38,6 +44,8 @@ nix run path:.
 nix build path:.#screenshots
 nix run path:.#render-screenshots -- dist/screenshots
 ```
+
+Screenshots are rendered in a headless sway session. `xtask/src/page_screenshots.rs` lists each scenario as typed steps that find widgets by accessibility role and name, such as `WidgetTarget::button("Start Scan")`, so layout changes don't break them. To see the names on a page, run `nix build path:.#render-screenshots` and then `result/bin/list-widgets -- --page=scan`. On every push to `main`, CI renders them and publishes them to the `screenshots` branch.
 
 ## License
 

@@ -1,0 +1,32 @@
+when:
+  - repo: wvhulle/clamui
+    event: [push, manual]
+    branch: main
+
+labels:
+  host: ryzen
+
+variables:
+  - &nix_environment
+    XDG_CACHE_HOME: /woodpecker/nix-cache
+    NIX_CONFIG: |
+      experimental-features = nix-command flakes
+      extra-substituters = https://wvhulle.cachix.org
+      extra-trusted-public-keys = wvhulle.cachix.org-1:heXx8DZMiRsKUx6l1TxNoF+Nmtmz66QEdsonQzc1ir0=
+
+steps:
+  - name: render-screenshots
+    image: nixos/nix:latest
+    environment: *nix_environment
+    commands:
+      - nix build --quiet --print-build-logs .#screenshots
+      - cp -r --no-preserve=mode result screenshots
+
+  - name: publish-screenshots
+    image: nixos/nix:latest
+    environment:
+      <<: *nix_environment
+      CODEBERG_TOKEN:
+        from_secret: bot_token
+    commands:
+      - nix run --quiet .#publish-screenshots -- screenshots
