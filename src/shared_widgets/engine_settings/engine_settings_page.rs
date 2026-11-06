@@ -30,8 +30,8 @@ use crate::{
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
         settings_helper::{
             live_settings_client::{
-                LiveChangeOutcome, LiveTuning, OverrideSetting, apply_live_change,
-                change_confirmation_text, change_effect, read_live_tuning,
+                LiveChangeFailure, LiveChangeOutcome, LiveTuning, OverrideSetting,
+                apply_live_change, change_confirmation_text, change_effect, read_live_tuning,
             },
             protection_change_rules::ProtectionReduction,
         },
@@ -279,9 +279,27 @@ fn describe_live_change_outcome(change_outcome: &LiveChangeOutcome) -> String {
             "ClamAV didn't come back healthy with that value, so the previous settings were \
              restored.",
         ),
-        LiveChangeOutcome::NothingChanged { failure_text } => {
-            gettext("The change was not made: {error}")
-                .replace("{error}", &sanitize_scanner_line(failure_text))
+        LiveChangeOutcome::NothingChanged(change_failure) => {
+            live_change_failure_text(change_failure)
+        }
+    }
+}
+
+fn live_change_failure_text(change_failure: &LiveChangeFailure) -> String {
+    let change_not_made = |failure_reason: &str| {
+        gettext("The change was not made: {error}")
+            .replace("{error}", &sanitize_scanner_line(failure_reason))
+    };
+    match change_failure {
+        LiveChangeFailure::AuthorizationRefused => gettext("Nothing changed without your password"),
+        LiveChangeFailure::HelperMissing => gettext(
+            "This installation has no settings helper, so ClamAV's settings can't be changed from \
+             Lazaret",
+        ),
+        LiveChangeFailure::UnknownHelperAnswer { helper_answer } => change_not_made(helper_answer),
+        LiveChangeFailure::ReportedByHelper { helper_message } => change_not_made(helper_message),
+        LiveChangeFailure::HelperCallFailed(call_failure) => {
+            change_not_made(&call_failure.to_string())
         }
     }
 }

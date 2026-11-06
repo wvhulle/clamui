@@ -447,18 +447,30 @@ fn serve_settings_helper() -> zbus::Result<()> {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+enum HelperModeFailure {
+    #[error("the settings helper could not serve on the system bus: {0}")]
+    ServingFailed(#[from] zbus::Error),
+    #[error("the merged clamd configuration could not be written: {0}")]
+    MergeFailed(#[from] std::io::Error),
+    #[error("usage: lazaret-settings-helper serve|merge")]
+    UnknownMode,
+}
+
+fn run_requested_mode(requested_mode: &str) -> Result<(), HelperModeFailure> {
+    match requested_mode {
+        "serve" => Ok(serve_settings_helper()?),
+        "merge" => Ok(write_merged_config(&SettingsPaths::on_this_host())?),
+        _unknown_mode => Err(HelperModeFailure::UnknownMode),
+    }
+}
+
 fn main() -> ExitCode {
     let requested_mode = std::env::args().nth(1).unwrap_or_default();
-    let mode_outcome = match requested_mode.as_str() {
-        "serve" => serve_settings_helper().map_err(|bus_failure| bus_failure.to_string()),
-        "merge" => write_merged_config(&SettingsPaths::on_this_host())
-            .map_err(|merge_failure| merge_failure.to_string()),
-        _unknown_mode => Err("usage: lazaret-settings-helper serve|merge".to_owned()),
-    };
-    match mode_outcome {
+    match run_requested_mode(&requested_mode) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(failure_text) => {
-            eprintln!("{failure_text}");
+        Err(mode_failure) => {
+            eprintln!("{mode_failure}");
             ExitCode::FAILURE
         }
     }

@@ -52,13 +52,23 @@ pub enum TrustChoice {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TrustOutcome {
     TrustApplied,
     AppliedReloadPending,
     AuthorizationRefused,
     HelperMissing,
-    TrustFailed { failure_text: String },
+    TrustFailed(TrustChangeFailure),
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum TrustChangeFailure {
+    #[error("the settings helper answered with an unknown outcome: {helper_answer}")]
+    UnknownHelperAnswer { helper_answer: String },
+    #[error("the settings helper reported: {helper_message}")]
+    ReportedByHelper { helper_message: String },
+    #[error(transparent)]
+    HelperCallFailed(#[from] zbus::Error),
 }
 
 pub fn fingerprint_file(file_path: &Path) -> io::Result<FileFingerprint> {
@@ -96,9 +106,9 @@ fn outcome_of_answer(helper_answer: zbus::Result<String>) -> TrustOutcome {
         Ok(answer_text) if answer_text == RELOAD_PENDING_ANSWER => {
             TrustOutcome::AppliedReloadPending
         }
-        Ok(other_answer) => TrustOutcome::TrustFailed {
-            failure_text: other_answer,
-        },
+        Ok(other_answer) => TrustOutcome::TrustFailed(TrustChangeFailure::UnknownHelperAnswer {
+            helper_answer: other_answer,
+        }),
         Err(zbus::Error::MethodError(error_name, _error_text, _reply))
             if error_name.as_str() == SERVICE_UNKNOWN_ERROR =>
         {
@@ -109,14 +119,10 @@ fn outcome_of_answer(helper_answer: zbus::Result<String>) -> TrustOutcome {
         {
             TrustOutcome::AuthorizationRefused
         }
-        Err(zbus::Error::MethodError(_error_name, Some(error_text), _reply)) => {
-            TrustOutcome::TrustFailed {
-                failure_text: error_text,
-            }
+        Err(zbus::Error::MethodError(_error_name, Some(helper_message), _reply)) => {
+            TrustOutcome::TrustFailed(TrustChangeFailure::ReportedByHelper { helper_message })
         }
-        Err(call_failure) => TrustOutcome::TrustFailed {
-            failure_text: call_failure.to_string(),
-        },
+        Err(call_failure) => TrustOutcome::TrustFailed(call_failure.into()),
     }
 }
 
@@ -160,8 +166,22 @@ pub fn trust_outcome_text(trust_outcome: &TrustOutcome) -> String {
             "This installation has no settings helper, so ClamAV's trust list can't be changed \
              from Lazaret",
         ),
-        TrustOutcome::TrustFailed { failure_text } => gettext("Nothing changed: {error}")
-            .replace("{error}", &sanitize_scanner_line(failure_text)),
+        TrustOutcome::TrustFailed(change_failure) => gettext("Nothing changed: {error}")
+            .replace("{error}", &trust_change_failure_text(change_failure)),
+    }
+}
+
+fn trust_change_failure_text(change_failure: &TrustChangeFailure) -> String {
+    match change_failure {
+        TrustChangeFailure::UnknownHelperAnswer { helper_answer } => {
+            sanitize_scanner_line(helper_answer)
+        }
+        TrustChangeFailure::ReportedByHelper { helper_message } => {
+            sanitize_scanner_line(helper_message)
+        }
+        TrustChangeFailure::HelperCallFailed(call_failure) => {
+            sanitize_scanner_line(&call_failure.to_string())
+        }
     }
 }
 

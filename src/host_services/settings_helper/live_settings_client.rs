@@ -20,6 +20,8 @@ trait SettingsHelper {
 
 const APPLIED_ANSWER: &str = "applied";
 const ROLLED_BACK_ANSWER: &str = "rolled-back";
+const SERVICE_UNKNOWN_ERROR: &str = "org.freedesktop.DBus.Error.ServiceUnknown";
+const ACCESS_DENIED_ERROR: &str = "org.freedesktop.DBus.Error.AccessDenied";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OverrideSetting {
@@ -36,11 +38,46 @@ pub enum LiveTuning {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LiveChangeOutcome {
     SettingsApplied,
     PreviousRestored,
-    NothingChanged { failure_text: String },
+    NothingChanged(LiveChangeFailure),
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum LiveChangeFailure {
+    #[error("the settings helper answered with an unknown outcome: {helper_answer}")]
+    UnknownHelperAnswer { helper_answer: String },
+    #[error("administrator authorization was not given")]
+    AuthorizationRefused,
+    #[error("the settings helper is not installed")]
+    HelperMissing,
+    #[error("the settings helper reported: {helper_message}")]
+    ReportedByHelper { helper_message: String },
+    #[error(transparent)]
+    HelperCallFailed(zbus::Error),
+}
+
+impl From<zbus::Error> for LiveChangeFailure {
+    fn from(call_failure: zbus::Error) -> Self {
+        match call_failure {
+            zbus::Error::MethodError(error_name, _error_message, _reply)
+                if error_name.as_str() == SERVICE_UNKNOWN_ERROR =>
+            {
+                Self::HelperMissing
+            }
+            zbus::Error::MethodError(error_name, _error_message, _reply)
+                if error_name.as_str() == ACCESS_DENIED_ERROR =>
+            {
+                Self::AuthorizationRefused
+            }
+            zbus::Error::MethodError(_error_name, Some(helper_message), _reply) => {
+                Self::ReportedByHelper { helper_message }
+            }
+            other_call_failure => Self::HelperCallFailed(other_call_failure),
+        }
+    }
 }
 
 async fn helper_proxy() -> zbus::Result<SettingsHelperProxy<'static>> {
@@ -82,9 +119,16 @@ pub fn outcome_from_helper_answer(helper_answer: &str) -> LiveChangeOutcome {
     match helper_answer {
         APPLIED_ANSWER => LiveChangeOutcome::SettingsApplied,
         ROLLED_BACK_ANSWER => LiveChangeOutcome::PreviousRestored,
-        other_answer => LiveChangeOutcome::NothingChanged {
-            failure_text: other_answer.to_owned(),
-        },
+        other_answer => LiveChangeOutcome::NothingChanged(LiveChangeFailure::UnknownHelperAnswer {
+            helper_answer: other_answer.to_owned(),
+        }),
+    }
+}
+
+fn outcome_of_helper_call(helper_answer: zbus::Result<String>) -> LiveChangeOutcome {
+    match helper_answer {
+        Ok(helper_answer) => outcome_from_helper_answer(&helper_answer),
+        Err(call_failure) => LiveChangeOutcome::NothingChanged(call_failure.into()),
     }
 }
 
@@ -97,12 +141,7 @@ pub async fn apply_live_change(
         .map(|setting_value| (setting_key.as_str(), setting_value.as_str()))
         .collect::<Vec<_>>();
     let helper_answer = async { helper_proxy().await?.apply_changes(&changes).await };
-    match helper_answer.await {
-        Ok(helper_answer) => outcome_from_helper_answer(&helper_answer),
-        Err(call_failure) => LiveChangeOutcome::NothingChanged {
-            failure_text: call_failure.to_string(),
-        },
-    }
+    outcome_of_helper_call(helper_answer.await)
 }
 
 pub fn change_effect(
@@ -234,10 +273,54 @@ mod live_settings_client_tests {
             outcome_from_helper_answer("rolled-back"),
             LiveChangeOutcome::PreviousRestored
         );
-        assert!(matches!(
+        assert_eq!(
             outcome_from_helper_answer("surprise"),
-            LiveChangeOutcome::NothingChanged { .. }
-        ));
+            LiveChangeOutcome::NothingChanged(LiveChangeFailure::UnknownHelperAnswer {
+                helper_answer: "surprise".to_owned(),
+            })
+        );
+    }
+
+    fn helper_method_error(error_name: &str, error_message: &str) -> zbus::Error {
+        let request_message = zbus::message::Message::method_call("/", "ApplyChanges")
+            .expect("method call")
+            .destination("page.codeberg.wvhulle.Lazaret.SettingsHelper")
+            .expect("destination")
+            .build(&())
+            .expect("request message");
+        let error_reply = zbus::message::Message::error(&request_message.header(), error_name)
+            .expect("error reply")
+            .build(&(error_message,))
+            .expect("error message");
+        zbus::Error::from(error_reply)
+    }
+
+    #[test]
+    fn helper_errors_are_classified_by_their_dbus_name() {
+        assert_eq!(
+            outcome_of_helper_call(Err(helper_method_error(
+                ACCESS_DENIED_ERROR,
+                "Failed with NotAuthorized somewhere"
+            ))),
+            LiveChangeOutcome::NothingChanged(LiveChangeFailure::AuthorizationRefused)
+        );
+        assert_eq!(
+            outcome_of_helper_call(Err(helper_method_error(
+                SERVICE_UNKNOWN_ERROR,
+                "no such name"
+            ))),
+            LiveChangeOutcome::NothingChanged(LiveChangeFailure::HelperMissing)
+        );
+        assert_eq!(
+            outcome_of_helper_call(Err(helper_method_error(
+                "org.freedesktop.DBus.Error.Failed",
+                "AccessDenied: the configuration files could not be updated"
+            ))),
+            LiveChangeOutcome::NothingChanged(LiveChangeFailure::ReportedByHelper {
+                helper_message: "AccessDenied: the configuration files could not be updated"
+                    .to_owned(),
+            })
+        );
     }
 
     #[test]

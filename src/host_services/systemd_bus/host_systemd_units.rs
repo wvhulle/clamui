@@ -19,6 +19,11 @@ const START_UNIT_METHOD: &str = "StartUnit";
 const ALREADY_SUBSCRIBED_FAILURE: &str = "org.freedesktop.systemd1.AlreadySubscribed";
 const KILL_UNIT_METHOD: &str = "KillUnit";
 const KILL_EVERY_PROCESS: &str = "all";
+const AUTHORIZATION_REFUSAL_ERRORS: [&str; 3] = [
+    "org.freedesktop.DBus.Error.AccessDenied",
+    "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired",
+    "org.freedesktop.PolicyKit1.Error.NotAuthorized",
+];
 
 static SYSTEM_BUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
 static USER_BUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
@@ -320,12 +325,22 @@ pub async fn timer_unit_snapshot(timer_unit: &str) -> TimerUnitSnapshot {
         .unwrap_or_else(TimerUnitSnapshot::SystemdUnreachable)
 }
 
+fn authorization_was_refused(start_failure: &zbus::Error) -> bool {
+    match start_failure {
+        zbus::Error::MethodError(error_name, _error_message, _reply) => {
+            AUTHORIZATION_REFUSAL_ERRORS.contains(&error_name.as_str())
+        }
+        zbus::Error::FDO(fdo_failure) => matches!(
+            **fdo_failure,
+            zbus::fdo::Error::AccessDenied(_)
+                | zbus::fdo::Error::InteractiveAuthorizationRequired(_)
+        ),
+        _other_bus_failure => false,
+    }
+}
+
 fn start_failure_outcome(start_failure: zbus::Error) -> UnitStartOutcome {
-    let failure_description = start_failure.to_string();
-    if failure_description.contains("AccessDenied")
-        || failure_description.contains("InteractiveAuthorizationRequired")
-        || failure_description.contains("NotAuthorized")
-    {
+    if authorization_was_refused(&start_failure) {
         UnitStartOutcome::AuthorizationRefused
     } else {
         UnitStartOutcome::BusFailure(SystemdBusFailure::BusCallFailed(start_failure))
@@ -510,12 +525,32 @@ mod host_systemd_units_tests {
         assert_eq!(parse_unit_state("", ""), UnitState::SystemdUnavailable);
     }
 
+    fn method_error_reply(error_name: &str, error_message: &str) -> zbus::Error {
+        let request_message = zbus::message::Message::method_call("/", START_UNIT_METHOD)
+            .expect("method call")
+            .destination("org.freedesktop.systemd1")
+            .expect("destination")
+            .build(&())
+            .expect("request message");
+        let error_reply = zbus::message::Message::error(&request_message.header(), error_name)
+            .expect("error reply")
+            .build(&(error_message,))
+            .expect("error message");
+        zbus::Error::from(error_reply)
+    }
+
     #[test]
     fn refused_authorization_is_told_apart_from_other_bus_failures() {
+        for refusal_name in AUTHORIZATION_REFUSAL_ERRORS {
+            assert_eq!(
+                start_failure_outcome(method_error_reply(refusal_name, "refused")),
+                UnitStartOutcome::AuthorizationRefused
+            );
+        }
         assert_eq!(
-            start_failure_outcome(zbus::Error::Failure(
-                "org.freedesktop.DBus.Error.AccessDenied".to_owned()
-            )),
+            start_failure_outcome(zbus::Error::FDO(Box::new(zbus::fdo::Error::AccessDenied(
+                "refused".to_owned()
+            )))),
             UnitStartOutcome::AuthorizationRefused
         );
         assert_eq!(
@@ -524,6 +559,18 @@ mod host_systemd_units_tests {
                 zbus::Error::InvalidReply
             ))
         );
+    }
+
+    #[test]
+    fn authorization_words_in_an_error_message_do_not_count_as_refusal() {
+        let unrelated_failure = method_error_reply(
+            "org.freedesktop.systemd1.NoSuchUnit",
+            "AccessDenied NotAuthorized InteractiveAuthorizationRequired",
+        );
+        assert!(!authorization_was_refused(&unrelated_failure));
+        assert!(!authorization_was_refused(&zbus::Error::Failure(
+            "org.freedesktop.DBus.Error.AccessDenied".to_owned()
+        )));
     }
 
     #[test]

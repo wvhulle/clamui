@@ -91,7 +91,7 @@ pub enum PreferencesDialogInput {
 
 #[derive(Debug)]
 pub enum PreferencesDialogCommand {
-    AutostartRequestFinished(Result<(), String>),
+    AutostartRequestFinished(zbus::Result<()>),
 }
 
 fn close_action_labels() -> gtk::StringList {
@@ -276,9 +276,7 @@ impl Component for PreferencesDialog {
                 if running_in_flatpak() {
                     sender.oneshot_command(async move {
                         PreferencesDialogCommand::AutostartRequestFinished(
-                            request_background_autostart(start_in_background)
-                                .await
-                                .map_err(|portal_failure| portal_failure.to_string()),
+                            request_background_autostart(start_in_background).await,
                         )
                     });
                 }
