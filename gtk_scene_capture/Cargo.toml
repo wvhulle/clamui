@@ -1,0 +1,14 @@
+[package]
+name = "gtk_scene_capture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+atspi = { version = "0.30", default-features = false, features = ["proxies", "connection", "zbus", "tokio"] }
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1.54.1", features = ["rt", "macros", "time"] }
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }

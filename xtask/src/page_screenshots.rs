@@ -2,206 +2,196 @@ use std::{
     ffi::OsString,
     fs,
     path::Path,
-    process::{Command, Stdio},
+    process::{Child, Stdio},
     thread,
     time::Duration,
 };
 
+use gtk_scene_capture::{
+    accessible_widget_lookup::{AccessibleTree, WidgetTarget},
+    headless_sway_session::HeadlessSwaySession,
+    scene_driver::{SceneDriver, UserInteraction},
+    virtual_pointer_input::ScreenSize,
+};
+
 use crate::{
     fixture_systemd_service::serve_fixture_systemd,
-    headless_sway_session::HeadlessSwaySession,
     screenshot_fixtures::{ScreenshotFixtures, prepare_screenshot_fixtures},
     task_failure::TaskFailure,
-    virtual_pointer_input::{ScreenPosition, ScreenSize, VirtualPointerInput},
 };
 
 const PAGE_SETTLE_DURATION: Duration = Duration::from_secs(4);
-const CLICK_SETTLE_DURATION: Duration = Duration::from_secs(2);
-const SCREEN_SIZE: ScreenSize = ScreenSize {
+const APPLICATION_EXIT_DURATION: Duration = Duration::from_millis(500);
+pub const SCREEN_SIZE: ScreenSize = ScreenSize {
     logical_width: 900,
     logical_height: 700,
 };
-const POINTER_REST_POSITION: ScreenPosition = ScreenPosition {
-    logical_x: 450,
-    logical_y: 22,
-};
-const APPLICATION_EXIT_DURATION: Duration = Duration::from_millis(500);
 
-struct PointerClick {
-    click_horizontal: u32,
-    click_vertical: u32,
-    screenshot_name: &'static str,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScanFixtureUse {
+    IdlePage,
+    ScansFixtureFolder,
 }
 
-impl PointerClick {
-    const fn at(click_horizontal: u32, click_vertical: u32, screenshot_name: &'static str) -> Self {
-        Self {
-            click_horizontal,
-            click_vertical,
-            screenshot_name,
-        }
+pub struct PageScenario {
+    pub page_argument: &'static str,
+    pub scan_fixture_use: ScanFixtureUse,
+    pub user_interactions: Vec<UserInteraction>,
+}
+
+fn capture(screenshot_name: &'static str) -> UserInteraction {
+    UserInteraction::CaptureScreen { screenshot_name }
+}
+
+fn idle_page_capture(page_argument: &'static str, screenshot_name: &'static str) -> PageScenario {
+    PageScenario {
+        page_argument,
+        scan_fixture_use: ScanFixtureUse::IdlePage,
+        user_interactions: vec![capture(screenshot_name)],
     }
 }
 
-struct PageCapture {
-    screenshot_name: &'static str,
-    page_argument: &'static str,
-    scans_fixture_directory: bool,
-    pointer_clicks: &'static [PointerClick],
+fn click(widget_target: WidgetTarget) -> UserInteraction {
+    UserInteraction::ClickWidget(widget_target)
 }
 
-const LOG_ENTRY_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 170, "logs-entry-selected")];
-const PROFILE_MANAGER_CLICKS: [PointerClick; 1] = [PointerClick::at(814, 136, "profile-manager")];
-const SCAN_SETTINGS_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 684, "scan-exclusions")];
-const PREFERENCE_TAB_CLICKS: [PointerClick; 1] =
-    [PointerClick::at(531, 42, "preferences-online-lookups")];
-const QUARANTINE_ALL_CLICKS: [PointerClick; 2] = [
-    PointerClick::at(492, 237, "results-quarantine-confirmation"),
-    PointerClick::at(520, 395, "results-quarantined"),
-];
+fn wait_for(widget_target: WidgetTarget) -> UserInteraction {
+    UserInteraction::WaitForWidget(widget_target)
+}
 
-const DETECTION_INCIDENT_CLICKS: [PointerClick; 1] =
-    [PointerClick::at(548, 170, "detection-incident")];
+fn page_scenarios() -> Vec<PageScenario> {
+    vec![
+        PageScenario {
+            page_argument: "--page=scan",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            user_interactions: vec![
+                capture("scan"),
+                click(WidgetTarget::button("Manage Profiles")),
+                capture("profile-manager"),
+            ],
+        },
+        PageScenario {
+            page_argument: "--page=scan",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            user_interactions: vec![
+                click(WidgetTarget::list_item("Exclusions")),
+                capture("scan-exclusions"),
+            ],
+        },
+        PageScenario {
+            page_argument: "--page=scan",
+            scan_fixture_use: ScanFixtureUse::ScansFixtureFolder,
+            user_interactions: vec![
+                wait_for(WidgetTarget::button("New Scan")),
+                capture("scan-result"),
+            ],
+        },
+        idle_page_capture("--page=database", "database"),
+        idle_page_capture("--page=quarantine", "quarantine"),
+        PageScenario {
+            page_argument: "--page=logs",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            user_interactions: vec![
+                capture("logs"),
+                click(WidgetTarget::list_item("Found 2 threats")),
+                capture("logs-entry-selected"),
+            ],
+        },
+        idle_page_capture("--page=protection", "protection"),
+        PageScenario {
+            page_argument: "--page=detections",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            user_interactions: vec![
+                capture("detections"),
+                click(WidgetTarget::list_item("invoice.pdf.exe")),
+                capture("detection-incident"),
+            ],
+        },
+        PageScenario {
+            page_argument: "--page=preferences",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            user_interactions: vec![
+                capture("preferences"),
+                click(WidgetTarget::page_tab("Online Lookups")),
+                capture("preferences-online-lookups"),
+            ],
+        },
+        PageScenario {
+            page_argument: "--page=scan",
+            scan_fixture_use: ScanFixtureUse::ScansFixtureFolder,
+            user_interactions: vec![
+                wait_for(WidgetTarget::button("New Scan")),
+                capture("results-before-quarantine"),
+                click(WidgetTarget::button("Quarantine 2 Threats")),
+                capture("results-quarantine-confirmation"),
+                click(
+                    WidgetTarget::button("Quarantine")
+                        .inside(WidgetTarget::alert("Move to Quarantine?")),
+                ),
+                capture("results-quarantined"),
+            ],
+        },
+    ]
+}
 
-const PAGE_CAPTURES: [PageCapture; 9] = [
-    PageCapture {
-        pointer_clicks: &PROFILE_MANAGER_CLICKS,
-        ..PageCapture::idle_page("scan", "--page=scan")
-    },
-    PageCapture {
-        pointer_clicks: &SCAN_SETTINGS_CLICKS,
-        ..PageCapture::idle_page("scan-settings", "--page=scan")
-    },
-    PageCapture {
-        screenshot_name: "scan-result",
-        page_argument: "--page=scan",
-        scans_fixture_directory: true,
-        pointer_clicks: &[],
-    },
-    PageCapture::idle_page("database", "--page=database"),
-    PageCapture::idle_page("quarantine", "--page=quarantine"),
-    PageCapture {
-        pointer_clicks: &LOG_ENTRY_CLICKS,
-        ..PageCapture::idle_page("logs", "--page=logs")
-    },
-    PageCapture::idle_page("protection", "--page=protection"),
-    PageCapture {
-        pointer_clicks: &DETECTION_INCIDENT_CLICKS,
-        ..PageCapture::idle_page("detections", "--page=detections")
-    },
-    PageCapture {
-        pointer_clicks: &PREFERENCE_TAB_CLICKS,
-        ..PageCapture::idle_page("preferences", "--page=preferences")
-    },
-];
-const QUARANTINE_ALL_CAPTURE: PageCapture = PageCapture {
-    screenshot_name: "results-before-quarantine",
-    page_argument: "--page=scan",
-    scans_fixture_directory: true,
-    pointer_clicks: &QUARANTINE_ALL_CLICKS,
-};
+fn application_arguments(
+    page_argument: &str,
+    scan_fixture_use: ScanFixtureUse,
+    screenshot_fixtures: &ScreenshotFixtures,
+) -> Vec<OsString> {
+    let scan_target = (scan_fixture_use == ScanFixtureUse::ScansFixtureFolder)
+        .then(|| screenshot_fixtures.scan_directory.clone().into_os_string());
+    std::iter::once(OsString::from(page_argument))
+        .chain(scan_target)
+        .collect()
+}
 
-impl PageCapture {
-    const fn idle_page(screenshot_name: &'static str, page_argument: &'static str) -> Self {
-        Self {
-            screenshot_name,
+fn launch_application(
+    headless_session: &HeadlessSwaySession,
+    screenshot_fixtures: &ScreenshotFixtures,
+    page_argument: &str,
+    scan_fixture_use: ScanFixtureUse,
+) -> Result<Child, TaskFailure> {
+    let application_process = headless_session
+        .session_command("clamui")
+        .env("PATH", &screenshot_fixtures.search_path)
+        .args(application_arguments(
             page_argument,
-            scans_fixture_directory: false,
-            pointer_clicks: &[],
-        }
-    }
-
-    fn application_arguments(&self, screenshot_fixtures: &ScreenshotFixtures) -> Vec<OsString> {
-        let scan_target = self
-            .scans_fixture_directory
-            .then(|| screenshot_fixtures.scan_directory.clone().into_os_string());
-        std::iter::once(OsString::from(self.page_argument))
-            .chain(scan_target)
-            .collect()
-    }
-}
-
-fn start_tool(
-    tool_command: &mut Command,
-    tool_name: &'static str,
-) -> Result<std::process::Child, TaskFailure> {
-    tool_command
+            scan_fixture_use,
+            screenshot_fixtures,
+        ))
+        .stdin(Stdio::null())
         .spawn()
         .map_err(|start_failure| TaskFailure::ToolNotStarted {
-            tool_name,
+            tool_name: "clamui",
             start_failure,
-        })
-}
-
-fn run_tool_to_completion(
-    tool_command: &mut Command,
-    tool_name: &'static str,
-) -> Result<(), TaskFailure> {
-    let exit_status = start_tool(tool_command, tool_name)?.wait()?;
-    if exit_status.success() {
-        Ok(())
-    } else {
-        Err(TaskFailure::ToolFailed {
-            tool_name,
-            exit_status,
-        })
-    }
-}
-
-fn take_screenshot(
-    sway_session: &HeadlessSwaySession,
-    output_directory: &Path,
-    screenshot_name: &str,
-) -> Result<(), TaskFailure> {
-    run_tool_to_completion(
-        sway_session
-            .session_command("grim")
-            .arg(output_directory.join(format!("{screenshot_name}.png"))),
-        "grim",
-    )
-}
-
-fn capture_page(
-    sway_session: &HeadlessSwaySession,
-    screenshot_fixtures: &ScreenshotFixtures,
-    output_directory: &Path,
-    page_capture: &PageCapture,
-    pointer_input: &mut VirtualPointerInput,
-) -> Result<(), TaskFailure> {
-    let mut application_process = start_tool(
-        sway_session
-            .session_command("clamui")
-            .env("PATH", &screenshot_fixtures.search_path)
-            .args(page_capture.application_arguments(screenshot_fixtures))
-            .stdin(Stdio::null()),
-        "clamui",
-    )?;
+        })?;
     thread::sleep(PAGE_SETTLE_DURATION);
-    let capture_outcome =
-        take_screenshot(sway_session, output_directory, page_capture.screenshot_name).and_then(
-            |()| {
-                page_capture
-                    .pointer_clicks
-                    .iter()
-                    .try_for_each(|pointer_click| {
-                        pointer_input.click_at(ScreenPosition {
-                            logical_x: pointer_click.click_horizontal,
-                            logical_y: pointer_click.click_vertical,
-                        })?;
-                        pointer_input.move_to(POINTER_REST_POSITION)?;
-                        thread::sleep(CLICK_SETTLE_DURATION);
-                        take_screenshot(
-                            sway_session,
-                            output_directory,
-                            pointer_click.screenshot_name,
-                        )
-                    })
-            },
-        );
+    Ok(application_process)
+}
+
+fn stop_application(mut application_process: Child) {
     let _already_exited = application_process.kill();
     let _exit_status = application_process.wait();
     thread::sleep(APPLICATION_EXIT_DURATION);
-    capture_outcome
+}
+
+fn run_page_scenario(
+    headless_session: &HeadlessSwaySession,
+    screenshot_fixtures: &ScreenshotFixtures,
+    output_directory: &Path,
+    page_scenario: &PageScenario,
+) -> Result<(), TaskFailure> {
+    let application_process = launch_application(
+        headless_session,
+        screenshot_fixtures,
+        page_scenario.page_argument,
+        page_scenario.scan_fixture_use,
+    )?;
+    let scenario_outcome = SceneDriver::attach(headless_session, output_directory)
+        .and_then(|mut scene_driver| scene_driver.perform_all(&page_scenario.user_interactions));
+    stop_application(application_process);
+    Ok(scenario_outcome?)
 }
 
 fn verify_fixtures_were_quarantined(
@@ -220,29 +210,56 @@ fn verify_fixtures_were_quarantined(
     }
 }
 
+struct PreparedSession {
+    headless_session: HeadlessSwaySession,
+    _fixture_systemd: zbus::blocking::Connection,
+    screenshot_fixtures: ScreenshotFixtures,
+}
+
+fn prepare_session() -> Result<PreparedSession, TaskFailure> {
+    let headless_session = HeadlessSwaySession::start_session(SCREEN_SIZE)?;
+    let fixture_systemd = serve_fixture_systemd(&headless_session.bus_address())?;
+    let screenshot_fixtures = prepare_screenshot_fixtures(headless_session.session_root())?;
+    Ok(PreparedSession {
+        headless_session,
+        _fixture_systemd: fixture_systemd,
+        screenshot_fixtures,
+    })
+}
+
 pub fn render_page_screenshots(output_directory: &Path) -> Result<(), TaskFailure> {
     fs::create_dir_all(output_directory)?;
     let absolute_output = fs::canonicalize(output_directory)?;
-    let sway_session = HeadlessSwaySession::start_session()?;
-    let _fixture_systemd = serve_fixture_systemd(&sway_session.bus_address())?;
-    let screenshot_fixtures = prepare_screenshot_fixtures(sway_session.session_root())?;
-    let mut pointer_input =
-        VirtualPointerInput::connect(&sway_session.wayland_socket_path(), SCREEN_SIZE)?;
-    PAGE_CAPTURES.iter().try_for_each(|page_capture| {
-        capture_page(
-            &sway_session,
-            &screenshot_fixtures,
+    let prepared_session = prepare_session()?;
+    page_scenarios().iter().try_for_each(|page_scenario| {
+        run_page_scenario(
+            &prepared_session.headless_session,
+            &prepared_session.screenshot_fixtures,
             &absolute_output,
-            page_capture,
-            &mut pointer_input,
+            page_scenario,
         )
     })?;
-    capture_page(
-        &sway_session,
-        &screenshot_fixtures,
-        &absolute_output,
-        &QUARANTINE_ALL_CAPTURE,
-        &mut pointer_input,
+    verify_fixtures_were_quarantined(&prepared_session.screenshot_fixtures)
+}
+
+pub fn list_visible_widgets(page_argument: &str) -> Result<Vec<String>, TaskFailure> {
+    let prepared_session = prepare_session()?;
+    let application_process = launch_application(
+        &prepared_session.headless_session,
+        &prepared_session.screenshot_fixtures,
+        page_argument,
+        ScanFixtureUse::IdlePage,
     )?;
-    verify_fixtures_were_quarantined(&screenshot_fixtures)
+    let async_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let widget_descriptions = async_runtime.block_on(async {
+        AccessibleTree::connect_through(&prepared_session.headless_session.bus_address())
+            .await?
+            .describe_visible_widgets()
+            .await
+    });
+    stop_application(application_process);
+    widget_descriptions
+        .map_err(|lookup_failure| TaskFailure::SceneCaptureFailed(lookup_failure.into()))
 }

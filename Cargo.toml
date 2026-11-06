@@ -1,5 +1,5 @@
 [workspace]
-members = ["settings_helper", "xtask"]
+members = ["gtk_scene_capture", "settings_helper", "xtask"]
 
 [package]
 name = "clamui"

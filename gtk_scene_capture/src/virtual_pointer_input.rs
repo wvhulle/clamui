@@ -10,7 +10,7 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1,
 };
 
-use crate::task_failure::TaskFailure;
+use crate::scene_capture_failure::SceneCaptureFailure;
 
 const LEFT_MOUSE_BUTTON: u32 = 0x110;
 const POINTER_INPUT_DELAY: Duration = Duration::from_millis(250);
@@ -53,7 +53,10 @@ pub struct VirtualPointerInput {
 }
 
 impl VirtualPointerInput {
-    pub fn connect(wayland_socket: &Path, screen_size: ScreenSize) -> Result<Self, TaskFailure> {
+    pub fn connect(
+        wayland_socket: &Path,
+        screen_size: ScreenSize,
+    ) -> Result<Self, SceneCaptureFailure> {
         let wayland_connection = Connection::from_socket(UnixStream::connect(wayland_socket)?)?;
         let (compositor_globals, event_queue) =
             registry_queue_init::<VirtualPointerEvents>(&wayland_connection)?;
@@ -76,14 +79,14 @@ impl VirtualPointerInput {
         self.event_time_milliseconds
     }
 
-    fn deliver_pointer_frame(&mut self) -> Result<(), TaskFailure> {
+    fn deliver_pointer_frame(&mut self) -> Result<(), SceneCaptureFailure> {
         self.virtual_pointer.frame();
         self.event_queue.roundtrip(&mut VirtualPointerEvents)?;
         thread::sleep(POINTER_INPUT_DELAY);
         Ok(())
     }
 
-    pub fn move_to(&mut self, position: ScreenPosition) -> Result<(), TaskFailure> {
+    pub fn move_to(&mut self, position: ScreenPosition) -> Result<(), SceneCaptureFailure> {
         let event_time = self.next_event_time();
         self.virtual_pointer.motion_absolute(
             event_time,
@@ -95,14 +98,14 @@ impl VirtualPointerInput {
         self.deliver_pointer_frame()
     }
 
-    fn set_left_button(&mut self, button_state: ButtonState) -> Result<(), TaskFailure> {
+    fn set_left_button(&mut self, button_state: ButtonState) -> Result<(), SceneCaptureFailure> {
         let event_time = self.next_event_time();
         self.virtual_pointer
             .button(event_time, LEFT_MOUSE_BUTTON, button_state);
         self.deliver_pointer_frame()
     }
 
-    pub fn click_at(&mut self, position: ScreenPosition) -> Result<(), TaskFailure> {
+    pub fn click_at(&mut self, position: ScreenPosition) -> Result<(), SceneCaptureFailure> {
         self.move_to(position)?;
         self.set_left_button(ButtonState::Pressed)?;
         self.set_left_button(ButtonState::Released)

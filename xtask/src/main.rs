@@ -1,10 +1,9 @@
 mod fixture_clamav_programs;
 mod fixture_systemd_service;
-mod headless_sway_session;
 mod page_screenshots;
 mod screenshot_fixtures;
+mod screenshot_publishing;
 mod task_failure;
-mod virtual_pointer_input;
 
 use std::{path::PathBuf, process::ExitCode};
 
@@ -12,7 +11,8 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     fixture_clamav_programs::{invoked_as_fixture_program, run_fixture_program},
-    page_screenshots::render_page_screenshots,
+    page_screenshots::{list_visible_widgets, render_page_screenshots},
+    screenshot_publishing::publish_screenshots,
     task_failure::TaskFailure,
 };
 
@@ -28,12 +28,29 @@ enum RepositoryTask {
         #[arg(default_value = "dist/screenshots")]
         output_directory: PathBuf,
     },
+    ListWidgets {
+        #[arg(default_value = "--page=scan")]
+        page_argument: String,
+    },
+    PublishScreenshots {
+        screenshots_directory: PathBuf,
+    },
 }
 
 fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailure> {
     match repository_task {
         RepositoryTask::RenderScreenshots { output_directory } => {
             render_page_screenshots(&output_directory)
+        }
+        RepositoryTask::PublishScreenshots {
+            screenshots_directory,
+        } => publish_screenshots(&screenshots_directory),
+        RepositoryTask::ListWidgets { page_argument } => {
+            list_visible_widgets(&page_argument).map(|widget_descriptions| {
+                widget_descriptions
+                    .iter()
+                    .for_each(|widget_description| println!("{widget_description}"));
+            })
         }
     }
 }

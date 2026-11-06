@@ -28,6 +28,7 @@ let
       ../AUTHORS
       ../Makefile
       ../xtask/assets
+      ../gtk_scene_capture/assets
       ../po
       ../data
     ];
@@ -205,6 +206,7 @@ in
     xtask = xtaskPackage;
     settings-helper = settingsHelperPackage;
     render-screenshots = screenshotRendering.renderScreenshots;
+    publish-screenshots = screenshotRendering.publishScreenshots;
     inherit (screenshotRendering) screenshots;
   };
 
@@ -233,6 +235,10 @@ in
     render-screenshots = {
       type = "app";
       program = lib.getExe screenshotRendering.renderScreenshots;
+    };
+    publish-screenshots = {
+      type = "app";
+      program = lib.getExe screenshotRendering.publishScreenshots;
     };
   };
 
