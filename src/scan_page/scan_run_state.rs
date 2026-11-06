@@ -6,7 +6,9 @@ use crate::{
     host_services::{
         clamav_programs::trusted_program_lookup::ProgramLocation,
         clamav_scanner::{
-            scan_progress_events::{CompletedScanOutcome, ScanProblem, UnscannedFileCause},
+            scan_progress_events::{
+                CompletedScanOutcome, ScanProblem, ThreatFindings, UnscannedFileCause,
+            },
             scan_target_enumeration::ScanTargetFailure,
             scanner_command_builder::ScannerProgramPaths,
             scanner_output_parser::{
@@ -206,15 +208,16 @@ fn describe_scan_notice(scan_notice: &ScanNotice) -> String {
 }
 
 pub fn scan_summary_text(scan_outcome: &CompletedScanOutcome) -> String {
-    let threat_summary = (!scan_outcome.detected_threats.is_empty()).then(|| {
-        let threat_count = scan_outcome.detected_threats.len();
-        ngettext(
-            "{count} threat found",
-            "{count} threats found",
-            u32::try_from(threat_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &threat_count.to_string())
-    });
+    let threat_summary =
+        (!scan_outcome.threat_findings.attributed_threats().is_empty()).then(|| {
+            let threat_count = scan_outcome.threat_findings.attributed_threats().len();
+            ngettext(
+                "{count} threat found",
+                "{count} threats found",
+                u32::try_from(threat_count).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &threat_count.to_string())
+        });
     let inspected_summary = ngettext(
         "{count} file scanned",
         "{count} files scanned",
@@ -252,7 +255,8 @@ fn unlisted_skipped_paths(scan_outcome: &CompletedScanOutcome) -> Vec<String> {
         .iter()
         .filter(|skipped_path| {
             !scan_outcome
-                .detected_threats
+                .threat_findings
+                .attributed_threats()
                 .iter()
                 .any(|detected_threat| detected_threat.file_path == Path::new(skipped_path))
         })
@@ -297,9 +301,12 @@ fn notice_lines_where(
     include_problem: impl Fn(&ScanProblem) -> bool,
     include_notice: impl Fn(&ScanNotice) -> bool,
 ) -> Vec<String> {
-    let unattributed_notice = (scan_outcome.unattributed_threats_reported
-        && scan_outcome.detected_threats.is_empty())
-    .then(|| gettext("The scanner reported a threat without naming the file."));
+    let unattributed_notice = match scan_outcome.threat_findings {
+        ThreatFindings::UnattributedThreatsOnly => Some(gettext(
+            "The scanner reported a threat without naming the file.",
+        )),
+        ThreatFindings::NoThreatsFound | ThreatFindings::AttributedThreats(_) => None,
+    };
     unattributed_notice
         .into_iter()
         .chain(

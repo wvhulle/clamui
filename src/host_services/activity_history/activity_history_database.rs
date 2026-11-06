@@ -1,10 +1,13 @@
-use std::{path::PathBuf, time::Duration};
+use std::{num::NonZeroU64, path::PathBuf, time::Duration};
 
 use jiff::Timestamp;
 use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Row, Value};
 
 use crate::host_services::{
+    clamav_scanner::{
+        scan_progress_events::ThreatFindings, scanner_output_parser::sanitize_scanner_line,
+    },
     desktop::file_process_lock::{ProcessFileLock, wait_for_file_lock},
     quarantine_vault::quarantine_file_moves::{
         QuarantineMoveFailure, pin_database_file, secure_database_files,
@@ -65,14 +68,47 @@ pub enum ActivityHistoryFailure {
     HistoryLockUnavailable(#[from] std::io::Error),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActivityStatus {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FoundThreatCount {
+    CountedThreats { threat_count: NonZeroU64 },
+    UncountedThreats,
+}
+
+impl FoundThreatCount {
+    pub fn from_findings(threat_findings: &ThreatFindings) -> Option<Self> {
+        match threat_findings {
+            ThreatFindings::NoThreatsFound => None,
+            ThreatFindings::AttributedThreats(attributed_threats) => Some(Self::CountedThreats {
+                threat_count: attributed_threats.threat_count(),
+            }),
+            ThreatFindings::UnattributedThreatsOnly => Some(Self::UncountedThreats),
+        }
+    }
+
+    const fn stored_count(self) -> u64 {
+        match self {
+            Self::CountedThreats { threat_count } => threat_count.get(),
+            Self::UncountedThreats => 0,
+        }
+    }
+
+    fn from_stored_count(stored_count: u64) -> Self {
+        NonZeroU64::new(stored_count).map_or(Self::UncountedThreats, |threat_count| {
+            Self::CountedThreats { threat_count }
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScanActivityStatus {
     ScanClean,
-    ScanInfected,
+    ScanInfected { found_threats: FoundThreatCount },
     ScanFailed,
     ScanCancelled,
-    ScanSkipped,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdateActivityStatus {
     UpdateApplied,
     UpdateAlreadyCurrent,
     UpdateRequested,
@@ -81,84 +117,175 @@ pub enum ActivityStatus {
     UpdateCancelled,
 }
 
-impl ActivityStatus {
-    const fn stored_text(self) -> &'static str {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ActivityRecord {
+    ScanActivity {
+        scan_targets: Vec<PathBuf>,
+        inspected_file_count: u64,
+        scan_status: ScanActivityStatus,
+    },
+    SkippedScan {
+        scan_targets: Vec<PathBuf>,
+    },
+    UpdateActivity {
+        update_status: UpdateActivityStatus,
+    },
+}
+
+const SCAN_TARGET_SEPARATOR: char = '\n';
+
+fn stored_scan_targets(scan_targets: &[PathBuf]) -> String {
+    scan_targets
+        .iter()
+        .map(|scan_target| sanitize_scanner_line(&scan_target.to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(&SCAN_TARGET_SEPARATOR.to_string())
+}
+
+fn scan_targets_from_stored_text(stored_targets: &str) -> Vec<PathBuf> {
+    stored_targets
+        .split(SCAN_TARGET_SEPARATOR)
+        .filter(|stored_target| !stored_target.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+pub struct StoredActivityColumns {
+    pub activity_status: &'static str,
+    pub activity_targets: String,
+    pub inspected_file_count: u64,
+    pub threat_count: u64,
+}
+
+impl ActivityRecord {
+    pub const fn stored_status_text(&self) -> &'static str {
         match self {
-            Self::ScanClean => "scan_clean",
-            Self::ScanInfected => "scan_infected",
-            Self::ScanFailed => "scan_failed",
-            Self::ScanCancelled => "scan_cancelled",
-            Self::ScanSkipped => "scan_skipped",
-            Self::UpdateApplied => "update_applied",
-            Self::UpdateAlreadyCurrent => "update_already_current",
-            Self::UpdateRequested => "update_requested",
-            Self::UpdateResultUnknown => "update_result_unknown",
-            Self::UpdateFailed => "update_failed",
-            Self::UpdateCancelled => "update_cancelled",
+            Self::ScanActivity { scan_status, .. } => match scan_status {
+                ScanActivityStatus::ScanClean => "scan_clean",
+                ScanActivityStatus::ScanInfected { .. } => "scan_infected",
+                ScanActivityStatus::ScanFailed => "scan_failed",
+                ScanActivityStatus::ScanCancelled => "scan_cancelled",
+            },
+            Self::SkippedScan { .. } => "scan_skipped",
+            Self::UpdateActivity { update_status } => match update_status {
+                UpdateActivityStatus::UpdateApplied => "update_applied",
+                UpdateActivityStatus::UpdateAlreadyCurrent => "update_already_current",
+                UpdateActivityStatus::UpdateRequested => "update_requested",
+                UpdateActivityStatus::UpdateResultUnknown => "update_result_unknown",
+                UpdateActivityStatus::UpdateFailed => "update_failed",
+                UpdateActivityStatus::UpdateCancelled => "update_cancelled",
+            },
         }
     }
 
-    fn from_stored_text(stored_text: &str) -> Result<Self, ActivityHistoryFailure> {
-        match stored_text {
-            "scan_clean" => Ok(Self::ScanClean),
-            "scan_infected" => Ok(Self::ScanInfected),
-            "scan_failed" => Ok(Self::ScanFailed),
-            "scan_cancelled" => Ok(Self::ScanCancelled),
-            "scan_skipped" => Ok(Self::ScanSkipped),
-            "update_applied" => Ok(Self::UpdateApplied),
-            "update_already_current" => Ok(Self::UpdateAlreadyCurrent),
-            "update_requested" => Ok(Self::UpdateRequested),
-            "update_result_unknown" => Ok(Self::UpdateResultUnknown),
-            "update_failed" => Ok(Self::UpdateFailed),
-            "update_cancelled" => Ok(Self::UpdateCancelled),
-            _unknown_status => Err(ActivityHistoryFailure::StoredStatusUnknown),
+    pub fn scan_targets(&self) -> &[PathBuf] {
+        match self {
+            Self::ScanActivity { scan_targets, .. } | Self::SkippedScan { scan_targets } => {
+                scan_targets
+            }
+            Self::UpdateActivity { .. } => &[],
         }
     }
 
-    pub const fn is_virus_scan(self) -> bool {
-        matches!(
-            self,
-            Self::ScanClean | Self::ScanInfected | Self::ScanFailed | Self::ScanCancelled
-        )
+    const fn stored_inspected_file_count(&self) -> u64 {
+        match self {
+            Self::ScanActivity {
+                inspected_file_count,
+                ..
+            } => *inspected_file_count,
+            Self::SkippedScan { .. } | Self::UpdateActivity { .. } => 0,
+        }
+    }
+
+    const fn stored_threat_count(&self) -> u64 {
+        match self {
+            Self::ScanActivity {
+                scan_status: ScanActivityStatus::ScanInfected { found_threats },
+                ..
+            } => found_threats.stored_count(),
+            Self::ScanActivity { .. } | Self::SkippedScan { .. } | Self::UpdateActivity { .. } => 0,
+        }
+    }
+
+    pub fn stored_columns(&self) -> StoredActivityColumns {
+        StoredActivityColumns {
+            activity_status: self.stored_status_text(),
+            activity_targets: stored_scan_targets(self.scan_targets()),
+            inspected_file_count: self.stored_inspected_file_count(),
+            threat_count: self.stored_threat_count(),
+        }
+    }
+
+    fn from_stored_columns(
+        stored_status: &str,
+        stored_targets: &str,
+        inspected_file_count: u64,
+        threat_count: u64,
+    ) -> Result<Self, ActivityHistoryFailure> {
+        let scan_activity = |scan_status| Self::ScanActivity {
+            scan_targets: scan_targets_from_stored_text(stored_targets),
+            inspected_file_count,
+            scan_status,
+        };
+        let update_activity = |update_status| Self::UpdateActivity { update_status };
+        Ok(match stored_status {
+            "scan_clean" => scan_activity(ScanActivityStatus::ScanClean),
+            "scan_infected" => scan_activity(ScanActivityStatus::ScanInfected {
+                found_threats: FoundThreatCount::from_stored_count(threat_count),
+            }),
+            "scan_failed" => scan_activity(ScanActivityStatus::ScanFailed),
+            "scan_cancelled" => scan_activity(ScanActivityStatus::ScanCancelled),
+            "scan_skipped" => Self::SkippedScan {
+                scan_targets: scan_targets_from_stored_text(stored_targets),
+            },
+            "update_applied" => update_activity(UpdateActivityStatus::UpdateApplied),
+            "update_already_current" => update_activity(UpdateActivityStatus::UpdateAlreadyCurrent),
+            "update_requested" => update_activity(UpdateActivityStatus::UpdateRequested),
+            "update_result_unknown" => update_activity(UpdateActivityStatus::UpdateResultUnknown),
+            "update_failed" => update_activity(UpdateActivityStatus::UpdateFailed),
+            "update_cancelled" => update_activity(UpdateActivityStatus::UpdateCancelled),
+            _unknown_status => return Err(ActivityHistoryFailure::StoredStatusUnknown),
+        })
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NewActivityEntry {
     pub started_at: Timestamp,
-    pub activity_status: ActivityStatus,
-    pub activity_targets: String,
-    pub inspected_file_count: u64,
-    pub threat_count: u64,
+    pub activity_record: ActivityRecord,
     pub duration_millis: u64,
     pub activity_output: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ActivityEntryRecord {
     pub entry_id: i64,
     pub started_at: Timestamp,
-    pub activity_status: ActivityStatus,
-    pub activity_targets: String,
-    pub inspected_file_count: u64,
-    pub threat_count: u64,
+    pub activity_record: ActivityRecord,
     pub duration_millis: u64,
     pub activity_output: String,
+}
+
+fn stored_count(stored_value: i64) -> u64 {
+    u64::try_from(stored_value).unwrap_or(0)
 }
 
 fn activity_entry_from_row(entry_row: &Row) -> Result<ActivityEntryRecord, ActivityHistoryFailure> {
     let stored_status: String = entry_row.get(2)?;
+    let stored_targets: String = entry_row.get(3)?;
     let inspected_file_count: i64 = entry_row.get(4)?;
     let threat_count: i64 = entry_row.get(5)?;
     let duration_millis: i64 = entry_row.get(6)?;
     Ok(ActivityEntryRecord {
         entry_id: entry_row.get(0)?,
         started_at: Timestamp::from_second(entry_row.get(1)?)?,
-        activity_status: ActivityStatus::from_stored_text(&stored_status)?,
-        activity_targets: entry_row.get(3)?,
-        inspected_file_count: inspected_file_count.max(0) as u64,
-        threat_count: threat_count.max(0) as u64,
-        duration_millis: duration_millis.max(0) as u64,
+        activity_record: ActivityRecord::from_stored_columns(
+            &stored_status,
+            &stored_targets,
+            stored_count(inspected_file_count),
+            stored_count(threat_count),
+        )?,
+        duration_millis: stored_count(duration_millis),
         activity_output: entry_row.get(7)?,
     })
 }
@@ -197,6 +324,12 @@ impl ActivityHistory {
         &self,
         new_entry: NewActivityEntry,
     ) -> Result<(), ActivityHistoryFailure> {
+        let StoredActivityColumns {
+            activity_status,
+            activity_targets,
+            inspected_file_count,
+            threat_count,
+        } = new_entry.activity_record.stored_columns();
         let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         database_connection
@@ -206,10 +339,10 @@ impl ActivityHistory {
                  activity_output) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 vec![
                     Value::Integer(new_entry.started_at.as_second()),
-                    Value::Text(new_entry.activity_status.stored_text().to_owned()),
-                    Value::Text(new_entry.activity_targets),
-                    Value::Integer(new_entry.inspected_file_count as i64),
-                    Value::Integer(new_entry.threat_count as i64),
+                    Value::Text(activity_status.to_owned()),
+                    Value::Text(activity_targets),
+                    Value::Integer(inspected_file_count as i64),
+                    Value::Integer(threat_count as i64),
                     Value::Integer(new_entry.duration_millis as i64),
                     Value::Text(new_entry.activity_output),
                 ],
@@ -272,10 +405,15 @@ mod activity_history_database_tests {
     fn scan_entry(started_at: Timestamp, activity_output: &str) -> NewActivityEntry {
         NewActivityEntry {
             started_at,
-            activity_status: ActivityStatus::ScanInfected,
-            activity_targets: "/scan/target\n/scan/other".to_owned(),
-            inspected_file_count: 12,
-            threat_count: 2,
+            activity_record: ActivityRecord::ScanActivity {
+                scan_targets: vec![PathBuf::from("/scan/target"), PathBuf::from("/scan/other")],
+                inspected_file_count: 12,
+                scan_status: ScanActivityStatus::ScanInfected {
+                    found_threats: FoundThreatCount::CountedThreats {
+                        threat_count: NonZeroU64::new(2).expect("two threats"),
+                    },
+                },
+            },
             duration_millis: 1500,
             activity_output: activity_output.to_owned(),
         }
@@ -302,10 +440,9 @@ mod activity_history_database_tests {
         assert_eq!(listed_entries.len(), 2);
         assert_eq!(listed_entries[0].activity_output, "newer");
         assert_eq!(
-            listed_entries[0].activity_status,
-            ActivityStatus::ScanInfected
+            listed_entries[0].activity_record,
+            scan_entry(Timestamp::constant(200, 0), "newer").activity_record
         );
-        assert_eq!(listed_entries[0].inspected_file_count, 12);
         assert_eq!(listed_entries[1].started_at, Timestamp::constant(100, 0));
         assert_eq!(
             std::fs::metadata(&database_path)
@@ -392,5 +529,105 @@ mod activity_history_database_tests {
         let listed_entries = history.list_recent_entries().await.expect("listed");
         assert_eq!(listed_entries[2].activity_output, "");
         assert_eq!(listed_entries[1].activity_output, "fresh");
+    }
+
+    async fn recorded_and_listed(activity_record: ActivityRecord) -> ActivityRecord {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+        history
+            .record_activity(NewActivityEntry {
+                started_at: Timestamp::constant(100, 0),
+                activity_record,
+                duration_millis: 0,
+                activity_output: String::new(),
+            })
+            .await
+            .expect("recorded");
+        history
+            .list_recent_entries()
+            .await
+            .expect("listed")
+            .remove(0)
+            .activity_record
+    }
+
+    #[tokio::test]
+    async fn a_comma_in_a_target_path_round_trips() {
+        let scanned_record = ActivityRecord::ScanActivity {
+            scan_targets: vec![
+                PathBuf::from("/home/user/report, final.pdf"),
+                PathBuf::from("/scan/other"),
+            ],
+            inspected_file_count: 2,
+            scan_status: ScanActivityStatus::ScanClean,
+        };
+        assert_eq!(
+            recorded_and_listed(scanned_record.clone()).await,
+            scanned_record
+        );
+    }
+
+    #[tokio::test]
+    async fn updates_and_skipped_scans_read_back_without_scan_counts() {
+        let update_record = ActivityRecord::UpdateActivity {
+            update_status: UpdateActivityStatus::UpdateAlreadyCurrent,
+        };
+        assert_eq!(
+            recorded_and_listed(update_record.clone()).await,
+            update_record
+        );
+        let skipped_record = ActivityRecord::SkippedScan {
+            scan_targets: vec![PathBuf::from("/scan/target")],
+        };
+        assert_eq!(
+            recorded_and_listed(skipped_record.clone()).await,
+            skipped_record
+        );
+    }
+
+    #[tokio::test]
+    async fn infected_scans_without_named_threats_read_back_as_uncounted() {
+        let uncounted_record = ActivityRecord::ScanActivity {
+            scan_targets: vec![PathBuf::from("/scan/target")],
+            inspected_file_count: 1,
+            scan_status: ScanActivityStatus::ScanInfected {
+                found_threats: FoundThreatCount::UncountedThreats,
+            },
+        };
+        assert_eq!(
+            recorded_and_listed(uncounted_record.clone()).await,
+            uncounted_record
+        );
+    }
+
+    #[test]
+    fn clean_findings_cannot_make_an_infected_scan() {
+        assert_eq!(
+            FoundThreatCount::from_findings(&ThreatFindings::NoThreatsFound),
+            None
+        );
+        assert_eq!(
+            FoundThreatCount::from_findings(&ThreatFindings::UnattributedThreatsOnly),
+            Some(FoundThreatCount::UncountedThreats)
+        );
+    }
+
+    #[test]
+    fn old_comma_joined_targets_read_as_one_target() {
+        assert_eq!(
+            scan_targets_from_stored_text("/scan/one, /scan/two"),
+            vec![PathBuf::from("/scan/one, /scan/two")]
+        );
+        assert_eq!(scan_targets_from_stored_text(""), Vec::<PathBuf>::new());
+    }
+
+    #[test]
+    fn line_breaks_inside_a_target_cannot_split_it() {
+        assert_eq!(
+            scan_targets_from_stored_text(&stored_scan_targets(&[PathBuf::from(
+                "/scan/odd\nname"
+            )])),
+            vec![PathBuf::from("/scan/odd name")]
+        );
     }
 }

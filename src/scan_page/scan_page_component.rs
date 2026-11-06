@@ -17,7 +17,8 @@ use tempfile::NamedTempFile;
 use crate::{
     host_services::{
         activity_history::activity_history_database::{
-            ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
+            ActivityHistory, ActivityHistoryFailure, ActivityRecord, FoundThreatCount,
+            NewActivityEntry, ScanActivityStatus,
         },
         clamav_config::detection_options::read_host_clamscan_detection_arguments,
         clamav_scanner::{
@@ -473,7 +474,7 @@ fn finished_results_view(finished_scan: &FinishedScan) -> ScanResultsView {
         scanned_directory_count: scan_outcome.scanned_directory_count,
         excluded_entry_count: scan_outcome.excluded_entry_count,
         elapsed_time: finished_scan.elapsed_time,
-        detected_threats: scan_outcome.detected_threats.clone(),
+        detected_threats: scan_outcome.threat_findings.attributed_threats().to_vec(),
         problem_path_groups: problem_path_groups(scan_outcome),
         notice_lines: unlisted_notice_lines(scan_outcome),
         noteworthy_output: scan_outcome.noteworthy_output.clone(),
@@ -497,23 +498,24 @@ fn notify_finished_scan(finished_scan: &FinishedScan) {
 
 fn finished_scan_activity(finished_scan: &FinishedScan) -> NewActivityEntry {
     let scan_run = &finished_scan.scan_run;
-    let activity_status = match results_status(&scan_run.scan_outcome, finished_scan.scan_ending) {
-        ScanResultsStatus::ThreatsDetected => ActivityStatus::ScanInfected,
-        ScanResultsStatus::NoThreatsDetected => ActivityStatus::ScanClean,
-        ScanResultsStatus::FinishedWithProblems => ActivityStatus::ScanFailed,
-        ScanResultsStatus::ScanCancelled => ActivityStatus::ScanCancelled,
+    let scan_outcome = &scan_run.scan_outcome;
+    let scan_status = match FoundThreatCount::from_findings(&scan_outcome.threat_findings) {
+        Some(found_threats) => ScanActivityStatus::ScanInfected { found_threats },
+        None => match finished_scan.scan_ending {
+            ScanEnding::ScanCancelled => ScanActivityStatus::ScanCancelled,
+            ScanEnding::ScanCompleted if scan_outcome.scan_problems.is_empty() => {
+                ScanActivityStatus::ScanClean
+            }
+            ScanEnding::ScanCompleted => ScanActivityStatus::ScanFailed,
+        },
     };
     NewActivityEntry {
         started_at: scan_run.started_at,
-        activity_status,
-        activity_targets: scan_run
-            .scan_targets
-            .iter()
-            .map(|scan_target| sanitize_scanner_line(&scan_target.to_string_lossy()))
-            .collect::<Vec<_>>()
-            .join("\n"),
-        inspected_file_count: scan_run.scan_outcome.inspected_file_count,
-        threat_count: scan_run.scan_outcome.detected_threats.len() as u64,
+        activity_record: ActivityRecord::ScanActivity {
+            scan_targets: scan_run.scan_targets.clone(),
+            inspected_file_count: scan_outcome.inspected_file_count,
+            scan_status,
+        },
         duration_millis: finished_scan.elapsed_time.as_millis() as u64,
         activity_output: scan_run.scan_outcome.noteworthy_output.clone(),
     }

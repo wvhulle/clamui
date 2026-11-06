@@ -106,13 +106,14 @@ async fn verify_detection_quarantine_and_restore(scanner_backend: ScannerBackend
     .await;
     println!("{scanner_backend:?}: {scan_outcome:#?}");
     assert_eq!(
-        scan_outcome.detected_threats.len(),
+        scan_outcome.threat_findings.attributed_threats().len(),
         2,
         "both files detected"
     );
     assert!(
         scan_outcome
-            .detected_threats
+            .threat_findings
+            .attributed_threats()
             .iter()
             .any(|detected_threat| detected_threat.file_path == non_utf8_path),
         "non-UTF-8 path preserved"
@@ -122,7 +123,7 @@ async fn verify_detection_quarantine_and_restore(scanner_backend: ScannerBackend
     let moved_record = quarantine_vault
         .move_file_into_quarantine(
             &non_utf8_path,
-            &scan_outcome.detected_threats[0].threat_identity,
+            &scan_outcome.threat_findings.attributed_threats()[0].threat_identity,
         )
         .await
         .expect("quarantined");
@@ -184,13 +185,16 @@ async fn verify_blocked_file_flow(scanner_backend: ScannerBackend, quarantine_di
     .await;
     println!("{scanner_backend:?} scan: {scan_outcome:#?}");
     assert!(scan_outcome.threats_were_found(), "blocked file reported");
-    assert_eq!(scan_outcome.detected_threats[0].file_path, eicar_path);
+    assert_eq!(
+        scan_outcome.threat_findings.attributed_threats()[0].file_path,
+        eicar_path
+    );
 
     let quarantine_vault = open_host_vault(&verification_root.path().join("vault")).await;
     let moved_record = quarantine_vault
         .move_file_into_quarantine(
             &eicar_path,
-            &scan_outcome.detected_threats[0].threat_identity,
+            &scan_outcome.threat_findings.attributed_threats()[0].threat_identity,
         )
         .await
         .expect("blocked file quarantined");

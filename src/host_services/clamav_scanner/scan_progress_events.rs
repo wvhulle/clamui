@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     fs::File,
     io::{self, Write},
+    num::NonZeroU64,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     process::ExitStatus,
@@ -105,14 +106,77 @@ pub enum ScanProblem {
     TargetRejected(ScanTargetFailure),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AttributedThreatList {
+    listed_threats: Vec<DetectedThreat>,
+}
+
+impl AttributedThreatList {
+    fn starting_with(first_threat: DetectedThreat) -> Self {
+        Self {
+            listed_threats: vec![first_threat],
+        }
+    }
+
+    pub fn listed_threats(&self) -> &[DetectedThreat] {
+        &self.listed_threats
+    }
+
+    pub fn threat_count(&self) -> NonZeroU64 {
+        NonZeroU64::MIN.saturating_add(self.listed_threats.len() as u64 - 1)
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum ThreatFindings {
+    #[default]
+    NoThreatsFound,
+    AttributedThreats(AttributedThreatList),
+    UnattributedThreatsOnly,
+}
+
+impl ThreatFindings {
+    fn record_attributed_threat(&mut self, detected_threat: DetectedThreat) {
+        match self {
+            Self::AttributedThreats(attributed_threats) => {
+                attributed_threats.listed_threats.push(detected_threat);
+            }
+            Self::NoThreatsFound | Self::UnattributedThreatsOnly => {
+                *self =
+                    Self::AttributedThreats(AttributedThreatList::starting_with(detected_threat));
+            }
+        }
+    }
+
+    fn record_unattributed_report(&mut self) {
+        match self {
+            Self::NoThreatsFound => *self = Self::UnattributedThreatsOnly,
+            Self::AttributedThreats(_) | Self::UnattributedThreatsOnly => {}
+        }
+    }
+
+    pub fn attributed_threats(&self) -> &[DetectedThreat] {
+        match self {
+            Self::AttributedThreats(attributed_threats) => attributed_threats.listed_threats(),
+            Self::NoThreatsFound | Self::UnattributedThreatsOnly => &[],
+        }
+    }
+
+    pub const fn threats_were_found(&self) -> bool {
+        match self {
+            Self::NoThreatsFound => false,
+            Self::AttributedThreats(_) | Self::UnattributedThreatsOnly => true,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct CompletedScanOutcome {
     pub planned_file_count: u64,
     pub inspected_file_count: u64,
     pub scanned_directory_count: u64,
     pub excluded_entry_count: u64,
-    pub detected_threats: Vec<DetectedThreat>,
-    pub unattributed_threats_reported: bool,
+    pub threat_findings: ThreatFindings,
     pub scan_notices: Vec<ScanNotice>,
     pub scan_problems: Vec<ScanProblem>,
     pub skipped_paths: Vec<String>,
@@ -137,7 +201,8 @@ impl CompletedScanOutcome {
                 self.inspected_file_count += 1;
             }
             ScanProgressEvent::ThreatDetected(detected_threat) => {
-                self.detected_threats.push(detected_threat);
+                self.threat_findings
+                    .record_attributed_threat(detected_threat);
             }
             ScanProgressEvent::FilesLeftUnscanned {
                 unscanned_paths,
@@ -176,15 +241,15 @@ impl CompletedScanOutcome {
         }
         match interpreted_scan.scan_verdict {
             ScanVerdict::NoThreatsFound => {}
-            ScanVerdict::ThreatsFound => self.unattributed_threats_reported = true,
+            ScanVerdict::ThreatsFound => self.threat_findings.record_unattributed_report(),
             ScanVerdict::ScanFailed(failure_reason) => self
                 .scan_problems
                 .push(ScanProblem::ScannerFailed(failure_reason)),
         }
     }
 
-    pub fn threats_were_found(&self) -> bool {
-        !self.detected_threats.is_empty() || self.unattributed_threats_reported
+    pub const fn threats_were_found(&self) -> bool {
+        self.threat_findings.threats_were_found()
     }
 }
 
@@ -860,9 +925,9 @@ mod scan_progress_events_tests {
         );
         let scan_outcome = fold_scan_outcome(progress_events);
         assert!(scan_outcome.threats_were_found());
-        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(scan_outcome.threat_findings.attributed_threats().len(), 1);
         assert_eq!(
-            scan_outcome.detected_threats[0].file_path,
+            scan_outcome.threat_findings.attributed_threats()[0].file_path,
             PathBuf::from("/scan/target file")
         );
         assert_eq!(scan_outcome.inspected_file_count, 1);
@@ -948,10 +1013,13 @@ mod scan_progress_events_tests {
         let scan_outcome =
             fold_scan_outcome(infected_events.into_iter().chain(clean_events).collect());
         assert_eq!(scan_outcome.inspected_file_count, 2);
-        assert_eq!(scan_outcome.detected_threats.len(), 1);
-        assert_eq!(scan_outcome.detected_threats[0].file_path, infected_file);
+        assert_eq!(scan_outcome.threat_findings.attributed_threats().len(), 1);
+        assert_eq!(
+            scan_outcome.threat_findings.attributed_threats()[0].file_path,
+            infected_file
+        );
         assert_ne!(
-            scan_outcome.detected_threats[0].threat_identity,
+            scan_outcome.threat_findings.attributed_threats()[0].threat_identity,
             ThreatIdentity::Signature {
                 signature_name: "Fake.Signature".to_owned()
             }
@@ -1017,7 +1085,7 @@ mod scan_progress_events_tests {
         );
         assert!(scan_outcome.threats_were_found());
         assert_eq!(scan_outcome.inspected_file_count, 2);
-        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(scan_outcome.threat_findings.attributed_threats().len(), 1);
         assert_eq!(scan_outcome.scan_problems.len(), 1);
     }
 
@@ -1026,7 +1094,7 @@ mod scan_progress_events_tests {
         let scan_outcome =
             fold_scan_outcome(transcript_progress_events(file_list_transcript(1), &[], 1));
         assert!(scan_outcome.threats_were_found());
-        assert!(scan_outcome.detected_threats.is_empty());
+        assert!(scan_outcome.threat_findings.attributed_threats().is_empty());
     }
 
     #[test]
@@ -1037,9 +1105,9 @@ mod scan_progress_events_tests {
         );
         drop(phase_transcript);
         let scan_outcome = fold_scan_outcome(partial_events);
-        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(scan_outcome.threat_findings.attributed_threats().len(), 1);
         assert_eq!(
-            scan_outcome.detected_threats[0]
+            scan_outcome.threat_findings.attributed_threats()[0]
                 .threat_identity
                 .threat_category(),
             "Virus"
@@ -1145,5 +1213,38 @@ mod scan_progress_events_tests {
             0,
         ));
         assert!(scan_outcome.scan_problems.is_empty());
+    }
+
+    fn signature_threat(file_path: &str) -> DetectedThreat {
+        DetectedThreat {
+            file_path: PathBuf::from(file_path),
+            threat_identity: ThreatIdentity::Signature {
+                signature_name: "Eicar-Signature".to_owned(),
+            },
+        }
+    }
+
+    #[test]
+    fn an_unattributed_report_after_named_threats_keeps_the_named_threats() {
+        let mut threat_findings = ThreatFindings::NoThreatsFound;
+        threat_findings.record_attributed_threat(signature_threat("/scan/one"));
+        threat_findings.record_unattributed_report();
+        assert_eq!(
+            threat_findings.attributed_threats(),
+            [signature_threat("/scan/one")]
+        );
+    }
+
+    #[test]
+    fn named_threats_replace_an_earlier_unattributed_report() {
+        let mut threat_findings = ThreatFindings::NoThreatsFound;
+        threat_findings.record_unattributed_report();
+        assert_eq!(threat_findings, ThreatFindings::UnattributedThreatsOnly);
+        threat_findings.record_attributed_threat(signature_threat("/scan/one"));
+        threat_findings.record_attributed_threat(signature_threat("/scan/two"));
+        let ThreatFindings::AttributedThreats(attributed_threats) = &threat_findings else {
+            panic!("expected attributed threats, got {threat_findings:?}");
+        };
+        assert_eq!(attributed_threats.threat_count().get(), 2);
     }
 }

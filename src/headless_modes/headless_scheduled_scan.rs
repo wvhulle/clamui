@@ -14,14 +14,13 @@ use crate::{
     application_data_directory,
     host_services::{
         activity_history::activity_history_database::{
-            ActivityHistory, ActivityStatus, NewActivityEntry,
+            ActivityHistory, ActivityRecord, FoundThreatCount, NewActivityEntry, ScanActivityStatus,
         },
         clamav_config::detection_options::host_clamscan_detection_arguments,
         clamav_scanner::{
             scan_exclusion_rules::ScanExclusions,
             scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
             scanner_command_builder::{ScannerProgramPaths, choose_scanner_backend},
-            scanner_output_parser::sanitize_scanner_line,
         },
         desktop::{
             desktop_notifications::send_session_notification,
@@ -87,31 +86,20 @@ pub fn host_runs_on_battery(power_supply_directory: &Path) -> bool {
     !mains_online && battery_discharging
 }
 
-fn activity_status_of(scan_outcome: &CompletedScanOutcome) -> ActivityStatus {
-    if scan_outcome.threats_were_found() {
-        ActivityStatus::ScanInfected
-    } else if scan_outcome.scan_problems.is_empty() {
-        ActivityStatus::ScanClean
-    } else {
-        ActivityStatus::ScanFailed
+fn scan_status_of(scan_outcome: &CompletedScanOutcome) -> ScanActivityStatus {
+    match FoundThreatCount::from_findings(&scan_outcome.threat_findings) {
+        Some(found_threats) => ScanActivityStatus::ScanInfected { found_threats },
+        None if scan_outcome.scan_problems.is_empty() => ScanActivityStatus::ScanClean,
+        None => ScanActivityStatus::ScanFailed,
     }
-}
-
-fn joined_target_text(scan_targets: &[PathBuf]) -> String {
-    scan_targets
-        .iter()
-        .map(|scan_target| sanitize_scanner_line(&scan_target.to_string_lossy()))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn skipped_entry(scan_targets: &[PathBuf]) -> NewActivityEntry {
     NewActivityEntry {
         started_at: Timestamp::now(),
-        activity_status: ActivityStatus::ScanSkipped,
-        activity_targets: joined_target_text(scan_targets),
-        inspected_file_count: 0,
-        threat_count: 0,
+        activity_record: ActivityRecord::SkippedScan {
+            scan_targets: scan_targets.to_vec(),
+        },
         duration_millis: 0,
         activity_output: String::new(),
     }
@@ -133,7 +121,7 @@ async fn quarantine_detected_threats(
     else {
         return 0;
     };
-    stream::iter(scan_outcome.detected_threats.clone())
+    stream::iter(scan_outcome.threat_findings.attributed_threats().to_vec())
         .then(|detected_threat| {
             let quarantine_vault = quarantine_vault.clone();
             async move {
@@ -155,7 +143,7 @@ fn finished_scan_notification_body(
     scan_outcome: &CompletedScanOutcome,
     quarantined_count: usize,
 ) -> String {
-    let threat_count = scan_outcome.detected_threats.len();
+    let threat_count = scan_outcome.threat_findings.attributed_threats().len();
     let found_text = ngettext(
         "{count} threat found",
         "{count} threats found",
@@ -221,34 +209,35 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
     } else {
         0
     };
-    let activity_status = activity_status_of(&scan_outcome);
+    let scan_status = scan_status_of(&scan_outcome);
     let _history_unavailable = activity_history
         .record_activity(NewActivityEntry {
             started_at,
-            activity_status,
-            activity_targets: joined_target_text(&scan_targets),
-            inspected_file_count: scan_outcome.inspected_file_count,
-            threat_count: scan_outcome.detected_threats.len() as u64,
+            activity_record: ActivityRecord::ScanActivity {
+                scan_targets,
+                inspected_file_count: scan_outcome.inspected_file_count,
+                scan_status,
+            },
             duration_millis: started_instant.elapsed().as_millis() as u64,
             activity_output: scan_outcome.noteworthy_output.clone(),
         })
         .await;
-    match activity_status {
-        ActivityStatus::ScanInfected => {
+    match scan_status {
+        ScanActivityStatus::ScanInfected { .. } => {
             send_session_notification(
                 &gettext("Threats Detected"),
                 &finished_scan_notification_body(&scan_outcome, quarantined_count),
             );
             ExitCode::from(THREATS_FOUND_EXIT_CODE)
         }
-        ActivityStatus::ScanFailed => {
+        ScanActivityStatus::ScanFailed => {
             send_session_notification(
                 &gettext("Scheduled scan failed"),
                 &gettext("Open Lazaret to read the log."),
             );
             ExitCode::from(SCAN_FAILED_EXIT_CODE)
         }
-        _clean_scan => ExitCode::SUCCESS,
+        ScanActivityStatus::ScanClean | ScanActivityStatus::ScanCancelled => ExitCode::SUCCESS,
     }
 }
 

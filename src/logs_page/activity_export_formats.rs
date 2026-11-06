@@ -1,45 +1,102 @@
 use gettextrs::gettext;
 
 use crate::host_services::activity_history::activity_history_database::{
-    ActivityEntryRecord, ActivityStatus,
+    ActivityEntryRecord, ActivityRecord, FoundThreatCount, ScanActivityStatus,
+    StoredActivityColumns, UpdateActivityStatus,
 };
 
 const CSV_HEADER: &str = "entry_id,started_at,status,targets,files_scanned,threats,duration_millis";
 
-pub fn activity_status_text(activity_status: ActivityStatus) -> String {
-    match activity_status {
-        ActivityStatus::ScanClean => gettext("Clean"),
-        ActivityStatus::ScanSkipped => gettext("Skipped"),
-        ActivityStatus::ScanInfected => gettext("Infected"),
-        ActivityStatus::ScanFailed | ActivityStatus::UpdateFailed => gettext("Error"),
-        ActivityStatus::ScanCancelled | ActivityStatus::UpdateCancelled => gettext("Cancelled"),
-        ActivityStatus::UpdateApplied => gettext("Success"),
-        ActivityStatus::UpdateAlreadyCurrent => gettext("Up to date"),
-        ActivityStatus::UpdateRequested => gettext("Requested"),
-        ActivityStatus::UpdateResultUnknown => gettext("Ran"),
+pub fn activity_status_text(activity_record: &ActivityRecord) -> String {
+    match activity_record {
+        ActivityRecord::ScanActivity { scan_status, .. } => match scan_status {
+            ScanActivityStatus::ScanClean => gettext("Clean"),
+            ScanActivityStatus::ScanInfected { .. } => gettext("Infected"),
+            ScanActivityStatus::ScanFailed => gettext("Error"),
+            ScanActivityStatus::ScanCancelled => gettext("Cancelled"),
+        },
+        ActivityRecord::SkippedScan { .. } => gettext("Skipped"),
+        ActivityRecord::UpdateActivity { update_status } => match update_status {
+            UpdateActivityStatus::UpdateFailed => gettext("Error"),
+            UpdateActivityStatus::UpdateCancelled => gettext("Cancelled"),
+            UpdateActivityStatus::UpdateApplied => gettext("Success"),
+            UpdateActivityStatus::UpdateAlreadyCurrent => gettext("Up to date"),
+            UpdateActivityStatus::UpdateRequested => gettext("Requested"),
+            UpdateActivityStatus::UpdateResultUnknown => gettext("Ran"),
+        },
+    }
+}
+
+fn found_threats_text(found_threats: FoundThreatCount) -> String {
+    match found_threats {
+        FoundThreatCount::CountedThreats { threat_count } => gettextrs::ngettext(
+            "Found {count} threat",
+            "Found {count} threats",
+            u32::try_from(threat_count.get()).unwrap_or(u32::MAX),
+        )
+        .replace("{count}", &threat_count.to_string()),
+        FoundThreatCount::UncountedThreats => {
+            gettext("The scanner reported a threat without naming the file.")
+        }
     }
 }
 
 pub fn activity_summary_text(activity_entry: &ActivityEntryRecord) -> String {
-    match activity_entry.activity_status {
-        ActivityStatus::ScanInfected => gettextrs::ngettext(
-            "Found {count} threat",
-            "Found {count} threats",
-            u32::try_from(activity_entry.threat_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &activity_entry.threat_count.to_string()),
-        ActivityStatus::ScanClean => gettext("No threats found"),
-        ActivityStatus::ScanSkipped => gettext("Scheduled scan skipped (on battery power)"),
-        ActivityStatus::ScanFailed => gettext("The scan did not finish cleanly"),
-        ActivityStatus::ScanCancelled => gettext("Scan cancelled by user"),
-        ActivityStatus::UpdateApplied => gettext("Virus definitions updated"),
-        ActivityStatus::UpdateAlreadyCurrent => gettext("Virus definitions are up to date"),
-        ActivityStatus::UpdateRequested => gettext("Update requested from the service"),
-        ActivityStatus::UpdateResultUnknown => {
-            gettext("The update service ran without reporting a result")
+    match &activity_entry.activity_record {
+        ActivityRecord::ScanActivity { scan_status, .. } => match scan_status {
+            ScanActivityStatus::ScanInfected { found_threats } => {
+                found_threats_text(*found_threats)
+            }
+            ScanActivityStatus::ScanClean => gettext("No threats found"),
+            ScanActivityStatus::ScanFailed => gettext("The scan did not finish cleanly"),
+            ScanActivityStatus::ScanCancelled => gettext("Scan cancelled by user"),
+        },
+        ActivityRecord::SkippedScan { .. } => gettext("Scheduled scan skipped (on battery power)"),
+        ActivityRecord::UpdateActivity { update_status } => match update_status {
+            UpdateActivityStatus::UpdateApplied => gettext("Virus definitions updated"),
+            UpdateActivityStatus::UpdateAlreadyCurrent => {
+                gettext("Virus definitions are up to date")
+            }
+            UpdateActivityStatus::UpdateRequested => gettext("Update requested from the service"),
+            UpdateActivityStatus::UpdateResultUnknown => {
+                gettext("The update service ran without reporting a result")
+            }
+            UpdateActivityStatus::UpdateFailed => gettext("Database update failed"),
+            UpdateActivityStatus::UpdateCancelled => gettext("Database update cancelled"),
+        },
+    }
+}
+
+#[derive(serde::Serialize)]
+struct ExportedActivityEntry<'entry> {
+    entry_id: i64,
+    started_at: jiff::Timestamp,
+    activity_status: &'static str,
+    activity_targets: String,
+    inspected_file_count: u64,
+    threat_count: u64,
+    duration_millis: u64,
+    activity_output: &'entry str,
+}
+
+impl<'entry> ExportedActivityEntry<'entry> {
+    fn from_entry(activity_entry: &'entry ActivityEntryRecord) -> Self {
+        let StoredActivityColumns {
+            activity_status,
+            activity_targets,
+            inspected_file_count,
+            threat_count,
+        } = activity_entry.activity_record.stored_columns();
+        Self {
+            entry_id: activity_entry.entry_id,
+            started_at: activity_entry.started_at,
+            activity_status,
+            activity_targets,
+            inspected_file_count,
+            threat_count,
+            duration_millis: activity_entry.duration_millis,
+            activity_output: &activity_entry.activity_output,
         }
-        ActivityStatus::UpdateFailed => gettext("Database update failed"),
-        ActivityStatus::UpdateCancelled => gettext("Database update cancelled"),
     }
 }
 
@@ -59,15 +116,16 @@ fn csv_field(field_text: &str) -> String {
 pub fn activity_entries_as_csv(activity_entries: &[ActivityEntryRecord]) -> String {
     std::iter::once(CSV_HEADER.to_owned())
         .chain(activity_entries.iter().map(|activity_entry| {
+            let exported_entry = ExportedActivityEntry::from_entry(activity_entry);
             format!(
                 "{},{},{},{},{},{},{}",
-                activity_entry.entry_id,
-                activity_entry.started_at,
-                csv_field(activity_status_text(activity_entry.activity_status).as_str()),
-                csv_field(&activity_entry.activity_targets),
-                activity_entry.inspected_file_count,
-                activity_entry.threat_count,
-                activity_entry.duration_millis,
+                exported_entry.entry_id,
+                exported_entry.started_at,
+                csv_field(activity_status_text(&activity_entry.activity_record).as_str()),
+                csv_field(&exported_entry.activity_targets),
+                exported_entry.inspected_file_count,
+                exported_entry.threat_count,
+                exported_entry.duration_millis,
             )
         }))
         .map(|csv_line| csv_line + "\n")
@@ -77,7 +135,12 @@ pub fn activity_entries_as_csv(activity_entries: &[ActivityEntryRecord]) -> Stri
 pub fn activity_entries_as_json(
     activity_entries: &[ActivityEntryRecord],
 ) -> serde_json::Result<String> {
-    serde_json::to_string_pretty(activity_entries)
+    serde_json::to_string_pretty(
+        &activity_entries
+            .iter()
+            .map(ExportedActivityEntry::from_entry)
+            .collect::<Vec<_>>(),
+    )
 }
 
 pub fn formatted_duration_text(duration_millis: u64) -> String {
@@ -91,19 +154,18 @@ pub fn activity_detail_text(
     activity_entry: &ActivityEntryRecord,
     formatted_start_time: &str,
 ) -> String {
-    let heading = if activity_entry.activity_status.is_virus_scan()
-        || activity_entry.activity_status == ActivityStatus::ScanSkipped
-    {
-        gettext("SCAN LOG")
-    } else {
-        gettext("UPDATE LOG")
+    let heading = match activity_entry.activity_record {
+        ActivityRecord::ScanActivity { .. } | ActivityRecord::SkippedScan { .. } => {
+            gettext("SCAN LOG")
+        }
+        ActivityRecord::UpdateActivity { .. } => gettext("UPDATE LOG"),
     };
     let metadata_lines = [
         format!("{}: {formatted_start_time}", gettext("Timestamp")),
         format!(
             "{}: {}",
             gettext("Status"),
-            activity_status_text(activity_entry.activity_status)
+            activity_status_text(&activity_entry.activity_record)
         ),
         format!(
             "{}: {}",
@@ -117,13 +179,18 @@ pub fn activity_detail_text(
         ),
     ]
     .join("\n");
-    let target_section = if activity_entry.activity_targets.is_empty() {
+    let scan_targets = activity_entry.activity_record.scan_targets();
+    let target_section = if scan_targets.is_empty() {
         String::new()
     } else {
         format!(
             "\n\n{}:\n{}",
             gettext("Path"),
-            activity_entry.activity_targets
+            scan_targets
+                .iter()
+                .map(|scan_target| scan_target.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
         )
     };
     let output_section = if activity_entry.activity_output.is_empty() {
@@ -146,10 +213,18 @@ mod activity_export_formats_tests {
         ActivityEntryRecord {
             entry_id: 7,
             started_at: jiff::Timestamp::constant(1000, 0),
-            activity_status: ActivityStatus::ScanInfected,
-            activity_targets: "/scan/a,b\n=/scan/\"c\"".to_owned(),
-            inspected_file_count: 3,
-            threat_count: 1,
+            activity_record: ActivityRecord::ScanActivity {
+                scan_targets: vec![
+                    std::path::PathBuf::from("/scan/a,b"),
+                    std::path::PathBuf::from("=/scan/\"c\""),
+                ],
+                inspected_file_count: 3,
+                scan_status: ScanActivityStatus::ScanInfected {
+                    found_threats: FoundThreatCount::CountedThreats {
+                        threat_count: std::num::NonZeroU64::MIN,
+                    },
+                },
+            },
             duration_millis: 2500,
             activity_output: "/scan/a,b: Bad FOUND\n".to_owned(),
         }
@@ -183,5 +258,22 @@ mod activity_export_formats_tests {
         assert!(detail_text.contains("Duration: 2s"));
         assert!(detail_text.contains("Found 1 threat"));
         assert!(detail_text.contains("/scan/a,b: Bad FOUND"));
+    }
+
+    #[test]
+    fn update_entries_export_empty_scan_columns() {
+        let update_entry = ActivityEntryRecord {
+            activity_record: ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateApplied,
+            },
+            ..infected_entry()
+        };
+        assert!(
+            activity_entries_as_csv(std::slice::from_ref(&update_entry))
+                .contains("7,1970-01-01T00:16:40Z,Success,,0,0,2500\n")
+        );
+        let json_text = activity_entries_as_json(&[update_entry]).expect("json");
+        assert!(json_text.contains("\"activity_status\": \"update_applied\""));
+        assert!(json_text.contains("\"threat_count\": 0"));
     }
 }

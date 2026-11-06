@@ -356,7 +356,9 @@ impl ScanPageState {
 #[cfg(test)]
 mod scan_page_state_tests {
     use super::*;
-    use crate::host_services::clamav_scanner::scanner_output_parser::ThreatIdentity;
+    use crate::host_services::clamav_scanner::{
+        scan_progress_events::ThreatFindings, scanner_output_parser::ThreatIdentity,
+    };
 
     fn running_state(scan_run_number: ScanRunNumber, started_instant: Instant) -> ScanPageState {
         ScanPageState::ScanRunning(RunningScan::started(
@@ -411,7 +413,10 @@ mod scan_page_state_tests {
         assert!(found_threats.is_empty());
         let unchanged_outcome = running_outcome(&scan_page_state);
         assert_eq!(unchanged_outcome.inspected_file_count, 0);
-        assert!(unchanged_outcome.detected_threats.is_empty());
+        assert_eq!(
+            unchanged_outcome.threat_findings,
+            ThreatFindings::NoThreatsFound
+        );
         assert_eq!(
             scan_page_state.scan_progress_view(),
             &ScanProgressView::PreparingScan

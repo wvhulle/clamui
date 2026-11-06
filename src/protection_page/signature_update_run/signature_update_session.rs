@@ -5,7 +5,9 @@ use jiff::Timestamp;
 
 use crate::{
     host_services::{
-        activity_history::activity_history_database::{ActivityStatus, NewActivityEntry},
+        activity_history::activity_history_database::{
+            ActivityRecord, NewActivityEntry, UpdateActivityStatus,
+        },
         clamav_programs::{
             component_availability::{ProgramProbe, probe_located_program_version},
             database_directory_status::{
@@ -232,10 +234,9 @@ impl ActiveUpdateRun {
             definitions_changed: definitions_changed(&ended_run.update_outcome),
             activity_entry: NewActivityEntry {
                 started_at: ended_run.update_timing.started_at,
-                activity_status: activity_status_of(&ended_run.update_outcome),
-                activity_targets: String::new(),
-                inspected_file_count: 0,
-                threat_count: 0,
+                activity_record: ActivityRecord::UpdateActivity {
+                    update_status: update_status_of(&ended_run.update_outcome),
+                },
                 duration_millis: u64::try_from(
                     ended_run
                         .update_timing
@@ -513,15 +514,17 @@ fn describe_update_outcome(update_outcome: &DatabaseUpdateOutcome) -> String {
         .join("\n")
 }
 
-const fn activity_status_of(update_outcome: &DatabaseUpdateOutcome) -> ActivityStatus {
+const fn update_status_of(update_outcome: &DatabaseUpdateOutcome) -> UpdateActivityStatus {
     match update_outcome {
-        DatabaseUpdateOutcome::DefinitionsUpdated(_) => ActivityStatus::UpdateApplied,
-        DatabaseUpdateOutcome::AlreadyCurrent(_) => ActivityStatus::UpdateAlreadyCurrent,
-        DatabaseUpdateOutcome::ServiceRanWithoutVerdict(_) => ActivityStatus::UpdateResultUnknown,
-        DatabaseUpdateOutcome::UpdateRequestedFromDaemon => ActivityStatus::UpdateRequested,
-        DatabaseUpdateOutcome::UpdateCancelled => ActivityStatus::UpdateCancelled,
+        DatabaseUpdateOutcome::DefinitionsUpdated(_) => UpdateActivityStatus::UpdateApplied,
+        DatabaseUpdateOutcome::AlreadyCurrent(_) => UpdateActivityStatus::UpdateAlreadyCurrent,
+        DatabaseUpdateOutcome::ServiceRanWithoutVerdict(_) => {
+            UpdateActivityStatus::UpdateResultUnknown
+        }
+        DatabaseUpdateOutcome::UpdateRequestedFromDaemon => UpdateActivityStatus::UpdateRequested,
+        DatabaseUpdateOutcome::UpdateCancelled => UpdateActivityStatus::UpdateCancelled,
         DatabaseUpdateOutcome::UpdateFailed { .. }
-        | DatabaseUpdateOutcome::UpdaterNeverStarted(_) => ActivityStatus::UpdateFailed,
+        | DatabaseUpdateOutcome::UpdaterNeverStarted(_) => UpdateActivityStatus::UpdateFailed,
     }
 }
 
@@ -781,8 +784,10 @@ mod signature_update_session_tests {
         let finished_report = ended_report(&mut update_session);
         assert!(!finished_report.definitions_changed);
         assert_eq!(
-            finished_report.activity_entry.activity_status,
-            ActivityStatus::UpdateRequested
+            finished_report.activity_entry.activity_record,
+            ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateRequested
+            }
         );
     }
 
@@ -807,8 +812,10 @@ mod signature_update_session_tests {
                 .contains("Reading the system journal stopped before it finished")
         );
         assert_eq!(
-            finished_report.activity_entry.activity_status,
-            ActivityStatus::UpdateResultUnknown
+            finished_report.activity_entry.activity_record,
+            ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateResultUnknown
+            }
         );
     }
 
@@ -839,8 +846,10 @@ mod signature_update_session_tests {
         let finished_report = ended_report(&mut update_session);
         assert!(!finished_report.definitions_changed);
         assert_eq!(
-            finished_report.activity_entry.activity_status,
-            ActivityStatus::UpdateResultUnknown
+            finished_report.activity_entry.activity_record,
+            ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateResultUnknown
+            }
         );
     }
 
@@ -854,8 +863,10 @@ mod signature_update_session_tests {
         )]);
         let finished_report = ended_report(&mut update_session);
         assert_eq!(
-            finished_report.activity_entry.activity_status,
-            ActivityStatus::UpdateFailed
+            finished_report.activity_entry.activity_record,
+            ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateFailed
+            }
         );
         assert_eq!(finished_report.activity_entry.activity_output, "");
         assert_eq!(
@@ -883,8 +894,10 @@ mod signature_update_session_tests {
         let next_report = ended_report(&mut update_session);
         assert!(!next_report.definitions_changed);
         assert_eq!(
-            next_report.activity_entry.activity_status,
-            ActivityStatus::UpdateFailed
+            next_report.activity_entry.activity_record,
+            ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateFailed
+            }
         );
         assert_eq!(next_report.activity_entry.activity_output, "");
     }
@@ -899,8 +912,10 @@ mod signature_update_session_tests {
         let finished_report = ended_report(&mut update_session);
         assert!(!finished_report.definitions_changed);
         assert_eq!(
-            finished_report.activity_entry.activity_status,
-            ActivityStatus::UpdateCancelled
+            finished_report.activity_entry.activity_record,
+            ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateCancelled
+            }
         );
     }
 
