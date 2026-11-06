@@ -1,4 +1,6 @@
-use std::{cell::OnceCell, os::unix::ffi::OsStringExt, path::PathBuf, rc::Rc};
+use std::{
+    cell::OnceCell, collections::HashMap, os::unix::ffi::OsStringExt, path::PathBuf, rc::Rc,
+};
 
 use gettextrs::gettext;
 use relm4::{
@@ -16,8 +18,12 @@ use crate::{
         activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
     },
     application_data_directory,
-    application_settings::preferences_dialog::{
-        CLOSE_ACTION_KEY, application_settings, present_preferences_dialog,
+    application_settings::{
+        clamav_host_settings::{
+            EngineSettingsSection, current_live_tuning_state, engine_settings_page,
+        },
+        preferences_dialog::{PreferencesPageName, present_preferences_dialog},
+        stored_settings::{CLOSE_ACTION_KEY, application_settings},
     },
     background_detections::{
         background_detections_page::{
@@ -41,13 +47,18 @@ use crate::{
         quarantine_entry_database::QuarantineVault,
         quarantine_file_moves::QuarantineMoveFailure,
     },
-    malware_scan::scan_progress_page::{
-        ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
+    malware_scan::{
+        scan_progress_page::{
+            ScanProgressPage, ScanProgressPageInit, ScanProgressPageInput, ScanProgressPageOutput,
+        },
+        scan_settings::{device_scan_page, exclusions_page},
     },
     protection_status::protection_timeline_page::{
         ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
     },
     scan_profiles::scan_profile_store::ScanProfileStore,
+    scheduled_scans::schedule_preferences_page::SchedulePreferencesPage,
+    settings_navigation::{OPEN_SETTINGS_ACTION_NAME, SettingsSubpage, settings_subpage_frame},
     startup_arguments::StartupRequest,
     system_audit::{
         audit_report_model::{HARDENING_AUDIT_CATEGORIES, SIGNATURE_AUDIT_CATEGORIES},
@@ -106,20 +117,112 @@ struct NavigationPage<'page> {
     keyboard_accelerator: &'static str,
 }
 
-fn navigation_stack(navigation_pages: &[NavigationPage<'_>]) -> gtk::Stack {
+type PageNavigationViews = Rc<HashMap<&'static str, adw::NavigationView>>;
+
+fn page_navigation_view(navigation_page: &NavigationPage<'_>) -> adw::NavigationView {
+    let navigation_view = adw::NavigationView::new();
+    navigation_view.add(
+        &adw::NavigationPage::builder()
+            .title(&navigation_page.page_title)
+            .tag(navigation_page.page_name)
+            .child(navigation_page.page_widget)
+            .build(),
+    );
+    navigation_view
+}
+
+fn navigation_stack(navigation_pages: &[NavigationPage<'_>]) -> (gtk::Stack, PageNavigationViews) {
     let page_stack = gtk::Stack::new();
+    let mut navigation_views = HashMap::new();
     navigation_pages.iter().for_each(|navigation_page| {
+        let navigation_view = page_navigation_view(navigation_page);
         page_stack.add_titled(
-            navigation_page.page_widget,
+            &navigation_view,
             Some(navigation_page.page_name),
             &navigation_page.page_title,
         );
+        navigation_views.insert(navigation_page.page_name, navigation_view);
         relm4::main_application().set_accels_for_action(
             &format!("win.show-page::{}", navigation_page.page_name),
             &[navigation_page.keyboard_accelerator],
         );
     });
-    page_stack
+    (page_stack, Rc::new(navigation_views))
+}
+
+fn settings_subpage_content(settings_subpage: SettingsSubpage) -> gtk::Widget {
+    match settings_subpage {
+        SettingsSubpage::ScanExclusions => exclusions_page(&application_settings()).upcast(),
+        SettingsSubpage::DeviceAutoScan => device_scan_page(&application_settings()).upcast(),
+        SettingsSubpage::ScanSchedule => {
+            let mut schedule_page = SchedulePreferencesPage::builder().launch(()).detach();
+            schedule_page.detach_runtime();
+            schedule_page.widget().clone().upcast()
+        }
+        SettingsSubpage::ScannerEngine
+        | SettingsSubpage::OnAccessScanning
+        | SettingsSubpage::SignatureUpdates => adw::Spinner::new().upcast(),
+    }
+}
+
+const fn engine_section(settings_subpage: SettingsSubpage) -> Option<EngineSettingsSection> {
+    match settings_subpage {
+        SettingsSubpage::ScannerEngine => Some(EngineSettingsSection::ScannerEngine),
+        SettingsSubpage::OnAccessScanning => Some(EngineSettingsSection::OnAccessScanning),
+        SettingsSubpage::SignatureUpdates => Some(EngineSettingsSection::SignatureUpdates),
+        SettingsSubpage::ScanExclusions
+        | SettingsSubpage::ScanSchedule
+        | SettingsSubpage::DeviceAutoScan => None,
+    }
+}
+
+fn push_settings_subpage(navigation_view: &adw::NavigationView, settings_subpage: SettingsSubpage) {
+    if navigation_view
+        .visible_page()
+        .and_then(|visible_page| visible_page.tag())
+        .is_some_and(|visible_tag| visible_tag == settings_subpage.action_target())
+    {
+        return;
+    }
+    let pushed_subpage = settings_subpage_frame(
+        settings_subpage,
+        &settings_subpage_content(settings_subpage),
+    );
+    navigation_view.push(&pushed_subpage);
+    if let Some(engine_section) = engine_section(settings_subpage) {
+        let loading_subpage = pushed_subpage.clone();
+        relm4::spawn_local(async move {
+            let engine_page =
+                engine_settings_page(engine_section, current_live_tuning_state().await);
+            if let Some(subpage_view) = loading_subpage.child().and_downcast::<adw::ToolbarView>() {
+                subpage_view.set_content(Some(&engine_page));
+            }
+        });
+    }
+}
+
+fn register_settings_action(
+    window_root: &adw::ApplicationWindow,
+    page_stack: &gtk::Stack,
+    navigation_views: PageNavigationViews,
+) {
+    let settings_action =
+        gio::SimpleAction::new(OPEN_SETTINGS_ACTION_NAME, Some(glib::VariantTy::STRING));
+    let settings_stack = page_stack.clone();
+    settings_action.connect_activate(move |_activated_action, action_target| {
+        let Some(settings_subpage) = action_target
+            .and_then(|target_variant| target_variant.str().map(str::to_owned))
+            .and_then(|target_text| SettingsSubpage::from_action_target(&target_text))
+        else {
+            return;
+        };
+        let owning_page_name = settings_subpage.owning_page_name();
+        settings_stack.set_visible_child_name(owning_page_name);
+        if let Some(navigation_view) = navigation_views.get(owning_page_name) {
+            push_settings_subpage(navigation_view, settings_subpage);
+        }
+    });
+    window_root.add_action(&settings_action);
 }
 
 fn navigation_row(navigation_page: &NavigationPage<'_>) -> gtk::ListBoxRow {
@@ -220,8 +323,9 @@ fn register_application_actions(window_root: &adw::ApplicationWindow, page_stack
     about_action.connect_activate(|_activated_action, _parameter| present_about_dialog());
     main_application.add_action(&about_action);
     let preferences_action = gio::SimpleAction::new("preferences", None);
-    preferences_action
-        .connect_activate(|_activated_action, _parameter| present_preferences_dialog());
+    preferences_action.connect_activate(|_activated_action, _parameter| {
+        present_preferences_dialog(PreferencesPageName::GeneralPreferences)
+    });
     main_application.add_action(&preferences_action);
     main_application.set_accels_for_action("app.preferences", &["<Control>comma"]);
     let quit_action = gio::SimpleAction::new("quit", None);
@@ -233,14 +337,20 @@ fn register_application_actions(window_root: &adw::ApplicationWindow, page_stack
     main_application.set_accels_for_action("window.close", &["<Control>w"]);
 }
 
+fn visible_page_title(page_stack: &gtk::Stack) -> String {
+    page_stack
+        .visible_child()
+        .and_then(|visible_child| page_stack.page(&visible_child).title())
+        .map(|page_title| page_title.to_string())
+        .unwrap_or_default()
+}
+
 fn adaptive_navigation_layout(
     sidebar_list: &gtk::ListBox,
     page_stack: &gtk::Stack,
     window_root: &adw::ApplicationWindow,
-) -> adw::OverlaySplitView {
-    let sidebar_header = adw::HeaderBar::builder()
-        .title_widget(&adw::WindowTitle::new("ClamUI", ""))
-        .build();
+) -> adw::ToastOverlay {
+    let sidebar_header = adw::HeaderBar::new();
     sidebar_header.pack_end(&primary_menu_button());
     let sidebar_view = adw::ToolbarView::new();
     sidebar_view.add_top_bar(&sidebar_header);
@@ -250,43 +360,36 @@ fn adaptive_navigation_layout(
             .child(sidebar_list)
             .build(),
     ));
-
-    let split_view = adw::OverlaySplitView::builder()
-        .sidebar(&sidebar_view)
+    let content_page = adw::NavigationPage::builder()
+        .title(visible_page_title(page_stack))
+        .child(page_stack)
+        .build();
+    let split_view = adw::NavigationSplitView::builder()
+        .sidebar(
+            &adw::NavigationPage::builder()
+                .title("ClamUI")
+                .child(&sidebar_view)
+                .build(),
+        )
+        .content(&content_page)
         .sidebar_width_fraction(0.22)
         .build();
+    let titled_content_page = content_page.clone();
+    page_stack.connect_visible_child_notify(move |changed_stack| {
+        titled_content_page.set_title(&visible_page_title(changed_stack));
+    });
     let activated_split_view = split_view.clone();
     sidebar_list.connect_row_activated(move |_sidebar_list, _activated_row| {
-        if activated_split_view.is_collapsed() {
-            activated_split_view.set_show_sidebar(false);
-        }
+        activated_split_view.set_show_content(true);
     });
-    let sidebar_toggle = gtk::ToggleButton::builder()
-        .icon_name("sidebar-show-symbolic")
-        .tooltip_text(gettext("Toggle sidebar"))
-        .build();
-    split_view
-        .bind_property("show-sidebar", &sidebar_toggle, "active")
-        .bidirectional()
-        .sync_create()
-        .build();
-    split_view
-        .bind_property("collapsed", &sidebar_toggle, "visible")
-        .sync_create()
-        .build();
-    let content_header = adw::HeaderBar::builder().show_title(false).build();
-    content_header.pack_start(&sidebar_toggle);
-    let content_view = adw::ToolbarView::new();
-    content_view.add_top_bar(&content_header);
-    content_view.set_content(Some(page_stack));
-    split_view.set_content(Some(&content_view));
-
     if let Ok(narrow_condition) = adw::BreakpointCondition::parse("max-width: 640sp") {
         let narrow_breakpoint = adw::Breakpoint::new(narrow_condition);
         narrow_breakpoint.add_setter(&split_view, "collapsed", Some(&true.to_value()));
         window_root.add_breakpoint(narrow_breakpoint);
     }
-    split_view
+    let window_toast_overlay = adw::ToastOverlay::new();
+    window_toast_overlay.set_child(Some(&split_view));
+    window_toast_overlay
 }
 
 fn application_pages(
@@ -393,6 +496,7 @@ fn application_pages(
                  add.",
             ),
             audited_categories: &SIGNATURE_AUDIT_CATEGORIES,
+            settings_subpages: &[SettingsSubpage::SignatureUpdates],
         })
         .detach();
     let hardening_page = AuditSectionsPage::builder()
@@ -403,6 +507,7 @@ fn application_pages(
                  reference and don't affect the Protection summary.",
             ),
             audited_categories: &HARDENING_AUDIT_CATEGORIES,
+            settings_subpages: &[],
         })
         .detach();
 
@@ -457,9 +562,12 @@ fn application_pages(
             keyboard_accelerator: "<Control>7",
         },
     ];
-    let page_stack = navigation_stack(&navigation_pages);
+    let (page_stack, navigation_views) = navigation_stack(&navigation_pages);
+    register_settings_action(window_root, &page_stack, navigation_views);
     match startup_request.startup_page.as_str() {
-        PREFERENCES_STARTUP_PAGE => present_preferences_dialog(),
+        PREFERENCES_STARTUP_PAGE => {
+            present_preferences_dialog(PreferencesPageName::GeneralPreferences)
+        }
         DATABASE_STARTUP_PAGE => database_dialog.present(Some(window_root)),
         startup_page => page_stack.set_visible_child_name(startup_page),
     }

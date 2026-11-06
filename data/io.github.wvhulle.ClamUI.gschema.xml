@@ -70,5 +70,13 @@
     <key name="exclusion-rules" type="a(ssb)">
       <default>[("node_modules", "directory", true), (".git", "directory", true), (".venv", "directory", true), ("build", "directory", true), ("dist", "directory", true), ("__pycache__", "directory", true)]</default>
     </key>
+    <key name="virustotal-key-file" type="s">
+      <default>""</default>
+      <summary>File holding the VirusTotal API key, provided by the system configuration</summary>
+    </key>
+    <key name="abuse-ch-key-file" type="s">
+      <default>""</default>
+      <summary>File holding the abuse.ch Auth-Key, provided by the system configuration</summary>
+    </key>
   </schema>
 </schemalist>

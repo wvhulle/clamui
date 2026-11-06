@@ -5,7 +5,6 @@ use relm4::{
 };
 
 use crate::{
-    application_settings::preferences_dialog::present_preferences_dialog,
     background_detections::detection_journal_follower::JournalAccess,
     clamav_components::distribution_install_guides::{
         DistributionFamily, detect_distribution_family,
@@ -22,6 +21,7 @@ use crate::{
         },
         protection_timeline_presentation::{AlertReadiness, protection_timeline},
     },
+    settings_navigation::{OPEN_SETTINGS_ACTION_NAME, SettingsSubpage, settings_link_group},
     step_timeline::{
         timeline_step_model::{TimelineStepAction, TimelineStepRequest},
         timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
@@ -228,7 +228,12 @@ impl ProtectionTimelinePage {
                     }
                 });
             }
-            TimelineStepAction::OpenSchedulePreferences => present_preferences_dialog(),
+            TimelineStepAction::OpenSchedulePreferences => {
+                let _action_missing = root.activate_action(
+                    &format!("win.{OPEN_SETTINGS_ACTION_NAME}"),
+                    Some(&SettingsSubpage::ScanSchedule.action_target().to_variant()),
+                );
+            }
             TimelineStepAction::QuarantineIncident
             | TimelineStepAction::AskIncidentDeletion
             | TimelineStepAction::DeleteIncidentFile
@@ -249,7 +254,29 @@ impl Component for ProtectionTimelinePage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
-            set_child = &gtk::Stack {
+            set_child = &adw::ToolbarView {
+            add_top_bar = &adw::HeaderBar {
+                #[wrap(Some)]
+                set_title_widget = &adw::WindowTitle {
+                    set_title: &gettext("Protection"),
+                },
+
+                pack_end = &gtk::Stack {
+                    add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
+                        set_icon_name: "view-refresh-symbolic",
+                        set_tooltip_text: Some(&gettext("Check again")),
+                        connect_clicked => ProtectionTimelinePageInput::RefreshRequested,
+                    },
+                    add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                        set_tooltip_text: Some(&gettext("Checking")),
+                    },
+                    #[watch]
+                    set_visible_child_name: busy_page_name(model.evidence_refresh != EvidenceRefresh::NothingRunning),
+                },
+            },
+
+            #[wrap(Some)]
+            set_content = &gtk::Stack {
             #[local_ref]
             add_named[Some(LOADING_PAGE_NAME)] = protection_loading_page -> adw::StatusPage {},
             add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
@@ -262,37 +289,24 @@ impl Component for ProtectionTimelinePage {
                         &gtk::glib::home_dir().to_string_lossy(),
                     ))),
                     #[wrap(Some)]
-                    set_header_suffix = &gtk::Box {
-                        set_spacing: 6,
+                    set_header_suffix = &gtk::Button {
+                        set_label: &gettext("Review"),
                         set_valign: gtk::Align::Center,
-                        gtk::Button {
-                            set_label: &gettext("Review"),
-                            set_action_name: Some("win.show-page"),
-                            set_action_target_value: Some(&"detections".to_variant()),
-                            add_css_class: "suggested-action",
-                            #[watch]
-                            set_visible: model.unresolved_detections > 0,
-                        },
-                        gtk::Stack {
-                            add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
-                                set_icon_name: "view-refresh-symbolic",
-                                set_tooltip_text: Some(&gettext("Check again")),
-                                add_css_class: "flat",
-                                connect_clicked => ProtectionTimelinePageInput::RefreshRequested,
-                            },
-                            add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
-                                set_tooltip_text: Some(&gettext("Checking")),
-                            },
-                            #[watch]
-                            set_visible_child_name: busy_page_name(model.evidence_refresh != EvidenceRefresh::NothingRunning),
-                        },
+                        set_action_name: Some("win.show-page"),
+                        set_action_target_value: Some(&"detections".to_variant()),
+                        add_css_class: "suggested-action",
+                        #[watch]
+                        set_visible: model.unresolved_detections > 0,
                     },
                 },
 
                 add: timeline_group,
+
+                add = &settings_link_group(&[SettingsSubpage::OnAccessScanning]),
             },
             #[watch]
             set_visible_child_name: model.first_load().shown_page_name(),
+            },
             },
         }
     }

@@ -8,6 +8,12 @@ clamuiFlake:
 let
   clamuiSettings = config.services.clamui;
   liveTuning = clamuiSettings.liveTuning;
+  apiKeyFileSettings = lib.filterAttrs (settingName: keyFilePath: keyFilePath != null) {
+    virustotal-key-file = clamuiSettings.apiKeyFiles.virustotal;
+    abuse-ch-key-file = clamuiSettings.apiKeyFiles.abuseCh;
+  };
+  isOutsideStore =
+    keyFilePath: lib.hasPrefix "/" keyFilePath && !lib.hasPrefix builtins.storeDir keyFilePath;
   clamavSettings = config.services.clamav;
   system = pkgs.stdenv.hostPlatform.system;
   mergedConfigPath = "/run/clamui/clamd.conf";
@@ -45,6 +51,28 @@ in
       defaultText = lib.literalExpression "clamui.packages.\${pkgs.stdenv.hostPlatform.system}.default";
       description = "The ClamUI package to run.";
     };
+    apiKeyFiles = {
+      virustotal = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = lib.literalExpression "config.age.secrets.virustotal-key.path";
+        description = ''
+          Runtime path of a file holding the VirusTotal API key, for example an agenix or
+          sops-nix secret owned by the desktop user. Only the path is stored, as a system-wide
+          dconf default, never the key. When set, ClamUI uses this file and doesn't offer to
+          paste a key.
+        '';
+      };
+      abuseCh = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = lib.literalExpression "config.age.secrets.abuse-ch-key.path";
+        description = ''
+          Runtime path of a file holding the abuse.ch Auth-Key used for MalwareBazaar lookups.
+          Only the path is stored, never the key.
+        '';
+      };
+    };
     liveTuning = {
       enable = lib.mkEnableOption ''
         changing allowed clamd settings from ClamUI at runtime. Each change asks for administrator
@@ -79,6 +107,18 @@ in
       systemd.user.services.clamui = {
         wantedBy = [ "graphical-session.target" ];
         path = [ "/run/current-system/sw" ];
+      };
+    })
+    (lib.mkIf (apiKeyFileSettings != { }) {
+      assertions = lib.mapAttrsToList (settingName: keyFilePath: {
+        assertion = isOutsideStore keyFilePath;
+        message = "services.clamui.apiKeyFiles: ${keyFilePath} must be an absolute path outside the Nix store, so the key never ends up in it";
+      }) apiKeyFileSettings;
+      programs.dconf = {
+        enable = true;
+        profiles.user.databases = [
+          { settings."io/github/wvhulle/ClamUI" = apiKeyFileSettings; }
+        ];
       };
     })
     (lib.mkIf liveTuning.enable {

@@ -5,8 +5,8 @@ use crate::{
     threat_intel_lookup::{
         circl_hashlookup_client::{KnownFileLookup, look_up_known_file},
         malware_bazaar_client::{KnownSampleLookup, look_up_file_hash},
-        service_key_preferences_page::describe_key_failure,
-        service_key_storage::{ThreatIntelService, read_stored_api_key},
+        online_lookup_preferences::describe_key_failure,
+        service_key_storage::{ResolvedApiKey, ThreatIntelService, read_api_key},
         virustotal_api_client::{FileReportLookup, VirusTotalClient, VirusTotalFailure},
     },
 };
@@ -33,7 +33,7 @@ impl SourceAnswer {
         match self {
             Self::NotChecked => gettext("Not checked yet"),
             Self::Checking => gettext("Checking…"),
-            Self::NeedsKey => gettext("Add a key in Preferences to include this source"),
+            Self::NeedsKey => gettext("Needs a key"),
             Self::Answered { verdict_text } | Self::AnsweredWithReport { verdict_text, .. } => {
                 verdict_text.clone()
             }
@@ -132,9 +132,11 @@ fn describe_virustotal_failure(virustotal_failure: &VirusTotalFailure) -> String
 }
 
 async fn stored_key_for(threat_intel_service: ThreatIntelService) -> Result<String, SourceAnswer> {
-    match read_stored_api_key(threat_intel_service).await {
-        Ok(Some(stored_key)) => Ok(stored_key),
-        Ok(None) => Err(SourceAnswer::NeedsKey),
+    match read_api_key(threat_intel_service).await {
+        Ok(ResolvedApiKey::FromKeyFile(api_key) | ResolvedApiKey::FromKeyring(api_key)) => {
+            Ok(api_key)
+        }
+        Ok(ResolvedApiKey::NotConfigured) => Err(SourceAnswer::NeedsKey),
         Err(key_failure) => Err(SourceAnswer::Failed {
             failure_text: describe_key_failure(&key_failure),
         }),

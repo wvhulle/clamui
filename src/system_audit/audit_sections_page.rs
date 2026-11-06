@@ -10,6 +10,7 @@ use crate::{
     },
     loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
+    settings_navigation::{SettingsSubpage, settings_link_group},
     system_audit::{
         audit_report_model::{AuditCategory, AuditSection},
         audit_section_group::{AuditGuidanceRequest, AuditSectionGroup, AuditSectionGroupInput},
@@ -28,6 +29,7 @@ pub struct AuditSectionsPageInit {
     pub page_title: String,
     pub page_description: String,
     pub audited_categories: &'static [AuditCategory],
+    pub settings_subpages: &'static [SettingsSubpage],
 }
 
 #[derive(Debug)]
@@ -96,18 +98,17 @@ impl Component for AuditSectionsPage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
-            #[local_ref]
-            set_child = sections_preferences_page -> adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    set_title: &gtk::glib::markup_escape_text(&page_init.page_title),
-                    set_description: Some(&gtk::glib::markup_escape_text(&page_init.page_description)),
+            set_child = &adw::ToolbarView {
+                add_top_bar = &adw::HeaderBar {
                     #[wrap(Some)]
-                    set_header_suffix = &gtk::Stack {
-                        set_valign: gtk::Align::Center,
+                    set_title_widget = &adw::WindowTitle {
+                        set_title: &page_init.page_title,
+                    },
+
+                    pack_end = &gtk::Stack {
                         add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
                             set_icon_name: "view-refresh-symbolic",
                             set_tooltip_text: Some(&gettext("Check again")),
-                            add_css_class: "flat",
                             connect_clicked => AuditSectionsPageInput::RefreshRequested,
                         },
                         add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
@@ -115,6 +116,14 @@ impl Component for AuditSectionsPage {
                         },
                         #[watch]
                         set_visible_child_name: busy_page_name(model.running_checks > 0),
+                    },
+                },
+
+                #[wrap(Some)]
+                #[local_ref]
+                set_content = sections_preferences_page -> adw::PreferencesPage {
+                    add = &adw::PreferencesGroup {
+                        set_description: Some(&gtk::glib::markup_escape_text(&page_init.page_description)),
                     },
                 },
             },
@@ -147,6 +156,9 @@ impl Component for AuditSectionsPage {
             .for_each(|audit_category| {
                 model.section_groups.guard().push_back(audit_category);
             });
+        if !page_init.settings_subpages.is_empty() {
+            sections_preferences_page.add(&settings_link_group(page_init.settings_subpages));
+        }
         model.start_section_audit(&sender);
         ComponentParts { model, widgets }
     }

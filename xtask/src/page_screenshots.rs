@@ -51,23 +51,26 @@ struct PageCapture {
 }
 
 const LOG_ENTRY_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 170, "logs-entry-selected")];
-const PROFILE_MANAGER_CLICKS: [PointerClick; 1] = [PointerClick::at(814, 177, "profile-manager")];
-const PREFERENCE_TAB_CLICKS: [PointerClick; 2] = [
-    PointerClick::at(275, 655, "preferences-exclusions"),
-    PointerClick::at(363, 655, "preferences-scheduled"),
-];
+const PROFILE_MANAGER_CLICKS: [PointerClick; 1] = [PointerClick::at(814, 136, "profile-manager")];
+const SCAN_SETTINGS_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 494, "scan-exclusions")];
+const PREFERENCE_TAB_CLICKS: [PointerClick; 1] =
+    [PointerClick::at(531, 42, "preferences-online-lookups")];
 const QUARANTINE_ALL_CLICKS: [PointerClick; 2] = [
-    PointerClick::at(637, 92, "results-quarantine-confirmation"),
+    PointerClick::at(492, 237, "results-quarantine-confirmation"),
     PointerClick::at(520, 395, "results-quarantined"),
 ];
 
 const DETECTION_INCIDENT_CLICKS: [PointerClick; 1] =
     [PointerClick::at(548, 170, "detection-incident")];
 
-const PAGE_CAPTURES: [PageCapture; 8] = [
+const PAGE_CAPTURES: [PageCapture; 9] = [
     PageCapture {
         pointer_clicks: &PROFILE_MANAGER_CLICKS,
         ..PageCapture::idle_page("scan", "--page=scan")
+    },
+    PageCapture {
+        pointer_clicks: &SCAN_SETTINGS_CLICKS,
+        ..PageCapture::idle_page("scan-settings", "--page=scan")
     },
     PageCapture {
         screenshot_name: "scan-result",

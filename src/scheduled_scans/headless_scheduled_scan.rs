@@ -15,10 +15,10 @@ use crate::{
     },
     application_data_directory,
     application_settings::{
-        preferences_dialog::{
+        scan_exclusion_rules::ScanExclusions,
+        stored_settings::{
             application_settings, read_exclusion_entries, scanner_backend_preference,
         },
-        scan_exclusion_rules::ScanExclusions,
     },
     desktop_integration::desktop_notifications::send_session_notification,
     file_process_lock::{FileLockAttempt, try_file_lock},

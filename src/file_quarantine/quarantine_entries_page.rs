@@ -210,99 +210,105 @@ impl Component for QuarantineEntriesPage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
-            #[template]
-            set_child = &ClampedPage {
-                #[template_child]
-                page_content {
-                    adw::PreferencesGroup {
-                        set_title: &gettext("Quarantine Storage"),
-                        set_description: Some(&gettext("Secure storage for isolated threats")),
-
-                        adw::ActionRow {
-                            set_title: &gettext("Total Size"),
-                            #[watch]
-                            set_subtitle: &model.total_stored_size(),
-                            add_prefix = &gtk::Image { set_icon_name: Some("drive-harddisk-symbolic") },
-                            add_suffix = &gtk::Label {
-                                add_css_class: "dim-label",
-                                #[watch]
-                                set_label: &model.entry_count_text(),
-                            },
-                        },
-                    },
-
-                    gtk::Label {
-                        set_xalign: 0.0,
-                        set_wrap: true,
-                        set_selectable: true,
+            set_child = &adw::ToolbarView {
+                add_top_bar = &adw::HeaderBar {
+                    #[wrap(Some)]
+                    set_title_widget = &adw::WindowTitle {
+                        set_title: &gettext("Quarantine"),
                         #[watch]
-                        set_visible: !model.status_message.is_empty(),
-                        #[watch]
-                        set_label: &model.status_message,
+                        set_subtitle: &model.entry_count_text(),
                     },
 
-                    gtk::Box {
-                        set_spacing: 6,
-
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_hexpand: true,
-
-                            gtk::Label {
-                                set_xalign: 0.0,
-                                add_css_class: "heading",
-                                set_label: &gettext("Quarantined Files"),
-                            },
-
-                            gtk::Label {
-                                set_xalign: 0.0,
-                                set_wrap: true,
-                                add_css_class: "dim-label",
-                                set_label: &gettext("Detected threats isolated from your system"),
-                            },
-                        },
-
-                        gtk::SearchEntry {
-                            set_placeholder_text: Some(&gettext("Search by threat name or path")),
-                            set_valign: gtk::Align::Center,
-                            connect_search_changed[sender] => move |search_entry| {
-                                sender.input(QuarantineEntriesPageInput::SearchTextChanged(
-                                    search_entry.text().to_string(),
-                                ));
-                            },
-                        },
-
-                        gtk::Button {
-                            set_icon_name: "view-refresh-symbolic",
-                            set_tooltip_text: Some(&gettext("Refresh")),
-                            set_valign: gtk::Align::Center,
-                            add_css_class: "flat",
-                            connect_clicked => QuarantineEntriesPageInput::ReloadEntriesRequested,
-                        },
-
-                        gtk::Button {
-                            set_label: &gettext("Clear Old Items"),
-                            set_valign: gtk::Align::Center,
-                            add_css_class: "flat",
-                            #[watch]
-                            set_sensitive: !model.old_entries().is_empty(),
-                            connect_clicked => QuarantineEntriesPageInput::ClearOldEntriesRequested,
-                        },
-                    },
-
-                    #[local_ref]
-                    entry_list -> gtk::ListBox {
-                        add_css_class: "boxed-list",
-                        set_selection_mode: gtk::SelectionMode::None,
+                    pack_end = &gtk::MenuButton {
+                        set_icon_name: "view-more-symbolic",
+                        set_tooltip_text: Some(&gettext("More")),
                         #[wrap(Some)]
-                        #[local_ref]
-                        set_placeholder = placeholder_stack -> gtk::Stack {
-                            #[watch]
-                            set_visible_child_name: model.first_load.shown_page_name(),
+                        set_popover = &gtk::Popover {
+                            gtk::Button {
+                                set_label: &gettext("Clear Old Items…"),
+                                add_css_class: "flat",
+                                #[watch]
+                                set_sensitive: !model.old_entries().is_empty(),
+                                connect_clicked[sender] => move |clicked_button| {
+                                    if let Some(enclosing_popover) = clicked_button
+                                        .ancestor(gtk::Popover::static_type())
+                                        .and_downcast::<gtk::Popover>()
+                                    {
+                                        enclosing_popover.popdown();
+                                    }
+                                    sender.input(QuarantineEntriesPageInput::ClearOldEntriesRequested);
+                                },
+                            },
+                        },
+                    },
+
+                    pack_end = &gtk::Button {
+                        set_icon_name: "view-refresh-symbolic",
+                        set_tooltip_text: Some(&gettext("Refresh")),
+                        connect_clicked => QuarantineEntriesPageInput::ReloadEntriesRequested,
+                    },
+
+                    #[name = "search_toggle"]
+                    pack_end = &gtk::ToggleButton {
+                        set_icon_name: "system-search-symbolic",
+                        set_tooltip_text: Some(&gettext("Search")),
+                    },
+                },
+
+                #[name = "search_bar"]
+                add_top_bar = &gtk::SearchBar {
+                    #[wrap(Some)]
+                    set_child = &gtk::SearchEntry {
+                        set_placeholder_text: Some(&gettext("Search by threat name or path")),
+                        connect_search_changed[sender] => move |search_entry| {
+                            sender.input(QuarantineEntriesPageInput::SearchTextChanged(
+                                search_entry.text().to_string(),
+                            ));
                         },
                     },
                 },
-            }
+
+                #[wrap(Some)]
+                #[template]
+                set_content = &ClampedPage {
+                    #[template_child]
+                    page_content {
+                        adw::PreferencesGroup {
+                            set_title: &gettext("Quarantine Storage"),
+                            set_description: Some(&gettext("Detected threats isolated from your system. Expand an entry to check its reputation.")),
+
+                            adw::ActionRow {
+                                set_title: &gettext("Total Size"),
+                                #[watch]
+                                set_subtitle: &model.total_stored_size(),
+                                add_prefix = &gtk::Image { set_icon_name: Some("drive-harddisk-symbolic") },
+                            },
+                        },
+
+                        gtk::Label {
+                            set_xalign: 0.0,
+                            set_wrap: true,
+                            set_selectable: true,
+                            #[watch]
+                            set_visible: !model.status_message.is_empty(),
+                            #[watch]
+                            set_label: &model.status_message,
+                        },
+
+                        #[local_ref]
+                        entry_list -> gtk::ListBox {
+                            add_css_class: "boxed-list",
+                            set_selection_mode: gtk::SelectionMode::None,
+                            #[wrap(Some)]
+                            #[local_ref]
+                            set_placeholder = placeholder_stack -> gtk::Stack {
+                                #[watch]
+                                set_visible_child_name: model.first_load.shown_page_name(),
+                            },
+                        },
+                    },
+                },
+            },
         }
     }
 
@@ -344,6 +350,26 @@ impl Component for QuarantineEntriesPage {
                 .build(),
         );
         let widgets = view_output!();
+        widgets
+            .search_toggle
+            .bind_property("active", &widgets.search_bar, "search-mode-enabled")
+            .bidirectional()
+            .sync_create()
+            .build();
+        widgets.search_bar.set_key_capture_widget(Some(&root));
+        let search_shortcuts = gtk::ShortcutController::new();
+        search_shortcuts.set_scope(gtk::ShortcutScope::Managed);
+        let shortcut_toggle = widgets.search_toggle.clone();
+        search_shortcuts.add_shortcut(gtk::Shortcut::new(
+            gtk::ShortcutTrigger::parse_string("<Control>f"),
+            Some(gtk::CallbackAction::new(
+                move |_shortcut_widget, _arguments| {
+                    shortcut_toggle.set_active(true);
+                    gtk::glib::Propagation::Stop
+                },
+            )),
+        ));
+        root.add_controller(search_shortcuts);
         ComponentParts { model, widgets }
     }
 

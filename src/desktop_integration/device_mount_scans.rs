@@ -6,7 +6,7 @@ use relm4::{
 };
 
 use crate::{
-    application_settings::preferences_dialog::application_settings,
+    application_settings::stored_settings::application_settings,
     malware_scan::scan_progress_page::{ScanProgressPage, ScanProgressPageInput},
     scheduled_scans::headless_scheduled_scan::{POWER_SUPPLY_DIRECTORY, host_runs_on_battery},
 };

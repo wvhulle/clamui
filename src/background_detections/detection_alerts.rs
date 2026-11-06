@@ -5,7 +5,7 @@ use relm4::gtk::{gio, gio::prelude::*, glib::variant::ToVariant};
 
 use crate::{
     APPLICATION_ID,
-    application_settings::preferences_dialog::application_settings,
+    application_settings::stored_settings::application_settings,
     background_detections::{
         detection_journal_records::{DetectionSource, JournalDetectionRecord},
         incident_timeline_presentation::signature_is_test_pattern,

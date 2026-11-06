@@ -8,6 +8,7 @@ use relm4::{
 };
 
 use crate::{
+    application_settings::preferences_dialog::{PreferencesPageName, present_preferences_dialog},
     file_quarantine::quarantine_entry_database::QuarantineEntryRecord,
     malware_scan::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
     threat_intel_lookup::file_reputation_check::{
@@ -25,6 +26,7 @@ pub enum QuarantineEntryRowInput {
     CheckReputation,
     CopyHash,
     OpenVirusTotalReport,
+    OpenOnlineLookups,
 }
 
 #[derive(Debug)]
@@ -122,11 +124,27 @@ impl FactoryComponent for QuarantineEntryRow {
             add_row = &source_row("MalwareBazaar") -> adw::ActionRow {
                 #[watch]
                 set_subtitle: &self.reputation_answers.bazaar_answer.displayed_text(),
+
+                add_suffix = &gtk::Button {
+                    set_label: &gettext("Add Key"),
+                    set_valign: gtk::Align::Center,
+                    #[watch]
+                    set_visible: self.reputation_answers.bazaar_answer == SourceAnswer::NeedsKey,
+                    connect_clicked => QuarantineEntryRowInput::OpenOnlineLookups,
+                },
             },
 
             add_row = &source_row("VirusTotal") -> adw::ActionRow {
                 #[watch]
                 set_subtitle: &self.reputation_answers.virustotal_answer.displayed_text(),
+
+                add_suffix = &gtk::Button {
+                    set_label: &gettext("Add Key"),
+                    set_valign: gtk::Align::Center,
+                    #[watch]
+                    set_visible: self.reputation_answers.virustotal_answer == SourceAnswer::NeedsKey,
+                    connect_clicked => QuarantineEntryRowInput::OpenOnlineLookups,
+                },
 
                 add_suffix = &gtk::Button {
                     set_label: &gettext("View Report"),
@@ -190,6 +208,9 @@ impl FactoryComponent for QuarantineEntryRow {
                 let _parent_gone = sender.output(QuarantineEntryRowOutput::ShowToast(gettext(
                     "Hash copied to clipboard",
                 )));
+            }
+            QuarantineEntryRowInput::OpenOnlineLookups => {
+                present_preferences_dialog(PreferencesPageName::OnlineLookups);
             }
             QuarantineEntryRowInput::OpenVirusTotalReport => {
                 gtk::UriLauncher::new(self.virustotal_report_url()).launch(

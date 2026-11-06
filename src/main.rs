@@ -13,6 +13,7 @@ mod malware_scan;
 mod protection_status;
 mod scan_profiles;
 mod scheduled_scans;
+mod settings_navigation;
 mod shared_page_widget_templates;
 mod signature_sources;
 mod startup_arguments;
@@ -35,9 +36,7 @@ use relm4::{
 };
 
 use crate::{
-    application_settings::preferences_dialog::{
-        application_settings, settings_schema_is_installed,
-    },
+    application_settings::stored_settings::{application_settings, settings_schema_is_installed},
     application_window_shell::ApplicationWindowShell,
     desktop_integration::running_instance_forwarding::{
         another_instance_is_running, forward_to_running_instance,

@@ -7,7 +7,7 @@ use tokio::task::spawn_blocking;
 use crate::{
     application_settings::{
         clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
-        preferences_dialog::application_settings,
+        stored_settings::application_settings,
     },
     clamav_components::component_availability::{
         ProgramProbe, clamd_answers_ping, probe_program_version,

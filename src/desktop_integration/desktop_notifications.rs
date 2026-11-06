@@ -11,9 +11,7 @@ use relm4::{
     },
 };
 
-use crate::{
-    APPLICATION_ICON_NAME, application_settings::preferences_dialog::application_settings,
-};
+use crate::{APPLICATION_ICON_NAME, application_settings::stored_settings::application_settings};
 
 const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
 const NOTIFICATION_TIMEOUT_DEFAULT: i32 = -1;

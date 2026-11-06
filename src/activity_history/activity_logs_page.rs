@@ -193,18 +193,23 @@ impl Component for ActivityLogsPage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
-            set_child = &gtk::Box {
+            set_child = &adw::ToolbarView {
+            add_top_bar = &adw::HeaderBar {
+                #[wrap(Some)]
+                set_title_widget = &adw::ViewSwitcher {
+                    set_policy: adw::ViewSwitcherPolicy::Wide,
+                    set_stack: Some(&log_stack),
+                },
+            },
+
+            #[wrap(Some)]
+            set_content = &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                set_margin_top: 6,
+                set_margin_top: 12,
                 set_margin_bottom: 18,
                 set_margin_start: 18,
                 set_margin_end: 18,
                 set_spacing: 12,
-
-                adw::ViewSwitcher {
-                    set_policy: adw::ViewSwitcherPolicy::Wide,
-                    set_stack: Some(&log_stack),
-                },
 
                 #[name = "log_stack"]
                 adw::ViewStack {
@@ -405,6 +410,7 @@ impl Component for ActivityLogsPage {
                         append: &log_text_view(&model.daemon_buffer),
                     },
                 },
+            },
             },
         }
     }

@@ -72,9 +72,9 @@ Deliberately removed: a socket list doesn't block anything.
 - [x] Default and custom profiles: run, edit, delete.
 - [x] Create, import, export and restore defaults.
 
-## Preferences
+## Settings
 
-Use `adw::PreferencesDialog` and `gio::Settings`.
+Settings sit with the part of the app they affect, as a Settings group at the bottom of that page whose rows open a subpage (`adw::NavigationView`). The Scan page holds scan backend, live progress, exclusions, scheduled scans, device auto-scan and the clamd scanner settings; Protection holds on-access settings; Signatures holds freshclam settings. Preferences (`adw::PreferencesDialog`) keeps only app-wide settings: General (window, notifications, file manager actions) and Online Lookups (API keys). Page actions live in each page's header bar.
 
 - [x] Live scan progress and scan backend choice.
 - [x] Close action and starting in the background, with the tray.
@@ -84,7 +84,7 @@ Use `adw::PreferencesDialog` and `gio::Settings`.
 - [x] Scheduled scans with user systemd timers, locked when the system already has a scan timer. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
 - [x] On-access settings, locked in the same way.
 - [x] MalwareBazaar lookups by signature name, with an abuse.ch key in the system keyring. Only the signature name is sent, so blocked files can be looked up too.
-- [x] Reputation check on each quarantine entry, using the SHA-256 stored at quarantine time: CIRCL hashlookup (no key; also reports files it lists as malicious), MalwareBazaar (abuse.ch key), and VirusTotal when its key is set. Only the hash is sent; files are never uploaded. Keys live in the system keyring with no plaintext fallback.
+- [x] Reputation check on each quarantine entry, using the SHA-256 stored at quarantine time: CIRCL hashlookup (no key; also reports files it lists as malicious), MalwareBazaar (abuse.ch key), and VirusTotal when its key is set. Only the hash is sent; files are never uploaded. Keys come from a file set through `services.clamui.apiKeyFiles` (agenix or sops-nix), in which case no paste field is shown, or otherwise from the system keyring, with no plaintext fallback.
 - [x] Device auto-scan for removable and external drives, without auto-quarantine or network and internal volumes.
 
 Debug logs and the in-app language picker are deliberately not ported: this fork has no debug logging, and the language follows the system locale.

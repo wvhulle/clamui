@@ -10,7 +10,7 @@ use relm4::{
 
 use crate::{
     activity_history::activity_entry_row::formatted_local_time,
-    application_settings::preferences_dialog::application_settings,
+    application_settings::stored_settings::application_settings,
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     scheduled_scans::scan_schedule_units::{
         ScanSchedule, ScheduleApplyFailure, ScheduleFrequency, ScheduleTimerState,

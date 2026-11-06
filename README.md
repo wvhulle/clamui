@@ -21,6 +21,13 @@ services.clamui.liveTuning = {
 };
 ```
 
+API keys for the reputation check in Quarantine can come from agenix or sops-nix. Only the path ends up in your configuration; the secret has to be readable by your user. When a path is set, ClamUI uses that file and hides the paste field. Without it, keys you paste are kept in the system keyring.
+
+```nix
+age.secrets.abuse-ch-key.owner = "alice";
+services.clamui.apiKeyFiles.abuseCh = config.age.secrets.abuse-ch-key.path;
+```
+
 ## Develop
 
 ```sh

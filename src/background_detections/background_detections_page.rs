@@ -46,7 +46,8 @@ use crate::{
     },
     threat_intel_lookup::{
         malware_bazaar_client::look_up_signature,
-        service_key_storage::{ThreatIntelService, read_stored_api_key},
+        online_lookup_preferences::describe_key_failure,
+        service_key_storage::{ResolvedApiKey, ThreatIntelService, read_api_key},
     },
 };
 
@@ -280,17 +281,19 @@ pub async fn load_displayed_detections(
 }
 
 async fn signature_lookup_state(signature_name: &str) -> SignatureLookupState {
-    match read_stored_api_key(ThreatIntelService::AbuseChService).await {
-        Ok(None) => SignatureLookupState::KeyMissing,
+    match read_api_key(ThreatIntelService::AbuseChService).await {
+        Ok(ResolvedApiKey::NotConfigured) => SignatureLookupState::KeyMissing,
         Err(key_failure) => SignatureLookupState::LookupFailed {
-            failure_text: key_failure.to_string(),
+            failure_text: describe_key_failure(&key_failure),
         },
-        Ok(Some(auth_key)) => match look_up_signature(&auth_key, signature_name).await {
-            Ok(signature_lookup) => SignatureLookupState::LookupFinished(signature_lookup),
-            Err(lookup_failure) => SignatureLookupState::LookupFailed {
-                failure_text: lookup_failure.to_string(),
-            },
-        },
+        Ok(ResolvedApiKey::FromKeyFile(auth_key) | ResolvedApiKey::FromKeyring(auth_key)) => {
+            match look_up_signature(&auth_key, signature_name).await {
+                Ok(signature_lookup) => SignatureLookupState::LookupFinished(signature_lookup),
+                Err(lookup_failure) => SignatureLookupState::LookupFailed {
+                    failure_text: lookup_failure.to_string(),
+                },
+            }
+        }
     }
 }
 
@@ -569,8 +572,27 @@ impl Component for BackgroundDetectionsPage {
     view! {
         adw::ToastOverlay {
             #[wrap(Some)]
+            set_child = &adw::ToolbarView {
+            add_top_bar = &adw::HeaderBar {
+                #[wrap(Some)]
+                set_title_widget = &adw::WindowTitle {
+                    set_title: &gettext("Detections"),
+                    #[watch]
+                    set_subtitle: &model.opened_detection().map_or_else(String::new, |displayed_detection| displayed_file_name(&displayed_detection.stored_detection)),
+                },
+
+                pack_start = &gtk::Button {
+                    set_icon_name: "go-previous-symbolic",
+                    set_tooltip_text: Some(&gettext("Back to detections")),
+                    #[watch]
+                    set_visible: model.opened_detection().is_some(),
+                    connect_clicked => BackgroundDetectionsPageInput::BackToListRequested,
+                },
+            },
+
+            #[wrap(Some)]
             #[local_ref]
-            set_child = stack_widget -> gtk::Stack {
+            set_content = stack_widget -> gtk::Stack {
                 set_transition_type: gtk::StackTransitionType::Crossfade,
 
                 add_named[Some(LIST_VIEW_NAME)] = &adw::PreferencesPage {
@@ -581,21 +603,9 @@ impl Component for BackgroundDetectionsPage {
                 add_named[Some(INCIDENT_VIEW_NAME)] = &adw::PreferencesPage {
                     set_title: &gettext("Detection"),
 
-                    add = &adw::PreferencesGroup {
-                        #[watch]
-                        set_title: &gtk::glib::markup_escape_text(&model.opened_detection().map_or_else(String::new, |displayed_detection| displayed_file_name(&displayed_detection.stored_detection))),
-                        #[wrap(Some)]
-                        set_header_suffix = &gtk::Button {
-                            set_icon_name: "go-previous-symbolic",
-                            set_tooltip_text: Some(&gettext("Back to detections")),
-                            set_valign: gtk::Align::Center,
-                            add_css_class: "flat",
-                            connect_clicked => BackgroundDetectionsPageInput::BackToListRequested,
-                        },
-                    },
-
                     add: incident_group_widget,
                 },
+            },
             },
         }
     }
