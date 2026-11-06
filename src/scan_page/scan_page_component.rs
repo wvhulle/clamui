@@ -333,6 +333,7 @@ impl ScanPage {
             inspected_file_count: self.scan_outcome.inspected_file_count,
             planned_file_count: self.scan_outcome.planned_file_count,
             scanned_directory_count: self.scan_outcome.scanned_directory_count,
+            excluded_entry_count: self.scan_outcome.excluded_entry_count,
             elapsed_time: self.scan_started_instant.elapsed(),
             detected_threats: self.scan_outcome.detected_threats.clone(),
             problem_path_groups: problem_path_groups(&self.scan_outcome),

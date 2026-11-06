@@ -27,7 +27,8 @@ use crate::host_services::{
         scan_exclusion_rules::ScanExclusions,
         scan_progress_estimates::RefreshThrottle,
         scan_target_enumeration::{
-            EnumerationProgress, ScanTargetFailure, enumerate_scan_files_reporting,
+            EnumeratedScanFiles, EnumerationProgress, ScanTargetFailure,
+            enumerate_scan_files_reporting,
         },
         scanner_command_builder::{
             ScannerBackend, ScannerInvocation, ScannerProgramPaths, build_scanner_command,
@@ -68,6 +69,7 @@ pub enum ScanProgressEvent {
     TargetEnumerated {
         planned_file_count: u64,
         planned_directory_count: u64,
+        excluded_entry_count: u64,
     },
     FileInspected {
         file_path: PathBuf,
@@ -107,6 +109,7 @@ pub struct CompletedScanOutcome {
     pub planned_file_count: u64,
     pub inspected_file_count: u64,
     pub scanned_directory_count: u64,
+    pub excluded_entry_count: u64,
     pub detected_threats: Vec<DetectedThreat>,
     pub unattributed_threats_reported: bool,
     pub scan_notices: Vec<ScanNotice>,
@@ -123,10 +126,11 @@ impl CompletedScanOutcome {
             ScanProgressEvent::TargetEnumerated {
                 planned_file_count,
                 planned_directory_count,
-                ..
+                excluded_entry_count,
             } => {
                 self.planned_file_count += planned_file_count;
                 self.scanned_directory_count += planned_directory_count;
+                self.excluded_entry_count += excluded_entry_count;
             }
             ScanProgressEvent::FileInspected { .. } => {
                 self.inspected_file_count += 1;
@@ -213,6 +217,7 @@ enum ScannerPhasePlan {
 struct PreparedScanTarget {
     planned_file_count: u64,
     planned_directory_count: u64,
+    excluded_entry_count: u64,
     scanner_phase_plans: Vec<ScannerPhasePlan>,
 }
 
@@ -481,6 +486,7 @@ fn prepare_clamd_phases(
     Ok(PreparedScanTarget {
         planned_file_count,
         planned_directory_count: enumerated_files.directory_count,
+        excluded_entry_count: enumerated_files.excluded_entry_count,
         scanner_phase_plans: file_list_phase
             .into_iter()
             .chain(standard_input_phases)
@@ -493,14 +499,15 @@ fn prepare_standalone_phase(
     scan_exclusions: &ScanExclusions,
     report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
 ) -> Result<PreparedScanTarget, ScanTargetFailure> {
-    let enumerated_paths = if is_root_level_target(target_path) {
-        Vec::new()
+    let enumerated_files = if is_root_level_target(target_path) {
+        EnumeratedScanFiles::default()
     } else {
-        enumerate_scan_files_reporting(target_path, scan_exclusions, report_progress)?.file_paths
+        enumerate_scan_files_reporting(target_path, scan_exclusions, report_progress)?
     };
     Ok(PreparedScanTarget {
-        planned_file_count: enumerated_paths.len() as u64,
+        planned_file_count: enumerated_files.file_paths.len() as u64,
         planned_directory_count: 0,
+        excluded_entry_count: enumerated_files.excluded_entry_count,
         scanner_phase_plans: vec![ScannerPhasePlan::StandaloneTarget {
             target_path: target_path.to_path_buf(),
         }],
@@ -681,6 +688,7 @@ fn prepared_target_events(
             stream::once(ready(ScanProgressEvent::TargetEnumerated {
                 planned_file_count: prepared_target.planned_file_count,
                 planned_directory_count: prepared_target.planned_directory_count,
+                excluded_entry_count: prepared_target.excluded_entry_count,
             }))
             .chain(stream::iter(prepared_target.scanner_phase_plans).flat_map(
                 move |scanner_phase_plan| scanner_phase_events(scanner_phase_plan, &scan_request),

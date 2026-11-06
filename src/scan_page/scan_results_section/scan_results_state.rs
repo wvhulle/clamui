@@ -28,6 +28,7 @@ pub struct ScanResultsView {
     pub inspected_file_count: u64,
     pub planned_file_count: u64,
     pub scanned_directory_count: u64,
+    pub excluded_entry_count: u64,
     pub elapsed_time: Duration,
     pub detected_threats: Vec<DetectedThreat>,
     pub problem_path_groups: Vec<ProblemPathGroup>,
@@ -42,6 +43,7 @@ impl ScanResultsView {
             inspected_file_count: 0,
             planned_file_count: 0,
             scanned_directory_count: 0,
+            excluded_entry_count: 0,
             elapsed_time: Duration::ZERO,
             detected_threats: Vec::new(),
             problem_path_groups: Vec::new(),
@@ -76,10 +78,19 @@ impl ScanResultsView {
             )
             .replace("{count}", &self.inspected_file_count.to_string())
         };
-        format!(
-            "{scanned_text} · {}",
-            elapsed_duration_text(self.elapsed_time)
-        )
+        let excluded_text = (self.excluded_entry_count > 0).then(|| {
+            ngettext(
+                "{count} entry skipped by exclusions",
+                "{count} entries skipped by exclusions",
+                u32::try_from(self.excluded_entry_count).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &self.excluded_entry_count.to_string())
+        });
+        std::iter::once(scanned_text)
+            .chain(excluded_text)
+            .chain(std::iter::once(elapsed_duration_text(self.elapsed_time)))
+            .collect::<Vec<_>>()
+            .join(" · ")
     }
 
     pub fn has_problems(&self) -> bool {
@@ -212,6 +223,7 @@ mod scan_results_state_tests {
             results_status: ScanResultsStatus::ThreatsDetected,
             inspected_file_count: 3,
             scanned_directory_count: 2,
+            excluded_entry_count: 4,
             detected_threats: vec![DetectedThreat {
                 file_path: PathBuf::from("/scan/bad\u{1b}[31m.txt"),
                 threat_name: "Eicar-Test-Signature".to_owned(),

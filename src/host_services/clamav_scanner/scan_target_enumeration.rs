@@ -27,6 +27,7 @@ pub enum ScanTargetFailure {
 pub struct EnumeratedScanFiles {
     pub file_paths: Vec<PathBuf>,
     pub directory_count: u64,
+    pub excluded_entry_count: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -58,6 +59,7 @@ pub fn enumerate_scan_files_reporting(
         return Ok(EnumeratedScanFiles {
             file_paths: vec![target_path.to_path_buf()],
             directory_count: 0,
+            excluded_entry_count: 0,
         });
     }
     if !target_path.is_dir() {
@@ -84,6 +86,7 @@ pub fn enumerate_scan_files_reporting(
         EnumeratedScanFiles {
             file_paths: Vec::new(),
             directory_count: 1,
+            excluded_entry_count: 0,
         },
         report_progress,
     ) {
@@ -119,6 +122,7 @@ fn collect_directory_files(
             };
             if entry_kind.is_dir() {
                 if scan_exclusions.excludes_directory(&entry_path) {
+                    enumerated_files.excluded_entry_count += 1;
                     return ControlFlow::Continue(enumerated_files);
                 }
                 return match fs::read_dir(&entry_path) {
@@ -135,8 +139,12 @@ fn collect_directory_files(
                     Err(_unreadable_directory) => ControlFlow::Continue(enumerated_files),
                 };
             }
-            if entry_kind.is_file() && !scan_exclusions.excludes_file(&entry_path) {
-                enumerated_files.file_paths.push(entry_path);
+            if entry_kind.is_file() {
+                if scan_exclusions.excludes_file(&entry_path) {
+                    enumerated_files.excluded_entry_count += 1;
+                } else {
+                    enumerated_files.file_paths.push(entry_path);
+                }
             }
             ControlFlow::Continue(enumerated_files)
         },
@@ -163,6 +171,7 @@ mod scan_target_enumeration_tests {
             EnumeratedScanFiles {
                 file_paths: vec![scan_root.join("nested/file.txt")],
                 directory_count: 2,
+                excluded_entry_count: 0,
             }
         );
     }
@@ -191,6 +200,7 @@ mod scan_target_enumeration_tests {
             EnumeratedScanFiles {
                 file_paths: vec![scan_root.join("kept.txt")],
                 directory_count: 1,
+                excluded_entry_count: 2,
             }
         );
     }
