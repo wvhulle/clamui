@@ -3,6 +3,7 @@ use crate::host_services::clamav_programs::distribution_install_guides::Distribu
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SuggestedRemedy {
     ClamavDaemonStart,
+    ClamavDaemonRestart,
     FreshclamUpdatesEnable,
     FirewallServiceEnable,
     IntrusionPreventionInstall,
@@ -10,6 +11,7 @@ pub enum SuggestedRemedy {
     CrowdsecServiceStart,
     OnAccessScanningEnable,
     OnAccessPreventionEnable,
+    OnAccessWatchedPathAdd,
     ScheduledScanEnable,
     BackgroundAlertsEnable,
 }
@@ -50,6 +52,11 @@ pub fn suggested_command(
             FedoraWorkstation | FedoraAtomic => Some("sudo systemctl start clamd@scan"),
             NixosFamily => Some("services.clamav.daemon.enable = true;"),
             UnrecognizedFamily => None,
+        },
+        SuggestedRemedy::ClamavDaemonRestart => match distribution_family {
+            DebianFamily | ArchFamily => Some("sudo systemctl restart clamav-daemon"),
+            FedoraWorkstation | FedoraAtomic => Some("sudo systemctl restart clamd@scan"),
+            NixosFamily | UnrecognizedFamily => None,
         },
         SuggestedRemedy::FreshclamUpdatesEnable => match distribution_family {
             DebianFamily | FedoraWorkstation | FedoraAtomic | ArchFamily => {
@@ -97,6 +104,14 @@ pub fn suggested_command(
                 None
             }
         },
+        SuggestedRemedy::OnAccessWatchedPathAdd => match distribution_family {
+            NixosFamily => {
+                Some("services.clamav.daemon.settings.OnAccessIncludePath = [ \"/home\" ];")
+            }
+            DebianFamily | FedoraWorkstation | FedoraAtomic | ArchFamily | UnrecognizedFamily => {
+                None
+            }
+        },
         SuggestedRemedy::BackgroundAlertsEnable => non_nixos_or_option(
             distribution_family,
             "services.lazaret.enable = true;",
@@ -115,8 +130,9 @@ pub fn suggested_command(
 mod suggested_audit_commands_tests {
     use super::*;
 
-    const ALL_REMEDIES: [SuggestedRemedy; 10] = [
+    const ALL_REMEDIES: [SuggestedRemedy; 12] = [
         SuggestedRemedy::ClamavDaemonStart,
+        SuggestedRemedy::ClamavDaemonRestart,
         SuggestedRemedy::FreshclamUpdatesEnable,
         SuggestedRemedy::FirewallServiceEnable,
         SuggestedRemedy::IntrusionPreventionInstall,
@@ -124,6 +140,7 @@ mod suggested_audit_commands_tests {
         SuggestedRemedy::CrowdsecServiceStart,
         SuggestedRemedy::OnAccessScanningEnable,
         SuggestedRemedy::OnAccessPreventionEnable,
+        SuggestedRemedy::OnAccessWatchedPathAdd,
         SuggestedRemedy::ScheduledScanEnable,
         SuggestedRemedy::BackgroundAlertsEnable,
     ];

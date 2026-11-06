@@ -14,11 +14,12 @@ use crate::{
     protection_page::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
-            AccountSettingFinding, DaemonEvidence, EngineInstallation, LoadedSignatures,
-            OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding,
-            ProtectionEvidence, RuntimeReductions, ScanServiceEvidence, ScanUnitResult,
-            ScheduledScanEvidence, SignatureEvidence, ThirdPartySignatureFile, UpdaterEvidence,
-            UpdaterUnitResult,
+            AccountSettingFinding, ClamdConfigReadFailure, DaemonEvidence, EngineInstallation,
+            LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessResponse, OnAccessScanner,
+            OnAccessSizeLimit, OverridesChangeTime, ProgramTrustFinding, ProtectionEvidence,
+            ReducedSetting, RuntimeReductions, ScanServiceEvidence, ScanUnitResult,
+            ScheduledScanEvidence, SignatureEvidence, ThirdPartySignatureFile, TimerState,
+            UpdaterEvidence, UpdaterUnitResult, WatchScope, WatchedLocation,
         },
         service_run_journal::{ScanRunFindings, ScanRunHistory, UpdaterRunHistory},
         signature_update_run::signature_update_session::{
@@ -240,48 +241,107 @@ fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<
     })
 }
 
-fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<TimelineStep> {
-    let RuntimeReductions::ReducedSince {
-        changed_at,
-        reduced_settings,
-    } = runtime_reductions
-    else {
-        return None;
-    };
-    Some(TimelineStep {
-        evidence_rows: reduced_settings
-            .iter()
-            .map(|reduced_setting| {
-                evidence_row(
-                    reduced_setting.setting_key.clone(),
-                    gettext("{base} in your configuration, {changed} now")
-                        .replace("{base}", &reduced_setting.base_value)
-                        .replace("{changed}", &reduced_setting.changed_value),
-                )
-            })
-            .collect(),
-        action_slot: StepActionSlot::ActionOffered {
-            action_label: gettext("Review"),
-            chosen_action: TimelineStepAction::OpenSettingsSubpage(SettingsSubpage::ScannerEngine),
-            action_suggested: false,
-        },
-        ..no_guidance_step(
-            gettext("Protection reduced on purpose"),
-            gettext(
-                "Someone with the administrator password changed ClamAV settings at runtime in a \
-                 way that checks less than your configuration does. The System Changes tab on the \
-                 Logs page shows who and when.",
-            ),
-            StepNodeState::NeedsReview,
-            ngettext(
-                "{count} setting checks less than configured since {time}",
-                "{count} settings check less than configured since {time}",
-                u32::try_from(reduced_settings.len()).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &reduced_settings.len().to_string())
-            .replace("{time}", &exact_local_time_text(*changed_at)),
+fn reduced_settings_status(
+    reduced_settings: &[ReducedSetting],
+    change_time: OverridesChangeTime,
+) -> String {
+    let setting_count = u32::try_from(reduced_settings.len()).unwrap_or(u32::MAX);
+    match change_time {
+        OverridesChangeTime::ChangedAt { changed_at } => ngettext(
+            "{count} setting checks less than configured since {time}",
+            "{count} settings check less than configured since {time}",
+            setting_count,
         )
-    })
+        .replace("{time}", &exact_local_time_text(changed_at)),
+        OverridesChangeTime::ChangeTimeUnknown => ngettext(
+            "{count} setting checks less than configured, since a time that could not be read",
+            "{count} settings check less than configured, since a time that could not be read",
+            setting_count,
+        ),
+    }
+    .replace("{count}", &reduced_settings.len().to_string())
+}
+
+fn override_change_time_row(change_time: OverridesChangeTime) -> StepEvidenceRow {
+    evidence_row(
+        gettext("Changed"),
+        match change_time {
+            OverridesChangeTime::ChangedAt { changed_at } => exact_local_time_text(changed_at),
+            OverridesChangeTime::ChangeTimeUnknown => gettext("Unknown"),
+        },
+    )
+}
+
+fn runtime_review_action() -> StepActionSlot {
+    StepActionSlot::ActionOffered {
+        action_label: gettext("Review"),
+        chosen_action: TimelineStepAction::OpenSettingsSubpage(SettingsSubpage::ScannerEngine),
+        action_suggested: false,
+    }
+}
+
+fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<TimelineStep> {
+    match runtime_reductions {
+        RuntimeReductions::NothingReduced => None,
+        RuntimeReductions::SettingsReduced {
+            change_time,
+            reduced_settings,
+        } => Some(TimelineStep {
+            evidence_rows: reduced_settings
+                .iter()
+                .map(|reduced_setting| {
+                    evidence_row(
+                        reduced_setting.setting_key.clone(),
+                        gettext("{base} in your configuration, {changed} now")
+                            .replace("{base}", &reduced_setting.base_value)
+                            .replace("{changed}", &reduced_setting.changed_value),
+                    )
+                })
+                .collect(),
+            action_slot: runtime_review_action(),
+            ..no_guidance_step(
+                gettext("Protection reduced on purpose"),
+                gettext(
+                    "Someone with the administrator password changed ClamAV settings at runtime \
+                     in a way that checks less than your configuration does. The System Changes \
+                     tab on the Logs page shows who and when.",
+                ),
+                StepNodeState::NeedsReview,
+                reduced_settings_status(reduced_settings, *change_time),
+            )
+        }),
+        RuntimeReductions::BaseConfigUnreadable {
+            change_time,
+            overridden_settings,
+        } => Some(TimelineStep {
+            evidence_rows: overridden_settings
+                .iter()
+                .map(|overridden_setting| {
+                    evidence_row(
+                        overridden_setting.setting_key.clone(),
+                        gettext("{changed} now")
+                            .replace("{changed}", &overridden_setting.changed_value),
+                    )
+                })
+                .chain(std::iter::once(override_change_time_row(*change_time)))
+                .collect(),
+            action_slot: runtime_review_action(),
+            ..no_guidance_step(
+                gettext("Settings changed at runtime"),
+                gettext(
+                    "Someone with the administrator password changed ClamAV settings at runtime. \
+                     Your clamd.conf could not be read, so Lazaret can't tell whether these \
+                     changes check less than your configuration does. The System Changes tab on \
+                     the Logs page shows who and when.",
+                ),
+                StepNodeState::NeedsReview,
+                gettext(
+                    "Settings were changed at runtime, but clamd.conf could not be read to \
+                     compare them",
+                ),
+            )
+        }),
+    }
 }
 
 fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<TimelineStep> {
@@ -725,6 +785,28 @@ fn daemon_step(
             StepNodeState::Completed,
             gettext("clamd is answering"),
         ),
+        DaemonEvidence::UnitActiveNotAnswering { service_unit } => TimelineStep {
+            guidance_commands: remedy_commands(
+                SuggestedRemedy::ClamavDaemonRestart,
+                distribution_family,
+            ),
+            ..no_guidance_step(
+                step_title,
+                mechanism_details,
+                StepNodeState::HasFailed,
+                gettext(
+                    "{unit} is running, but clamd does not answer. It may still be loading \
+                     signatures.",
+                )
+                .replace("{unit}", service_unit),
+            )
+        },
+        DaemonEvidence::UnitStateUnknown => no_guidance_step(
+            step_title,
+            mechanism_details,
+            StepNodeState::NeedsReview,
+            gettext("clamd does not answer, and systemd could not report its state"),
+        ),
         DaemonEvidence::UnitStopped { service_unit } => TimelineStep {
             guidance_commands: remedy_commands(
                 SuggestedRemedy::ClamavDaemonStart,
@@ -765,24 +847,151 @@ fn on_access_setting_row(evidence_name: String, evidence_value: String) -> StepE
     }
 }
 
-fn on_access_rows(on_access_evidence: &OnAccessEvidence) -> Vec<StepEvidenceRow> {
-    let watched_row = on_access_setting_row(
-        gettext("Watched folders"),
-        if on_access_evidence.watched_paths.is_empty() {
-            gettext("None configured")
-        } else {
-            on_access_evidence.watched_paths.join("\n")
+fn clamd_config_failure_text(config_failure: ClamdConfigReadFailure) -> String {
+    match config_failure {
+        ClamdConfigReadFailure::NoReadableConfig => gettext("No readable clamd.conf was found"),
+        ClamdConfigReadFailure::ReadingTaskAborted => {
+            gettext("Reading clamd.conf stopped before it finished")
+        }
+    }
+}
+
+fn watched_location_text(watched_location: &WatchedLocation) -> String {
+    match watched_location {
+        WatchedLocation::WatchedFolder { folder_path } => folder_path.clone(),
+        WatchedLocation::WatchedMount { mount_path } => {
+            gettext("{path} (whole mount)").replace("{path}", mount_path)
+        }
+    }
+}
+
+fn watch_scope_text(watch_scope: &WatchScope) -> String {
+    match watch_scope {
+        WatchScope::NothingWatched => gettext("None configured"),
+        WatchScope::WatchedLocations { .. } => watch_scope
+            .watched_locations()
+            .into_iter()
+            .map(watched_location_text)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
+}
+
+fn size_limit_text(size_limit: &OnAccessSizeLimit) -> String {
+    match size_limit {
+        OnAccessSizeLimit::DefaultLimit => gettext("The ClamAV default"),
+        OnAccessSizeLimit::ConfiguredLimit { size_limit } => byte_size_text(*size_limit),
+        OnAccessSizeLimit::UnreadableLimit { limit_text } => limit_text.clone(),
+    }
+}
+
+fn on_access_rows(on_access_config: &OnAccessConfig) -> Vec<StepEvidenceRow> {
+    match on_access_config {
+        OnAccessConfig::ConfigUnreadable(config_failure) => vec![on_access_setting_row(
+            gettext("Configuration"),
+            clamd_config_failure_text(*config_failure),
+        )],
+        OnAccessConfig::ConfigRead {
+            watch_scope,
+            size_limit,
+            ..
+        } => vec![
+            on_access_setting_row(gettext("Watched folders"), watch_scope_text(watch_scope)),
+            on_access_setting_row(gettext("Largest file scanned"), size_limit_text(size_limit)),
+        ],
+    }
+}
+
+struct OnAccessVerdict {
+    node_state: StepNodeState,
+    status_text: String,
+    suggested_remedies: Vec<SuggestedRemedy>,
+}
+
+fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict {
+    match on_access_config {
+        OnAccessConfig::ConfigUnreadable(_) => OnAccessVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext(
+                "Running, but clamd.conf could not be read, so what is checked and whether \
+                 detected files are blocked is unknown",
+            ),
+            suggested_remedies: Vec::new(),
         },
-    );
-    let size_row = on_access_setting_row(
-        gettext("Largest file scanned"),
-        match &on_access_evidence.size_limit {
-            OnAccessSizeLimit::DefaultLimit => gettext("The ClamAV default"),
-            OnAccessSizeLimit::ConfiguredLimit { size_limit } => byte_size_text(*size_limit),
-            OnAccessSizeLimit::UnreadableLimit { limit_text } => limit_text.clone(),
+        OnAccessConfig::ConfigRead {
+            watch_scope: WatchScope::NothingWatched,
+            blocking_response: OnAccessResponse::BlockAccess,
+            ..
+        } => OnAccessVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext("Running, but no folders or mounts are watched"),
+            suggested_remedies: vec![SuggestedRemedy::OnAccessWatchedPathAdd],
         },
-    );
-    vec![watched_row, size_row]
+        OnAccessConfig::ConfigRead {
+            watch_scope: WatchScope::NothingWatched,
+            blocking_response: OnAccessResponse::ReportOnly,
+            ..
+        } => OnAccessVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext(
+                "Running, but no folders or mounts are watched, and detected files would not be \
+                 blocked",
+            ),
+            suggested_remedies: vec![
+                SuggestedRemedy::OnAccessWatchedPathAdd,
+                SuggestedRemedy::OnAccessPreventionEnable,
+            ],
+        },
+        OnAccessConfig::ConfigRead {
+            watch_scope: WatchScope::WatchedLocations { .. },
+            blocking_response: OnAccessResponse::ReportOnly,
+            ..
+        } => OnAccessVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext("Files are checked, but detected files are not blocked"),
+            suggested_remedies: vec![SuggestedRemedy::OnAccessPreventionEnable],
+        },
+        OnAccessConfig::ConfigRead {
+            watch_scope: WatchScope::WatchedLocations { .. },
+            blocking_response: OnAccessResponse::BlockAccess,
+            ..
+        } => OnAccessVerdict {
+            node_state: StepNodeState::Completed,
+            status_text: gettext("Detected files are blocked"),
+            suggested_remedies: Vec::new(),
+        },
+    }
+}
+
+fn on_access_verdict(
+    on_access_evidence: &OnAccessEvidence,
+    daemon_answering: bool,
+) -> OnAccessVerdict {
+    match on_access_evidence.on_access_scanner {
+        OnAccessScanner::NeverSetUp => OnAccessVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext("On-access scanning is not set up"),
+            suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
+        },
+        OnAccessScanner::UnitStopped { .. } if !daemon_answering => OnAccessVerdict {
+            node_state: StepNodeState::AwaitingPrerequisite,
+            status_text: daemon_awaited_text(),
+            suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
+        },
+        OnAccessScanner::UnitStopped { service_unit } => OnAccessVerdict {
+            node_state: StepNodeState::HasFailed,
+            status_text: gettext("{unit} is not running").replace("{unit}", service_unit),
+            suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
+        },
+        OnAccessScanner::MonitorRunning if !daemon_answering => OnAccessVerdict {
+            node_state: StepNodeState::AwaitingPrerequisite,
+            status_text: daemon_awaited_text(),
+            suggested_remedies: Vec::new(),
+        },
+        OnAccessScanner::MonitorRunning => {
+            running_monitor_verdict(&on_access_evidence.on_access_config)
+        }
+    }
 }
 
 fn on_access_step(
@@ -796,46 +1005,20 @@ fn on_access_step(
          the kernel refuses access to a detected file, which is why such a file can't be opened \
          even though it is still there.",
     );
-    let (node_state, status_text) = match on_access_evidence.on_access_scanner {
-        OnAccessScanner::NeverSetUp => (
-            StepNodeState::NeedsReview,
-            gettext("On-access scanning is not set up"),
-        ),
-        _configured_scanner if !daemon_answering => {
-            (StepNodeState::AwaitingPrerequisite, daemon_awaited_text())
-        }
-        OnAccessScanner::UnitStopped { service_unit } => (
-            StepNodeState::HasFailed,
-            gettext("{unit} is not running").replace("{unit}", service_unit),
-        ),
-        OnAccessScanner::MonitorRunning if !on_access_evidence.prevention_enabled => (
-            StepNodeState::NeedsReview,
-            gettext("Files are checked, but detected files are not blocked"),
-        ),
-        OnAccessScanner::MonitorRunning if on_access_evidence.watched_paths.is_empty() => (
-            StepNodeState::NeedsReview,
-            gettext("Running, but no watched folders could be read"),
-        ),
-        OnAccessScanner::MonitorRunning => (
-            StepNodeState::Completed,
-            gettext("Detected files are blocked"),
-        ),
-    };
+    let on_access_verdict = on_access_verdict(on_access_evidence, daemon_answering);
     TimelineStep {
-        evidence_rows: on_access_rows(on_access_evidence),
-        guidance_commands: if node_state == StepNodeState::Completed {
-            Vec::new()
-        } else {
-            remedy_commands(
-                if on_access_evidence.on_access_scanner == OnAccessScanner::MonitorRunning {
-                    SuggestedRemedy::OnAccessPreventionEnable
-                } else {
-                    SuggestedRemedy::OnAccessScanningEnable
-                },
-                distribution_family,
-            )
-        },
-        ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
+        evidence_rows: on_access_rows(&on_access_evidence.on_access_config),
+        guidance_commands: on_access_verdict
+            .suggested_remedies
+            .into_iter()
+            .flat_map(|suggested_remedy| remedy_commands(suggested_remedy, distribution_family))
+            .collect(),
+        ..no_guidance_step(
+            step_title,
+            mechanism_details,
+            on_access_verdict.node_state,
+            on_access_verdict.status_text,
+        )
     }
 }
 
@@ -921,22 +1104,22 @@ fn scheduled_scan_step(
     match scheduled_scan_evidence {
         ScheduledScanEvidence::SystemTimer {
             service_unit,
-            timer_active,
-            next_run,
+            timer_state,
             scan_service,
             last_completed_run,
         } => {
-            let (node_state, status_text) = if !daemon_answering {
-                (StepNodeState::AwaitingPrerequisite, daemon_awaited_text())
-            } else if !timer_active {
-                (
+            let (node_state, status_text) = match timer_state {
+                TimerState::TimerInactive | TimerState::TimerActive { .. } if !daemon_answering => {
+                    (StepNodeState::AwaitingPrerequisite, daemon_awaited_text())
+                }
+                TimerState::TimerInactive => (
                     StepNodeState::HasFailed,
                     gettext("The system timer is not active"),
-                )
-            } else if scheduled_scan_starting {
-                (StepNodeState::InProgress, gettext("Starting the scan…"))
-            } else {
-                match scan_service {
+                ),
+                TimerState::TimerActive { .. } if scheduled_scan_starting => {
+                    (StepNodeState::InProgress, gettext("Starting the scan…"))
+                }
+                TimerState::TimerActive { next_run } => match scan_service {
                     ScanServiceEvidence::ServiceConfigured { last_result, .. }
                         if scan_result_failed(last_result) =>
                     {
@@ -957,7 +1140,7 @@ fn scheduled_scan_step(
                         StepNodeState::NeedsReview,
                         gettext("The scan service could not be read from systemd"),
                     ),
-                }
+                },
             };
             let run_action = if scheduled_scan_starting || !daemon_answering {
                 StepActionSlot::NoAction
@@ -970,7 +1153,15 @@ fn scheduled_scan_step(
             };
             TimelineStep {
                 evidence_rows: vec![
-                    next_run_row(*next_run, moment_context),
+                    match timer_state {
+                        TimerState::TimerActive { next_run } => {
+                            next_run_row(*next_run, moment_context)
+                        }
+                        TimerState::TimerInactive => evidence_row(
+                            gettext("Next scan"),
+                            gettext("Not scheduled, because the timer is not active"),
+                        ),
+                    },
                     last_run_row(*last_completed_run, run_action, moment_context),
                     StepEvidenceRow {
                         evidence_moment: EvidenceMoment::FixedSetting,
@@ -1067,23 +1258,38 @@ fn alerts_step(
 }
 
 fn on_access_coverage(on_access_evidence: &OnAccessEvidence) -> Option<String> {
-    if on_access_evidence.on_access_scanner != OnAccessScanner::MonitorRunning
-        || on_access_evidence.watched_paths.is_empty()
-    {
+    let OnAccessEvidence {
+        on_access_scanner: OnAccessScanner::MonitorRunning,
+        on_access_config:
+            OnAccessConfig::ConfigRead {
+                watch_scope: watch_scope @ WatchScope::WatchedLocations { .. },
+                blocking_response,
+                ..
+            },
+    } = on_access_evidence
+    else {
         return None;
-    }
-    let watched_folders = on_access_evidence.watched_paths.join(", ");
-    Some(if on_access_evidence.prevention_enabled {
-        gettext("{paths} blocked on access").replace("{paths}", &watched_folders)
-    } else {
-        gettext("{paths} checked on access, not blocked").replace("{paths}", &watched_folders)
+    };
+    let watched_paths = watch_scope
+        .watched_locations()
+        .into_iter()
+        .map(WatchedLocation::location_path)
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(match blocking_response {
+        OnAccessResponse::BlockAccess => {
+            gettext("{paths} blocked on access").replace("{paths}", &watched_paths)
+        }
+        OnAccessResponse::ReportOnly => {
+            gettext("{paths} checked on access, not blocked").replace("{paths}", &watched_paths)
+        }
     })
 }
 
 fn scheduled_coverage(scheduled_scan_evidence: &ScheduledScanEvidence) -> Option<String> {
     match scheduled_scan_evidence {
         ScheduledScanEvidence::SystemTimer {
-            timer_active: true,
+            timer_state: TimerState::TimerActive { .. },
             scan_service: ScanServiceEvidence::ServiceConfigured { scan_targets, .. },
             ..
         } if !scan_targets.is_empty() => Some(
@@ -1293,17 +1499,25 @@ mod protection_timeline_presentation_tests {
             },
             on_access_evidence: OnAccessEvidence {
                 on_access_scanner: OnAccessScanner::MonitorRunning,
-                watched_paths: vec!["/home/user/Downloads".to_owned()],
-                prevention_enabled: true,
-                size_limit: OnAccessSizeLimit::ConfiguredLimit {
-                    size_limit: ByteSize::mib(100),
+                on_access_config: OnAccessConfig::ConfigRead {
+                    watch_scope: WatchScope::WatchedLocations {
+                        first_location: WatchedLocation::WatchedFolder {
+                            folder_path: "/home/user/Downloads".to_owned(),
+                        },
+                        other_locations: Vec::new(),
+                    },
+                    blocking_response: OnAccessResponse::BlockAccess,
+                    size_limit: OnAccessSizeLimit::ConfiguredLimit {
+                        size_limit: ByteSize::mib(100),
+                    },
                 },
             },
             scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
                 service_unit: "clamdscan.service",
-                timer_active: true,
-                next_run: UnitTimestamp::RecordedAt {
-                    recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
+                timer_state: TimerState::TimerActive {
+                    next_run: UnitTimestamp::RecordedAt {
+                        recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
+                    },
                 },
                 scan_service: ScanServiceEvidence::ServiceConfigured {
                     scan_targets: vec!["/tmp".to_owned(), "/var/tmp".to_owned()],
@@ -1409,11 +1623,12 @@ mod protection_timeline_presentation_tests {
         let healthy_steps = all_steps(idle_timeline(&ProtectionEvidence {
             scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
                 service_unit: "clamdscan.service",
-                timer_active: true,
-                next_run: UnitTimestamp::RecordedAt {
-                    recorded_at: REFERENCE_MOMENT
-                        + SignedDuration::from_hours(72)
-                        + SignedDuration::from_mins(1),
+                timer_state: TimerState::TimerActive {
+                    next_run: UnitTimestamp::RecordedAt {
+                        recorded_at: REFERENCE_MOMENT
+                            + SignedDuration::from_hours(72)
+                            + SignedDuration::from_mins(1),
+                    },
                 },
                 scan_service: ScanServiceEvidence::ServiceConfigured {
                     scan_targets: vec!["/tmp".to_owned()],
@@ -1537,9 +1752,10 @@ mod protection_timeline_presentation_tests {
         ProtectionEvidence {
             scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
                 service_unit: "clamdscan.service",
-                timer_active: true,
-                next_run: UnitTimestamp::RecordedAt {
-                    recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
+                timer_state: TimerState::TimerActive {
+                    next_run: UnitTimestamp::RecordedAt {
+                        recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
+                    },
                 },
                 scan_service,
                 last_completed_run: ScanRunHistory::NoCompletedScan,
@@ -1630,8 +1846,10 @@ mod protection_timeline_presentation_tests {
     #[test]
     fn a_runtime_reduction_stays_visible_as_needing_review() {
         let protection_evidence = ProtectionEvidence {
-            runtime_reductions: RuntimeReductions::ReducedSince {
-                changed_at: REFERENCE_MOMENT,
+            runtime_reductions: RuntimeReductions::SettingsReduced {
+                change_time: OverridesChangeTime::ChangedAt {
+                    changed_at: REFERENCE_MOMENT,
+                },
                 reduced_settings: vec![
                     crate::protection_page::protection_evidence::ReducedSetting {
                         setting_key: "OnAccessPrevention".to_owned(),
@@ -1689,10 +1907,16 @@ mod protection_timeline_presentation_tests {
     #[test]
     fn running_without_prevention_is_never_reported_as_blocking() {
         let protection_evidence = ProtectionEvidence {
-            on_access_evidence: OnAccessEvidence {
-                prevention_enabled: false,
-                ..healthy_evidence().on_access_evidence
-            },
+            on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::WatchedLocations {
+                    first_location: WatchedLocation::WatchedFolder {
+                        folder_path: "/home/user/Downloads".to_owned(),
+                    },
+                    other_locations: Vec::new(),
+                },
+                blocking_response: OnAccessResponse::ReportOnly,
+                size_limit: OnAccessSizeLimit::DefaultLimit,
+            }),
             ..healthy_evidence()
         };
         assert_eq!(
@@ -1791,5 +2015,177 @@ mod protection_timeline_presentation_tests {
             StepNodeState::ActNext
         );
         assert!(coverage_summary(&protection_evidence).contains("nothing is being checked"));
+    }
+
+    fn on_access_with(on_access_config: OnAccessConfig) -> OnAccessEvidence {
+        OnAccessEvidence {
+            on_access_scanner: OnAccessScanner::MonitorRunning,
+            on_access_config,
+        }
+    }
+
+    fn on_access_step_of(protection_evidence: &ProtectionEvidence) -> TimelineStep {
+        step_titled(
+            &idle_timeline(protection_evidence).protection_steps,
+            "On-access blocking",
+        )
+        .clone()
+    }
+
+    #[test]
+    fn an_unreadable_daemon_config_claims_neither_coverage_nor_missing_blocking() {
+        let protection_evidence = ProtectionEvidence {
+            on_access_evidence: on_access_with(OnAccessConfig::ConfigUnreadable(
+                ClamdConfigReadFailure::NoReadableConfig,
+            )),
+            ..healthy_evidence()
+        };
+        let on_access_step = on_access_step_of(&protection_evidence);
+        assert_eq!(on_access_step.node_state, StepNodeState::NeedsReview);
+        assert!(
+            on_access_step
+                .status_text
+                .contains("clamd.conf could not be read")
+        );
+        assert!(!on_access_step.status_text.contains("not blocked"));
+        assert!(on_access_step.guidance_commands.is_empty());
+        assert_eq!(
+            row_named(&on_access_step, "Configuration").evidence_value,
+            "No readable clamd.conf was found"
+        );
+        let coverage_text = coverage_summary(&protection_evidence);
+        assert!(!coverage_text.contains("on access"));
+    }
+
+    #[test]
+    fn prevention_without_watched_locations_suggests_adding_a_watched_folder() {
+        let protection_evidence = ProtectionEvidence {
+            on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::NothingWatched,
+                blocking_response: OnAccessResponse::BlockAccess,
+                size_limit: OnAccessSizeLimit::DefaultLimit,
+            }),
+            ..healthy_evidence()
+        };
+        let on_access_step = on_access_step_of(&protection_evidence);
+        assert_eq!(on_access_step.node_state, StepNodeState::NeedsReview);
+        assert_eq!(
+            on_access_step.status_text,
+            "Running, but no folders or mounts are watched"
+        );
+        assert_eq!(
+            on_access_step.guidance_commands,
+            remedy_commands(
+                SuggestedRemedy::OnAccessWatchedPathAdd,
+                DistributionFamily::NixosFamily
+            )
+        );
+        assert!(!coverage_summary(&protection_evidence).contains("on access"));
+    }
+
+    #[test]
+    fn a_watched_mount_is_shown_as_a_whole_mount_and_counts_as_coverage() {
+        let protection_evidence = ProtectionEvidence {
+            on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::WatchedLocations {
+                    first_location: WatchedLocation::WatchedMount {
+                        mount_path: "/".to_owned(),
+                    },
+                    other_locations: Vec::new(),
+                },
+                blocking_response: OnAccessResponse::BlockAccess,
+                size_limit: OnAccessSizeLimit::DefaultLimit,
+            }),
+            ..healthy_evidence()
+        };
+        let on_access_step = on_access_step_of(&protection_evidence);
+        assert_eq!(on_access_step.node_state, StepNodeState::Completed);
+        assert_eq!(
+            row_named(&on_access_step, "Watched folders").evidence_value,
+            "/ (whole mount)"
+        );
+        assert!(coverage_summary(&protection_evidence).starts_with("/ blocked on access"));
+    }
+
+    #[test]
+    fn an_active_daemon_that_does_not_answer_suggests_a_restart() {
+        let protection_evidence = ProtectionEvidence {
+            daemon_evidence: DaemonEvidence::UnitActiveNotAnswering {
+                service_unit: "clamav-daemon.service",
+            },
+            ..healthy_evidence()
+        };
+        let daemon_step = daemon_step(
+            &protection_evidence.daemon_evidence,
+            DistributionFamily::DebianFamily,
+        );
+        assert_eq!(daemon_step.node_state, StepNodeState::HasFailed);
+        assert!(
+            daemon_step
+                .status_text
+                .starts_with("clamav-daemon.service is running, but clamd does not answer")
+        );
+        assert_eq!(
+            daemon_step.guidance_commands,
+            vec!["sudo systemctl restart clamav-daemon".to_owned()]
+        );
+        assert_eq!(
+            state_of(&protection_evidence, "On-access blocking"),
+            StepNodeState::AwaitingPrerequisite
+        );
+        assert_eq!(
+            daemon_step_state(DaemonEvidence::UnitStateUnknown),
+            StepNodeState::NeedsReview
+        );
+    }
+
+    fn daemon_step_state(daemon_evidence: DaemonEvidence) -> StepNodeState {
+        daemon_step(&daemon_evidence, DistributionFamily::NixosFamily).node_state
+    }
+
+    #[test]
+    fn a_reduction_with_an_unknown_change_time_never_shows_a_date() {
+        let protection_evidence = ProtectionEvidence {
+            runtime_reductions: RuntimeReductions::SettingsReduced {
+                change_time: OverridesChangeTime::ChangeTimeUnknown,
+                reduced_settings: vec![ReducedSetting {
+                    setting_key: "OnAccessPrevention".to_owned(),
+                    base_value: "yes".to_owned(),
+                    changed_value: "no".to_owned(),
+                }],
+            },
+            ..healthy_evidence()
+        };
+        let review_steps = idle_timeline(&protection_evidence).review_steps;
+        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(
+            review_steps[0].status_text,
+            "1 setting checks less than configured, since a time that could not be read"
+        );
+        assert!(!review_steps[0].status_text.contains("1970"));
+    }
+
+    #[test]
+    fn an_inactive_timer_fails_and_claims_no_scheduled_coverage() {
+        let protection_evidence = ProtectionEvidence {
+            scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
+                service_unit: "clamdscan.service",
+                timer_state: TimerState::TimerInactive,
+                scan_service: ScanServiceEvidence::ServiceConfigured {
+                    scan_targets: vec!["/tmp".to_owned()],
+                    last_result: ScanUnitResult::NothingFound,
+                },
+                last_completed_run: ScanRunHistory::NoCompletedScan,
+            },
+            ..healthy_evidence()
+        };
+        let protection_steps = idle_timeline(&protection_evidence).protection_steps;
+        let scheduled_step = step_titled(&protection_steps, "Scheduled scan");
+        assert_eq!(scheduled_step.node_state, StepNodeState::HasFailed);
+        assert_eq!(
+            row_named(scheduled_step, "Next scan").evidence_value,
+            "Not scheduled, because the timer is not active"
+        );
+        assert!(!coverage_summary(&protection_evidence).contains("scanned on a schedule"));
     }
 }

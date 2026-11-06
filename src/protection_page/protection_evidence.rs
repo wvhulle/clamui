@@ -35,7 +35,8 @@ use crate::{
     },
     protection_page::{
         clamav_engine_evidence::{
-            DatabaseEvidence, inspect_database_evidence, newest_disk_signature_version,
+            DatabaseEvidence, inspect_database_evidence_with_banner,
+            inspect_database_evidence_without_banner, newest_disk_signature_version,
         },
         service_run_journal::{
             ScanRunHistory, UpdaterRunHistory, newest_scan_run, newest_update_run,
@@ -214,7 +215,9 @@ pub enum LoadedSignatures {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DaemonEvidence {
     ClamdAnswering { loaded_signatures: LoadedSignatures },
+    UnitActiveNotAnswering { service_unit: &'static str },
     UnitStopped { service_unit: &'static str },
+    UnitStateUnknown,
     NeverSetUp,
 }
 
@@ -233,11 +236,82 @@ pub enum OnAccessSizeLimit {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WatchedLocation {
+    WatchedFolder { folder_path: String },
+    WatchedMount { mount_path: String },
+}
+
+impl WatchedLocation {
+    pub fn location_path(&self) -> &str {
+        match self {
+            Self::WatchedFolder { folder_path } => folder_path,
+            Self::WatchedMount { mount_path } => mount_path,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WatchScope {
+    NothingWatched,
+    WatchedLocations {
+        first_location: WatchedLocation,
+        other_locations: Vec<WatchedLocation>,
+    },
+}
+
+impl WatchScope {
+    fn from_locations(watched_locations: Vec<WatchedLocation>) -> Self {
+        let mut location_iterator = watched_locations.into_iter();
+        match location_iterator.next() {
+            Some(first_location) => Self::WatchedLocations {
+                first_location,
+                other_locations: location_iterator.collect(),
+            },
+            None => Self::NothingWatched,
+        }
+    }
+
+    pub fn watched_locations(&self) -> Vec<&WatchedLocation> {
+        match self {
+            Self::NothingWatched => Vec::new(),
+            Self::WatchedLocations {
+                first_location,
+                other_locations,
+            } => std::iter::once(first_location)
+                .chain(other_locations)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OnAccessResponse {
+    BlockAccess,
+    ReportOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum ClamdConfigReadFailure {
+    #[error("no readable clamd.conf was found")]
+    NoReadableConfig,
+    #[error("the task reading clamd.conf stopped before it finished")]
+    ReadingTaskAborted,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OnAccessConfig {
+    ConfigUnreadable(ClamdConfigReadFailure),
+    ConfigRead {
+        watch_scope: WatchScope,
+        blocking_response: OnAccessResponse,
+        size_limit: OnAccessSizeLimit,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OnAccessEvidence {
     pub on_access_scanner: OnAccessScanner,
-    pub watched_paths: Vec<String>,
-    pub prevention_enabled: bool,
-    pub size_limit: OnAccessSizeLimit,
+    pub on_access_config: OnAccessConfig,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -250,12 +324,17 @@ pub enum ScanServiceEvidence {
     ServiceUnreadable,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimerState {
+    TimerInactive,
+    TimerActive { next_run: UnitTimestamp },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScheduledScanEvidence {
     SystemTimer {
         service_unit: &'static str,
-        timer_active: bool,
-        next_run: UnitTimestamp,
+        timer_state: TimerState,
         scan_service: ScanServiceEvidence,
         last_completed_run: ScanRunHistory,
     },
@@ -286,13 +365,29 @@ pub struct ReducedSetting {
     pub changed_value: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OverriddenSetting {
+    pub setting_key: String,
+    pub changed_value: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OverridesChangeTime {
+    ChangedAt { changed_at: Timestamp },
+    ChangeTimeUnknown,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum RuntimeReductions {
     #[default]
     NothingReduced,
-    ReducedSince {
-        changed_at: Timestamp,
+    SettingsReduced {
+        change_time: OverridesChangeTime,
         reduced_settings: Vec<ReducedSetting>,
+    },
+    BaseConfigUnreadable {
+        change_time: OverridesChangeTime,
+        overridden_settings: Vec<OverriddenSetting>,
     },
 }
 
@@ -329,29 +424,65 @@ pub fn reduced_settings(
         .collect()
 }
 
-fn inspect_runtime_reductions() -> RuntimeReductions {
-    let overrides_path = readable_host_path(RUNTIME_OVERRIDES_PATH);
-    let (Ok(overrides_text), Ok(overrides_metadata)) = (
-        fs::read_to_string(&overrides_path),
-        fs::metadata(&overrides_path),
-    ) else {
-        return RuntimeReductions::NothingReduced;
-    };
-    let base_settings = parse_config_settings(
-        &fs::read_to_string(readable_host_path(BASE_CLAMD_CONFIG_PATH)).unwrap_or_default(),
-    );
-    let reduced_settings =
-        reduced_settings(&base_settings, &parse_config_settings(&overrides_text));
+fn overrides_change_time(overrides_path: &Path) -> OverridesChangeTime {
+    fs::metadata(overrides_path)
+        .and_then(|overrides_metadata| overrides_metadata.modified())
+        .ok()
+        .and_then(|modified_time| Timestamp::try_from(modified_time).ok())
+        .map_or(OverridesChangeTime::ChangeTimeUnknown, |changed_at| {
+            OverridesChangeTime::ChangedAt { changed_at }
+        })
+}
+
+pub fn runtime_reductions_against_base(
+    base_settings: &[ConfigSetting],
+    override_settings: &[ConfigSetting],
+    change_time: OverridesChangeTime,
+) -> RuntimeReductions {
+    let reduced_settings = reduced_settings(base_settings, override_settings);
     if reduced_settings.is_empty() {
+        RuntimeReductions::NothingReduced
+    } else {
+        RuntimeReductions::SettingsReduced {
+            change_time,
+            reduced_settings,
+        }
+    }
+}
+
+pub fn runtime_reductions_without_base(
+    override_settings: &[ConfigSetting],
+    change_time: OverridesChangeTime,
+) -> RuntimeReductions {
+    if override_settings.is_empty() {
         return RuntimeReductions::NothingReduced;
     }
-    RuntimeReductions::ReducedSince {
-        changed_at: overrides_metadata
-            .modified()
-            .ok()
-            .and_then(|modified_time| Timestamp::try_from(modified_time).ok())
-            .unwrap_or(Timestamp::UNIX_EPOCH),
-        reduced_settings,
+    RuntimeReductions::BaseConfigUnreadable {
+        change_time,
+        overridden_settings: override_settings
+            .iter()
+            .map(|override_setting| OverriddenSetting {
+                setting_key: sanitize_scanner_line(&override_setting.setting_key),
+                changed_value: sanitize_scanner_line(&override_setting.setting_value),
+            })
+            .collect(),
+    }
+}
+
+fn inspect_runtime_reductions() -> RuntimeReductions {
+    let overrides_path = readable_host_path(RUNTIME_OVERRIDES_PATH);
+    let Ok(overrides_text) = fs::read_to_string(&overrides_path) else {
+        return RuntimeReductions::NothingReduced;
+    };
+    let override_settings = parse_config_settings(&overrides_text);
+    let change_time = overrides_change_time(&overrides_path);
+    match fs::read_to_string(readable_host_path(BASE_CLAMD_CONFIG_PATH)) {
+        Ok(base_text) => runtime_reductions_against_base(
+            &parse_config_settings(&base_text),
+            &override_settings,
+            change_time,
+        ),
+        Err(_unreadable_base) => runtime_reductions_without_base(&override_settings, change_time),
     }
 }
 
@@ -419,7 +550,7 @@ pub fn signature_version_in_banner(version_banner: &str) -> Option<&str> {
 
 pub fn compare_loaded_signatures(
     daemon_banner: &ProgramProbe,
-    disk_version: Option<u64>,
+    disk_version: u64,
 ) -> LoadedSignatures {
     let ProgramProbe::VersionReported {
         version_text: daemon_text,
@@ -427,17 +558,18 @@ pub fn compare_loaded_signatures(
     else {
         return LoadedSignatures::ComparisonUnavailable;
     };
-    let loaded_version = signature_version_in_banner(daemon_text)
-        .and_then(|version_text| version_text.parse::<u64>().ok());
-    match (loaded_version, disk_version) {
-        (Some(loaded_version), Some(disk_version)) if loaded_version >= disk_version => {
-            LoadedSignatures::MatchesDisk
-        }
-        (Some(loaded_version), Some(disk_version)) => LoadedSignatures::BehindDisk {
+    let Some(loaded_version) = signature_version_in_banner(daemon_text)
+        .and_then(|version_text| version_text.parse::<u64>().ok())
+    else {
+        return LoadedSignatures::ComparisonUnavailable;
+    };
+    if loaded_version >= disk_version {
+        LoadedSignatures::MatchesDisk
+    } else {
+        LoadedSignatures::BehindDisk {
             loaded_version: loaded_version.to_string(),
             disk_version: disk_version.to_string(),
-        },
-        _unknown_version => LoadedSignatures::ComparisonUnavailable,
+        }
     }
 }
 
@@ -458,17 +590,27 @@ fn setting_is_enabled(setting_value: &str) -> bool {
     )
 }
 
-pub fn on_access_evidence_from_config(
-    on_access_scanner: OnAccessScanner,
-    config_settings: &[ConfigSetting],
-) -> OnAccessEvidence {
-    OnAccessEvidence {
-        on_access_scanner,
-        watched_paths: config_values(config_settings, "OnAccessIncludePath")
-            .map(sanitize_scanner_line)
-            .collect(),
-        prevention_enabled: config_values(config_settings, "OnAccessPrevention")
-            .any(setting_is_enabled),
+pub fn on_access_config_from_settings(config_settings: &[ConfigSetting]) -> OnAccessConfig {
+    let watched_mounts = config_values(config_settings, "OnAccessMountPath").map(|mount_path| {
+        WatchedLocation::WatchedMount {
+            mount_path: sanitize_scanner_line(mount_path),
+        }
+    });
+    let watched_folders =
+        config_values(config_settings, "OnAccessIncludePath").map(|folder_path| {
+            WatchedLocation::WatchedFolder {
+                folder_path: sanitize_scanner_line(folder_path),
+            }
+        });
+    OnAccessConfig::ConfigRead {
+        watch_scope: WatchScope::from_locations(watched_mounts.chain(watched_folders).collect()),
+        blocking_response: if config_values(config_settings, "OnAccessPrevention")
+            .any(setting_is_enabled)
+        {
+            OnAccessResponse::BlockAccess
+        } else {
+            OnAccessResponse::ReportOnly
+        },
         size_limit: config_values(config_settings, "OnAccessMaxFileSize")
             .next()
             .map_or(OnAccessSizeLimit::DefaultLimit, |limit_text| {
@@ -481,6 +623,17 @@ pub fn on_access_evidence_from_config(
                     },
                 )
             }),
+    }
+}
+
+pub fn on_access_config_from_view(config_view: HostConfigView) -> OnAccessConfig {
+    match config_view {
+        HostConfigView::ConfigFound {
+            config_settings, ..
+        } => on_access_config_from_settings(&config_settings),
+        HostConfigView::ConfigNotFound => {
+            OnAccessConfig::ConfigUnreadable(ClamdConfigReadFailure::NoReadableConfig)
+        }
     }
 }
 
@@ -618,14 +771,21 @@ fn third_party_signature_files(database_directory: &Path) -> Vec<ThirdPartySigna
     signature_files
 }
 
-async fn inspect_signature_evidence(engine_banner: &str) -> SignatureEvidence {
+async fn inspect_signature_evidence(engine_installation: &EngineInstallation) -> SignatureEvidence {
     let updater_evidence = join_all(SIGNATURE_UPDATER_UNITS.map(inspect_updater_unit))
         .await
         .into_iter()
         .flatten()
         .collect();
     SignatureEvidence {
-        database_evidence: inspect_database_evidence(engine_banner).await,
+        database_evidence: match engine_installation {
+            EngineInstallation::VersionReported { version_banner } => {
+                inspect_database_evidence_with_banner(version_banner).await
+            }
+            EngineInstallation::EngineMissing | EngineInstallation::VersionUnverified { .. } => {
+                inspect_database_evidence_without_banner().await
+            }
+        },
         updater_evidence,
         third_party_files: spawn_blocking(|| {
             third_party_signature_files(&configured_database_directory())
@@ -640,26 +800,46 @@ async fn inspect_daemon_evidence() -> DaemonEvidence {
         .await
         .unwrap_or(ProgramLocation::ProgramNotFound);
     if located_clamd_answers_ping(&clamdscan_location).await {
+        let daemon_banner = probe_located_program_version(&clamdscan_location).await;
         return DaemonEvidence::ClamdAnswering {
-            loaded_signatures: compare_loaded_signatures(
-                &probe_located_program_version(&clamdscan_location).await,
-                spawn_blocking(newest_disk_signature_version)
-                    .await
-                    .ok()
-                    .flatten(),
-            ),
+            loaded_signatures: match spawn_blocking(newest_disk_signature_version)
+                .await
+                .ok()
+                .flatten()
+            {
+                Some(disk_version) => compare_loaded_signatures(&daemon_banner, disk_version),
+                None => LoadedSignatures::ComparisonUnavailable,
+            },
         };
     }
-    let unit_states = join_all(DAEMON_SERVICE_UNITS.map(probe_unit_state)).await;
+    silent_daemon_evidence(&join_all(DAEMON_SERVICE_UNITS.map(probe_unit_state)).await)
+}
+
+fn first_unit_in_state(unit_states: &[UnitState], wanted_state: UnitState) -> Option<&'static str> {
     DAEMON_SERVICE_UNITS
         .iter()
         .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitLoaded(UnitActivity::UnitInactive))
-        .map_or(DaemonEvidence::NeverSetUp, |named_state| {
-            DaemonEvidence::UnitStopped {
-                service_unit: named_state.0,
-            }
-        })
+        .find(|named_state| *named_state.1 == wanted_state)
+        .map(|named_state| *named_state.0)
+}
+
+pub fn silent_daemon_evidence(unit_states: &[UnitState]) -> DaemonEvidence {
+    if let Some(service_unit) =
+        first_unit_in_state(unit_states, UnitState::UnitLoaded(UnitActivity::UnitActive))
+    {
+        return DaemonEvidence::UnitActiveNotAnswering { service_unit };
+    }
+    if let Some(service_unit) = first_unit_in_state(
+        unit_states,
+        UnitState::UnitLoaded(UnitActivity::UnitInactive),
+    ) {
+        return DaemonEvidence::UnitStopped { service_unit };
+    }
+    if unit_states.contains(&UnitState::SystemdUnavailable) {
+        DaemonEvidence::UnitStateUnknown
+    } else {
+        DaemonEvidence::NeverSetUp
+    }
 }
 
 async fn inspect_on_access_scanner() -> OnAccessScanner {
@@ -680,13 +860,14 @@ async fn inspect_on_access_scanner() -> OnAccessScanner {
 
 async fn inspect_on_access_evidence() -> OnAccessEvidence {
     let on_access_scanner = inspect_on_access_scanner().await;
-    let config_settings = match spawn_blocking(read_clamd_config).await {
-        Ok(HostConfigView::ConfigFound {
-            config_settings, ..
-        }) => config_settings,
-        _no_config => Vec::new(),
-    };
-    on_access_evidence_from_config(on_access_scanner, &config_settings)
+    let on_access_config = spawn_blocking(read_clamd_config).await.map_or(
+        OnAccessConfig::ConfigUnreadable(ClamdConfigReadFailure::ReadingTaskAborted),
+        on_access_config_from_view,
+    );
+    OnAccessEvidence {
+        on_access_scanner,
+        on_access_config,
+    }
 }
 
 pub fn scan_service_evidence(service_snapshot: ServiceUnitSnapshot) -> ScanServiceEvidence {
@@ -717,8 +898,10 @@ async fn inspect_scheduled_scan(lazaret_schedule_enabled: bool) -> ScheduledScan
         let service_snapshot = service_unit_snapshot(system_scan_units.service_unit).await;
         return ScheduledScanEvidence::SystemTimer {
             service_unit: system_scan_units.service_unit,
-            timer_active: unit_activity == UnitActivity::UnitActive,
-            next_run,
+            timer_state: match unit_activity {
+                UnitActivity::UnitActive => TimerState::TimerActive { next_run },
+                UnitActivity::UnitInactive => TimerState::TimerInactive,
+            },
             scan_service: scan_service_evidence(service_snapshot),
             last_completed_run: newest_scan_run(system_scan_units.service_unit).await,
         };
@@ -740,12 +923,7 @@ pub fn lazaret_schedule_is_enabled() -> bool {
 
 pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> ProtectionEvidence {
     let engine_installation = inspect_engine_installation().await;
-    let engine_banner = match &engine_installation {
-        EngineInstallation::VersionReported { version_banner } => version_banner.clone(),
-        EngineInstallation::EngineMissing | EngineInstallation::VersionUnverified { .. } => {
-            String::new()
-        }
-    };
+    let signature_evidence = inspect_signature_evidence(&engine_installation).await;
     ProtectionEvidence {
         program_trust_findings: spawn_blocking(inspect_program_trust)
             .await
@@ -758,7 +936,7 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
             .unwrap_or_default(),
         account_setting_findings: inspect_account_settings(lazaret_schedule_enabled),
         engine_installation,
-        signature_evidence: inspect_signature_evidence(&engine_banner).await,
+        signature_evidence,
         daemon_evidence: inspect_daemon_evidence().await,
         on_access_evidence: inspect_on_access_evidence().await,
         scheduled_scan_evidence: inspect_scheduled_scan(lazaret_schedule_enabled).await,
@@ -941,14 +1119,14 @@ mod protection_evidence_tests {
     fn a_daemon_on_older_signatures_than_the_disk_is_reported() {
         let daemon_banner = reported_banner("ClamAV 1.5.4/28173/Tue Nov  3 07:27:52 2026");
         assert_eq!(
-            compare_loaded_signatures(&daemon_banner, Some(28_174)),
+            compare_loaded_signatures(&daemon_banner, 28_174),
             LoadedSignatures::BehindDisk {
                 loaded_version: "28173".to_owned(),
                 disk_version: "28174".to_owned(),
             }
         );
         assert_eq!(
-            compare_loaded_signatures(&daemon_banner, Some(28_173)),
+            compare_loaded_signatures(&daemon_banner, 28_173),
             LoadedSignatures::MatchesDisk
         );
     }
@@ -956,11 +1134,11 @@ mod protection_evidence_tests {
     #[test]
     fn a_banner_without_a_signature_version_cannot_be_compared() {
         assert_eq!(
-            compare_loaded_signatures(&reported_banner("ClamAV 1.5.4"), Some(28_174)),
+            compare_loaded_signatures(&reported_banner("ClamAV 1.5.4"), 28_174),
             LoadedSignatures::ComparisonUnavailable
         );
         assert_eq!(
-            compare_loaded_signatures(&ProgramProbe::NotFoundOnPath, Some(28_174)),
+            compare_loaded_signatures(&ProgramProbe::NotFoundOnPath, 28_174),
             LoadedSignatures::ComparisonUnavailable
         );
     }
@@ -968,19 +1146,28 @@ mod protection_evidence_tests {
     #[test]
     fn on_access_settings_are_read_from_the_daemon_config() {
         assert_eq!(
-            on_access_evidence_from_config(
-                OnAccessScanner::MonitorRunning,
-                &[
-                    config_setting("OnAccessIncludePath", "/home/user/Downloads"),
-                    config_setting("OnAccessIncludePath", "/srv/inbox"),
-                    config_setting("OnAccessPrevention", "true"),
-                    config_setting("OnAccessMaxFileSize", "100M"),
-                ],
-            ),
-            OnAccessEvidence {
-                on_access_scanner: OnAccessScanner::MonitorRunning,
-                watched_paths: vec!["/home/user/Downloads".to_owned(), "/srv/inbox".to_owned()],
-                prevention_enabled: true,
+            on_access_config_from_settings(&[
+                config_setting("OnAccessIncludePath", "/home/user/Downloads"),
+                config_setting("OnAccessIncludePath", "/srv/inbox"),
+                config_setting("OnAccessMountPath", "/media"),
+                config_setting("OnAccessPrevention", "true"),
+                config_setting("OnAccessMaxFileSize", "100M"),
+            ]),
+            OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::WatchedLocations {
+                    first_location: WatchedLocation::WatchedMount {
+                        mount_path: "/media".to_owned()
+                    },
+                    other_locations: vec![
+                        WatchedLocation::WatchedFolder {
+                            folder_path: "/home/user/Downloads".to_owned()
+                        },
+                        WatchedLocation::WatchedFolder {
+                            folder_path: "/srv/inbox".to_owned()
+                        },
+                    ],
+                },
+                blocking_response: OnAccessResponse::BlockAccess,
                 size_limit: OnAccessSizeLimit::ConfiguredLimit {
                     size_limit: ByteSize::mib(100)
                 },
@@ -989,13 +1176,109 @@ mod protection_evidence_tests {
     }
 
     #[test]
+    fn a_watched_mount_alone_counts_as_watched() {
+        let OnAccessConfig::ConfigRead { watch_scope, .. } =
+            on_access_config_from_settings(&[config_setting("OnAccessMountPath", "/")])
+        else {
+            panic!("a read config was expected");
+        };
+        assert_ne!(watch_scope, WatchScope::NothingWatched);
+    }
+
+    #[test]
     fn absent_on_access_settings_do_not_claim_prevention() {
-        let on_access_evidence = on_access_evidence_from_config(OnAccessScanner::NeverSetUp, &[]);
-        assert!(!on_access_evidence.prevention_enabled);
-        assert!(on_access_evidence.watched_paths.is_empty());
         assert_eq!(
-            on_access_evidence.size_limit,
-            OnAccessSizeLimit::DefaultLimit
+            on_access_config_from_settings(&[]),
+            OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::NothingWatched,
+                blocking_response: OnAccessResponse::ReportOnly,
+                size_limit: OnAccessSizeLimit::DefaultLimit,
+            }
+        );
+    }
+
+    #[test]
+    fn a_missing_daemon_config_claims_no_on_access_settings() {
+        assert_eq!(
+            on_access_config_from_view(HostConfigView::ConfigNotFound),
+            OnAccessConfig::ConfigUnreadable(ClamdConfigReadFailure::NoReadableConfig)
+        );
+    }
+
+    #[test]
+    fn a_silent_daemon_is_classified_by_its_unit_states() {
+        assert_eq!(
+            silent_daemon_evidence(&[
+                UnitState::UnitNotFound,
+                UnitState::UnitLoaded(UnitActivity::UnitActive),
+                UnitState::UnitNotFound,
+            ]),
+            DaemonEvidence::UnitActiveNotAnswering {
+                service_unit: "clamd@scan.service"
+            }
+        );
+        assert_eq!(
+            silent_daemon_evidence(&[
+                UnitState::UnitLoaded(UnitActivity::UnitInactive),
+                UnitState::SystemdUnavailable,
+                UnitState::UnitNotFound,
+            ]),
+            DaemonEvidence::UnitStopped {
+                service_unit: "clamav-daemon.service"
+            }
+        );
+        assert_eq!(
+            silent_daemon_evidence(&[
+                UnitState::SystemdUnavailable,
+                UnitState::UnitNotFound,
+                UnitState::UnitNotFound,
+            ]),
+            DaemonEvidence::UnitStateUnknown
+        );
+        assert_eq!(
+            silent_daemon_evidence(&[UnitState::UnitNotFound; 3]),
+            DaemonEvidence::NeverSetUp
+        );
+    }
+
+    #[test]
+    fn overrides_against_an_unreadable_base_are_not_called_harmless() {
+        let override_settings = vec![config_setting("OnAccessPrevention", "no")];
+        assert_eq!(
+            runtime_reductions_without_base(
+                &override_settings,
+                OverridesChangeTime::ChangeTimeUnknown
+            ),
+            RuntimeReductions::BaseConfigUnreadable {
+                change_time: OverridesChangeTime::ChangeTimeUnknown,
+                overridden_settings: vec![OverriddenSetting {
+                    setting_key: "OnAccessPrevention".to_owned(),
+                    changed_value: "no".to_owned(),
+                }],
+            }
+        );
+        assert_eq!(
+            runtime_reductions_without_base(&[], OverridesChangeTime::ChangeTimeUnknown),
+            RuntimeReductions::NothingReduced
+        );
+    }
+
+    #[test]
+    fn a_reduction_keeps_an_unknown_change_time_unknown() {
+        assert_eq!(
+            runtime_reductions_against_base(
+                &[config_setting("OnAccessPrevention", "yes")],
+                &[config_setting("OnAccessPrevention", "no")],
+                OverridesChangeTime::ChangeTimeUnknown,
+            ),
+            RuntimeReductions::SettingsReduced {
+                change_time: OverridesChangeTime::ChangeTimeUnknown,
+                reduced_settings: vec![ReducedSetting {
+                    setting_key: "OnAccessPrevention".to_owned(),
+                    base_value: "yes".to_owned(),
+                    changed_value: "no".to_owned(),
+                }],
+            }
         );
     }
 }

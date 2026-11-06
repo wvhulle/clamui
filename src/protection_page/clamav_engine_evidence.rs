@@ -113,23 +113,40 @@ pub fn newest_disk_signature_version() -> Option<u64> {
         .max()
 }
 
-pub async fn inspect_database_evidence(version_banner: &str) -> DatabaseEvidence {
-    let file_evidence = spawn_blocking(read_database_file_evidence)
+async fn read_database_file_evidence_off_thread() -> DatabaseFileEvidence {
+    spawn_blocking(read_database_file_evidence)
         .await
-        .unwrap_or(DatabaseFileEvidence::NoDatabaseFile);
-    match (
-        file_evidence,
-        parse_version_banner_build_time(version_banner),
-    ) {
-        (DatabaseFileEvidence::StampedDatabase { built_at }, _any_banner) => {
+        .unwrap_or(DatabaseFileEvidence::NoDatabaseFile)
+}
+
+const fn database_evidence_from_files(file_evidence: DatabaseFileEvidence) -> DatabaseEvidence {
+    match file_evidence {
+        DatabaseFileEvidence::StampedDatabase { built_at } => {
             DatabaseEvidence::BuiltAt { built_at }
         }
-        (
-            DatabaseFileEvidence::UnstampedDatabase | DatabaseFileEvidence::NoDatabaseFile,
-            Some(built_at),
-        ) => DatabaseEvidence::BuiltAt { built_at },
-        (DatabaseFileEvidence::UnstampedDatabase, None) => DatabaseEvidence::AgeUndetermined,
-        (DatabaseFileEvidence::NoDatabaseFile, None) => DatabaseEvidence::DatabaseMissing,
+        DatabaseFileEvidence::UnstampedDatabase => DatabaseEvidence::AgeUndetermined,
+        DatabaseFileEvidence::NoDatabaseFile => DatabaseEvidence::DatabaseMissing,
+    }
+}
+
+pub async fn inspect_database_evidence_without_banner() -> DatabaseEvidence {
+    database_evidence_from_files(read_database_file_evidence_off_thread().await)
+}
+
+pub async fn inspect_database_evidence_with_banner(version_banner: &str) -> DatabaseEvidence {
+    let file_evidence = read_database_file_evidence_off_thread().await;
+    match parse_version_banner_build_time(version_banner) {
+        Some(banner_built_at) => match file_evidence {
+            DatabaseFileEvidence::StampedDatabase { built_at } => {
+                DatabaseEvidence::BuiltAt { built_at }
+            }
+            DatabaseFileEvidence::UnstampedDatabase | DatabaseFileEvidence::NoDatabaseFile => {
+                DatabaseEvidence::BuiltAt {
+                    built_at: banner_built_at,
+                }
+            }
+        },
+        None => database_evidence_from_files(file_evidence),
     }
 }
 
