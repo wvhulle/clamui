@@ -1,51 +1,31 @@
 # Lazaret
 
-A native GTK desktop frontend for host-installed ClamAV, built with Relm4 and libadwaita. It scans files and folders through `clamdscan --fdpass`, falls back to `clamscan`, and manages a local quarantine.
+A GTK desktop front-end for the ClamAV that is already installed on your system. Lazaret scans files and folders through clamd, or with `clamscan` when clamd isn't running. It moves detections into a quarantine, raises alerts when the ClamAV services in the background find something, and schedules scans with systemd timers. It doesn't bundle a virus scanner of its own.
 
-Lazaret is a hard fork of [ClamUI](https://github.com/linx-systems/clamui). ClamAV itself is not bundled: `clamdscan` or `clamscan` must be on `PATH`.
-
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan.png" width="800" alt="The Scan page, with a drop zone for files and folders above the scan options">
+Lazaret is a hard fork of [ClamUI](https://github.com/linx-systems/clamui).
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/results-before-quarantine.png" width="800" alt="Scan results showing two threats found, with a button to quarantine both">
 
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/protection.png" width="800" alt="The Protection page, summarizing signatures, the daemon, on-access blocking and scheduled scans">
+More screenshots are in [usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md).
 
-## NixOS and Home Manager
+## Install
 
-The flake exports `nixosModules.default` and `homeManagerModules.default`. Either one runs Lazaret in the background, so detections raise alerts. Enable one per user. Neither configures ClamAV itself.
+| System | Guide | Live tuning of clamd |
+|---|---|---|
+| NixOS | [NixOS module or Home Manager module](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/install/nixos.md) | yes |
+| Debian 13, Ubuntu 26.04 | [`.deb` from the releases](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/install/debian-ubuntu.md) | yes |
+| Other distributions | [Flatpak bundle from the releases](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/install/flatpak.md) | no |
+| Anywhere else | [Build from source](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/install/from-source.md) | yes, with manual steps |
 
-```nix
-services.lazaret.enable = true;
-```
+## Documentation
 
-Optionally, let Lazaret change chosen `clamd` settings at runtime. Each change shows what will happen and asks for administrator authorization. Settings that run commands or change identity are refused, and changes that leave ClamAV unhealthy are rolled back. Changes live outside your Nix files until you copy them over.
+- [Usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md): scanning, quarantine, reputation lookups, protection status, alerts and scheduled scans.
+- [Architecture](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/architecture.md): how Lazaret talks to ClamAV, systemd and the settings helper.
+- [Development](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/development.md): building, testing, screenshots, translations and releases.
 
-```nix
-services.lazaret.liveTuning = {
-  enable = true;
-  allowedSettings = [ "OnAccessMaxFileSize" ];
-};
-```
+## Contributing
 
-API keys for the reputation check in Quarantine can come from agenix or sops-nix. Only the path ends up in your configuration; the secret has to be readable by your user. When a path is set, Lazaret uses that file and hides the paste field. Without it, keys you paste are kept in the system keyring.
-
-```nix
-age.secrets.abuse-ch-key.owner = "alice";
-services.lazaret.apiKeyFiles.abuseCh = config.age.secrets.abuse-ch-key.path;
-```
-
-## Develop
-
-```sh
-nix develop path:.
-cargo test
-nix flake check path:.
-nix run path:.
-nix build path:.#screenshots
-nix run path:.#render-screenshots -- dist/screenshots
-```
-
-Screenshots are rendered in a headless sway session. `xtask/src/page_screenshots.rs` lists each scenario as typed steps that find widgets by accessibility role and name, such as `WidgetTarget::button("Start Scan")`, so layout changes don't break them. To see the names on a page, run `nix build path:.#render-screenshots` and then `result/bin/list-widgets -- --page=scan`. On every push to `main`, CI renders them and publishes them to the `screenshots` branch.
+Issues and pull requests are welcome on [Codeberg](https://codeberg.org/wvhulle/lazaret). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
