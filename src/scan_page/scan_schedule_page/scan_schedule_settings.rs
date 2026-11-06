@@ -1,7 +1,9 @@
+use jiff::civil::Weekday;
 use relm4::gtk::{gio, gio::prelude::*};
 
 use crate::scan_page::scan_schedule_page::scan_schedule_units::{
-    ScanSchedule, ScheduleFrequency, parse_schedule_time,
+    ScanSchedule, ScheduleClockTime, ScheduleFrequency, ScheduleFrequencyChoice,
+    parse_schedule_time,
 };
 
 pub const ENABLED_KEY: &str = "schedule-enabled";
@@ -22,17 +24,17 @@ pub const SCHEDULE_SETTING_KEYS: [&str; 8] = [
     SKIP_ON_BATTERY_KEY,
     AUTO_QUARANTINE_KEY,
 ];
-pub const FREQUENCY_CHOICES: [ScheduleFrequency; 4] = [
-    ScheduleFrequency::Hourly,
-    ScheduleFrequency::Daily,
-    ScheduleFrequency::Weekly,
-    ScheduleFrequency::Monthly,
+pub const FREQUENCY_CHOICES: [ScheduleFrequencyChoice; 4] = [
+    ScheduleFrequencyChoice::Hourly,
+    ScheduleFrequencyChoice::Daily,
+    ScheduleFrequencyChoice::Weekly,
+    ScheduleFrequencyChoice::Monthly,
 ];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredScheduleSettings {
     pub schedule_enabled: bool,
-    pub schedule_frequency: ScheduleFrequency,
+    pub frequency_choice: ScheduleFrequencyChoice,
     pub schedule_time_text: String,
     pub weekday_position: u32,
     pub month_day: u32,
@@ -54,7 +56,7 @@ pub fn joined_scan_targets(scan_targets: &[String]) -> String {
     scan_targets.join(", ")
 }
 
-pub fn frequency_position(schedule_frequency: ScheduleFrequency) -> u32 {
+pub fn frequency_position(schedule_frequency: ScheduleFrequencyChoice) -> u32 {
     FREQUENCY_CHOICES
         .iter()
         .position(|frequency_choice| *frequency_choice == schedule_frequency)
@@ -62,7 +64,7 @@ pub fn frequency_position(schedule_frequency: ScheduleFrequency) -> u32 {
         .unwrap_or(1)
 }
 
-pub fn frequency_at(frequency_position: u32) -> Option<ScheduleFrequency> {
+pub fn frequency_at(frequency_position: u32) -> Option<ScheduleFrequencyChoice> {
     usize::try_from(frequency_position)
         .ok()
         .and_then(|frequency_position| FREQUENCY_CHOICES.get(frequency_position))
@@ -73,7 +75,7 @@ impl StoredScheduleSettings {
     pub fn read_from(stored_settings: &gio::Settings) -> Self {
         Self {
             schedule_enabled: stored_settings.boolean(ENABLED_KEY),
-            schedule_frequency: ScheduleFrequency::from_stored_text(
+            frequency_choice: ScheduleFrequencyChoice::from_stored_text(
                 &stored_settings.string(FREQUENCY_KEY),
             ),
             schedule_time_text: stored_settings.string(TIME_KEY).to_string(),
@@ -92,7 +94,7 @@ impl StoredScheduleSettings {
     pub fn write_to(&self, stored_settings: &gio::Settings) {
         let _enabled_stored = stored_settings.set_boolean(ENABLED_KEY, self.schedule_enabled);
         let _frequency_stored =
-            stored_settings.set_string(FREQUENCY_KEY, self.schedule_frequency.stored_text());
+            stored_settings.set_string(FREQUENCY_KEY, self.frequency_choice.stored_text());
         let _time_stored = stored_settings.set_string(TIME_KEY, &self.schedule_time_text);
         let _weekday_stored = stored_settings.set_int(
             WEEKDAY_KEY,
@@ -113,14 +115,43 @@ impl StoredScheduleSettings {
             stored_settings.set_boolean(AUTO_QUARANTINE_KEY, self.auto_quarantine);
     }
 
+    fn stored_weekday(&self) -> Weekday {
+        Weekday::Monday.wrapping_add(u8::try_from(self.weekday_position).unwrap_or(0))
+    }
+
+    fn stored_month_day(&self) -> u8 {
+        u8::try_from(self.month_day).unwrap_or(1)
+    }
+
+    fn scan_time(&self) -> Option<ScheduleClockTime> {
+        parse_schedule_time(&self.schedule_time_text)
+    }
+
+    fn schedule_frequency(&self) -> Option<ScheduleFrequency> {
+        match self.frequency_choice {
+            ScheduleFrequencyChoice::Hourly => Some(ScheduleFrequency::Hourly),
+            ScheduleFrequencyChoice::Daily => self
+                .scan_time()
+                .map(|scan_time| ScheduleFrequency::Daily { scan_time }),
+            ScheduleFrequencyChoice::Weekly => {
+                self.scan_time().map(|scan_time| ScheduleFrequency::Weekly {
+                    scan_weekday: self.stored_weekday(),
+                    scan_time,
+                })
+            }
+            ScheduleFrequencyChoice::Monthly => {
+                self.scan_time()
+                    .map(|scan_time| ScheduleFrequency::Monthly {
+                        month_day: self.stored_month_day(),
+                        scan_time,
+                    })
+            }
+        }
+    }
+
     pub fn scan_schedule(&self) -> Option<ScanSchedule> {
-        let clock_time = parse_schedule_time(&self.schedule_time_text)?;
         Some(ScanSchedule {
-            schedule_frequency: self.schedule_frequency,
-            scan_hour: clock_time.scan_hour,
-            scan_minute: clock_time.scan_minute,
-            weekday_position: u8::try_from(self.weekday_position).unwrap_or(0),
-            month_day: u8::try_from(self.month_day).unwrap_or(1),
+            schedule_frequency: self.schedule_frequency()?,
             scan_targets: self.scan_targets.clone(),
             skip_on_battery: self.skip_on_battery,
             auto_quarantine: self.auto_quarantine,
@@ -131,11 +162,12 @@ impl StoredScheduleSettings {
 #[cfg(test)]
 mod scan_schedule_settings_tests {
     use super::*;
+    use crate::scan_page::scan_schedule_page::scan_schedule_units::on_calendar_expression;
 
     fn daily_schedule_settings() -> StoredScheduleSettings {
         StoredScheduleSettings {
             schedule_enabled: true,
-            schedule_frequency: ScheduleFrequency::Daily,
+            frequency_choice: ScheduleFrequencyChoice::Daily,
             schedule_time_text: "02:30".to_owned(),
             weekday_position: 0,
             month_day: 1,
@@ -173,8 +205,13 @@ mod scan_schedule_settings_tests {
             .scan_schedule()
             .expect("02:30 is a valid time");
         assert_eq!(
-            (scan_schedule.scan_hour, scan_schedule.scan_minute),
-            (2, 30)
+            scan_schedule.schedule_frequency,
+            ScheduleFrequency::Daily {
+                scan_time: ScheduleClockTime {
+                    scan_hour: 2,
+                    scan_minute: 30
+                }
+            }
         );
         assert!(
             StoredScheduleSettings {
@@ -183,6 +220,72 @@ mod scan_schedule_settings_tests {
             }
             .scan_schedule()
             .is_none()
+        );
+    }
+
+    #[test]
+    fn hourly_schedules_ignore_the_time() {
+        assert_eq!(
+            StoredScheduleSettings {
+                frequency_choice: ScheduleFrequencyChoice::Hourly,
+                schedule_time_text: "half past two".to_owned(),
+                ..daily_schedule_settings()
+            }
+            .scan_schedule()
+            .map(|scan_schedule| scan_schedule.schedule_frequency),
+            Some(ScheduleFrequency::Hourly)
+        );
+    }
+
+    #[test]
+    fn stored_calendar_settings_keep_their_systemd_calendar_text() {
+        let calendar_text_for = |frequency_choice, weekday_position, month_day| {
+            StoredScheduleSettings {
+                frequency_choice,
+                weekday_position,
+                month_day,
+                ..daily_schedule_settings()
+            }
+            .scan_schedule()
+            .map(|scan_schedule| on_calendar_expression(&scan_schedule))
+        };
+        assert_eq!(
+            calendar_text_for(ScheduleFrequencyChoice::Hourly, 0, 1).as_deref(),
+            Some("*-*-* *:00:00")
+        );
+        assert_eq!(
+            calendar_text_for(ScheduleFrequencyChoice::Daily, 3, 9).as_deref(),
+            Some("*-*-* 02:30:00")
+        );
+        [
+            (0, "Mon"),
+            (1, "Tue"),
+            (2, "Wed"),
+            (3, "Thu"),
+            (4, "Fri"),
+            (5, "Sat"),
+            (6, "Sun"),
+            (7, "Mon"),
+            (13, "Sun"),
+        ]
+        .into_iter()
+        .for_each(|(weekday_position, weekday_name)| {
+            assert_eq!(
+                calendar_text_for(ScheduleFrequencyChoice::Weekly, weekday_position, 1),
+                Some(format!("{weekday_name} *-*-* 02:30:00"))
+            );
+        });
+        assert_eq!(
+            calendar_text_for(ScheduleFrequencyChoice::Monthly, 0, 15).as_deref(),
+            Some("*-*-15 02:30:00")
+        );
+        assert_eq!(
+            calendar_text_for(ScheduleFrequencyChoice::Monthly, 0, 31).as_deref(),
+            Some("*-*-28 02:30:00")
+        );
+        assert_eq!(
+            calendar_text_for(ScheduleFrequencyChoice::Monthly, 0, 0).as_deref(),
+            Some("*-*-01 02:30:00")
         );
     }
 }

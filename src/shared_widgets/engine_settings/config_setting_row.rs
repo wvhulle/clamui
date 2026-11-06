@@ -8,6 +8,23 @@ use relm4::{
 
 use crate::host_services::clamav_config::setting_provenance::SettingLock;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RowChangeActivity {
+    ChangesAllowed,
+    ApplyingThisRow,
+    ApplyingOtherRow,
+}
+
+impl RowChangeActivity {
+    pub const fn accepts_changes(self) -> bool {
+        matches!(self, Self::ChangesAllowed)
+    }
+
+    pub const fn shows_applying_spinner(self) -> bool {
+        matches!(self, Self::ApplyingThisRow)
+    }
+}
+
 pub struct ConfigSettingRowInit {
     pub setting_key: String,
     pub setting_value: String,
@@ -22,12 +39,12 @@ pub struct ConfigSettingRow {
     setting_lock: SettingLock,
     sibling_values: Vec<String>,
     value_position: usize,
-    change_running: bool,
+    change_activity: RowChangeActivity,
 }
 
 #[derive(Debug)]
 pub enum ConfigSettingRowInput {
-    ChangeRunningChanged(bool),
+    ChangeActivityChanged(RowChangeActivity),
 }
 
 #[derive(Debug)]
@@ -103,7 +120,7 @@ impl FactoryComponent for ConfigSettingRow {
             setting_lock: row_init.setting_lock,
             sibling_values: row_init.sibling_values,
             value_position: row_init.value_position,
-            change_running: false,
+            change_activity: RowChangeActivity::ChangesAllowed,
         }
     }
 
@@ -153,14 +170,18 @@ impl FactoryComponent for ConfigSettingRow {
 
     fn update(&mut self, row_input: Self::Input, _sender: FactorySender<Self>) {
         match row_input {
-            ConfigSettingRowInput::ChangeRunningChanged(change_running) => {
-                self.change_running = change_running;
+            ConfigSettingRowInput::ChangeActivityChanged(change_activity) => {
+                self.change_activity = change_activity;
             }
         }
     }
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: FactorySender<Self>) {
-        widgets.applying_spinner.set_visible(self.change_running);
-        widgets.setting_row.set_sensitive(!self.change_running);
+        widgets
+            .applying_spinner
+            .set_visible(self.change_activity.shows_applying_spinner());
+        widgets
+            .setting_row
+            .set_sensitive(self.change_activity.accepts_changes());
     }
 }

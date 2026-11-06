@@ -5,7 +5,10 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::host_services::clamav_config::detection_options::DetectionOption;
+use crate::{
+    host_services::clamav_config::detection_options::DetectionOption,
+    shared_widgets::engine_settings::config_setting_row::RowChangeActivity,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SwitchAvailability {
@@ -19,7 +22,7 @@ pub struct DetectionSwitchState {
     pub detection_option: DetectionOption,
     pub switched_on: bool,
     pub switch_availability: SwitchAvailability,
-    pub change_running: bool,
+    pub change_activity: RowChangeActivity,
 }
 
 pub struct DetectionSwitchRow {
@@ -101,7 +104,7 @@ impl DetectionSwitchRow {
 
     fn accepts_toggles(&self) -> bool {
         self.switch_state.switch_availability == SwitchAvailability::ChangeableNow
-            && !self.switch_state.change_running
+            && self.switch_state.change_activity.accepts_changes()
     }
 }
 

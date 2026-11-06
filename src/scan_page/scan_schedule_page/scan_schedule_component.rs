@@ -3,12 +3,13 @@ use relm4::{Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gt
 
 use crate::{
     host_services::{
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::{
             locale_formatting::exact_local_time_text, stored_settings::application_settings,
             stored_settings_watch::forward_setting_changes,
         },
-        systemd_bus::host_systemd_units::{TimerUnitSnapshot, UnitTimestamp, timer_unit_snapshot},
+        systemd_bus::host_systemd_units::{
+            SystemdBusFailure, TimerUnitSnapshot, UnitTimestamp, timer_unit_snapshot,
+        },
     },
     scan_page::scan_schedule_page::{
         scan_schedule_settings::{
@@ -29,9 +30,22 @@ pub struct ScanSchedulePage {
     schedule_settings: StoredScheduleSettings,
     scan_targets_text: String,
     entry_texts_replaced: bool,
-    timer_state_text: String,
+    user_timer_view: UserTimerView,
     system_schedule_owner: SystemScheduleOwner,
-    page_notice: String,
+    page_notice: SchedulePageNotice,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UserTimerView {
+    ReadingUserTimer,
+    UserTimerRead(ScheduleTimerState),
+}
+
+#[derive(Debug)]
+pub enum SchedulePageNotice {
+    NoNoticeShown,
+    ScanTimeUnreadable,
+    ScheduleNotApplied(ScheduleApplyFailure),
 }
 
 #[derive(Debug)]
@@ -58,9 +72,12 @@ pub enum ScanSchedulePageCommand {
 fn describe_timer_state(timer_state: &ScheduleTimerState) -> String {
     match timer_state {
         ScheduleTimerState::TimerInactive => gettext("Not scheduled"),
-        ScheduleTimerState::TimerActive { next_run_text } => {
-            gettext("Next run: {time}").replace("{time}", &sanitize_scanner_line(next_run_text))
-        }
+        ScheduleTimerState::TimerActive {
+            next_run: UnitTimestamp::RecordedAt { recorded_at },
+        } => gettext("Next run: {time}").replace("{time}", &exact_local_time_text(*recorded_at)),
+        ScheduleTimerState::TimerActive {
+            next_run: UnitTimestamp::NeverRecorded,
+        } => gettext("Scheduled. The time of the next run is not known yet."),
         ScheduleTimerState::SystemdUnavailable => {
             gettext("Scheduled scans need a systemd user session, which is not available.")
         }
@@ -79,6 +96,48 @@ fn describe_system_schedule(next_run: UnitTimestamp) -> String {
              schedule. Change it in your system configuration.",
         ),
     }
+}
+
+fn describe_user_timer(user_timer_view: &UserTimerView) -> String {
+    match user_timer_view {
+        UserTimerView::ReadingUserTimer => gettext("Checking…"),
+        UserTimerView::UserTimerRead(timer_state) => describe_timer_state(timer_state),
+    }
+}
+
+fn describe_schedule_group(
+    system_schedule_owner: &SystemScheduleOwner,
+    user_timer_view: &UserTimerView,
+) -> String {
+    match system_schedule_owner {
+        SystemScheduleOwner::InspectingSystemTimer => gettext(
+            "Checking whether your system already runs scheduled scans. These settings stay \
+             locked until then.",
+        ),
+        SystemScheduleOwner::NoSystemTimer => describe_user_timer(user_timer_view),
+        SystemScheduleOwner::SystemTimerExists { next_run } => describe_system_schedule(*next_run),
+        SystemScheduleOwner::SystemTimerUnknown(inspection_failure) => gettext(
+            "Lazaret could not check whether your system already runs scheduled scans, so these \
+             settings are locked to avoid a second schedule: {error}",
+        )
+        .replace("{error}", &inspection_failure.to_string()),
+    }
+}
+
+fn describe_page_notice(page_notice: &SchedulePageNotice) -> String {
+    match page_notice {
+        SchedulePageNotice::NoNoticeShown => String::new(),
+        SchedulePageNotice::ScanTimeUnreadable => {
+            gettext("Enter the scan time as HH:MM, for example 02:00.")
+        }
+        SchedulePageNotice::ScheduleNotApplied(apply_failure) => {
+            describe_apply_failure(apply_failure)
+        }
+    }
+}
+
+const fn shows_page_notice(page_notice: &SchedulePageNotice) -> bool {
+    !matches!(page_notice, SchedulePageNotice::NoNoticeShown)
 }
 
 fn describe_apply_failure(apply_failure: &ScheduleApplyFailure) -> String {
@@ -117,10 +176,12 @@ fn weekday_labels() -> gtk::StringList {
     gtk::StringList::new(&labels.iter().map(String::as_str).collect::<Vec<_>>())
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SystemScheduleOwner {
+    InspectingSystemTimer,
     NoSystemTimer,
     SystemTimerExists { next_run: UnitTimestamp },
+    SystemTimerUnknown(SystemdBusFailure),
 }
 
 pub fn system_schedule_owner(timer_snapshot: TimerUnitSnapshot) -> SystemScheduleOwner {
@@ -128,14 +189,19 @@ pub fn system_schedule_owner(timer_snapshot: TimerUnitSnapshot) -> SystemSchedul
         TimerUnitSnapshot::LoadedTimer { next_run, .. } => {
             SystemScheduleOwner::SystemTimerExists { next_run }
         }
-        TimerUnitSnapshot::TimerNotFound | TimerUnitSnapshot::SystemdUnreachable(_) => {
-            SystemScheduleOwner::NoSystemTimer
+        TimerUnitSnapshot::TimerNotFound => SystemScheduleOwner::NoSystemTimer,
+        TimerUnitSnapshot::SystemdUnreachable(inspection_failure) => {
+            SystemScheduleOwner::SystemTimerUnknown(inspection_failure)
         }
     }
 }
 
+pub const fn allows_applying_schedule(system_schedule_owner: &SystemScheduleOwner) -> bool {
+    matches!(system_schedule_owner, SystemScheduleOwner::NoSystemTimer)
+}
+
 impl ScanSchedulePage {
-    fn refresh_timer_state(&self, sender: &ComponentSender<Self>) {
+    fn inspect_timers(sender: &ComponentSender<Self>) {
         sender.oneshot_command(async {
             ScanSchedulePageCommand::SystemTimerInspected(system_schedule_owner(
                 timer_unit_snapshot(SYSTEM_SCAN_TIMER).await,
@@ -181,9 +247,12 @@ impl Component for ScanSchedulePage {
             add = &adw::PreferencesGroup {
                 set_title: &gettext("Scheduled Scans"),
                 #[watch]
-                set_sensitive: model.system_schedule_owner == SystemScheduleOwner::NoSystemTimer,
+                set_sensitive: allows_applying_schedule(&model.system_schedule_owner),
                 #[watch]
-                set_description: Some(&model.timer_state_text),
+                set_description: Some(&describe_schedule_group(
+                    &model.system_schedule_owner,
+                    &model.user_timer_view,
+                )),
                 #[wrap(Some)]
                 set_header_suffix = &gtk::Button {
                     set_label: &gettext("Apply"),
@@ -207,7 +276,7 @@ impl Component for ScanSchedulePage {
                     set_model: Some(&frequency_labels()),
                     #[watch]
                     #[block_signal(frequency_chosen_handler)]
-                    set_selected: frequency_position(model.schedule_settings.schedule_frequency),
+                    set_selected: frequency_position(model.schedule_settings.frequency_choice),
                     connect_selected_notify[sender] => move |changed_row| {
                         sender.input(ScanSchedulePageInput::FrequencyChosen(changed_row.selected()));
                     } @frequency_chosen_handler,
@@ -286,9 +355,9 @@ impl Component for ScanSchedulePage {
                     set_wrap: true,
                     add_css_class: "error",
                     #[watch]
-                    set_visible: !model.page_notice.is_empty(),
+                    set_visible: shows_page_notice(&model.page_notice),
                     #[watch]
-                    set_label: &model.page_notice,
+                    set_label: &describe_page_notice(&model.page_notice),
                 },
             },
         }
@@ -308,12 +377,12 @@ impl Component for ScanSchedulePage {
             entry_texts_replaced: true,
             schedule_settings,
             stored_settings,
-            timer_state_text: gettext("Checking…"),
-            system_schedule_owner: SystemScheduleOwner::NoSystemTimer,
-            page_notice: String::new(),
+            user_timer_view: UserTimerView::ReadingUserTimer,
+            system_schedule_owner: SystemScheduleOwner::InspectingSystemTimer,
+            page_notice: SchedulePageNotice::NoNoticeShown,
         };
         let widgets = view_output!();
-        model.refresh_timer_state(&sender);
+        Self::inspect_timers(&sender);
         ComponentParts { model, widgets }
     }
 
@@ -333,7 +402,7 @@ impl Component for ScanSchedulePage {
             ScanSchedulePageInput::FrequencyChosen(chosen_position) => {
                 if let Some(schedule_frequency) = frequency_at(chosen_position) {
                     self.change_schedule_settings(|schedule_settings| {
-                        schedule_settings.schedule_frequency = schedule_frequency;
+                        schedule_settings.frequency_choice = schedule_frequency;
                     });
                 }
             }
@@ -372,7 +441,10 @@ impl Component for ScanSchedulePage {
             }
             ScanSchedulePageInput::StoredSettingChanged => self.show_stored_settings(),
             ScanSchedulePageInput::ApplyRequested => {
-                self.page_notice.clear();
+                if !allows_applying_schedule(&self.system_schedule_owner) {
+                    return;
+                }
+                self.page_notice = SchedulePageNotice::NoNoticeShown;
                 if !self.schedule_settings.schedule_enabled {
                     sender.oneshot_command(async {
                         ScanSchedulePageCommand::ScheduleApplied(
@@ -382,7 +454,7 @@ impl Component for ScanSchedulePage {
                     return;
                 }
                 let Some(scan_schedule) = self.schedule_settings.scan_schedule() else {
-                    self.page_notice = gettext("Enter the scan time as HH:MM, for example 02:00.");
+                    self.page_notice = SchedulePageNotice::ScanTimeUnreadable;
                     return;
                 };
                 sender.oneshot_command(async move {
@@ -403,21 +475,17 @@ impl Component for ScanSchedulePage {
         self.entry_texts_replaced = false;
         match page_command {
             ScanSchedulePageCommand::TimerStateLoaded(timer_state) => {
-                if self.system_schedule_owner == SystemScheduleOwner::NoSystemTimer {
-                    self.timer_state_text = describe_timer_state(&timer_state);
-                }
+                self.user_timer_view = UserTimerView::UserTimerRead(timer_state);
             }
             ScanSchedulePageCommand::SystemTimerInspected(system_schedule_owner) => {
                 self.system_schedule_owner = system_schedule_owner;
-                if let SystemScheduleOwner::SystemTimerExists { next_run } = system_schedule_owner {
-                    self.timer_state_text = describe_system_schedule(next_run);
-                }
             }
             ScanSchedulePageCommand::ScheduleApplied(apply_outcome) => {
                 if let Err(apply_failure) = apply_outcome {
-                    self.page_notice = describe_apply_failure(&apply_failure);
+                    self.page_notice = SchedulePageNotice::ScheduleNotApplied(apply_failure);
                 }
-                self.refresh_timer_state(&sender);
+                self.user_timer_view = UserTimerView::ReadingUserTimer;
+                Self::inspect_timers(&sender);
             }
         }
     }
@@ -426,7 +494,7 @@ impl Component for ScanSchedulePage {
 #[cfg(test)]
 mod scan_schedule_component_tests {
     use super::*;
-    use crate::host_services::systemd_bus::host_systemd_units::{SystemdBusFailure, UnitActivity};
+    use crate::host_services::systemd_bus::host_systemd_units::UnitActivity;
 
     #[test]
     fn an_installed_system_timer_locks_the_schedule_even_when_stopped() {
@@ -446,16 +514,28 @@ mod scan_schedule_component_tests {
 
     #[test]
     fn hosts_without_a_system_timer_keep_their_own_schedule() {
+        let system_schedule_owner = system_schedule_owner(TimerUnitSnapshot::TimerNotFound);
+        assert_eq!(system_schedule_owner, SystemScheduleOwner::NoSystemTimer);
+        assert!(allows_applying_schedule(&system_schedule_owner));
+    }
+
+    #[test]
+    fn the_schedule_cannot_be_applied_while_inspecting_or_without_systemd() {
         [
-            TimerUnitSnapshot::TimerNotFound,
-            TimerUnitSnapshot::SystemdUnreachable(SystemdBusFailure::UnrecognizedLoadState),
+            SystemScheduleOwner::InspectingSystemTimer,
+            system_schedule_owner(TimerUnitSnapshot::SystemdUnreachable(
+                SystemdBusFailure::UnrecognizedLoadState,
+            )),
+            system_schedule_owner(TimerUnitSnapshot::SystemdUnreachable(
+                SystemdBusFailure::BusCallFailed(zbus::Error::InvalidReply),
+            )),
+            SystemScheduleOwner::SystemTimerExists {
+                next_run: UnitTimestamp::NeverRecorded,
+            },
         ]
-        .into_iter()
-        .for_each(|timer_snapshot| {
-            assert_eq!(
-                system_schedule_owner(timer_snapshot),
-                SystemScheduleOwner::NoSystemTimer
-            );
+        .iter()
+        .for_each(|system_schedule_owner| {
+            assert!(!allows_applying_schedule(system_schedule_owner));
         });
     }
 }

@@ -4,11 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use jiff::civil::Weekday;
+
 use crate::host_services::{
-    desktop::{
-        flatpak_sandbox::{running_in_flatpak, sandboxed_launcher_words},
-        locale_formatting::exact_local_time_text,
-    },
+    desktop::flatpak_sandbox::{running_in_flatpak, sandboxed_launcher_words},
     systemd_bus::host_systemd_units::{
         TimerUnitSnapshot, UnitActivity, UnitTimestamp, disable_user_timer, enable_user_timer,
         reload_user_manager, user_timer_snapshot,
@@ -17,7 +16,6 @@ use crate::host_services::{
 
 const SERVICE_FILE_NAME: &str = "lazaret-scheduled-scan.service";
 const TIMER_FILE_NAME: &str = "lazaret-scheduled-scan.timer";
-const WEEKDAY_NAMES: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SERVICE_TEMPLATE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/data/lazaret-scheduled-scan.service.in"
@@ -28,14 +26,14 @@ const TIMER_TEMPLATE: &str = include_str!(concat!(
 ));
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScheduleFrequency {
+pub enum ScheduleFrequencyChoice {
     Hourly,
     Daily,
     Weekly,
     Monthly,
 }
 
-impl ScheduleFrequency {
+impl ScheduleFrequencyChoice {
     pub fn from_stored_text(stored_text: &str) -> Self {
         match stored_text {
             "hourly" => Self::Hourly,
@@ -55,13 +53,25 @@ impl ScheduleFrequency {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScheduleFrequency {
+    Hourly,
+    Daily {
+        scan_time: ScheduleClockTime,
+    },
+    Weekly {
+        scan_weekday: Weekday,
+        scan_time: ScheduleClockTime,
+    },
+    Monthly {
+        month_day: u8,
+        scan_time: ScheduleClockTime,
+    },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScanSchedule {
     pub schedule_frequency: ScheduleFrequency,
-    pub scan_hour: u8,
-    pub scan_minute: u8,
-    pub weekday_position: u8,
-    pub month_day: u8,
     pub scan_targets: Vec<String>,
     pub skip_on_battery: bool,
     pub auto_quarantine: bool,
@@ -78,7 +88,7 @@ pub enum ScheduleApplyFailure {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScheduleTimerState {
     TimerInactive,
-    TimerActive { next_run_text: String },
+    TimerActive { next_run: UnitTimestamp },
     SystemdUnavailable,
 }
 
@@ -101,21 +111,43 @@ pub struct ScheduleClockTime {
     pub scan_minute: u8,
 }
 
+const fn calendar_weekday_name(scan_weekday: Weekday) -> &'static str {
+    match scan_weekday {
+        Weekday::Monday => "Mon",
+        Weekday::Tuesday => "Tue",
+        Weekday::Wednesday => "Wed",
+        Weekday::Thursday => "Thu",
+        Weekday::Friday => "Fri",
+        Weekday::Saturday => "Sat",
+        Weekday::Sunday => "Sun",
+    }
+}
+
+fn calendar_clock_text(scan_time: ScheduleClockTime) -> String {
+    format!("{:02}:{:02}:00", scan_time.scan_hour, scan_time.scan_minute)
+}
+
 pub fn on_calendar_expression(scan_schedule: &ScanSchedule) -> String {
-    let clock_time = format!(
-        "{:02}:{:02}:00",
-        scan_schedule.scan_hour, scan_schedule.scan_minute
-    );
     match scan_schedule.schedule_frequency {
         ScheduleFrequency::Hourly => "*-*-* *:00:00".to_owned(),
-        ScheduleFrequency::Daily => format!("*-*-* {clock_time}"),
-        ScheduleFrequency::Weekly => format!(
-            "{} *-*-* {clock_time}",
-            WEEKDAY_NAMES[usize::from(scan_schedule.weekday_position) % WEEKDAY_NAMES.len()]
+        ScheduleFrequency::Daily { scan_time } => {
+            format!("*-*-* {}", calendar_clock_text(scan_time))
+        }
+        ScheduleFrequency::Weekly {
+            scan_weekday,
+            scan_time,
+        } => format!(
+            "{} *-*-* {}",
+            calendar_weekday_name(scan_weekday),
+            calendar_clock_text(scan_time)
         ),
-        ScheduleFrequency::Monthly => format!(
-            "*-*-{:02} {clock_time}",
-            scan_schedule.month_day.clamp(1, 28)
+        ScheduleFrequency::Monthly {
+            month_day,
+            scan_time,
+        } => format!(
+            "*-*-{:02} {}",
+            month_day.clamp(1, 28),
+            calendar_clock_text(scan_time)
         ),
     }
 }
@@ -285,12 +317,7 @@ pub fn schedule_state_from_timer(timer_snapshot: TimerUnitSnapshot) -> ScheduleT
             unit_activity: UnitActivity::UnitActive,
             next_run,
             ..
-        } => ScheduleTimerState::TimerActive {
-            next_run_text: match next_run {
-                UnitTimestamp::RecordedAt { recorded_at } => exact_local_time_text(recorded_at),
-                UnitTimestamp::NeverRecorded => String::new(),
-            },
-        },
+        } => ScheduleTimerState::TimerActive { next_run },
         TimerUnitSnapshot::LoadedTimer {
             unit_activity: UnitActivity::UnitInactive,
             ..
@@ -344,13 +371,17 @@ mod scan_schedule_units_tests {
         );
     }
 
+    const EARLY_MORNING: ScheduleClockTime = ScheduleClockTime {
+        scan_hour: 2,
+        scan_minute: 5,
+    };
+
     fn weekly_schedule() -> ScanSchedule {
         ScanSchedule {
-            schedule_frequency: ScheduleFrequency::Weekly,
-            scan_hour: 2,
-            scan_minute: 5,
-            weekday_position: 6,
-            month_day: 31,
+            schedule_frequency: ScheduleFrequency::Weekly {
+                scan_weekday: Weekday::Sunday,
+                scan_time: EARLY_MORNING,
+            },
             scan_targets: vec!["/home/a b/100%$HOME\"x".to_owned()],
             skip_on_battery: true,
             auto_quarantine: false,
@@ -366,14 +397,42 @@ mod scan_schedule_units_tests {
             })
         };
         assert_eq!(on_calendar_with(ScheduleFrequency::Hourly), "*-*-* *:00:00");
-        assert_eq!(on_calendar_with(ScheduleFrequency::Daily), "*-*-* 02:05:00");
         assert_eq!(
-            on_calendar_with(ScheduleFrequency::Weekly),
+            on_calendar_with(ScheduleFrequency::Daily {
+                scan_time: EARLY_MORNING
+            }),
+            "*-*-* 02:05:00"
+        );
+        assert_eq!(
+            on_calendar_with(ScheduleFrequency::Weekly {
+                scan_weekday: Weekday::Sunday,
+                scan_time: EARLY_MORNING
+            }),
             "Sun *-*-* 02:05:00"
         );
         assert_eq!(
-            on_calendar_with(ScheduleFrequency::Monthly),
+            on_calendar_with(ScheduleFrequency::Weekly {
+                scan_weekday: Weekday::Monday,
+                scan_time: ScheduleClockTime {
+                    scan_hour: 23,
+                    scan_minute: 59
+                }
+            }),
+            "Mon *-*-* 23:59:00"
+        );
+        assert_eq!(
+            on_calendar_with(ScheduleFrequency::Monthly {
+                month_day: 31,
+                scan_time: EARLY_MORNING
+            }),
             "*-*-28 02:05:00"
+        );
+        assert_eq!(
+            on_calendar_with(ScheduleFrequency::Monthly {
+                month_day: 3,
+                scan_time: EARLY_MORNING
+            }),
+            "*-*-03 02:05:00"
         );
     }
 
@@ -441,10 +500,12 @@ mod scan_schedule_units_tests {
             )),
             ScheduleTimerState::SystemdUnavailable
         );
-        assert!(matches!(
+        assert_eq!(
             schedule_state_from_timer(loaded_timer_with(UnitActivity::UnitActive)),
-            ScheduleTimerState::TimerActive { .. }
-        ));
+            ScheduleTimerState::TimerActive {
+                next_run: UnitTimestamp::NeverRecorded
+            }
+        );
     }
 
     #[test]

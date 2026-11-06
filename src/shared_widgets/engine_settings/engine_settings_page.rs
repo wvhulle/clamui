@@ -41,7 +41,7 @@ use crate::{
         engine_settings::{
             config_setting_row::{
                 ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput,
-                ConfigSettingRowOutput,
+                ConfigSettingRowOutput, RowChangeActivity,
             },
             detection_switch_row::{
                 DetectionSwitchRow, DetectionSwitchRowInput, DetectionSwitchRowOutput,
@@ -144,15 +144,78 @@ enum UnlockState {
     Unlocked { relock_generation: u64 },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChangedRow {
     ConfigRow(DynamicIndex),
     DetectionSwitch(DetectionOption),
 }
 
+#[derive(Debug)]
 enum ChangeProgress {
     NoChangeRunning,
     ChangeRunning { changed_row: ChangedRow },
+}
+
+impl ChangeProgress {
+    fn row_change_activity(
+        &self,
+        is_this_row: impl FnOnce(&ChangedRow) -> bool,
+    ) -> RowChangeActivity {
+        match self {
+            Self::NoChangeRunning => RowChangeActivity::ChangesAllowed,
+            Self::ChangeRunning { changed_row } => {
+                if is_this_row(changed_row) {
+                    RowChangeActivity::ApplyingThisRow
+                } else {
+                    RowChangeActivity::ApplyingOtherRow
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LiveChangeReadiness {
+    ReadyToChange { unlock_generation: u64 },
+    ChangesLocked,
+    ChangeAlreadyRunning,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConfirmationVerdict {
+    StartConfirmedChange,
+    DropStaleConfirmation,
+}
+
+const fn live_change_readiness(
+    unlock_state: &UnlockState,
+    change_progress: &ChangeProgress,
+) -> LiveChangeReadiness {
+    match change_progress {
+        ChangeProgress::ChangeRunning { .. } => LiveChangeReadiness::ChangeAlreadyRunning,
+        ChangeProgress::NoChangeRunning => match unlock_state {
+            UnlockState::Locked => LiveChangeReadiness::ChangesLocked,
+            UnlockState::Unlocked { relock_generation } => LiveChangeReadiness::ReadyToChange {
+                unlock_generation: *relock_generation,
+            },
+        },
+    }
+}
+
+const fn confirmation_verdict(
+    change_readiness: LiveChangeReadiness,
+    confirmed_generation: u64,
+) -> ConfirmationVerdict {
+    match change_readiness {
+        LiveChangeReadiness::ReadyToChange { unlock_generation }
+            if unlock_generation == confirmed_generation =>
+        {
+            ConfirmationVerdict::StartConfirmedChange
+        }
+        LiveChangeReadiness::ReadyToChange { .. }
+        | LiveChangeReadiness::ChangesLocked
+        | LiveChangeReadiness::ChangeAlreadyRunning => ConfirmationVerdict::DropStaleConfirmation,
+    }
 }
 
 pub struct EngineSettingsPage {
@@ -179,6 +242,7 @@ pub enum EngineSettingsPageInput {
         edited_text: String,
     },
     LiveChangeConfirmed {
+        unlock_generation: u64,
         changed_row: ChangedRow,
         setting_key: String,
         new_values: Vec<String>,
@@ -231,14 +295,25 @@ fn live_tunable_config_description(config_path: &str) -> String {
     .replace("{path}", config_path)
 }
 
-fn present_live_change_confirmation(
-    parent_widget: &impl IsA<gtk::Widget>,
+struct ProposedLiveChange {
+    unlock_generation: u64,
     changed_row: ChangedRow,
     setting_key: String,
-    current_values: &[String],
     new_values: Vec<String>,
+}
+
+fn present_live_change_confirmation(
+    parent_widget: &impl IsA<gtk::Widget>,
+    proposed_change: ProposedLiveChange,
+    current_values: &[String],
     sender: &ComponentSender<EngineSettingsPage>,
 ) {
+    let ProposedLiveChange {
+        unlock_generation,
+        changed_row,
+        setting_key,
+        new_values,
+    } = proposed_change;
     let effect = change_effect(&setting_key, current_values, &new_values);
     let confirmation_dialog = adw::AlertDialog::new(
         Some(&gettext("Change this setting?")),
@@ -268,6 +343,7 @@ fn present_live_change_confirmation(
         alert_response(confirmation_dialog, parent_widget.clone().upcast()),
         move |chosen_response| {
             (chosen_response == "apply").then_some(EngineSettingsPageInput::LiveChangeConfirmed {
+                unlock_generation,
                 changed_row,
                 setting_key,
                 new_values,
@@ -364,8 +440,17 @@ impl EngineSettingsPage {
         matches!(self.unlock_state, UnlockState::Unlocked { .. })
     }
 
-    fn allows_live_change(&self, setting_key: &str) -> bool {
-        self.is_unlocked() && self.offers_live_changes() && self.setting_is_tunable(setting_key)
+    fn live_change_readiness_for(&self, setting_key: &str) -> LiveChangeReadiness {
+        let change_readiness = live_change_readiness(&self.unlock_state, &self.change_progress);
+        if self.offers_live_changes() && self.setting_is_tunable(setting_key) {
+            return change_readiness;
+        }
+        match change_readiness {
+            LiveChangeReadiness::ChangeAlreadyRunning => LiveChangeReadiness::ChangeAlreadyRunning,
+            LiveChangeReadiness::ReadyToChange { .. } | LiveChangeReadiness::ChangesLocked => {
+                LiveChangeReadiness::ChangesLocked
+            }
+        }
     }
 
     fn current_setting_values(
@@ -468,12 +553,9 @@ impl EngineSettingsPage {
                 (true, false) => SwitchAvailability::LockedUntilUnlocked,
                 (false, _not_tunable) => SwitchAvailability::NotAllowedAtRuntime,
             },
-            change_running: matches!(
-                &self.change_progress,
-                ChangeProgress::ChangeRunning {
-                    changed_row: ChangedRow::DetectionSwitch(running_option)
-                } if *running_option == detection_option
-            ),
+            change_activity: self.change_progress.row_change_activity(|changed_row| {
+                *changed_row == ChangedRow::DetectionSwitch(detection_option)
+            }),
         }
     }
 
@@ -489,6 +571,28 @@ impl EngineSettingsPage {
                     ),
                 );
             });
+    }
+
+    fn refresh_setting_rows(&self) {
+        (0..self.setting_rows.len()).for_each(|row_position| {
+            self.setting_rows.send(
+                row_position,
+                ConfigSettingRowInput::ChangeActivityChanged(
+                    self.change_progress.row_change_activity(|changed_row| {
+                        matches!(
+                            changed_row,
+                            ChangedRow::ConfigRow(running_index)
+                                if running_index.current_index() == row_position
+                        )
+                    }),
+                ),
+            );
+        });
+    }
+
+    fn refresh_changeable_rows(&self) {
+        self.refresh_detection_switches();
+        self.refresh_setting_rows();
     }
 
     fn unlock_label(&self) -> String {
@@ -688,25 +792,32 @@ impl Component for EngineSettingsPage {
                 switched_on,
             } => {
                 let setting_key = detection_option.setting_key().to_owned();
-                if self.allows_live_change(&setting_key) {
-                    let current_values = self.detection_values(detection_option);
-                    let shown_current_values = if current_values.is_empty() {
-                        vec![if detection_option.enabled_by_default() {
-                            "yes".to_owned()
+                match self.live_change_readiness_for(&setting_key) {
+                    LiveChangeReadiness::ReadyToChange { unlock_generation } => {
+                        let current_values = self.detection_values(detection_option);
+                        let shown_current_values = if current_values.is_empty() {
+                            vec![if detection_option.enabled_by_default() {
+                                "yes".to_owned()
+                            } else {
+                                "no".to_owned()
+                            }]
                         } else {
-                            "no".to_owned()
-                        }]
-                    } else {
-                        current_values
-                    };
-                    present_live_change_confirmation(
-                        root,
-                        ChangedRow::DetectionSwitch(detection_option),
-                        setting_key,
-                        &shown_current_values,
-                        vec![if switched_on { "yes" } else { "no" }.to_owned()],
-                        &sender,
-                    );
+                            current_values
+                        };
+                        present_live_change_confirmation(
+                            root,
+                            ProposedLiveChange {
+                                unlock_generation,
+                                changed_row: ChangedRow::DetectionSwitch(detection_option),
+                                setting_key,
+                                new_values: vec![if switched_on { "yes" } else { "no" }.to_owned()],
+                            },
+                            &shown_current_values,
+                            &sender,
+                        );
+                    }
+                    LiveChangeReadiness::ChangesLocked
+                    | LiveChangeReadiness::ChangeAlreadyRunning => {}
                 }
                 self.refresh_detection_switches();
             }
@@ -718,49 +829,66 @@ impl Component for EngineSettingsPage {
                 edited_text,
             } => {
                 let edited_text = sanitize_scanner_line(&edited_text);
-                if self.allows_live_change(&setting_key) {
-                    let current_values = self.current_setting_values(&setting_key, &sibling_values);
-                    let new_values = values_with_edit(&current_values, value_position, edited_text);
-                    present_live_change_confirmation(
-                        root,
-                        ChangedRow::ConfigRow(row_index),
-                        setting_key,
-                        &current_values,
-                        new_values,
-                        &sender,
-                    );
-                } else {
-                    root.clipboard().set_text(&change_snippet(
-                        self.config_file_owner(),
-                        self.settings_section.config_kind(),
-                        &setting_key,
-                        &values_with_edit(&sibling_values, value_position, edited_text),
-                    ));
-                    self.toaster.add_toast(shown_toast(&gettext(
-                        "Copied. Add it to your configuration to apply it.",
-                    )));
+                match self.live_change_readiness_for(&setting_key) {
+                    LiveChangeReadiness::ReadyToChange { unlock_generation } => {
+                        let current_values =
+                            self.current_setting_values(&setting_key, &sibling_values);
+                        let new_values =
+                            values_with_edit(&current_values, value_position, edited_text);
+                        present_live_change_confirmation(
+                            root,
+                            ProposedLiveChange {
+                                unlock_generation,
+                                changed_row: ChangedRow::ConfigRow(row_index),
+                                setting_key,
+                                new_values,
+                            },
+                            &current_values,
+                            &sender,
+                        );
+                    }
+                    LiveChangeReadiness::ChangesLocked => {
+                        root.clipboard().set_text(&change_snippet(
+                            self.config_file_owner(),
+                            self.settings_section.config_kind(),
+                            &setting_key,
+                            &values_with_edit(&sibling_values, value_position, edited_text),
+                        ));
+                        self.toaster.add_toast(shown_toast(&gettext(
+                            "Copied. Add it to your configuration to apply it.",
+                        )));
+                    }
+                    LiveChangeReadiness::ChangeAlreadyRunning => {}
                 }
             }
             EngineSettingsPageInput::LiveChangeConfirmed {
+                unlock_generation,
                 changed_row,
                 setting_key,
                 new_values,
             } => {
-                if let ChangedRow::ConfigRow(row_index) = &changed_row {
-                    self.setting_rows.send(
-                        row_index.current_index(),
-                        ConfigSettingRowInput::ChangeRunningChanged(true),
-                    );
-                }
-                self.change_progress = ChangeProgress::ChangeRunning { changed_row };
-                self.refresh_detection_switches();
-                sender.oneshot_command(async move {
-                    let change_outcome = apply_live_change(setting_key, new_values).await;
-                    EngineSettingsPageCommand::LiveChangeFinished {
-                        change_outcome,
-                        live_tuning: read_live_tuning().await,
+                match confirmation_verdict(
+                    live_change_readiness(&self.unlock_state, &self.change_progress),
+                    unlock_generation,
+                ) {
+                    ConfirmationVerdict::StartConfirmedChange => {
+                        self.change_progress = ChangeProgress::ChangeRunning { changed_row };
+                        sender.oneshot_command(async move {
+                            let change_outcome = apply_live_change(setting_key, new_values).await;
+                            EngineSettingsPageCommand::LiveChangeFinished {
+                                change_outcome,
+                                live_tuning: read_live_tuning().await,
+                            }
+                        });
                     }
-                });
+                    ConfirmationVerdict::DropStaleConfirmation => {
+                        self.toaster.add_toast(shown_toast(&gettext(
+                            "The change was not made: the settings locked again or another change \
+                             started first.",
+                        )));
+                    }
+                }
+                self.refresh_changeable_rows();
             }
             EngineSettingsPageInput::DriftSnippetCopyRequested => {
                 root.clipboard().set_text(&self.drift_snippet());
@@ -807,6 +935,8 @@ impl Component for EngineSettingsPage {
                         switch_states.into_iter().for_each(|switch_state| {
                             switch_guard.push_back(switch_state);
                         });
+                        drop(switch_guard);
+                        self.refresh_setting_rows();
                     }
                     HostConfigView::ConfigNotFound => self.config_load = ConfigLoad::ConfigMissing,
                 }
@@ -825,20 +955,96 @@ impl Component for EngineSettingsPage {
                 change_outcome,
                 live_tuning,
             } => {
-                if let ChangeProgress::ChangeRunning {
-                    changed_row: ChangedRow::ConfigRow(row_index),
-                } = std::mem::replace(&mut self.change_progress, ChangeProgress::NoChangeRunning)
-                {
-                    self.setting_rows.send(
-                        row_index.current_index(),
-                        ConfigSettingRowInput::ChangeRunningChanged(false),
-                    );
-                }
+                self.change_progress = ChangeProgress::NoChangeRunning;
                 self.toaster
                     .add_toast(shown_toast(&describe_live_change_outcome(&change_outcome)));
                 self.tuning_load = LiveTuningLoad::TuningRead(live_tuning);
-                self.refresh_detection_switches();
+                self.refresh_changeable_rows();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod engine_settings_page_tests {
+    use super::*;
+
+    const RUNNING_SWITCH_CHANGE: ChangeProgress = ChangeProgress::ChangeRunning {
+        changed_row: ChangedRow::DetectionSwitch(DetectionOption::HeuristicAlerts),
+    };
+
+    #[test]
+    fn a_second_live_change_is_refused_while_one_runs() {
+        let unlock_state = UnlockState::Unlocked {
+            relock_generation: 1,
+        };
+        assert_eq!(
+            live_change_readiness(&unlock_state, &RUNNING_SWITCH_CHANGE),
+            LiveChangeReadiness::ChangeAlreadyRunning
+        );
+        assert_eq!(
+            confirmation_verdict(
+                live_change_readiness(&unlock_state, &RUNNING_SWITCH_CHANGE),
+                1
+            ),
+            ConfirmationVerdict::DropStaleConfirmation
+        );
+    }
+
+    #[test]
+    fn a_confirmation_from_the_current_unlock_starts_the_change() {
+        assert_eq!(
+            confirmation_verdict(
+                live_change_readiness(
+                    &UnlockState::Unlocked {
+                        relock_generation: 3
+                    },
+                    &ChangeProgress::NoChangeRunning
+                ),
+                3
+            ),
+            ConfirmationVerdict::StartConfirmedChange
+        );
+    }
+
+    #[test]
+    fn a_stale_confirmation_after_the_relock_is_dropped() {
+        assert_eq!(
+            confirmation_verdict(
+                live_change_readiness(&UnlockState::Locked, &ChangeProgress::NoChangeRunning),
+                1
+            ),
+            ConfirmationVerdict::DropStaleConfirmation
+        );
+        assert_eq!(
+            confirmation_verdict(
+                live_change_readiness(
+                    &UnlockState::Unlocked {
+                        relock_generation: 2
+                    },
+                    &ChangeProgress::NoChangeRunning
+                ),
+                1
+            ),
+            ConfirmationVerdict::DropStaleConfirmation
+        );
+    }
+
+    #[test]
+    fn every_row_is_insensitive_while_a_change_runs_and_only_one_spins() {
+        let running_activity = RUNNING_SWITCH_CHANGE.row_change_activity(|changed_row| {
+            *changed_row == ChangedRow::DetectionSwitch(DetectionOption::HeuristicAlerts)
+        });
+        let other_activity = RUNNING_SWITCH_CHANGE.row_change_activity(|changed_row| {
+            *changed_row == ChangedRow::DetectionSwitch(DetectionOption::OfficeMacros)
+        });
+        assert_eq!(running_activity, RowChangeActivity::ApplyingThisRow);
+        assert_eq!(other_activity, RowChangeActivity::ApplyingOtherRow);
+        assert!(!running_activity.accepts_changes() && running_activity.shows_applying_spinner());
+        assert!(!other_activity.accepts_changes() && !other_activity.shows_applying_spinner());
+        assert_eq!(
+            ChangeProgress::NoChangeRunning.row_change_activity(|_changed_row| true),
+            RowChangeActivity::ChangesAllowed
+        );
     }
 }
