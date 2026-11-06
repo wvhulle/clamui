@@ -15,7 +15,10 @@ use crate::{
             scanner_process_events::ScanStartFailure,
         },
     },
-    scan_page::scan_results_section::scan_results_state::{ProblemPathGroup, ScanResultsStatus},
+    scan_page::{
+        scan_page_state::ScanEnding,
+        scan_results_section::scan_results_state::{ProblemPathGroup, ScanResultsStatus},
+    },
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -319,15 +322,14 @@ fn notice_lines_where(
 
 pub fn results_status(
     scan_outcome: &CompletedScanOutcome,
-    scan_was_cancelled: bool,
+    scan_ending: ScanEnding,
 ) -> ScanResultsStatus {
-    if scan_outcome.threats_were_found() {
-        ScanResultsStatus::ThreatsDetected
-    } else if scan_was_cancelled {
-        ScanResultsStatus::ScanCancelled
-    } else if scan_outcome.scan_problems.is_empty() {
-        ScanResultsStatus::NoThreatsDetected
-    } else {
-        ScanResultsStatus::FinishedWithProblems
+    match scan_ending {
+        _any_ending if scan_outcome.threats_were_found() => ScanResultsStatus::ThreatsDetected,
+        ScanEnding::ScanCancelled => ScanResultsStatus::ScanCancelled,
+        ScanEnding::ScanCompleted if scan_outcome.scan_problems.is_empty() => {
+            ScanResultsStatus::NoThreatsDetected
+        }
+        ScanEnding::ScanCompleted => ScanResultsStatus::FinishedWithProblems,
     }
 }

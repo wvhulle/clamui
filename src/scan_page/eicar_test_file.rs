@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use tempfile::NamedTempFile;
@@ -11,6 +11,23 @@ const EICAR_SIGNATURE_PARTS: [&str; 3] = [
     "EICAR-STANDARD-ANTIVIRUS-",
     "TEST-FILE!$H+H*",
 ];
+
+#[derive(Debug, thiserror::Error)]
+pub enum EicarTestFileFailure {
+    #[error("writing the EICAR test file stopped unexpectedly")]
+    WritingInterrupted(#[source] tokio::task::JoinError),
+    #[error("the EICAR test file could not be written")]
+    FileUnwritable(#[source] io::Error),
+}
+
+pub async fn written_eicar_test_file(
+    test_file_directory: PathBuf,
+) -> Result<NamedTempFile, EicarTestFileFailure> {
+    tokio::task::spawn_blocking(move || write_eicar_test_file(&test_file_directory))
+        .await
+        .map_err(EicarTestFileFailure::WritingInterrupted)?
+        .map_err(EicarTestFileFailure::FileUnwritable)
+}
 
 pub fn eicar_test_bytes() -> Vec<u8> {
     EICAR_SIGNATURE_PARTS.concat().into_bytes()

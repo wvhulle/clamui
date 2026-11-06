@@ -4,6 +4,7 @@ pub mod exclusions_page;
 pub mod found_threat_row;
 pub mod scan_options_section;
 pub mod scan_page_component;
+pub mod scan_page_state;
 pub mod scan_profiles_dialog;
 pub mod scan_progress_view;
 pub mod scan_results_section;

@@ -17,6 +17,13 @@ impl RunningStream {
     pub fn stop(&self) {
         self.0.abort();
     }
+
+    #[cfg(test)]
+    pub fn already_stopped() -> Self {
+        let (abort_handle, _abort_registration) = AbortHandle::new_pair();
+        abort_handle.abort();
+        RunningStream(abort_handle)
+    }
 }
 
 impl Drop for RunningStream {
