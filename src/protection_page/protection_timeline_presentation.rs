@@ -5,7 +5,10 @@ use crate::{
     application_window::settings_navigation::SettingsSubpage,
     hardening_page::suggested_audit_commands::{SuggestedRemedy, suggested_command},
     host_services::{
-        clamav_programs::distribution_install_guides::{DistributionFamily, engine_install_guides},
+        clamav_programs::{
+            component_availability::ProbeFailure,
+            distribution_install_guides::{DistributionFamily, engine_install_guides},
+        },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
@@ -33,10 +36,14 @@ use crate::{
             trusted_detections_component::trust_list_failure_text,
         },
     },
-    shared_widgets::step_timeline::timeline_step_contents::{
-        ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment, EvidenceRowControl,
-        OfferedAction, RunningStep, SettledNodeState, SettledStep, StepActionButton,
-        StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep, moment_value_text,
+    shared_widgets::{
+        journal_follow_failure_text::journal_follow_failure_text,
+        step_timeline::timeline_step_contents::{
+            ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
+            EvidenceRowControl, OfferedAction, RunningStep, SettledNodeState, SettledStep,
+            StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
+            moment_value_text,
+        },
     },
     signatures_page::signature_provider_catalogue::provider_of_signature_file,
 };
@@ -170,6 +177,19 @@ fn remedy_commands(
         .collect()
 }
 
+fn probe_failure_text(probe_failure: &ProbeFailure) -> String {
+    match probe_failure {
+        ProbeFailure::ProgramPrintedFailure { program_stderr } => {
+            sanitize_scanner_line(program_stderr)
+        }
+        ProbeFailure::ProgramStartFailed { start_failure_kind } => {
+            gettext("clamscan could not be started: {error}")
+                .replace("{error}", &start_failure_kind.to_string())
+        }
+        ProbeFailure::ProbeTimedOut => gettext("clamscan did not answer in time"),
+    }
+}
+
 fn engine_step(
     engine_installation: &EngineInstallation,
     distribution_family: DistributionFamily,
@@ -186,11 +206,18 @@ fn engine_step(
             SettledNodeState::Completed,
             version_banner.clone(),
         ),
-        EngineInstallation::VersionUnverified { failure_text } => no_guidance_step(
+        EngineInstallation::ScannerRefused { refused_path } => no_guidance_step(
             step_title,
             mechanism_details,
             SettledNodeState::NeedsReview,
-            failure_text.clone(),
+            gettext("refused {path}, because your account can replace it")
+                .replace("{path}", refused_path),
+        ),
+        EngineInstallation::VersionUnverified(probe_failure) => no_guidance_step(
+            step_title,
+            mechanism_details,
+            SettledNodeState::NeedsReview,
+            probe_failure_text(probe_failure),
         ),
         EngineInstallation::EngineMissing => no_guidance_step(
             step_title,
@@ -1371,10 +1398,9 @@ fn alerts_step(
                 "The system journal can't be read. Add your user to the systemd-journal group.",
             ),
         ),
-        JournalAccess::FollowingFailed { failure_text } => (
+        JournalAccess::FollowingFailed(follow_failure) => (
             SettledNodeState::HasFailed,
-            gettext("Reading the system journal stopped: {error}")
-                .replace("{error}", &sanitize_scanner_line(failure_text)),
+            journal_follow_failure_text(follow_failure),
         ),
         JournalAccess::FollowingJournal if !alert_readiness.notifications_enabled => (
             SettledNodeState::NeedsReview,

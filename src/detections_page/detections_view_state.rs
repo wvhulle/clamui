@@ -142,10 +142,10 @@ pub fn split_journal_batch(journal_events: Vec<DetectionJournalEvent>) -> Journa
                         .access_changes
                         .push(JournalAccess::JournalUnreadable);
                 }
-                DetectionJournalEvent::FollowingStopped { failure_text } => {
+                DetectionJournalEvent::FollowingStopped(follow_failure) => {
                     journal_batch
                         .access_changes
-                        .push(JournalAccess::FollowingFailed { failure_text });
+                        .push(JournalAccess::FollowingFailed(follow_failure));
                 }
             }
             journal_batch

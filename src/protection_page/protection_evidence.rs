@@ -2,7 +2,6 @@ use std::{fs, path::Path};
 
 use bytesize::ByteSize;
 use futures::future::join_all;
-use gettextrs::gettext;
 use jiff::Timestamp;
 use relm4::gtk::gio::prelude::SettingsExt;
 use tokio::task::spawn_blocking;
@@ -14,7 +13,8 @@ use crate::{
         },
         clamav_programs::{
             component_availability::{
-                ProgramProbe, located_clamd_answers_ping, probe_located_program_version,
+                ProbeFailure, ProgramProbe, located_clamd_answers_ping,
+                probe_located_program_version,
             },
             database_directory_status::configured_database_directory,
             trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
@@ -119,7 +119,8 @@ struct SystemScanUnits {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EngineInstallation {
     EngineMissing,
-    VersionUnverified { failure_text: String },
+    ScannerRefused { refused_path: String },
+    VersionUnverified(ProbeFailure),
     VersionReported { version_banner: String },
 }
 
@@ -690,13 +691,12 @@ async fn inspect_engine_installation() -> EngineInstallation {
             .unwrap_or(ProgramLocation::ProgramNotFound);
     match probe_located_program_version(&clamscan_location).await {
         ProgramProbe::NotFoundOnPath => EngineInstallation::EngineMissing,
-        ProgramProbe::ProgramRefused { candidate_path } => EngineInstallation::VersionUnverified {
-            failure_text: gettext("refused {path}, because your account can replace it")
-                .replace("{path}", &sanitized_path_text(&candidate_path)),
+        ProgramProbe::ProgramRefused { candidate_path } => EngineInstallation::ScannerRefused {
+            refused_path: sanitized_path_text(&candidate_path),
         },
-        ProgramProbe::ProbeFailed { failure_text } => EngineInstallation::VersionUnverified {
-            failure_text: sanitize_scanner_line(&failure_text),
-        },
+        ProgramProbe::ProbeFailed(probe_failure) => {
+            EngineInstallation::VersionUnverified(probe_failure)
+        }
         ProgramProbe::VersionReported { version_text } => EngineInstallation::VersionReported {
             version_banner: sanitize_scanner_line(&version_text),
         },
@@ -788,7 +788,9 @@ async fn inspect_signature_evidence(engine_installation: &EngineInstallation) ->
             EngineInstallation::VersionReported { version_banner } => {
                 inspect_database_evidence_with_banner(version_banner).await
             }
-            EngineInstallation::EngineMissing | EngineInstallation::VersionUnverified { .. } => {
+            EngineInstallation::EngineMissing
+            | EngineInstallation::ScannerRefused { .. }
+            | EngineInstallation::VersionUnverified(_) => {
                 inspect_database_evidence_without_banner().await
             }
         },

@@ -686,7 +686,10 @@ impl Component for ActivityLogsPage {
                         self.export_text("lazaret-logs.json", exported_json, &sender);
                     }
                     Err(json_failure) => {
-                        self.toaster.toast(&json_failure.to_string());
+                        self.toaster.toast(
+                            &gettext("Could not export the logs: {error}")
+                                .replace("{error}", &json_failure.to_string()),
+                        );
                     }
                 }
             }

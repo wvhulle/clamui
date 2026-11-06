@@ -15,11 +15,14 @@ pub enum TrayConnection {
     Unavailable,
 }
 
-pub async fn start_system_tray() -> Result<RunningTrayHandle, String> {
-    spawn_system_tray()
-        .await
-        .map(RunningTrayHandle)
-        .map_err(|tray_failure| tray_failure.to_string())
+#[derive(Debug, thiserror::Error)]
+pub enum TrayStartFailure {
+    #[error("the system tray could not be started: {0}")]
+    TraySpawnFailed(#[from] ksni::Error),
+}
+
+pub async fn start_system_tray() -> Result<RunningTrayHandle, TrayStartFailure> {
+    Ok(RunningTrayHandle(spawn_system_tray().await?))
 }
 
 pub async fn show_unresolved_detections(

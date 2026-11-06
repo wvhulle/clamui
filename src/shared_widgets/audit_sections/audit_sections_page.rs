@@ -43,7 +43,7 @@ pub struct AuditSectionsPageInit {
 pub enum AuditSectionsPageInput {
     RefreshRequested,
     GuidanceRequested(AuditCategorySectionOutput),
-    DocumentationOpenFailed(String),
+    DocumentationOpenFailed(gtk::glib::Error),
 }
 
 #[derive(Debug)]
@@ -87,7 +87,7 @@ impl AuditSectionsPage {
             move |launch_outcome| {
                 if let Err(launch_failure) = launch_outcome {
                     failure_sender.input(AuditSectionsPageInput::DocumentationOpenFailed(
-                        launch_failure.message().to_owned(),
+                        launch_failure,
                     ));
                 }
             },
@@ -189,12 +189,14 @@ impl Component for AuditSectionsPage {
             AuditSectionsPageInput::GuidanceRequested(
                 AuditCategorySectionOutput::OpenDocumentationRequested(documentation_url),
             ) => Self::open_documentation(documentation_url, &sender, root),
-            AuditSectionsPageInput::DocumentationOpenFailed(failure_text) => {
+            AuditSectionsPageInput::DocumentationOpenFailed(launch_failure) => {
                 self.toaster.add_toast(
                     adw::Toast::builder()
                         .title(
-                            gettext("Could not open documentation: {error}")
-                                .replace("{error}", &sanitize_scanner_line(&failure_text)),
+                            gettext("Could not open documentation: {error}").replace(
+                                "{error}",
+                                &sanitize_scanner_line(launch_failure.message()),
+                            ),
                         )
                         .use_markup(false)
                         .build(),

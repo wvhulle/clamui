@@ -32,7 +32,7 @@ use crate::{
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
         },
-        clamav_scanner::scanner_output_parser::{ThreatIdentity, sanitize_scanner_line},
+        clamav_scanner::scanner_output_parser::ThreatIdentity,
         detection_journal::{
             detection_history_store::ResolutionKind,
             detection_journal_follower::{JournalAccess, detection_journal_events},
@@ -50,6 +50,7 @@ use crate::{
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     shared_widgets::{
         component_streams::{RunningStream, run_stream},
+        journal_follow_failure_text::journal_follow_failure_text,
         loading_indicators::FirstLoad,
         step_timeline::{
             timeline_step_contents::TimelineStepRowOutput,
@@ -394,9 +395,8 @@ impl BackgroundDetectionsPage {
                  here. This does not mean nothing was found. Add your user to the systemd-journal \
                  group.",
             ),
-            JournalAccess::FollowingFailed { failure_text } => {
-                gettext("Reading the system journal stopped: {error}")
-                    .replace("{error}", &sanitize_scanner_line(failure_text))
+            JournalAccess::FollowingFailed(follow_failure) => {
+                journal_follow_failure_text(follow_failure)
             }
             JournalAccess::FollowingJournal if self.first_load == FirstLoad::StillLoading => {
                 gettext("Loading detections…")

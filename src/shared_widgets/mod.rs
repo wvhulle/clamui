@@ -3,6 +3,7 @@ pub mod awaited_dialogs;
 pub mod component_streams;
 pub mod engine_settings;
 pub mod false_positive_report_dialog;
+pub mod journal_follow_failure_text;
 pub mod loading_indicators;
 pub mod page_widget_templates;
 pub mod scanner_exit_text;

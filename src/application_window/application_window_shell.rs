@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use gettextrs::gettext;
 use relm4::{
     AsyncComponentSender, Component, ComponentController, Controller,
@@ -22,7 +24,8 @@ use crate::{
         },
         startup_arguments::StartupRequest,
         system_tray_connection::{
-            RunningTrayHandle, TrayConnection, show_unresolved_detections, start_system_tray,
+            RunningTrayHandle, TrayConnection, TrayStartFailure, show_unresolved_detections,
+            start_system_tray,
         },
         window_close_behavior::{CloseAction, CloseAnswer, present_close_confirmation},
     },
@@ -32,7 +35,10 @@ use crate::{
             stored_settings::{CLOSE_ACTION_KEY, application_settings},
             stored_settings_watch::forward_setting_changes,
         },
-        quarantine_vault::quarantine_entry_database::QuarantineVault,
+        quarantine_vault::{
+            quarantine_entry_database::QuarantineVault,
+            quarantine_file_moves::QuarantineMoveFailure,
+        },
     },
     preferences_dialog::preferences_dialog_component::{
         PreferencesDialog, PreferencesDialogInput, PreferencesPageName,
@@ -48,10 +54,65 @@ enum WindowContent {
         page_navigation: Controller<PageNavigation>,
         _vault_lock: ProcessFileLock,
     },
-    VaultUnavailable {
-        failure_title: String,
-        failure_description: String,
-    },
+    VaultUnavailable(VaultStartupFailure),
+}
+
+#[derive(Debug, thiserror::Error)]
+enum VaultStartupFailure {
+    #[error("the quarantine database could not be locked: {0}")]
+    VaultLockFailed(#[from] std::io::Error),
+    #[error("locking the quarantine database stopped unexpectedly: {0}")]
+    LockTaskInterrupted(#[from] tokio::task::JoinError),
+    #[error("the quarantine database could not be opened: {0}")]
+    VaultOpenFailed(#[from] QuarantineMoveFailure),
+}
+
+struct LockedQuarantineVault {
+    vault_lock: ProcessFileLock,
+    quarantine_vault: QuarantineVault,
+}
+
+async fn open_locked_vault(
+    data_directory: &Path,
+) -> Result<LockedQuarantineVault, VaultStartupFailure> {
+    let lock_path = data_directory.join("quarantine.lock");
+    let vault_lock = relm4::spawn_blocking(move || wait_for_file_lock(&lock_path)).await??;
+    let quarantine_vault = QuarantineVault::open_vault(
+        data_directory.join("quarantine.db"),
+        data_directory.join("quarantine"),
+    )
+    .await?;
+    Ok(LockedQuarantineVault {
+        vault_lock,
+        quarantine_vault,
+    })
+}
+
+fn vault_failure_title(startup_failure: &VaultStartupFailure) -> String {
+    match startup_failure {
+        VaultStartupFailure::VaultLockFailed(_) | VaultStartupFailure::LockTaskInterrupted(_) => {
+            gettext("The quarantine database could not be locked")
+        }
+        VaultStartupFailure::VaultOpenFailed(_) => {
+            gettext("The quarantine database could not be opened")
+        }
+    }
+}
+
+fn vault_failure_description(startup_failure: &VaultStartupFailure) -> String {
+    match startup_failure {
+        VaultStartupFailure::VaultLockFailed(lock_failure) => {
+            gettext("A file operation failed: {error}")
+                .replace("{error}", &lock_failure.to_string())
+        }
+        VaultStartupFailure::LockTaskInterrupted(interrupted_task) => {
+            gettext("A background quarantine step stopped unexpectedly: {error}")
+                .replace("{error}", &interrupted_task.to_string())
+        }
+        VaultStartupFailure::VaultOpenFailed(vault_failure) => {
+            describe_quarantine_failure(vault_failure)
+        }
+    }
 }
 
 pub struct ApplicationWindowShell {
@@ -77,7 +138,7 @@ pub enum ApplicationWindowShellInput {
 
 #[derive(Debug)]
 pub enum ApplicationWindowShellCommand {
-    TrayStartFinished(Result<RunningTrayHandle, String>),
+    TrayStartFinished(Result<RunningTrayHandle, TrayStartFailure>),
     TrayUpdated,
 }
 
@@ -151,46 +212,33 @@ async fn opened_window_content(
     sender: &AsyncComponentSender<ApplicationWindowShell>,
 ) -> WindowContent {
     let data_directory = application_data_directory();
-    let lock_path = data_directory.join("quarantine.lock");
-    let vault_lock = relm4::spawn_blocking(move || wait_for_file_lock(&lock_path)).await;
-    let opened_vault = QuarantineVault::open_vault(
-        data_directory.join("quarantine.db"),
-        data_directory.join("quarantine"),
-    )
-    .await;
-    match (vault_lock, opened_vault) {
-        (Ok(Ok(vault_lock)), Ok(quarantine_vault)) => WindowContent::PagesShown {
-            page_navigation: PageNavigation::builder()
-                .launch(PageNavigationInit {
-                    quarantine_vault,
-                    data_directory,
-                    window_root: window_root.clone(),
-                    startup_destination: startup_destination(&startup_request.startup_page),
-                    startup_scan_targets: startup_request.scan_targets,
-                })
-                .forward(
-                    sender.input_sender(),
-                    |navigation_output| match navigation_output {
-                        PageNavigationOutput::WindowPresentRequested => {
-                            ApplicationWindowShellInput::WindowShowRequested
-                        }
-                        PageNavigationOutput::UnresolvedDetectionsChanged(
+    let locked_vault = match open_locked_vault(&data_directory).await {
+        Ok(locked_vault) => locked_vault,
+        Err(startup_failure) => return WindowContent::VaultUnavailable(startup_failure),
+    };
+    WindowContent::PagesShown {
+        page_navigation: PageNavigation::builder()
+            .launch(PageNavigationInit {
+                quarantine_vault: locked_vault.quarantine_vault,
+                data_directory,
+                window_root: window_root.clone(),
+                startup_destination: startup_destination(&startup_request.startup_page),
+                startup_scan_targets: startup_request.scan_targets,
+            })
+            .forward(
+                sender.input_sender(),
+                |navigation_output| match navigation_output {
+                    PageNavigationOutput::WindowPresentRequested => {
+                        ApplicationWindowShellInput::WindowShowRequested
+                    }
+                    PageNavigationOutput::UnresolvedDetectionsChanged(unresolved_detections) => {
+                        ApplicationWindowShellInput::UnresolvedDetectionsChanged(
                             unresolved_detections,
-                        ) => ApplicationWindowShellInput::UnresolvedDetectionsChanged(
-                            unresolved_detections,
-                        ),
-                    },
-                ),
-            _vault_lock: vault_lock,
-        },
-        (_lock_outcome, Err(vault_failure)) => WindowContent::VaultUnavailable {
-            failure_title: gettext("The quarantine database could not be opened"),
-            failure_description: describe_quarantine_failure(&vault_failure),
-        },
-        (_lock_failure, Ok(_quarantine_vault)) => WindowContent::VaultUnavailable {
-            failure_title: gettext("The quarantine database could not be locked"),
-            failure_description: String::new(),
-        },
+                        )
+                    }
+                },
+            ),
+        _vault_lock: locked_vault.vault_lock,
     }
 }
 
@@ -200,17 +248,16 @@ impl WindowContent {
             Self::PagesShown {
                 page_navigation, ..
             } => page_navigation.widget().clone().upcast(),
-            Self::VaultUnavailable {
-                failure_title,
-                failure_description,
-            } => {
+            Self::VaultUnavailable(startup_failure) => {
                 let toolbar_view = adw::ToolbarView::new();
                 toolbar_view.add_top_bar(&adw::HeaderBar::new());
                 toolbar_view.set_content(Some(
                     &adw::StatusPage::builder()
                         .icon_name("dialog-error-symbolic")
-                        .title(failure_title)
-                        .description(glib::markup_escape_text(failure_description))
+                        .title(vault_failure_title(startup_failure))
+                        .description(glib::markup_escape_text(&vault_failure_description(
+                            startup_failure,
+                        )))
                         .build(),
                 ));
                 toolbar_view.upcast()
@@ -340,5 +387,23 @@ impl AsyncComponent for ApplicationWindowShell {
             }
             ApplicationWindowShellCommand::TrayUpdated => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod application_window_shell_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_vault_lock_failure_keeps_its_io_error() {
+        let data_directory = tempfile::tempdir().expect("data directory");
+        std::fs::create_dir(data_directory.path().join("quarantine.lock")).expect("lock folder");
+        let Err(startup_failure) = open_locked_vault(data_directory.path()).await else {
+            panic!("a folder in place of the lock file must not be lockable");
+        };
+        let VaultStartupFailure::VaultLockFailed(lock_failure) = &startup_failure else {
+            panic!("expected a lock failure, got {startup_failure:?}");
+        };
+        assert!(vault_failure_description(&startup_failure).contains(&lock_failure.to_string()));
     }
 }

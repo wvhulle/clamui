@@ -28,7 +28,25 @@ pub enum JournalStartPosition {
 pub enum JournalAccess {
     FollowingJournal,
     JournalUnreadable,
-    FollowingFailed { failure_text: String },
+    FollowingFailed(JournalFollowFailure),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum JournalFollowFailure {
+    #[error("the journal could not be read: {read_failure_kind}")]
+    JournalReadFailed { read_failure_kind: io::ErrorKind },
+    #[error("a journal entry has a timestamp outside the supported range")]
+    EntryTimestampInvalid,
+    #[error("the journal reader thread could not start: {spawn_failure_kind}")]
+    ReaderThreadFailed { spawn_failure_kind: io::ErrorKind },
+}
+
+impl From<systemd::Error> for JournalFollowFailure {
+    fn from(journal_failure: systemd::Error) -> Self {
+        Self::JournalReadFailed {
+            read_failure_kind: journal_failure.kind(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,18 +56,20 @@ pub enum DetectionJournalEvent {
         journal_cursor: String,
     },
     JournalUnreadable,
-    FollowingStopped {
-        failure_text: String,
-    },
+    FollowingStopped(JournalFollowFailure),
 }
 
 fn journal_has_readable_files(journal: &Journal) -> systemd::Result<bool> {
     Ok(journal.has_persistent_files()? || journal.has_runtime_files()?)
 }
 
-fn detection_at_position(journal: &mut Journal) -> systemd::Result<Option<JournalDetectionRecord>> {
+fn detection_at_position(
+    journal: &mut Journal,
+) -> Result<Option<JournalDetectionRecord>, JournalFollowFailure> {
     let systemd_unit = journal_field_text(journal, SYSTEMD_UNIT_FIELD)?;
-    let observed_at = Timestamp::try_from(journal.timestamp()?).map_err(io::Error::other)?;
+    let Ok(observed_at) = Timestamp::try_from(journal.timestamp()?) else {
+        return Err(JournalFollowFailure::EntryTimestampInvalid);
+    };
     let message_field = journal.get_data(MESSAGE_FIELD)?;
     let message_bytes = message_field
         .as_ref()
@@ -84,7 +104,7 @@ struct FollowedDetections {
 
 fn opened_detection_journal(
     start_position: &JournalStartPosition,
-) -> systemd::Result<Option<Journal>> {
+) -> Result<Option<Journal>, JournalFollowFailure> {
     let mut journal = open_system_journal()?;
     if !journal_has_readable_files(&journal)? {
         return Ok(None);
@@ -113,7 +133,7 @@ fn opened_detection_journal(
 fn next_followed_detection(
     journal: &mut Journal,
     skipped_resume_cursor: &mut SkippedResumeCursor,
-) -> systemd::Result<DetectionJournalEvent> {
+) -> Result<DetectionJournalEvent, JournalFollowFailure> {
     loop {
         if journal.next()? == 0 {
             journal.wait(None)?;
@@ -131,12 +151,6 @@ fn next_followed_detection(
                 journal_cursor: journal.cursor()?,
             });
         }
-    }
-}
-
-fn following_stopped(follow_failure: &impl std::fmt::Display) -> DetectionJournalEvent {
-    DetectionJournalEvent::FollowingStopped {
-        failure_text: follow_failure.to_string(),
     }
 }
 
@@ -164,7 +178,9 @@ impl Iterator for FollowedDetections {
                         self.next()
                     }
                     Ok(None) => Some(DetectionJournalEvent::JournalUnreadable),
-                    Err(open_failure) => Some(following_stopped(&open_failure)),
+                    Err(open_failure) => {
+                        Some(DetectionJournalEvent::FollowingStopped(open_failure))
+                    }
                 }
             }
             FollowerState::Following {
@@ -178,7 +194,9 @@ impl Iterator for FollowedDetections {
                     };
                     Some(journal_event)
                 }
-                Err(follow_failure) => Some(following_stopped(&follow_failure)),
+                Err(follow_failure) => {
+                    Some(DetectionJournalEvent::FollowingStopped(follow_failure))
+                }
             },
         }
     }
@@ -192,7 +210,11 @@ pub fn detection_journal_events(
         move || FollowedDetections {
             follower_state: FollowerState::NotOpened { start_position },
         },
-        |spawn_failure| following_stopped(&spawn_failure),
+        |spawn_failure| {
+            DetectionJournalEvent::FollowingStopped(JournalFollowFailure::ReaderThreadFailed {
+                spawn_failure_kind: spawn_failure.kind(),
+            })
+        },
     )
 }
 

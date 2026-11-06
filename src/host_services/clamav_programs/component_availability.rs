@@ -18,7 +18,19 @@ pub enum ProgramProbe {
     VersionReported { version_text: String },
     NotFoundOnPath,
     ProgramRefused { candidate_path: std::path::PathBuf },
-    ProbeFailed { failure_text: String },
+    ProbeFailed(ProbeFailure),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum ProbeFailure {
+    #[error("the program printed: {program_stderr}")]
+    ProgramPrintedFailure { program_stderr: String },
+    #[error("the program could not be started: {start_failure_kind}")]
+    ProgramStartFailed {
+        start_failure_kind: std::io::ErrorKind,
+    },
+    #[error("the program did not answer in time")]
+    ProbeTimedOut,
 }
 
 fn program_probe_from_output(version_output: &Output) -> ProgramProbe {
@@ -32,11 +44,11 @@ fn program_probe_from_output(version_output: &Output) -> ProgramProbe {
                 .to_owned(),
         }
     } else {
-        ProgramProbe::ProbeFailed {
-            failure_text: String::from_utf8_lossy(&version_output.stderr)
+        ProgramProbe::ProbeFailed(ProbeFailure::ProgramPrintedFailure {
+            program_stderr: String::from_utf8_lossy(&version_output.stderr)
                 .trim()
                 .to_owned(),
-        }
+        })
     }
 }
 
@@ -51,12 +63,10 @@ pub async fn probe_program_version(program_path: &Path) -> ProgramProbe {
         Ok(Err(spawn_failure)) if spawn_failure.kind() == std::io::ErrorKind::NotFound => {
             ProgramProbe::NotFoundOnPath
         }
-        Ok(Err(spawn_failure)) => ProgramProbe::ProbeFailed {
-            failure_text: spawn_failure.to_string(),
-        },
-        Err(_probe_timed_out) => ProgramProbe::ProbeFailed {
-            failure_text: "timed out".to_owned(),
-        },
+        Ok(Err(spawn_failure)) => ProgramProbe::ProbeFailed(ProbeFailure::ProgramStartFailed {
+            start_failure_kind: spawn_failure.kind(),
+        }),
+        Err(_probe_timed_out) => ProgramProbe::ProbeFailed(ProbeFailure::ProbeTimedOut),
     }
 }
 
@@ -116,12 +126,23 @@ mod component_availability_tests {
     }
 
     #[test]
-    fn failing_programs_report_their_diagnostics() {
+    fn failing_programs_keep_their_stderr_as_evidence() {
         assert_eq!(
-            program_probe_from_output(&finished_output(3, "", "broken install\n")),
-            ProgramProbe::ProbeFailed {
-                failure_text: "broken install".to_owned(),
-            }
+            program_probe_from_output(&finished_output(3, "ignored stdout", "broken install\n")),
+            ProgramProbe::ProbeFailed(ProbeFailure::ProgramPrintedFailure {
+                program_stderr: "broken install".to_owned(),
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn programs_that_cannot_start_report_the_io_error_kind() {
+        let not_executable = tempfile::NamedTempFile::new().expect("plain file");
+        assert_eq!(
+            probe_program_version(not_executable.path()).await,
+            ProgramProbe::ProbeFailed(ProbeFailure::ProgramStartFailed {
+                start_failure_kind: std::io::ErrorKind::PermissionDenied,
+            })
         );
     }
 
