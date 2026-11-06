@@ -4,3 +4,4 @@ pub mod file_process_lock;
 pub mod flatpak_sandbox;
 pub mod running_instance_forwarding;
 pub mod stored_settings;
+pub mod stored_settings_watch;

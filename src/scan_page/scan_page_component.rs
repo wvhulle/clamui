@@ -64,6 +64,7 @@ use crate::{
         scan_settings::scan_settings_sections,
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
     },
+    shared_widgets::file_dialog_requests::{request_files_to_open, request_folder_to_open},
 };
 
 const PROGRESS_BATCH_SIZE: usize = 256;
@@ -382,14 +383,6 @@ fn dropped_file_paths(dropped_value: &glib::Value) -> Vec<PathBuf> {
                 .collect()
         })
         .unwrap_or_default()
-}
-
-fn chosen_file_paths(chosen_files: &gio::ListModel) -> Vec<PathBuf> {
-    (0..chosen_files.n_items())
-        .filter_map(|file_position| chosen_files.item(file_position))
-        .filter_map(|chosen_file| chosen_file.downcast::<gio::File>().ok())
-        .filter_map(|chosen_file| chosen_file.path())
-        .collect()
 }
 
 impl ScanPage {
@@ -1210,37 +1203,16 @@ impl Component for ScanPage {
         root: &Self::Root,
     ) {
         match page_input {
-            ScanPageInput::ChooseFilesRequested => {
-                let input_sender = sender.input_sender().clone();
-                relm4::spawn_local(async move {
-                    let chosen_files = gtk::FileDialog::builder()
-                        .title(gettext("Choose Files to Scan"))
-                        .build()
-                        .open_multiple_future(relm4::main_application().active_window().as_ref())
-                        .await;
-                    if let Ok(chosen_files) = chosen_files {
-                        input_sender.emit(ScanPageInput::ScanTargetsAdded(chosen_file_paths(
-                            &chosen_files,
-                        )));
-                    }
-                });
-            }
-            ScanPageInput::ChooseFolderRequested => {
-                let input_sender = sender.input_sender().clone();
-                relm4::spawn_local(async move {
-                    let chosen_folder = gtk::FileDialog::builder()
-                        .title(gettext("Choose a Folder to Scan"))
-                        .build()
-                        .select_folder_future(relm4::main_application().active_window().as_ref())
-                        .await;
-                    if let Some(folder_path) = chosen_folder
-                        .ok()
-                        .and_then(|chosen_folder| chosen_folder.path())
-                    {
-                        input_sender.emit(ScanPageInput::ScanTargetsAdded(vec![folder_path]));
-                    }
-                });
-            }
+            ScanPageInput::ChooseFilesRequested => request_files_to_open(
+                gettext("Choose Files to Scan"),
+                sender.input_sender().clone(),
+                ScanPageInput::ScanTargetsAdded,
+            ),
+            ScanPageInput::ChooseFolderRequested => request_folder_to_open(
+                gettext("Choose a Folder to Scan"),
+                sender.input_sender().clone(),
+                |folder_path| ScanPageInput::ScanTargetsAdded(vec![folder_path]),
+            ),
             ScanPageInput::ScanTargetsChosen(scan_targets) => {
                 self.add_scan_targets(scan_targets);
                 if !self.scan_target_rows.is_empty() && !self.scan_is_running() {

@@ -26,8 +26,8 @@ use crate::{
         daemon_log_reader::{DaemonLogContents, read_daemon_log},
     },
     shared_widgets::{
+        file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
-        text_export_dialog::{TextExportOutcome, describe_export_failure, save_text_with_dialog},
     },
 };
 
@@ -173,19 +173,16 @@ impl ActivityLogsPage {
 
     fn export_text(
         &self,
-        root: &adw::ToastOverlay,
         suggested_name: &'static str,
         exported_text: String,
         sender: &ComponentSender<Self>,
     ) {
-        let parent_widget = root.clone().upcast::<gtk::Widget>();
-        let command_sender = sender.command_sender().clone();
-        relm4::spawn_local(async move {
-            let export_outcome =
-                save_text_with_dialog(&parent_widget, suggested_name, exported_text).await;
-            let _page_closed =
-                command_sender.send(ActivityLogsPageCommand::TextExportFinished(export_outcome));
-        });
+        request_text_export(
+            suggested_name.to_owned(),
+            exported_text,
+            sender.command_sender().clone(),
+            ActivityLogsPageCommand::TextExportFinished,
+        );
     }
 
     fn selected_detail_text(&self) -> String {
@@ -588,7 +585,6 @@ impl Component for ActivityLogsPage {
             }
             ActivityLogsPageInput::ExportAllCsvRequested => {
                 self.export_text(
-                    root,
                     "lazaret-logs.csv",
                     activity_entries_as_csv(&self.listed_entries),
                     &sender,
@@ -597,7 +593,7 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageInput::ExportAllJsonRequested => {
                 match activity_entries_as_json(&self.listed_entries) {
                     Ok(exported_json) => {
-                        self.export_text(root, "lazaret-logs.json", exported_json, &sender);
+                        self.export_text("lazaret-logs.json", exported_json, &sender);
                     }
                     Err(json_failure) => {
                         root.add_toast(adw::Toast::new(&json_failure.to_string()));
@@ -609,12 +605,7 @@ impl Component for ActivityLogsPage {
                 root.add_toast(adw::Toast::new(&gettext("Log details copied to clipboard")));
             }
             ActivityLogsPageInput::ExportDetailRequested => {
-                self.export_text(
-                    root,
-                    "lazaret-log.txt",
-                    self.selected_detail_text(),
-                    &sender,
-                );
+                self.export_text("lazaret-log.txt", self.selected_detail_text(), &sender);
             }
             ActivityLogsPageInput::RefreshDaemonLogRequested => self.refresh_daemon_log(&sender),
             ActivityLogsPageInput::RefreshSystemChangesRequested => {
@@ -641,7 +632,6 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageInput::ExportDaemonLogRequested => {
                 let (buffer_start, buffer_end) = self.daemon_buffer.bounds();
                 self.export_text(
-                    root,
                     "clamd-logs.txt",
                     self.daemon_buffer
                         .text(&buffer_start, &buffer_end, false)

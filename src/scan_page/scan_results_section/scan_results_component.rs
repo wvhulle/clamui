@@ -31,8 +31,8 @@ use crate::{
     scan_page::scan_results_section::detected_threat_row::{
         DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput, ThreatQuarantineState,
     },
-    shared_widgets::text_export_dialog::{
-        TextExportOutcome, describe_export_failure, save_text_with_dialog,
+    shared_widgets::file_dialog_requests::{
+        TextExportOutcome, describe_export_failure, request_text_export,
     },
 };
 
@@ -705,16 +705,12 @@ impl Component for ScanResultsSection {
             }
             ScanResultsSectionInput::ExportReportRequested => {
                 let exported_report = format_scan_report(&self.results_view);
-                let parent_widget = root.clone().upcast::<gtk::Widget>();
-                let command_sender = sender.command_sender().clone();
-                relm4::spawn_local(async move {
-                    let export_outcome =
-                        save_text_with_dialog(&parent_widget, EXPORT_FILE_NAME, exported_report)
-                            .await;
-                    let _dialog_closed = command_sender.send(
-                        ScanResultsSectionCommand::ReportExportFinished(export_outcome),
-                    );
-                });
+                request_text_export(
+                    EXPORT_FILE_NAME.to_owned(),
+                    exported_report,
+                    sender.command_sender().clone(),
+                    ScanResultsSectionCommand::ReportExportFinished,
+                );
             }
         }
         self.update_view(widgets, sender);

@@ -15,8 +15,8 @@ use crate::{
         scan_profile_row::{ScanProfileRow, ScanProfileRowOutput},
         scan_profile_store::{ScanProfile, ScanProfileStore, exported_profile_json},
     },
-    shared_widgets::text_export_dialog::{
-        TextExportOutcome, describe_export_failure, save_text_with_dialog,
+    shared_widgets::file_dialog_requests::{
+        TextExportOutcome, describe_export_failure, request_text_export,
     },
 };
 
@@ -330,18 +330,12 @@ impl Component for ProfileManagerDialog {
                     .map(|exported_profile| exported_profile_json(&exported_profile));
                 match exported_json {
                     Some(Ok(exported_json)) => {
-                        let parent_widget = root.clone().upcast::<gtk::Widget>();
-                        let command_sender = sender.command_sender().clone();
-                        relm4::spawn_local(async move {
-                            let export_outcome = save_text_with_dialog(
-                                &parent_widget,
-                                "lazaret-profile.json",
-                                exported_json,
-                            )
-                            .await;
-                            let _dialog_closed = command_sender
-                                .send(ProfileManagerDialogCommand::ExportFinished(export_outcome));
-                        });
+                        request_text_export(
+                            "lazaret-profile.json".to_owned(),
+                            exported_json,
+                            sender.command_sender().clone(),
+                            ProfileManagerDialogCommand::ExportFinished,
+                        );
                     }
                     Some(Err(export_failure)) => widgets
                         .toast_overlay
