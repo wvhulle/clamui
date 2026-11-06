@@ -207,8 +207,108 @@ impl ScanExclusions {
     }
 }
 
+const MALWARE_LANDING_PLACES: [&str; 9] = [
+    "~/Downloads/invoice.pdf.exe",
+    "~/Downloads/installer.sh",
+    "~/Downloads/archive.zip",
+    "~/Documents/report.docm",
+    "~/.config/autostart/updater.desktop",
+    "~/.local/bin/updater",
+    "~/.local/share/updater/payload.so",
+    "~/.bashrc",
+    "/tmp/payload",
+];
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BroadExclusion {
+    pub exclusion_pattern: String,
+    pub skipped_example: PathBuf,
+}
+
+impl ScanExclusions {
+    pub fn skips_path(&self, file_path: &Path) -> bool {
+        self.excludes_file(file_path)
+            || file_path
+                .ancestors()
+                .skip(1)
+                .any(|ancestor_directory| self.excludes_directory(ancestor_directory))
+    }
+}
+
+fn landing_place(landing_text: &str, home_directory: &Path) -> PathBuf {
+    landing_text.strip_prefix("~/").map_or_else(
+        || PathBuf::from(landing_text),
+        |home_relative| home_directory.join(home_relative),
+    )
+}
+
+pub fn broad_exclusions(
+    exclusion_entries: &[ExclusionEntry],
+    home_directory: &Path,
+) -> Vec<BroadExclusion> {
+    exclusion_entries
+        .iter()
+        .filter(|exclusion_entry| exclusion_entry.is_enabled)
+        .filter_map(|exclusion_entry| {
+            let single_exclusion =
+                ScanExclusions::from_entries(std::slice::from_ref(exclusion_entry), home_directory);
+            MALWARE_LANDING_PLACES
+                .iter()
+                .map(|landing_text| landing_place(landing_text, home_directory))
+                .find(|landing_path| single_exclusion.skips_path(landing_path))
+                .map(|skipped_example| BroadExclusion {
+                    exclusion_pattern: exclusion_entry.exclusion_pattern.clone(),
+                    skipped_example,
+                })
+        })
+        .collect()
+}
+
 pub fn exclusion_entry_for_threat(threat_path: &Path) -> ExclusionEntry {
     ExclusionEntry::enabled_pattern(PathBuf::from(threat_path).to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod broad_exclusion_tests {
+    use super::*;
+
+    fn patterns(exclusion_entries: &[ExclusionEntry]) -> Vec<String> {
+        broad_exclusions(exclusion_entries, Path::new("/home/alex"))
+            .into_iter()
+            .map(|broad_exclusion| broad_exclusion.exclusion_pattern)
+            .collect()
+    }
+
+    #[test]
+    fn exclusions_that_cover_where_malware_lands_are_broad() {
+        let exclusion_entries = ["*", "/home/alex", "~/.config", "*.exe", "*.sh", "/tmp"]
+            .map(|exclusion_pattern| ExclusionEntry::enabled_pattern(exclusion_pattern.to_owned()));
+        assert_eq!(
+            patterns(&exclusion_entries),
+            ["*", "/home/alex", "~/.config", "*.exe", "*.sh", "/tmp"]
+        );
+    }
+
+    #[test]
+    fn the_default_presets_and_narrow_exclusions_are_not_broad() {
+        let exclusion_entries = PRESET_DIRECTORY_NAMES
+            .map(|preset_name| ExclusionEntry {
+                exclusion_pattern: preset_name.to_owned(),
+                exclusion_kind: ExclusionKind::DirectoryOnly,
+                is_enabled: true,
+            })
+            .into_iter()
+            .chain([
+                ExclusionEntry::enabled_pattern("*.iso".to_owned()),
+                ExclusionEntry::enabled_pattern("~/VirtualMachines".to_owned()),
+                ExclusionEntry {
+                    is_enabled: false,
+                    ..ExclusionEntry::enabled_pattern("*".to_owned())
+                },
+            ])
+            .collect::<Vec<_>>();
+        assert!(patterns(&exclusion_entries).is_empty());
+    }
 }
 
 #[cfg(test)]

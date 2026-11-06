@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 16:09+0100\n"
+"POT-Creation-Date: 2026-11-06 16:13+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -112,7 +112,7 @@ msgid "Exclusions"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:62
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:195
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:184
 msgid "Scheduled Scans"
 msgstr ""
 
@@ -238,7 +238,7 @@ msgid ""
 msgstr ""
 
 #: src/detections_page/background_detections_page.rs:293
-#: src/protection_page/protection_timeline_presentation.rs:679
+#: src/protection_page/protection_timeline_presentation.rs:730
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
@@ -778,7 +778,7 @@ msgstr ""
 #: src/protection_page/protection_timeline_page.rs:344
 #: src/quarantine_page/quarantine_entry_row.rs:73
 #: src/scan_page/scan_page_component.rs:252
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:324
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:313
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
 #: src/signatures_page/signature_update_dialog/database_update_page.rs:306
 #: src/signatures_page/signature_update_dialog/database_update_page.rs:313
@@ -1244,7 +1244,7 @@ msgid ""
 "only a file's SHA-256 hash is sent."
 msgstr ""
 
-#: src/protection_page/protection_evidence.rs:412
+#: src/protection_page/protection_evidence.rs:457
 #, rust-format
 msgid "refused {path}, because your account can replace it"
 msgstr ""
@@ -1262,8 +1262,9 @@ msgstr[1] ""
 
 #: src/protection_page/protection_timeline_page.rs:131
 #: src/protection_page/protection_timeline_page.rs:304
-#: src/protection_page/protection_timeline_presentation.rs:217
-#: src/protection_page/protection_timeline_presentation.rs:273
+#: src/protection_page/protection_timeline_presentation.rs:218
+#: src/protection_page/protection_timeline_presentation.rs:268
+#: src/protection_page/protection_timeline_presentation.rs:324
 msgid "Review"
 msgstr ""
 
@@ -1314,52 +1315,52 @@ msgstr ""
 msgid "Command copied to clipboard"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:86
+#: src/protection_page/protection_timeline_presentation.rs:87
 msgid "ClamAV installed"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:88
+#: src/protection_page/protection_timeline_presentation.rs:89
 msgid ""
 "ClamAV is the engine that recognizes malware. Lazaret uses the copy "
 "installed on this computer and never bundles its own."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:114
+#: src/protection_page/protection_timeline_presentation.rs:115
 msgid "ClamAV was not found on this computer"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:127
+#: src/protection_page/protection_timeline_presentation.rs:128
 #, rust-format
 msgid "{program} in use"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:132
+#: src/protection_page/protection_timeline_presentation.rs:133
 #, rust-format
 msgid "Ignored {program}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:144
+#: src/protection_page/protection_timeline_presentation.rs:145
 #, rust-format
 msgid "Refused {program}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:166
+#: src/protection_page/protection_timeline_presentation.rs:167
 msgid ""
 "A ClamAV program can be replaced by your account, so Lazaret refuses to run "
 "it"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:173
+#: src/protection_page/protection_timeline_presentation.rs:174
 msgid ""
 "A ClamAV program in your account shadows the system copy. Lazaret ignores "
 "it, but check where it came from"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:184
+#: src/protection_page/protection_timeline_presentation.rs:185
 msgid "Scanner programs can be trusted"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:186
+#: src/protection_page/protection_timeline_presentation.rs:187
 msgid ""
 "Malware running as you could put a fake clamdscan earlier on your search "
 "path that reports every file as clean. Lazaret only runs ClamAV programs "
@@ -1367,300 +1368,331 @@ msgid ""
 "system."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:210
+#: src/protection_page/protection_timeline_presentation.rs:211
 #, rust-format
 msgid "{base} in your configuration, {changed} now"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:222
+#: src/protection_page/protection_timeline_presentation.rs:223
 msgid "Protection reduced on purpose"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:224
+#: src/protection_page/protection_timeline_presentation.rs:225
 msgid ""
 "Someone with the administrator password changed ClamAV settings at runtime "
 "in a way that checks less than your configuration does. The System Changes "
 "tab on the Logs page shows who and when."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:230
+#: src/protection_page/protection_timeline_presentation.rs:231
 #, rust-format
 msgid "{count} setting checks less than configured since {time}"
 msgid_plural "{count} settings check less than configured since {time}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_page/protection_timeline_presentation.rs:249
+#: src/protection_page/protection_timeline_presentation.rs:259
+#, rust-format
+msgid "Exclusion {pattern}"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:260
+#, rust-format
+msgid "Skips files such as {path}"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:263
+msgid "Changed outside Lazaret"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:277
+msgid "Scan settings in your account"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:279
+msgid ""
+"Exclusions and the scan schedule are stored in your account, so any program "
+"running as you can change them. Lazaret warns when an exclusion skips places "
+"where malware usually lands, or when the schedule's unit files differ from "
+"what Lazaret wrote, for example after an update or because something else "
+"changed them. Applying the schedule again rewrites them."
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:286
+msgid "Your scan settings may skip malware"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:300
 #, rust-format
 msgid "{count} file or detection is never reported"
 msgid_plural "{count} files or detections are never reported"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_page/protection_timeline_presentation.rs:258
+#: src/protection_page/protection_timeline_presentation.rs:309
 msgid "An allowlist that Lazaret didn't write tells ClamAV to stay silent"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:267
+#: src/protection_page/protection_timeline_presentation.rs:318
 msgid "Other allowlist"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:280
+#: src/protection_page/protection_timeline_presentation.rs:331
 msgid "Trusted detections"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:282
+#: src/protection_page/protection_timeline_presentation.rs:333
 msgid ""
 "Files and detection names on ClamAV's allowlists are never reported, by any "
 "scan. Malware that gets administrator rights could hide itself this way, so "
 "check that every entry was added on purpose."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:312
+#: src/protection_page/protection_timeline_presentation.rs:363
 #, rust-format
 msgid "Definitions built {date}, {days} days ago"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:316
+#: src/protection_page/protection_timeline_presentation.rs:367
 msgid "Definitions exist, but their age could not be determined"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:318
+#: src/protection_page/protection_timeline_presentation.rs:369
 msgid "No virus definitions were found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:328
+#: src/protection_page/protection_timeline_presentation.rs:379
 msgid "Its last update failed"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:331
+#: src/protection_page/protection_timeline_presentation.rs:382
 #, rust-format
 msgid "Last updated {time}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:335
+#: src/protection_page/protection_timeline_presentation.rs:386
 msgid "No completed update recorded yet"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:374
+#: src/protection_page/protection_timeline_presentation.rs:425
 #, rust-format
 msgid "{count} signature, {size}, updated {hours} hours ago ({file})"
 msgid_plural "{count} signatures, {size}, updated {hours} hours ago ({file})"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_page/protection_timeline_presentation.rs:395
+#: src/protection_page/protection_timeline_presentation.rs:446
 msgid "Update Now"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:400
+#: src/protection_page/protection_timeline_presentation.rs:451
 msgid "Signatures current"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:402
+#: src/protection_page/protection_timeline_presentation.rs:453
 msgid ""
 "Signatures describe known malware, and new ones are published constantly. "
 "Old signatures miss recent threats even when everything else is running."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:415
+#: src/protection_page/protection_timeline_presentation.rs:466
 msgid "Daemon running"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:417
+#: src/protection_page/protection_timeline_presentation.rs:468
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:431
+#: src/protection_page/protection_timeline_presentation.rs:482
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:439
+#: src/protection_page/protection_timeline_presentation.rs:490
 msgid "clamd is answering"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:450
-#: src/protection_page/protection_timeline_presentation.rs:515
+#: src/protection_page/protection_timeline_presentation.rs:501
+#: src/protection_page/protection_timeline_presentation.rs:566
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:462
+#: src/protection_page/protection_timeline_presentation.rs:513
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:474
+#: src/protection_page/protection_timeline_presentation.rs:525
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:476
+#: src/protection_page/protection_timeline_presentation.rs:527
 msgid "None configured"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:483
-#: src/protection_page/protection_timeline_presentation.rs:487
+#: src/protection_page/protection_timeline_presentation.rs:534
+#: src/protection_page/protection_timeline_presentation.rs:538
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:484
+#: src/protection_page/protection_timeline_presentation.rs:535
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:498
+#: src/protection_page/protection_timeline_presentation.rs:549
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:500
+#: src/protection_page/protection_timeline_presentation.rs:551
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:507
+#: src/protection_page/protection_timeline_presentation.rs:558
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:511
-#: src/protection_page/protection_timeline_presentation.rs:601
+#: src/protection_page/protection_timeline_presentation.rs:562
+#: src/protection_page/protection_timeline_presentation.rs:652
 msgid "Waiting for the daemon"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:519
+#: src/protection_page/protection_timeline_presentation.rs:570
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:523
+#: src/protection_page/protection_timeline_presentation.rs:574
 msgid "Running, but no watched folders could be read"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:527
+#: src/protection_page/protection_timeline_presentation.rs:578
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:551
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:73
+#: src/protection_page/protection_timeline_presentation.rs:602
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:62
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:558
+#: src/protection_page/protection_timeline_presentation.rs:609
 #, rust-format
 msgid "{time}, threats found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:563
+#: src/protection_page/protection_timeline_presentation.rs:614
 #, rust-format
 msgid "{time}, nothing found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:567
+#: src/protection_page/protection_timeline_presentation.rs:618
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:584
+#: src/protection_page/protection_timeline_presentation.rs:635
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:586
+#: src/protection_page/protection_timeline_presentation.rs:637
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:606
+#: src/protection_page/protection_timeline_presentation.rs:657
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:611
+#: src/protection_page/protection_timeline_presentation.rs:662
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:616
+#: src/protection_page/protection_timeline_presentation.rs:667
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:621
+#: src/protection_page/protection_timeline_presentation.rs:672
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:622
+#: src/protection_page/protection_timeline_presentation.rs:673
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:625
+#: src/protection_page/protection_timeline_presentation.rs:676
 msgid "Run Now"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:636
+#: src/protection_page/protection_timeline_presentation.rs:687
 msgid "Scheduled by Lazaret"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:644
+#: src/protection_page/protection_timeline_presentation.rs:695
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:654
+#: src/protection_page/protection_timeline_presentation.rs:705
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:665
+#: src/protection_page/protection_timeline_presentation.rs:716
 msgid "Alerts"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:667
+#: src/protection_page/protection_timeline_presentation.rs:718
 msgid ""
 "Lazaret follows the system journal and notifies you when something is "
 "detected. It can only do that while it is running, so it should run in the "
 "background."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:674
+#: src/protection_page/protection_timeline_presentation.rs:725
 msgid ""
 "The system journal can't be read. Add your user to the systemd-journal group."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:684
+#: src/protection_page/protection_timeline_presentation.rs:735
 msgid "Notifications are turned off in the preferences"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:689
+#: src/protection_page/protection_timeline_presentation.rs:740
 msgid ""
 "Alerts stop when you quit Lazaret, because it isn't set up to run in the "
 "background"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:695
+#: src/protection_page/protection_timeline_presentation.rs:746
 msgid "Running in the background and following the journal"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:719
+#: src/protection_page/protection_timeline_presentation.rs:770
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:721
+#: src/protection_page/protection_timeline_presentation.rs:772
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:732
+#: src/protection_page/protection_timeline_presentation.rs:783
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:735
+#: src/protection_page/protection_timeline_presentation.rs:786
 msgid "Scheduled scans set up in Lazaret"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:743
+#: src/protection_page/protection_timeline_presentation.rs:794
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:756
+#: src/protection_page/protection_timeline_presentation.rs:807
 msgid "Files are only checked when you scan them"
 msgstr ""
 
@@ -1992,7 +2024,7 @@ msgid "0 means no size limit."
 msgstr ""
 
 #: src/scan_page/device_auto_scan_page/device_scan_page.rs:70
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:274
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:263
 msgid "Skip on Battery"
 msgstr ""
 
@@ -2636,16 +2668,16 @@ msgstr ""
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:75
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:64
 #, rust-format
 msgid "Next run: {time}"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:78
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:67
 msgid "Scheduled scans need a systemd user session, which is not available."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:86
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:75
 #, rust-format
 msgid ""
 "Your system already runs scheduled scans, so these settings are locked to "
@@ -2653,122 +2685,122 @@ msgid ""
 "configuration."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:91
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:80
 msgid ""
 "Your system has a scan timer, so these settings are locked to avoid a second "
 "schedule. Change it in your system configuration."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:100
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:89
 #, rust-format
 msgid "Error creating systemd files: {error}"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:104
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:93
 #, rust-format
 msgid "The timer could not be applied: {error}"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:112
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:101
 msgid "Hourly"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:113
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:102
 msgid "Daily"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:114
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:103
 msgid "Weekly"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:115
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:104
 msgid "Monthly"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:122
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:111
 msgid "Monday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:123
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:112
 msgid "Tuesday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:124
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:113
 msgid "Wednesday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:125
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:114
 msgid "Thursday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:126
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:115
 msgid "Friday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:127
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:116
 msgid "Saturday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:128
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:117
 msgid "Sunday"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:191
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:180
 msgid "Scheduled"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:202
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:191
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:215
 msgid "Apply"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:209
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:198
 msgid "Enable Scheduled Scans"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:219
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:208
 msgid "Scan Frequency"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:230
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:219
 msgid "Scan Time (24-hour)"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:240
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:229
 msgid "Day of Week"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:241
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:230
 msgid "Used for weekly scans."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:252
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:241
 msgid "Day of Month"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:253
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:242
 msgid "Used for monthly scans."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:264
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:253
 msgid "Scan Targets (separated by commas; empty scans your home folder)"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:275
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:264
 msgid "Do not start scheduled scans while on battery power."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:285
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:274
 msgid "Auto-Quarantine"
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:286
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:275
 msgid ""
 "Automatically quarantine threats found by scheduled scans. While Lazaret is "
 "open, threats are only reported."
 msgstr ""
 
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:398
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:387
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 

@@ -1,12 +1,5 @@
-use std::path::PathBuf;
-
 use gettextrs::gettext;
-use relm4::{
-    Component, ComponentParts, ComponentSender, adw,
-    adw::prelude::*,
-    gtk,
-    gtk::{gio, glib},
-};
+use relm4::{Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, gtk::gio};
 
 use crate::{
     host_services::{
@@ -26,7 +19,7 @@ use crate::{
         },
         scan_schedule_units::{
             ScheduleApplyFailure, ScheduleTimerState, disable_scan_schedule, enable_scan_schedule,
-            read_schedule_timer_state,
+            read_schedule_timer_state, systemd_user_unit_directory,
         },
     },
 };
@@ -62,10 +55,6 @@ pub enum ScanSchedulePageCommand {
     TimerStateLoaded(ScheduleTimerState),
     SystemTimerInspected(SystemScheduleOwner),
     ScheduleApplied(Result<(), ScheduleApplyFailure>),
-}
-
-fn systemd_user_unit_directory() -> PathBuf {
-    glib::user_config_dir().join("systemd/user")
 }
 
 fn describe_timer_state(timer_state: &ScheduleTimerState) -> String {

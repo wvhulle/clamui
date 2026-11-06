@@ -17,8 +17,13 @@ use crate::{
             database_directory_status::configured_database_directory,
             trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
         },
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-        desktop::{flatpak_sandbox::readable_host_path, stored_settings::application_settings},
+        clamav_scanner::{
+            scan_exclusion_rules::broad_exclusions, scanner_output_parser::sanitize_scanner_line,
+        },
+        desktop::{
+            flatpak_sandbox::readable_host_path,
+            stored_settings::{application_settings, read_exclusion_entries},
+        },
         settings_helper::protection_change_rules::change_weakens_protection,
         systemd_bus::host_systemd_units::{
             ServiceLastResult, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
@@ -33,6 +38,10 @@ use crate::{
         trusted_detections_page::trust_list_contents::{
             TrustListContents, read_trust_list_contents,
         },
+    },
+    scan_page::scan_schedule_page::{
+        scan_schedule_settings::StoredScheduleSettings,
+        scan_schedule_units::changed_units_of_current_schedule,
     },
 };
 
@@ -274,10 +283,46 @@ fn inspect_runtime_reductions() -> RuntimeReductions {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AccountSettingFinding {
+    BroadExclusion {
+        exclusion_pattern: String,
+        skipped_example: String,
+    },
+    ScheduleUnitChanged {
+        unit_file_name: String,
+    },
+}
+
+fn inspect_account_settings(lazaret_schedule_enabled: bool) -> Vec<AccountSettingFinding> {
+    let stored_settings = application_settings();
+    let exclusion_findings = broad_exclusions(
+        &read_exclusion_entries(&stored_settings),
+        &relm4::gtk::glib::home_dir(),
+    )
+    .into_iter()
+    .map(|broad_exclusion| AccountSettingFinding::BroadExclusion {
+        exclusion_pattern: sanitize_scanner_line(&broad_exclusion.exclusion_pattern),
+        skipped_example: sanitize_scanner_line(&broad_exclusion.skipped_example.to_string_lossy()),
+    });
+    let schedule_findings = if lazaret_schedule_enabled {
+        StoredScheduleSettings::read_from(&stored_settings)
+            .scan_schedule()
+            .map(|scan_schedule| changed_units_of_current_schedule(&scan_schedule))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    }
+    .into_iter()
+    .map(|unit_file_name| AccountSettingFinding::ScheduleUnitChanged { unit_file_name });
+    exclusion_findings.chain(schedule_findings).collect()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionEvidence {
     pub program_trust_findings: Vec<ProgramTrustFinding>,
     pub trust_list: TrustListContents,
     pub runtime_reductions: RuntimeReductions,
+    pub account_setting_findings: Vec<AccountSettingFinding>,
     pub engine_installation: EngineInstallation,
     pub signature_evidence: SignatureEvidence,
     pub daemon_evidence: DaemonEvidence,
@@ -609,6 +654,7 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
         runtime_reductions: spawn_blocking(inspect_runtime_reductions)
             .await
             .unwrap_or_default(),
+        account_setting_findings: inspect_account_settings(lazaret_schedule_enabled),
         engine_installation,
         signature_evidence: inspect_signature_evidence(&engine_banner).await,
         daemon_evidence: inspect_daemon_evidence().await,

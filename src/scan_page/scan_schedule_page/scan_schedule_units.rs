@@ -212,6 +212,57 @@ pub async fn enable_scan_schedule(
     Ok(())
 }
 
+pub fn systemd_user_unit_directory() -> PathBuf {
+    relm4::gtk::glib::user_config_dir().join("systemd/user")
+}
+
+fn unit_file_differs(unit_path: &Path, expected_text: &str) -> bool {
+    fs::read_to_string(unit_path).map_or(true, |installed_text| installed_text != expected_text)
+}
+
+fn drop_in_directory_has_entries(unit_directory: &Path, unit_file_name: &str) -> bool {
+    fs::read_dir(unit_directory.join(format!("{unit_file_name}.d")))
+        .is_ok_and(|mut drop_in_entries| drop_in_entries.next().is_some())
+}
+
+pub fn changed_schedule_units(
+    unit_directory: &Path,
+    launcher_words: &[String],
+    scan_schedule: &ScanSchedule,
+) -> Vec<String> {
+    let expected_units = [
+        (
+            SERVICE_FILE_NAME,
+            service_unit_text(launcher_words, scan_schedule),
+        ),
+        (TIMER_FILE_NAME, timer_unit_text(scan_schedule)),
+    ];
+    let changed_files = expected_units
+        .iter()
+        .filter(|(unit_file_name, expected_text)| {
+            unit_file_differs(&unit_directory.join(unit_file_name), expected_text)
+        })
+        .map(|(unit_file_name, _expected_text)| (*unit_file_name).to_owned());
+    let drop_in_directories = [SERVICE_FILE_NAME, TIMER_FILE_NAME]
+        .into_iter()
+        .filter(|unit_file_name| drop_in_directory_has_entries(unit_directory, unit_file_name))
+        .map(|unit_file_name| format!("{unit_file_name}.d"));
+    changed_files.chain(drop_in_directories).collect()
+}
+
+pub fn changed_units_of_current_schedule(scan_schedule: &ScanSchedule) -> Vec<String> {
+    current_launcher_words().map_or_else(
+        |_launcher_unknown| Vec::new(),
+        |launcher_words| {
+            changed_schedule_units(
+                &systemd_user_unit_directory(),
+                &launcher_words,
+                scan_schedule,
+            )
+        },
+    )
+}
+
 pub async fn disable_scan_schedule(unit_directory: PathBuf) -> Result<(), ScheduleApplyFailure> {
     disable_user_timer(TIMER_FILE_NAME).await?;
     [SERVICE_FILE_NAME, TIMER_FILE_NAME]
@@ -250,6 +301,39 @@ mod scan_schedule_units_tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    #[test]
+    fn edited_units_and_drop_in_overrides_are_reported() {
+        let unit_directory = tempfile::tempdir().unwrap();
+        let launcher_words = vec!["/usr/bin/lazaret".to_owned()];
+        let scan_schedule = weekly_schedule();
+        fs::write(
+            unit_directory.path().join(SERVICE_FILE_NAME),
+            service_unit_text(&launcher_words, &scan_schedule),
+        )
+        .unwrap();
+        fs::write(
+            unit_directory.path().join(TIMER_FILE_NAME),
+            timer_unit_text(&scan_schedule),
+        )
+        .unwrap();
+        assert!(
+            changed_schedule_units(unit_directory.path(), &launcher_words, &scan_schedule)
+                .is_empty()
+        );
+        fs::write(unit_directory.path().join(TIMER_FILE_NAME), "[Timer]\n").unwrap();
+        let drop_in_directory = unit_directory.path().join(format!("{SERVICE_FILE_NAME}.d"));
+        fs::create_dir(&drop_in_directory).unwrap();
+        fs::write(
+            drop_in_directory.join("override.conf"),
+            "[Service]\nExecStart=\n",
+        )
+        .unwrap();
+        assert_eq!(
+            changed_schedule_units(unit_directory.path(), &launcher_words, &scan_schedule),
+            [TIMER_FILE_NAME.to_owned(), format!("{SERVICE_FILE_NAME}.d")]
+        );
+    }
 
     fn weekly_schedule() -> ScanSchedule {
         ScanSchedule {

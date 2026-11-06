@@ -14,9 +14,10 @@ use crate::{
     protection_page::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
-            DaemonEvidence, EngineInstallation, LoadedSignatures, OnAccessEvidence,
-            OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding, ProtectionEvidence,
-            RuntimeReductions, ScheduledScanEvidence, SignatureEvidence, UpdaterEvidence,
+            AccountSettingFinding, DaemonEvidence, EngineInstallation, LoadedSignatures,
+            OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding,
+            ProtectionEvidence, RuntimeReductions, ScheduledScanEvidence, SignatureEvidence,
+            UpdaterEvidence,
         },
         service_run_journal::ServiceRunHistory,
         trusted_detections_page::trust_list_contents::TrustListContents,
@@ -233,6 +234,56 @@ fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<Time
             )
             .replace("{count}", &reduced_settings.len().to_string())
             .replace("{time}", &formatted_local_time(*changed_unix_seconds)),
+        )
+    })
+}
+
+fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<TimelineStep> {
+    if account_findings.is_empty() {
+        return None;
+    }
+    let exclusion_found = account_findings.iter().any(|account_finding| {
+        matches!(
+            account_finding,
+            AccountSettingFinding::BroadExclusion { .. }
+        )
+    });
+    Some(TimelineStep {
+        evidence_rows: account_findings
+            .iter()
+            .map(|account_finding| match account_finding {
+                AccountSettingFinding::BroadExclusion {
+                    exclusion_pattern,
+                    skipped_example,
+                } => evidence_row(
+                    gettext("Exclusion {pattern}").replace("{pattern}", exclusion_pattern),
+                    gettext("Skips files such as {path}").replace("{path}", skipped_example),
+                ),
+                AccountSettingFinding::ScheduleUnitChanged { unit_file_name } => {
+                    evidence_row(gettext("Changed outside Lazaret"), unit_file_name.clone())
+                }
+            })
+            .collect(),
+        action_slot: StepActionSlot::ActionOffered {
+            action_label: gettext("Review"),
+            chosen_action: TimelineStepAction::OpenSettingsSubpage(if exclusion_found {
+                SettingsSubpage::ScanExclusions
+            } else {
+                SettingsSubpage::ScanSchedule
+            }),
+            action_suggested: true,
+        },
+        ..no_guidance_step(
+            gettext("Scan settings in your account"),
+            gettext(
+                "Exclusions and the scan schedule are stored in your account, so any program \
+                 running as you can change them. Lazaret warns when an exclusion skips places \
+                 where malware usually lands, or when the schedule's unit files differ from what \
+                 Lazaret wrote, for example after an update or because something else changed \
+                 them. Applying the schedule again rewrites them.",
+            ),
+            StepNodeState::NeedsReview,
+            gettext("Your scan settings may skip malware"),
         )
     })
 }
@@ -797,6 +848,9 @@ pub fn protection_timeline(
             .chain(runtime_reduction_step(
                 &protection_evidence.runtime_reductions,
             ))
+            .chain(account_settings_step(
+                &protection_evidence.account_setting_findings,
+            ))
             .chain(trust_list_step(&protection_evidence.trust_list))
             .collect(),
     }
@@ -815,6 +869,7 @@ mod protection_timeline_presentation_tests {
             program_trust_findings: Vec::new(),
             trust_list: TrustListContents::default(),
             runtime_reductions: RuntimeReductions::NothingReduced,
+            account_setting_findings: Vec::new(),
             engine_installation: EngineInstallation::VersionReported {
                 version_banner: "ClamAV 1.5.4/28174".to_owned(),
             },
@@ -1025,6 +1080,33 @@ mod protection_timeline_presentation_tests {
             node_states.len(),
             step_states(&healthy_evidence()).len() + 1
         );
+    }
+
+    #[test]
+    fn a_broad_exclusion_needs_review_and_opens_the_exclusions() {
+        let protection_evidence = ProtectionEvidence {
+            account_setting_findings: vec![AccountSettingFinding::BroadExclusion {
+                exclusion_pattern: "*".to_owned(),
+                skipped_example: "/home/alex/Downloads/invoice.pdf.exe".to_owned(),
+            }],
+            ..healthy_evidence()
+        };
+        let timeline = protection_timeline(
+            &protection_evidence,
+            &ready_alerts(),
+            DistributionFamily::NixosFamily,
+        );
+        let account_step = timeline.timeline_steps.last().unwrap();
+        assert_eq!(account_step.node_state, StepNodeState::NeedsReview);
+        assert!(matches!(
+            account_step.action_slot,
+            StepActionSlot::ActionOffered {
+                chosen_action: TimelineStepAction::OpenSettingsSubpage(
+                    SettingsSubpage::ScanExclusions
+                ),
+                ..
+            }
+        ));
     }
 
     #[test]
