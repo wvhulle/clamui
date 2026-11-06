@@ -16,7 +16,7 @@ use crate::{
             database_directory_status::configured_database_directory,
             distribution_install_guides::DistributionFamily,
         },
-        systemd_bus::host_systemd_units::{UnitState, probe_unit_state},
+        systemd_bus::host_systemd_units::{UnitActivity, UnitState, probe_unit_state},
     },
     shared_widgets::audit_sections::{
         audit_check_results::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
@@ -293,7 +293,9 @@ pub fn intrusion_detection_checks(
 }
 
 async fn inspect_tool_presence(detection_tool: IntrusionDetectionTool) -> ToolPresence {
-    if probe_unit_state(detection_tool.service_unit()).await == UnitState::UnitActive {
+    if probe_unit_state(detection_tool.service_unit()).await
+        == UnitState::UnitLoaded(UnitActivity::UnitActive)
+    {
         ToolPresence::ServiceActive
     } else if locate_host_program(detection_tool.client_program()).is_some() {
         ToolPresence::InstalledStopped

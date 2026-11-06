@@ -6,7 +6,7 @@ use std::{
 
 use crate::host_services::{
     desktop::flatpak_sandbox::readable_host_path,
-    systemd_bus::host_systemd_units::{UnitState, probe_unit_state},
+    systemd_bus::host_systemd_units::{UnitActivity, UnitState, probe_unit_state},
 };
 
 const CONFIG_CANDIDATES: &[&str] = &[
@@ -102,11 +102,17 @@ pub fn classify_service_state(
     timer_state: UnitState,
 ) -> Option<FreshclamServiceState> {
     match service_state {
-        UnitState::UnitActive => Some(FreshclamServiceState::DaemonRunning { service_unit }),
-        UnitState::UnitInactive if timer_state == UnitState::UnitActive => {
+        UnitState::UnitLoaded(UnitActivity::UnitActive) => {
+            Some(FreshclamServiceState::DaemonRunning { service_unit })
+        }
+        UnitState::UnitLoaded(UnitActivity::UnitInactive)
+            if timer_state == UnitState::UnitLoaded(UnitActivity::UnitActive) =>
+        {
             Some(FreshclamServiceState::TimerScheduled { service_unit })
         }
-        UnitState::UnitInactive => Some(FreshclamServiceState::ServiceStopped { service_unit }),
+        UnitState::UnitLoaded(UnitActivity::UnitInactive) => {
+            Some(FreshclamServiceState::ServiceStopped { service_unit })
+        }
         UnitState::UnitNotFound | UnitState::SystemdUnavailable => None,
     }
 }
@@ -205,13 +211,21 @@ mod database_directory_status_tests {
             None
         );
         assert_eq!(
-            classify_service_state("freshclam", UnitState::UnitActive, UnitState::UnitNotFound),
+            classify_service_state(
+                "freshclam",
+                UnitState::UnitLoaded(UnitActivity::UnitActive),
+                UnitState::UnitNotFound
+            ),
             Some(FreshclamServiceState::DaemonRunning {
                 service_unit: "freshclam"
             })
         );
         assert_eq!(
-            classify_service_state("freshclam", UnitState::UnitInactive, UnitState::UnitActive),
+            classify_service_state(
+                "freshclam",
+                UnitState::UnitLoaded(UnitActivity::UnitInactive),
+                UnitState::UnitLoaded(UnitActivity::UnitActive)
+            ),
             Some(FreshclamServiceState::TimerScheduled {
                 service_unit: "freshclam"
             })
@@ -219,7 +233,7 @@ mod database_directory_status_tests {
         assert_eq!(
             classify_service_state(
                 "freshclam",
-                UnitState::UnitInactive,
+                UnitState::UnitLoaded(UnitActivity::UnitInactive),
                 UnitState::UnitNotFound
             ),
             Some(FreshclamServiceState::ServiceStopped {

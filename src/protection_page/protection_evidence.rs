@@ -28,8 +28,9 @@ use crate::{
         },
         settings_helper::protection_change_rules::{change_weakens_protection, limit_in_units},
         systemd_bus::host_systemd_units::{
-            ServiceLastResult, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
-            probe_user_unit_state, service_unit_snapshot, timer_unit_snapshot,
+            ServiceLastResult, ServiceUnitSnapshot, TimerUnitSnapshot, UnitActivity, UnitState,
+            UnitTimestamp, first_active_unit, probe_unit_state, probe_user_unit_state,
+            service_unit_snapshot, timer_unit_snapshot,
         },
     },
     protection_page::{
@@ -177,13 +178,22 @@ pub struct OnAccessEvidence {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScanServiceEvidence {
+    ServiceConfigured {
+        scan_targets: Vec<String>,
+        last_result: ServiceLastResult,
+    },
+    ServiceMissing,
+    ServiceUnreadable,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScheduledScanEvidence {
     SystemTimer {
         service_unit: &'static str,
         timer_active: bool,
         next_run: UnitTimestamp,
-        scan_targets: Vec<String>,
-        last_result: ServiceLastResult,
+        scan_service: ScanServiceEvidence,
         last_completed_run: ServiceRunHistory,
     },
     LazaretSchedule,
@@ -471,18 +481,19 @@ async fn inspect_engine_installation() -> EngineInstallation {
     }
 }
 
-async fn inspect_updater_unit(updater_unit: SignatureUpdaterUnit) -> Option<UpdaterEvidence> {
-    let service_snapshot = service_unit_snapshot(updater_unit.service_unit).await;
-    if !matches!(
-        service_snapshot.unit_state,
-        UnitState::UnitActive | UnitState::UnitInactive
-    ) {
-        return None;
+fn updater_last_result(service_snapshot: ServiceUnitSnapshot) -> Option<ServiceLastResult> {
+    match service_snapshot {
+        ServiceUnitSnapshot::LoadedService { last_result, .. } => Some(last_result),
+        ServiceUnitSnapshot::ServiceNotFound | ServiceUnitSnapshot::SystemdUnreachable(_) => None,
     }
+}
+
+async fn inspect_updater_unit(updater_unit: SignatureUpdaterUnit) -> Option<UpdaterEvidence> {
+    let last_result = updater_last_result(service_unit_snapshot(updater_unit.service_unit).await)?;
     Some(UpdaterEvidence {
         updater_name: updater_unit.updater_name,
         service_unit: updater_unit.service_unit,
-        last_result: service_snapshot.last_result,
+        last_result,
         last_completed_run: newest_service_run(updater_unit.service_unit).await,
     })
 }
@@ -568,7 +579,7 @@ async fn inspect_daemon_evidence() -> DaemonEvidence {
     DAEMON_SERVICE_UNITS
         .iter()
         .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitInactive)
+        .find(|named_state| named_state.1 == UnitState::UnitLoaded(UnitActivity::UnitInactive))
         .map_or(DaemonEvidence::NeverSetUp, |named_state| {
             DaemonEvidence::UnitStopped {
                 service_unit: named_state.0,
@@ -584,7 +595,7 @@ async fn inspect_on_access_scanner() -> OnAccessScanner {
     ON_ACCESS_SERVICE_UNITS
         .iter()
         .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitInactive)
+        .find(|named_state| named_state.1 == UnitState::UnitLoaded(UnitActivity::UnitInactive))
         .map_or(OnAccessScanner::NeverSetUp, |named_state| {
             OnAccessScanner::UnitStopped {
                 service_unit: named_state.0,
@@ -603,23 +614,39 @@ async fn inspect_on_access_evidence() -> OnAccessEvidence {
     on_access_evidence_from_config(on_access_scanner, &config_settings)
 }
 
+fn scan_service_evidence(service_snapshot: ServiceUnitSnapshot) -> ScanServiceEvidence {
+    match service_snapshot {
+        ServiceUnitSnapshot::LoadedService {
+            last_result,
+            program_arguments,
+            ..
+        } => ScanServiceEvidence::ServiceConfigured {
+            scan_targets: scan_targets_from_arguments(&program_arguments),
+            last_result,
+        },
+        ServiceUnitSnapshot::ServiceNotFound => ScanServiceEvidence::ServiceMissing,
+        ServiceUnitSnapshot::SystemdUnreachable(_) => ScanServiceEvidence::ServiceUnreadable,
+    }
+}
+
 async fn inspect_scheduled_scan(lazaret_schedule_enabled: bool) -> ScheduledScanEvidence {
     for system_scan_units in SYSTEM_SCAN_UNITS {
-        let timer_snapshot = timer_unit_snapshot(system_scan_units.timer_unit).await;
-        if matches!(
-            timer_snapshot.unit_state,
-            UnitState::UnitActive | UnitState::UnitInactive
-        ) {
-            let service_snapshot = service_unit_snapshot(system_scan_units.service_unit).await;
-            return ScheduledScanEvidence::SystemTimer {
-                service_unit: system_scan_units.service_unit,
-                timer_active: timer_snapshot.unit_state == UnitState::UnitActive,
-                next_run: timer_snapshot.next_run,
-                scan_targets: scan_targets_from_arguments(&service_snapshot.program_arguments),
-                last_result: service_snapshot.last_result,
-                last_completed_run: newest_service_run(system_scan_units.service_unit).await,
-            };
-        }
+        let TimerUnitSnapshot::LoadedTimer {
+            unit_activity,
+            next_run,
+            ..
+        } = timer_unit_snapshot(system_scan_units.timer_unit).await
+        else {
+            continue;
+        };
+        let service_snapshot = service_unit_snapshot(system_scan_units.service_unit).await;
+        return ScheduledScanEvidence::SystemTimer {
+            service_unit: system_scan_units.service_unit,
+            timer_active: unit_activity == UnitActivity::UnitActive,
+            next_run,
+            scan_service: scan_service_evidence(service_snapshot),
+            last_completed_run: newest_service_run(system_scan_units.service_unit).await,
+        };
     }
     if lazaret_schedule_enabled {
         ScheduledScanEvidence::LazaretSchedule
@@ -667,6 +694,7 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
 #[cfg(test)]
 mod protection_evidence_tests {
     use super::*;
+    use crate::host_services::systemd_bus::host_systemd_units::SystemdBusFailure;
 
     fn config_setting(setting_key: &str, setting_value: &str) -> ConfigSetting {
         ConfigSetting {
@@ -701,6 +729,45 @@ mod protection_evidence_tests {
                 base_value: "yes".to_owned(),
                 changed_value: "no".to_owned(),
             }]
+        );
+    }
+
+    #[test]
+    fn an_unreadable_or_missing_scan_service_never_reports_a_result() {
+        assert_eq!(
+            scan_service_evidence(ServiceUnitSnapshot::SystemdUnreachable(
+                SystemdBusFailure::BusCallFailed(zbus::Error::InvalidReply)
+            )),
+            ScanServiceEvidence::ServiceUnreadable
+        );
+        assert_eq!(
+            scan_service_evidence(ServiceUnitSnapshot::ServiceNotFound),
+            ScanServiceEvidence::ServiceMissing
+        );
+        assert_eq!(
+            scan_service_evidence(ServiceUnitSnapshot::LoadedService {
+                unit_activity: UnitActivity::UnitInactive,
+                last_result: ServiceLastResult::ResultSucceeded,
+                program_arguments: vec!["/bin/clamdscan".to_owned(), "/home".to_owned()],
+            }),
+            ScanServiceEvidence::ServiceConfigured {
+                scan_targets: vec!["/home".to_owned()],
+                last_result: ServiceLastResult::ResultSucceeded,
+            }
+        );
+    }
+
+    #[test]
+    fn a_missing_updater_unit_is_not_reported_as_succeeded() {
+        assert_eq!(
+            updater_last_result(ServiceUnitSnapshot::ServiceNotFound),
+            None
+        );
+        assert_eq!(
+            updater_last_result(ServiceUnitSnapshot::SystemdUnreachable(
+                SystemdBusFailure::UnrecognizedLoadState
+            )),
+            None
         );
     }
 

@@ -9,15 +9,17 @@ use crate::{
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
-        systemd_bus::host_systemd_units::{ServiceLastResult, UnitState, UnitTimestamp},
+        systemd_bus::host_systemd_units::{
+            ServiceLastResult, UnitActivity, UnitState, UnitTimestamp,
+        },
     },
     protection_page::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
             AccountSettingFinding, DaemonEvidence, EngineInstallation, LoadedSignatures,
             OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding,
-            ProtectionEvidence, RuntimeReductions, ScheduledScanEvidence, SignatureEvidence,
-            ThirdPartySignatureFile, UpdaterEvidence,
+            ProtectionEvidence, RuntimeReductions, ScanServiceEvidence, ScheduledScanEvidence,
+            SignatureEvidence, ThirdPartySignatureFile, UpdaterEvidence,
         },
         service_run_journal::ServiceRunHistory,
         signature_update_run::signature_update_session::{
@@ -879,6 +881,15 @@ fn scan_result_failed(last_result: &ServiceLastResult) -> bool {
     }
 }
 
+fn scanned_folders_text(scan_service: &ScanServiceEvidence) -> String {
+    match scan_service {
+        ScanServiceEvidence::ServiceConfigured { scan_targets, .. } => scan_targets.join("\n"),
+        ScanServiceEvidence::ServiceMissing | ScanServiceEvidence::ServiceUnreadable => {
+            gettext("Unknown")
+        }
+    }
+}
+
 fn scheduled_scan_step(
     scheduled_scan_evidence: &ScheduledScanEvidence,
     scheduled_scan_starting: bool,
@@ -896,8 +907,7 @@ fn scheduled_scan_step(
             service_unit,
             timer_active,
             next_run,
-            scan_targets,
-            last_result,
+            scan_service,
             last_completed_run,
         } => {
             let (node_state, status_text) = if !daemon_answering {
@@ -909,16 +919,29 @@ fn scheduled_scan_step(
                 )
             } else if scheduled_scan_starting {
                 (StepNodeState::InProgress, gettext("Starting the scan…"))
-            } else if scan_result_failed(last_result) {
-                (
-                    StepNodeState::NeedsReview,
-                    gettext("The last scan ended with an error"),
-                )
             } else {
-                (
-                    StepNodeState::Completed,
-                    gettext("Next scan: {time}").replace("{time}", &next_run_text(*next_run)),
-                )
+                match scan_service {
+                    ScanServiceEvidence::ServiceConfigured { last_result, .. }
+                        if scan_result_failed(last_result) =>
+                    {
+                        (
+                            StepNodeState::NeedsReview,
+                            gettext("The last scan ended with an error"),
+                        )
+                    }
+                    ScanServiceEvidence::ServiceConfigured { .. } => (
+                        StepNodeState::Completed,
+                        gettext("Next scan: {time}").replace("{time}", &next_run_text(*next_run)),
+                    ),
+                    ScanServiceEvidence::ServiceMissing => (
+                        StepNodeState::NeedsReview,
+                        gettext("The timer starts a scan service that is not installed"),
+                    ),
+                    ScanServiceEvidence::ServiceUnreadable => (
+                        StepNodeState::NeedsReview,
+                        gettext("The scan service could not be read from systemd"),
+                    ),
+                }
             };
             let run_action = if scheduled_scan_starting || !daemon_answering {
                 StepActionSlot::NoAction
@@ -935,7 +958,10 @@ fn scheduled_scan_step(
                     last_run_row(*last_completed_run, run_action, moment_context),
                     StepEvidenceRow {
                         evidence_moment: EvidenceMoment::FixedSetting,
-                        ..evidence_row(gettext("Folders scanned"), scan_targets.join("\n"))
+                        ..evidence_row(
+                            gettext("Folders scanned"),
+                            scanned_folders_text(scan_service),
+                        )
                     },
                 ],
                 ..no_guidance_step(step_title, mechanism_details, node_state, status_text)
@@ -995,13 +1021,17 @@ fn alerts_step(
             StepNodeState::NeedsReview,
             gettext("Notifications are turned off in the preferences"),
         ),
-        JournalAccess::FollowingJournal if background_service_state != UnitState::UnitActive => (
-            StepNodeState::NeedsReview,
-            gettext(
-                "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
-                 background",
-            ),
-        ),
+        JournalAccess::FollowingJournal
+            if background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive) =>
+        {
+            (
+                StepNodeState::NeedsReview,
+                gettext(
+                    "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
+                     background",
+                ),
+            )
+        }
         JournalAccess::FollowingJournal => (
             StepNodeState::Completed,
             gettext("Running in the background and following the journal"),
@@ -1010,7 +1040,7 @@ fn alerts_step(
     TimelineStep {
         guidance_commands: if alert_readiness.journal_access == JournalAccess::FollowingJournal
             && alert_readiness.notifications_enabled
-            && background_service_state != UnitState::UnitActive
+            && background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive)
         {
             remedy_commands(SuggestedRemedy::BackgroundAlertsEnable, distribution_family)
         } else {
@@ -1038,7 +1068,7 @@ fn scheduled_coverage(scheduled_scan_evidence: &ScheduledScanEvidence) -> Option
     match scheduled_scan_evidence {
         ScheduledScanEvidence::SystemTimer {
             timer_active: true,
-            scan_targets,
+            scan_service: ScanServiceEvidence::ServiceConfigured { scan_targets, .. },
             ..
         } if !scan_targets.is_empty() => Some(
             gettext("{paths} scanned on a schedule").replace("{paths}", &scan_targets.join(", ")),
@@ -1255,11 +1285,13 @@ mod protection_timeline_presentation_tests {
                 next_run: UnitTimestamp::RecordedAt {
                     recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
                 },
-                scan_targets: vec!["/tmp".to_owned(), "/var/tmp".to_owned()],
-                last_result: ServiceLastResult::ResultSucceeded,
+                scan_service: ScanServiceEvidence::ServiceConfigured {
+                    scan_targets: vec!["/tmp".to_owned(), "/var/tmp".to_owned()],
+                    last_result: ServiceLastResult::ResultSucceeded,
+                },
                 last_completed_run: ServiceRunHistory::NoCompletedRun,
             },
-            background_service_state: UnitState::UnitActive,
+            background_service_state: UnitState::UnitLoaded(UnitActivity::UnitActive),
         }
     }
 
@@ -1363,8 +1395,10 @@ mod protection_timeline_presentation_tests {
                         + SignedDuration::from_hours(72)
                         + SignedDuration::from_mins(1),
                 },
-                scan_targets: vec!["/tmp".to_owned()],
-                last_result: ServiceLastResult::ResultSucceeded,
+                scan_service: ScanServiceEvidence::ServiceConfigured {
+                    scan_targets: vec!["/tmp".to_owned()],
+                    last_result: ServiceLastResult::ResultSucceeded,
+                },
                 last_completed_run: ServiceRunHistory::CompletedRun(
                     crate::protection_page::service_run_journal::ServiceRunRecord {
                         finished_at: REFERENCE_MOMENT - SignedDuration::from_hours(2),
@@ -1477,6 +1511,45 @@ mod protection_timeline_presentation_tests {
         assert_eq!(
             coverage_summary(&protection_evidence),
             "Files are only checked when you scan them"
+        );
+    }
+
+    fn system_timer_with(scan_service: ScanServiceEvidence) -> ProtectionEvidence {
+        ProtectionEvidence {
+            scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
+                service_unit: "clamdscan.service",
+                timer_active: true,
+                next_run: UnitTimestamp::RecordedAt {
+                    recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
+                },
+                scan_service,
+                last_completed_run: ServiceRunHistory::NoCompletedRun,
+            },
+            ..healthy_evidence()
+        }
+    }
+
+    #[test]
+    fn an_unreadable_scan_service_after_a_readable_timer_needs_review() {
+        let unreadable_service = system_timer_with(ScanServiceEvidence::ServiceUnreadable);
+        let scheduled_steps = all_steps(idle_timeline(&unreadable_service));
+        let scheduled_step = step_titled(&scheduled_steps, "Scheduled scan");
+        assert_eq!(scheduled_step.node_state, StepNodeState::NeedsReview);
+        assert_eq!(
+            scheduled_step.status_text,
+            "The scan service could not be read from systemd"
+        );
+        assert!(!coverage_summary(&unreadable_service).contains("scanned on a schedule"));
+    }
+
+    #[test]
+    fn a_missing_scan_service_is_not_reported_as_completed() {
+        assert_eq!(
+            state_of(
+                &system_timer_with(ScanServiceEvidence::ServiceMissing),
+                "Scheduled scan"
+            ),
+            StepNodeState::NeedsReview
         );
     }
 
@@ -1658,7 +1731,10 @@ mod protection_timeline_presentation_tests {
     #[test]
     fn alerts_are_only_complete_when_they_will_actually_fire() {
         assert_eq!(
-            alert_step_state(&ready_alerts(), UnitState::UnitActive),
+            alert_step_state(
+                &ready_alerts(),
+                UnitState::UnitLoaded(UnitActivity::UnitActive)
+            ),
             StepNodeState::Completed
         );
         assert_eq!(
@@ -1671,7 +1747,7 @@ mod protection_timeline_presentation_tests {
                     notifications_enabled: false,
                     ..ready_alerts()
                 },
-                UnitState::UnitActive
+                UnitState::UnitLoaded(UnitActivity::UnitActive)
             ),
             StepNodeState::NeedsReview
         );
@@ -1681,7 +1757,7 @@ mod protection_timeline_presentation_tests {
                     journal_access: JournalAccess::JournalUnreadable,
                     ..ready_alerts()
                 },
-                UnitState::UnitActive
+                UnitState::UnitLoaded(UnitActivity::UnitActive)
             ),
             StepNodeState::HasFailed
         );

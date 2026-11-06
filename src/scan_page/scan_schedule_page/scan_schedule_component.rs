@@ -8,9 +8,7 @@ use crate::{
             locale_formatting::exact_local_time_text, stored_settings::application_settings,
             stored_settings_watch::forward_setting_changes,
         },
-        systemd_bus::host_systemd_units::{
-            TimerUnitSnapshot, UnitState, UnitTimestamp, timer_unit_snapshot,
-        },
+        systemd_bus::host_systemd_units::{TimerUnitSnapshot, UnitTimestamp, timer_unit_snapshot},
     },
     scan_page::scan_schedule_page::{
         scan_schedule_settings::{
@@ -126,11 +124,11 @@ pub enum SystemScheduleOwner {
 }
 
 pub fn system_schedule_owner(timer_snapshot: TimerUnitSnapshot) -> SystemScheduleOwner {
-    match timer_snapshot.unit_state {
-        UnitState::UnitActive | UnitState::UnitInactive => SystemScheduleOwner::SystemTimerExists {
-            next_run: timer_snapshot.next_run,
-        },
-        UnitState::UnitNotFound | UnitState::SystemdUnavailable => {
+    match timer_snapshot {
+        TimerUnitSnapshot::LoadedTimer { next_run, .. } => {
+            SystemScheduleOwner::SystemTimerExists { next_run }
+        }
+        TimerUnitSnapshot::TimerNotFound | TimerUnitSnapshot::SystemdUnreachable(_) => {
             SystemScheduleOwner::NoSystemTimer
         }
     }
@@ -428,22 +426,19 @@ impl Component for ScanSchedulePage {
 #[cfg(test)]
 mod scan_schedule_component_tests {
     use super::*;
-
-    fn timer_snapshot_with(unit_state: UnitState) -> TimerUnitSnapshot {
-        TimerUnitSnapshot {
-            unit_state,
-            next_run: UnitTimestamp::NeverRecorded,
-            last_trigger: UnitTimestamp::NeverRecorded,
-        }
-    }
+    use crate::host_services::systemd_bus::host_systemd_units::{SystemdBusFailure, UnitActivity};
 
     #[test]
     fn an_installed_system_timer_locks_the_schedule_even_when_stopped() {
-        [UnitState::UnitActive, UnitState::UnitInactive]
+        [UnitActivity::UnitActive, UnitActivity::UnitInactive]
             .into_iter()
-            .for_each(|unit_state| {
+            .for_each(|unit_activity| {
                 assert!(matches!(
-                    system_schedule_owner(timer_snapshot_with(unit_state)),
+                    system_schedule_owner(TimerUnitSnapshot::LoadedTimer {
+                        unit_activity,
+                        next_run: UnitTimestamp::NeverRecorded,
+                        last_trigger: UnitTimestamp::NeverRecorded,
+                    }),
                     SystemScheduleOwner::SystemTimerExists { .. }
                 ));
             });
@@ -451,13 +446,16 @@ mod scan_schedule_component_tests {
 
     #[test]
     fn hosts_without_a_system_timer_keep_their_own_schedule() {
-        [UnitState::UnitNotFound, UnitState::SystemdUnavailable]
-            .into_iter()
-            .for_each(|unit_state| {
-                assert_eq!(
-                    system_schedule_owner(timer_snapshot_with(unit_state)),
-                    SystemScheduleOwner::NoSystemTimer
-                );
-            });
+        [
+            TimerUnitSnapshot::TimerNotFound,
+            TimerUnitSnapshot::SystemdUnreachable(SystemdBusFailure::UnrecognizedLoadState),
+        ]
+        .into_iter()
+        .for_each(|timer_snapshot| {
+            assert_eq!(
+                system_schedule_owner(timer_snapshot),
+                SystemScheduleOwner::NoSystemTimer
+            );
+        });
     }
 }

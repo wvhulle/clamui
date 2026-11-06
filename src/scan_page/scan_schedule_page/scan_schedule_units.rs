@@ -10,7 +10,7 @@ use crate::host_services::{
         locale_formatting::exact_local_time_text,
     },
     systemd_bus::host_systemd_units::{
-        TimerUnitSnapshot, UnitState, UnitTimestamp, disable_user_timer, enable_user_timer,
+        TimerUnitSnapshot, UnitActivity, UnitTimestamp, disable_user_timer, enable_user_timer,
         reload_user_manager, user_timer_snapshot,
     },
 };
@@ -280,15 +280,23 @@ pub async fn disable_scan_schedule(unit_directory: PathBuf) -> Result<(), Schedu
 }
 
 pub fn schedule_state_from_timer(timer_snapshot: TimerUnitSnapshot) -> ScheduleTimerState {
-    match timer_snapshot.unit_state {
-        UnitState::UnitActive => ScheduleTimerState::TimerActive {
-            next_run_text: match timer_snapshot.next_run {
+    match timer_snapshot {
+        TimerUnitSnapshot::LoadedTimer {
+            unit_activity: UnitActivity::UnitActive,
+            next_run,
+            ..
+        } => ScheduleTimerState::TimerActive {
+            next_run_text: match next_run {
                 UnitTimestamp::RecordedAt { recorded_at } => exact_local_time_text(recorded_at),
                 UnitTimestamp::NeverRecorded => String::new(),
             },
         },
-        UnitState::UnitInactive | UnitState::UnitNotFound => ScheduleTimerState::TimerInactive,
-        UnitState::SystemdUnavailable => ScheduleTimerState::SystemdUnavailable,
+        TimerUnitSnapshot::LoadedTimer {
+            unit_activity: UnitActivity::UnitInactive,
+            ..
+        }
+        | TimerUnitSnapshot::TimerNotFound => ScheduleTimerState::TimerInactive,
+        TimerUnitSnapshot::SystemdUnreachable(_) => ScheduleTimerState::SystemdUnavailable,
     }
 }
 
@@ -301,6 +309,7 @@ mod scan_schedule_units_tests {
     use std::ffi::OsString;
 
     use super::*;
+    use crate::host_services::systemd_bus::host_systemd_units::SystemdBusFailure;
 
     #[test]
     fn edited_units_and_drop_in_overrides_are_reported() {
@@ -413,21 +422,27 @@ mod scan_schedule_units_tests {
 
     #[test]
     fn an_inactive_or_missing_timer_is_not_scheduled_but_an_unreachable_manager_is_distinct() {
-        let timer_snapshot_with = |unit_state| TimerUnitSnapshot {
-            unit_state,
+        let loaded_timer_with = |unit_activity| TimerUnitSnapshot::LoadedTimer {
+            unit_activity,
             next_run: UnitTimestamp::NeverRecorded,
             last_trigger: UnitTimestamp::NeverRecorded,
         };
         assert_eq!(
-            schedule_state_from_timer(timer_snapshot_with(UnitState::UnitNotFound)),
+            schedule_state_from_timer(TimerUnitSnapshot::TimerNotFound),
             ScheduleTimerState::TimerInactive
         );
         assert_eq!(
-            schedule_state_from_timer(timer_snapshot_with(UnitState::SystemdUnavailable)),
+            schedule_state_from_timer(loaded_timer_with(UnitActivity::UnitInactive)),
+            ScheduleTimerState::TimerInactive
+        );
+        assert_eq!(
+            schedule_state_from_timer(TimerUnitSnapshot::SystemdUnreachable(
+                SystemdBusFailure::BusCallFailed(zbus::Error::InvalidReply)
+            )),
             ScheduleTimerState::SystemdUnavailable
         );
         assert!(matches!(
-            schedule_state_from_timer(timer_snapshot_with(UnitState::UnitActive)),
+            schedule_state_from_timer(loaded_timer_with(UnitActivity::UnitActive)),
             ScheduleTimerState::TimerActive { .. }
         ));
     }

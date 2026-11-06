@@ -24,11 +24,24 @@ static SYSTEM_BUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
 static USER_BUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UnitState {
+pub enum UnitActivity {
     UnitActive,
     UnitInactive,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UnitState {
+    UnitLoaded(UnitActivity),
     UnitNotFound,
     SystemdUnavailable,
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum SystemdBusFailure {
+    #[error("the systemd bus call failed: {0}")]
+    BusCallFailed(#[from] zbus::Error),
+    #[error("systemd reported a unit load state that is not recognized")]
+    UnrecognizedLoadState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,26 +57,34 @@ pub enum ServiceLastResult {
     FailedWithResult { result_name: String },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ServiceUnitSnapshot {
-    pub unit_state: UnitState,
-    pub last_result: ServiceLastResult,
-    pub program_arguments: Vec<String>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum ServiceUnitSnapshot {
+    LoadedService {
+        unit_activity: UnitActivity,
+        last_result: ServiceLastResult,
+        program_arguments: Vec<String>,
+    },
+    ServiceNotFound,
+    SystemdUnreachable(SystemdBusFailure),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TimerUnitSnapshot {
-    pub unit_state: UnitState,
-    pub next_run: UnitTimestamp,
-    pub last_trigger: UnitTimestamp,
+#[derive(Clone, Debug, PartialEq)]
+pub enum TimerUnitSnapshot {
+    LoadedTimer {
+        unit_activity: UnitActivity,
+        next_run: UnitTimestamp,
+        last_trigger: UnitTimestamp,
+    },
+    TimerNotFound,
+    SystemdUnreachable(SystemdBusFailure),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UnitStartOutcome {
     UnitFinished,
     JobEnded { job_result: String },
     AuthorizationRefused,
-    BusFailure { failure_text: String },
+    BusFailure(SystemdBusFailure),
 }
 
 async fn system_bus() -> zbus::Result<&'static Connection> {
@@ -75,9 +96,9 @@ async fn system_bus() -> zbus::Result<&'static Connection> {
 pub fn parse_unit_state(load_state: &str, active_state: &str) -> UnitState {
     match load_state {
         "loaded" if active_state == "active" || active_state == "reloading" => {
-            UnitState::UnitActive
+            UnitState::UnitLoaded(UnitActivity::UnitActive)
         }
-        "loaded" | "masked" => UnitState::UnitInactive,
+        "loaded" | "masked" => UnitState::UnitLoaded(UnitActivity::UnitInactive),
         "not-found" => UnitState::UnitNotFound,
         _other_state => UnitState::SystemdUnavailable,
     }
@@ -189,26 +210,20 @@ pub async fn first_active_unit(unit_names: &[&'static str]) -> Option<&'static s
     unit_names
         .iter()
         .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitActive)
+        .find(|named_state| named_state.1 == UnitState::UnitLoaded(UnitActivity::UnitActive))
         .map(|named_state| *named_state.0)
 }
 
-async fn read_service_snapshot(service_unit: &str) -> zbus::Result<ServiceUnitSnapshot> {
-    let unit_path = unit_object_path(service_unit).await?;
-    let unit_state = read_unit_state(&unit_path).await?;
-    if unit_state == UnitState::UnitNotFound {
-        return Ok(ServiceUnitSnapshot {
-            unit_state,
-            last_result: ServiceLastResult::ResultSucceeded,
-            program_arguments: Vec::new(),
-        });
-    }
+async fn read_loaded_service(
+    unit_path: &OwnedObjectPath,
+    unit_activity: UnitActivity,
+) -> zbus::Result<ServiceUnitSnapshot> {
     let service_proxy = SystemdServiceProxy::builder(system_bus().await?)
-        .path(&unit_path)?
+        .path(unit_path)?
         .build()
         .await?;
-    Ok(ServiceUnitSnapshot {
-        unit_state,
+    Ok(ServiceUnitSnapshot::LoadedService {
+        unit_activity,
         last_result: classify_service_result(
             &service_proxy.result().await?,
             service_proxy.exec_main_status().await?,
@@ -217,56 +232,74 @@ async fn read_service_snapshot(service_unit: &str) -> zbus::Result<ServiceUnitSn
     })
 }
 
+async fn read_service_snapshot(
+    service_unit: &str,
+) -> Result<ServiceUnitSnapshot, SystemdBusFailure> {
+    let unit_path = unit_object_path(service_unit).await?;
+    match read_unit_state(&unit_path).await? {
+        UnitState::UnitLoaded(unit_activity) => {
+            Ok(read_loaded_service(&unit_path, unit_activity).await?)
+        }
+        UnitState::UnitNotFound => Ok(ServiceUnitSnapshot::ServiceNotFound),
+        UnitState::SystemdUnavailable => Err(SystemdBusFailure::UnrecognizedLoadState),
+    }
+}
+
 pub async fn service_unit_snapshot(service_unit: &str) -> ServiceUnitSnapshot {
     read_service_snapshot(service_unit)
         .await
-        .unwrap_or(ServiceUnitSnapshot {
-            unit_state: UnitState::SystemdUnavailable,
-            last_result: ServiceLastResult::ResultSucceeded,
-            program_arguments: Vec::new(),
-        })
+        .unwrap_or_else(ServiceUnitSnapshot::SystemdUnreachable)
 }
 
-async fn read_timer_snapshot(timer_unit: &str) -> zbus::Result<TimerUnitSnapshot> {
-    let unit_path = unit_object_path(timer_unit).await?;
-    let unit_state = read_unit_state(&unit_path).await?;
-    if unit_state == UnitState::UnitNotFound {
-        return Ok(TimerUnitSnapshot {
-            unit_state,
-            next_run: UnitTimestamp::NeverRecorded,
-            last_trigger: UnitTimestamp::NeverRecorded,
-        });
-    }
-    let timer_proxy = SystemdTimerProxy::builder(system_bus().await?)
-        .path(&unit_path)?
+async fn read_loaded_timer(
+    bus_connection: &Connection,
+    unit_path: &OwnedObjectPath,
+    unit_activity: UnitActivity,
+) -> zbus::Result<TimerUnitSnapshot> {
+    let timer_proxy = SystemdTimerProxy::builder(bus_connection)
+        .path(unit_path)?
         .build()
         .await?;
-    Ok(TimerUnitSnapshot {
-        unit_state,
+    Ok(TimerUnitSnapshot::LoadedTimer {
+        unit_activity,
         next_run: timestamp_from_microseconds(timer_proxy.next_elapse_microseconds().await?),
         last_trigger: timestamp_from_microseconds(timer_proxy.last_trigger_microseconds().await?),
     })
 }
 
-pub async fn timer_unit_snapshot(timer_unit: &str) -> TimerUnitSnapshot {
-    read_timer_snapshot(timer_unit)
-        .await
-        .unwrap_or(TimerUnitSnapshot {
-            unit_state: UnitState::SystemdUnavailable,
-            next_run: UnitTimestamp::NeverRecorded,
-            last_trigger: UnitTimestamp::NeverRecorded,
-        })
+async fn read_timer_snapshot_on(
+    bus_connection: &Connection,
+    timer_unit: &str,
+) -> Result<TimerUnitSnapshot, SystemdBusFailure> {
+    let unit_path = SystemdManagerProxy::new(bus_connection)
+        .await?
+        .load_unit(timer_unit)
+        .await?;
+    match read_unit_state_on(bus_connection, &unit_path).await? {
+        UnitState::UnitLoaded(unit_activity) => {
+            Ok(read_loaded_timer(bus_connection, &unit_path, unit_activity).await?)
+        }
+        UnitState::UnitNotFound => Ok(TimerUnitSnapshot::TimerNotFound),
+        UnitState::SystemdUnavailable => Err(SystemdBusFailure::UnrecognizedLoadState),
+    }
 }
 
-fn start_failure_outcome(start_failure: &zbus::Error) -> UnitStartOutcome {
-    let failure_text = start_failure.to_string();
-    if failure_text.contains("AccessDenied")
-        || failure_text.contains("InteractiveAuthorizationRequired")
-        || failure_text.contains("NotAuthorized")
+pub async fn timer_unit_snapshot(timer_unit: &str) -> TimerUnitSnapshot {
+    let timer_read = async { read_timer_snapshot_on(system_bus().await?, timer_unit).await };
+    timer_read
+        .await
+        .unwrap_or_else(TimerUnitSnapshot::SystemdUnreachable)
+}
+
+fn start_failure_outcome(start_failure: zbus::Error) -> UnitStartOutcome {
+    let failure_description = start_failure.to_string();
+    if failure_description.contains("AccessDenied")
+        || failure_description.contains("InteractiveAuthorizationRequired")
+        || failure_description.contains("NotAuthorized")
     {
         UnitStartOutcome::AuthorizationRefused
     } else {
-        UnitStartOutcome::BusFailure { failure_text }
+        UnitStartOutcome::BusFailure(SystemdBusFailure::BusCallFailed(start_failure))
     }
 }
 
@@ -302,7 +335,7 @@ async fn start_unit_and_wait(unit_name: &str) -> zbus::Result<UnitStartOutcome> 
 pub async fn start_system_unit(unit_name: &str) -> UnitStartOutcome {
     start_unit_and_wait(unit_name)
         .await
-        .unwrap_or_else(|start_failure| start_failure_outcome(&start_failure))
+        .unwrap_or_else(start_failure_outcome)
 }
 
 async fn signal_unit(unit_name: &str, signal_number: i32) -> zbus::Result<()> {
@@ -319,10 +352,9 @@ async fn signal_unit(unit_name: &str, signal_number: i32) -> zbus::Result<()> {
 }
 
 pub async fn signal_system_unit(unit_name: &str, signal_number: i32) -> UnitStartOutcome {
-    signal_unit(unit_name, signal_number).await.map_or_else(
-        |signal_failure| start_failure_outcome(&signal_failure),
-        |()| UnitStartOutcome::UnitFinished,
-    )
+    signal_unit(unit_name, signal_number)
+        .await
+        .map_or_else(start_failure_outcome, |()| UnitStartOutcome::UnitFinished)
 }
 
 pub async fn enable_user_timer(timer_unit: &str) -> zbus::Result<()> {
@@ -352,31 +384,6 @@ pub async fn reload_user_manager() -> zbus::Result<()> {
         .await
 }
 
-async fn read_user_timer_snapshot(timer_unit: &str) -> zbus::Result<TimerUnitSnapshot> {
-    let bus_connection = user_bus().await?;
-    let unit_path = SystemdManagerProxy::new(bus_connection)
-        .await?
-        .load_unit(timer_unit)
-        .await?;
-    let unit_state = read_unit_state_on(bus_connection, &unit_path).await?;
-    if unit_state == UnitState::UnitNotFound {
-        return Ok(TimerUnitSnapshot {
-            unit_state,
-            next_run: UnitTimestamp::NeverRecorded,
-            last_trigger: UnitTimestamp::NeverRecorded,
-        });
-    }
-    let timer_proxy = SystemdTimerProxy::builder(bus_connection)
-        .path(&unit_path)?
-        .build()
-        .await?;
-    Ok(TimerUnitSnapshot {
-        unit_state,
-        next_run: timestamp_from_microseconds(timer_proxy.next_elapse_microseconds().await?),
-        last_trigger: timestamp_from_microseconds(timer_proxy.last_trigger_microseconds().await?),
-    })
-}
-
 pub async fn probe_user_unit_state(unit_name: &str) -> UnitState {
     let read_state = async {
         let bus_connection = user_bus().await?;
@@ -390,13 +397,10 @@ pub async fn probe_user_unit_state(unit_name: &str) -> UnitState {
 }
 
 pub async fn user_timer_snapshot(timer_unit: &str) -> TimerUnitSnapshot {
-    read_user_timer_snapshot(timer_unit)
+    let timer_read = async { read_timer_snapshot_on(user_bus().await?, timer_unit).await };
+    timer_read
         .await
-        .unwrap_or(TimerUnitSnapshot {
-            unit_state: UnitState::SystemdUnavailable,
-            next_run: UnitTimestamp::NeverRecorded,
-            last_trigger: UnitTimestamp::NeverRecorded,
-        })
+        .unwrap_or_else(TimerUnitSnapshot::SystemdUnreachable)
 }
 
 async fn active_state_changes_of_unit(
@@ -458,20 +462,39 @@ mod host_systemd_units_tests {
 
     #[test]
     fn unit_states_distinguish_missing_units_from_an_unreachable_systemd() {
-        assert_eq!(parse_unit_state("loaded", "active"), UnitState::UnitActive);
+        assert_eq!(
+            parse_unit_state("loaded", "active"),
+            UnitState::UnitLoaded(UnitActivity::UnitActive)
+        );
         assert_eq!(
             parse_unit_state("loaded", "inactive"),
-            UnitState::UnitInactive
+            UnitState::UnitLoaded(UnitActivity::UnitInactive)
         );
         assert_eq!(
             parse_unit_state("masked", "inactive"),
-            UnitState::UnitInactive
+            UnitState::UnitLoaded(UnitActivity::UnitInactive)
         );
         assert_eq!(
             parse_unit_state("not-found", "inactive"),
             UnitState::UnitNotFound
         );
         assert_eq!(parse_unit_state("", ""), UnitState::SystemdUnavailable);
+    }
+
+    #[test]
+    fn refused_authorization_is_told_apart_from_other_bus_failures() {
+        assert_eq!(
+            start_failure_outcome(zbus::Error::Failure(
+                "org.freedesktop.DBus.Error.AccessDenied".to_owned()
+            )),
+            UnitStartOutcome::AuthorizationRefused
+        );
+        assert_eq!(
+            start_failure_outcome(zbus::Error::InvalidReply),
+            UnitStartOutcome::BusFailure(SystemdBusFailure::BusCallFailed(
+                zbus::Error::InvalidReply
+            ))
+        );
     }
 
     #[test]
@@ -548,10 +571,8 @@ mod host_systemd_units_tests {
         println!("{:?}", service_unit_snapshot("clamdscan.service").await);
         println!("{:?}", timer_unit_snapshot("clamdscan.timer").await);
         assert_eq!(
-            user_timer_snapshot("no-such-lazaret-unit.timer")
-                .await
-                .unit_state,
-            UnitState::UnitNotFound
+            user_timer_snapshot("no-such-lazaret-unit.timer").await,
+            TimerUnitSnapshot::TimerNotFound
         );
     }
 }

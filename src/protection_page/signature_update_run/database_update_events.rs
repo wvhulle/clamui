@@ -78,8 +78,8 @@ fn events_from_unit_outcome(start_outcome: UnitStartOutcome) -> Vec<DatabaseUpda
             DatabaseUpdateEvent::UpdateOutputLine("access denied".to_owned()),
             exited_with_failure,
         ],
-        UnitStartOutcome::BusFailure { failure_text } => vec![
-            DatabaseUpdateEvent::UpdateOutputLine(failure_text),
+        UnitStartOutcome::BusFailure(bus_failure) => vec![
+            DatabaseUpdateEvent::UpdateOutputLine(bus_failure.to_string()),
             exited_with_failure,
         ],
     }
@@ -118,7 +118,7 @@ async fn service_journal_lines(
 async fn third_party_update_lines(started_after: Timestamp) -> Vec<String> {
     if !matches!(
         probe_unit_state(FANGFRISCH_SERVICE_UNIT).await,
-        UnitState::UnitActive | UnitState::UnitInactive
+        UnitState::UnitLoaded(_)
     ) {
         return Vec::new();
     }
@@ -126,7 +126,7 @@ async fn third_party_update_lines(started_after: Timestamp) -> Vec<String> {
         UnitStartOutcome::UnitFinished => "fangfrisch finished".to_owned(),
         UnitStartOutcome::JobEnded { job_result } => format!("fangfrisch ended: {job_result}"),
         UnitStartOutcome::AuthorizationRefused => "fangfrisch: access denied".to_owned(),
-        UnitStartOutcome::BusFailure { failure_text } => format!("fangfrisch: {failure_text}"),
+        UnitStartOutcome::BusFailure(bus_failure) => format!("fangfrisch: {bus_failure}"),
     };
     service_journal_lines(FANGFRISCH_UNIT_NAME, started_after)
         .await
