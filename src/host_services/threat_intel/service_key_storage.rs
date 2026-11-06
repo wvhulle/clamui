@@ -83,6 +83,8 @@ pub enum KeyStorageFailure {
         key_file_path: PathBuf,
         read_failure: io::Error,
     },
+    #[error("the key file {key_file_path} is not readable by this user")]
+    KeyFilePermissionDenied { key_file_path: PathBuf },
     #[error("the key file {key_file_path} does not hold a valid API key")]
     KeyFileContentInvalid { key_file_path: PathBuf },
 }
@@ -131,9 +133,17 @@ pub fn read_key_file(
     threat_intel_service: ThreatIntelService,
     key_file_path: &Path,
 ) -> Result<String, KeyStorageFailure> {
-    let unreadable = |read_failure: io::Error| KeyStorageFailure::KeyFileUnreadable {
-        key_file_path: key_file_path.to_path_buf(),
-        read_failure,
+    let unreadable = |read_failure: io::Error| {
+        if read_failure.kind() == io::ErrorKind::PermissionDenied {
+            KeyStorageFailure::KeyFilePermissionDenied {
+                key_file_path: key_file_path.to_path_buf(),
+            }
+        } else {
+            KeyStorageFailure::KeyFileUnreadable {
+                key_file_path: key_file_path.to_path_buf(),
+                read_failure,
+            }
+        }
     };
     let key_file = std::fs::File::open(key_file_path).map_err(unreadable)?;
     if !key_file.metadata().map_err(unreadable)?.is_file() {
@@ -222,6 +232,11 @@ pub fn describe_key_failure(key_failure: &KeyStorageFailure) -> String {
              its owner to your user.",
         )
         .replace("{error}", &read_failure.to_string()),
+        KeyStorageFailure::KeyFilePermissionDenied { .. } => gettext(
+            "Lazaret can't read this file, so lookups with this service are off. Give your user \
+             read access, for example with the owner or group setting of the agenix or sops-nix \
+             secret.",
+        ),
         KeyStorageFailure::KeyFileContentInvalid { .. } => {
             gettext("The file doesn't hold a valid key for this service")
         }
@@ -297,6 +312,23 @@ mod virustotal_key_storage_tests {
         std::fs::write(&secret_path, "aB3".repeat(16)).expect("written");
         std::os::unix::fs::symlink(&secret_path, &link_path).expect("linked");
         assert!(read_key_file(ThreatIntelService::AbuseChService, &link_path).is_ok());
+    }
+
+    #[test]
+    fn a_key_file_owned_by_someone_else_is_denied() {
+        use std::os::unix::fs::PermissionsExt;
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let key_file_path = temporary_root.path().join("abuse-ch");
+        std::fs::write(&key_file_path, "aB3".repeat(16)).expect("written");
+        std::fs::set_permissions(&key_file_path, std::fs::Permissions::from_mode(0o000))
+            .expect("permissions changed");
+        assert!(matches!(
+            read_key_file(ThreatIntelService::AbuseChService, &key_file_path),
+            Err(KeyStorageFailure::KeyFilePermissionDenied { .. })
+        ));
     }
 
     #[test]

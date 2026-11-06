@@ -24,9 +24,9 @@ fn service_description(threat_intel_service: ThreatIntelService) -> String {
         ),
         ThreatIntelService::AbuseChService => gettext(
             "Looks up a detection's signature name, and a quarantined file's SHA-256 hash, when \
-             you ask. The same abuse.ch key works for URLhaus signature downloads, but Lazaret \
-             needs its own copy it can read. abuse.ch's fair-use terms say for-profit users may \
-             need its commercial API.",
+             you ask. The same abuse.ch key works for URLhaus signature downloads; on NixOS, \
+             Lazaret reuses fangfrisch's key file when your user can read it. abuse.ch's fair-use \
+             terms say for-profit users may need its commercial API.",
         ),
     }
 }
@@ -58,10 +58,37 @@ fn describe_resolved_key(resolved_key: &ResolvedApiKey) -> String {
     }
 }
 
+enum SystemKeyFileStatus {
+    CheckingKeyFile,
+    KeyFileReadable { masked_key: String },
+    KeyFileNotReadable { denial_explanation: String },
+    KeyFileFailed { failure_explanation: String },
+}
+
+impl SystemKeyFileStatus {
+    fn from_key_status(key_status: &Result<ResolvedApiKey, KeyStorageFailure>) -> Self {
+        match key_status {
+            Ok(resolved_key) => Self::KeyFileReadable {
+                masked_key: describe_resolved_key(resolved_key),
+            },
+            Err(key_failure @ KeyStorageFailure::KeyFilePermissionDenied { .. }) => {
+                Self::KeyFileNotReadable {
+                    denial_explanation: describe_key_failure(key_failure),
+                }
+            }
+            Err(key_failure) => Self::KeyFileFailed {
+                failure_explanation: describe_key_failure(key_failure),
+            },
+        }
+    }
+}
+
 pub struct ServiceKeySection {
     threat_intel_service: ThreatIntelService,
     key_source: KeySource,
     key_status_text: String,
+    system_key_file_status: SystemKeyFileStatus,
+    keyring_key_stored: bool,
     entered_key_cleared: bool,
 }
 
@@ -93,7 +120,21 @@ impl ServiceKeySection {
     fn system_key_file_text(&self) -> String {
         match &self.key_source {
             KeySource::SystemKeyFile { key_file_path } => {
-                format!("{}\n{}", key_file_path.display(), self.key_status_text)
+                let shown_path = key_file_path.display();
+                match &self.system_key_file_status {
+                    SystemKeyFileStatus::CheckingKeyFile => {
+                        format!("{shown_path}\n{}", gettext("Checking…"))
+                    }
+                    SystemKeyFileStatus::KeyFileReadable { masked_key } => {
+                        format!("{masked_key}\n{shown_path}")
+                    }
+                    SystemKeyFileStatus::KeyFileNotReadable { denial_explanation } => {
+                        format!("••••\n{shown_path}\n{denial_explanation}")
+                    }
+                    SystemKeyFileStatus::KeyFileFailed {
+                        failure_explanation,
+                    } => format!("{shown_path}\n{failure_explanation}"),
+                }
             }
             KeySource::UserKeyring => String::new(),
         }
@@ -113,7 +154,7 @@ impl Component for ServiceKeySection {
             set_description: Some(&service_description(model.threat_intel_service)),
 
             adw::ActionRow {
-                set_title: &gettext("Provided by your system configuration"),
+                set_title: &gettext("Set by your system configuration"),
                 set_use_markup: false,
                 set_subtitle_lines: 0,
                 set_visible: model.uses_system_key_file(),
@@ -131,6 +172,8 @@ impl Component for ServiceKeySection {
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Delete Key"),
                     set_valign: gtk::Align::Center,
+                    #[watch]
+                    set_visible: model.keyring_key_stored,
                     add_css_class: "flat",
                     connect_clicked => ServiceKeySectionInput::KeyDeletionRequested,
                 },
@@ -169,6 +212,8 @@ impl Component for ServiceKeySection {
             threat_intel_service,
             key_source: key_source(threat_intel_service),
             key_status_text: gettext("Checking…"),
+            system_key_file_status: SystemKeyFileStatus::CheckingKeyFile,
+            keyring_key_stored: false,
             entered_key_cleared: false,
         };
         let widgets = view_output!();
@@ -217,6 +262,10 @@ impl Component for ServiceKeySection {
         _root: &Self::Root,
     ) {
         self.entered_key_cleared = false;
+        if let ServiceKeySectionCommand::KeyStatusRead(key_status) = &group_command {
+            self.system_key_file_status = SystemKeyFileStatus::from_key_status(key_status);
+            self.keyring_key_stored = matches!(key_status, Ok(ResolvedApiKey::FromKeyring(_)));
+        }
         match group_command {
             ServiceKeySectionCommand::KeyStatusRead(Ok(resolved_key)) => {
                 self.key_status_text = describe_resolved_key(&resolved_key);

@@ -65,6 +65,50 @@ let
       ];
     };
 
+  fangfrischKeyEvaluation =
+    lazaretKeyModule:
+    nixpkgs.lib.nixosSystem {
+      inherit (pkgs.stdenv.hostPlatform) system;
+      modules = [
+        self.nixosModules.default
+        lazaretKeyModule
+        (
+          { lib, ... }:
+          {
+            options.age.secrets = lib.mkOption {
+              type = lib.types.attrsOf lib.types.attrs;
+              default = { };
+            };
+            config = {
+              services.clamav.fangfrisch.urlhaus.authKeyFile = "/run/agenix/urlhaus-auth-key";
+              boot.loader.grub.enable = false;
+              fileSystems."/" = {
+                device = "nodev";
+                fsType = "tmpfs";
+              };
+              system.stateVersion = "25.11";
+            };
+          }
+        )
+      ];
+    };
+
+  dconfKeyFileSettings =
+    lazaretKeyModule:
+    nixpkgs.lib.concatMap (dconfDatabase: [
+      (dconfDatabase.settings."page/codeberg/wvhulle/Lazaret" or { })
+    ]) (fangfrischKeyEvaluation lazaretKeyModule).config.programs.dconf.profiles.user.databases;
+
+  urlhausSecretWarnings =
+    secretSettings:
+    builtins.filter (moduleWarning: nixpkgs.lib.hasInfix "age.secrets.urlhaus-auth-key" moduleWarning)
+      (fangfrischKeyEvaluation {
+        age.secrets.urlhaus-auth-key = {
+          path = "/run/agenix/urlhaus-auth-key";
+        }
+        // secretSettings;
+      }).config.warnings;
+
   failedKeyFileAssertions =
     keyFilePath:
     builtins.filter (moduleAssertion: !moduleAssertion.assertion)
@@ -116,6 +160,19 @@ assert failedKeyFileAssertions "/nix/store/abc-abuse-ch-key" != [ ];
 assert failedKeyFileAssertions "relative/abuse-ch-key" != [ ];
 assert
   (keyFileEvaluation "/run/agenix/abuse-ch-key").config.programs.dconf.profiles.user.databases != [ ];
+assert dconfKeyFileSettings { } == [ { abuse-ch-key-file = "/run/agenix/urlhaus-auth-key"; } ];
+assert
+  dconfKeyFileSettings { services.lazaret.apiKeyFiles.abuseCh = "/run/agenix/abuse-ch-key"; } == [
+    { abuse-ch-key-file = "/run/agenix/abuse-ch-key"; }
+  ];
+assert !((keyFileEvaluation null).config.programs.dconf.profiles ? user);
+assert urlhausSecretWarnings { } != [ ];
+assert
+  urlhausSecretWarnings {
+    group = "users";
+    mode = "0440";
+  } == [ ];
+assert urlhausSecretWarnings { owner = "wvhulle"; } == [ ];
 {
   nixos-background-service = backgroundServiceSystem.config.systemd.user.units."lazaret.service".unit;
   home-manager-background-service = pkgs.writeText "lazaret-home-manager-service.json" (

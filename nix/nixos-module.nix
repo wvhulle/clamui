@@ -14,6 +14,61 @@ let
   };
   isOutsideStore =
     keyFilePath: lib.hasPrefix "/" keyFilePath && !lib.hasPrefix builtins.storeDir keyFilePath;
+  fangfrischUrlhausKeyFile =
+    let
+      configuredKeyFile = lib.attrByPath [
+        "services"
+        "clamav"
+        "fangfrisch"
+        "urlhaus"
+        "authKeyFile"
+      ] null config;
+    in
+    if configuredKeyFile != null && isOutsideStore (toString configuredKeyFile) then
+      toString configuredKeyFile
+    else
+      null;
+  declaredSecretsByPath =
+    let
+      secretsWithPaths =
+        secretTool: declaredSecrets:
+        lib.mapAttrsToList (secretName: secretSettings: {
+          inherit secretName secretTool;
+          secretPath = toString (secretSettings.path or "");
+          secretOwner = secretSettings.owner or "root";
+          secretGroup = secretSettings.group or "root";
+          secretMode = secretSettings.mode or "0400";
+        }) declaredSecrets;
+    in
+    secretsWithPaths "age.secrets" (lib.attrByPath [ "age" "secrets" ] { } config)
+    ++ secretsWithPaths "sops.secrets" (lib.attrByPath [ "sops" "secrets" ] { } config);
+  modeLetsOthersRead =
+    secretMode:
+    let
+      modeDigits = lib.stringToCharacters secretMode;
+      groupAndOtherDigits = lib.drop (builtins.length modeDigits - 2) modeDigits;
+      digitHasReadBit = modeDigit: lib.toInt modeDigit >= 4;
+    in
+    builtins.any digitHasReadBit groupAndOtherDigits;
+  rootOnlySecretWarnings = lib.concatMap (
+    keyFilePath:
+    map
+      (
+        declaredSecret:
+        "services.lazaret.apiKeyFiles: ${keyFilePath} is the ${declaredSecret.secretTool}.${declaredSecret.secretName} secret, which only root can read, so Lazaret can't use it for online lookups. Set ${declaredSecret.secretTool}.${declaredSecret.secretName}.group = \"users\" and mode = \"0440\", or owner = your user."
+      )
+      (
+        builtins.filter (
+          declaredSecret:
+          declaredSecret.secretPath == keyFilePath
+          && builtins.elem declaredSecret.secretOwner [
+            "root"
+            "0"
+          ]
+          && !modeLetsOthersRead declaredSecret.secretMode
+        ) declaredSecretsByPath
+      )
+  ) (builtins.attrValues apiKeyFileSettings);
   clamavSettings = config.services.clamav;
   system = pkgs.stdenv.hostPlatform.system;
   mergedConfigPath = "/run/lazaret/clamd.conf";
@@ -65,11 +120,13 @@ in
       };
       abuseCh = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
-        default = null;
+        default = fangfrischUrlhausKeyFile;
+        defaultText = lib.literalExpression "config.services.clamav.fangfrisch.urlhaus.authKeyFile";
         example = lib.literalExpression "config.age.secrets.abuse-ch-key.path";
         description = ''
           Runtime path of a file holding the abuse.ch Auth-Key used for MalwareBazaar lookups.
-          Only the path is stored, never the key.
+          Only the path is stored, never the key. Defaults to the key fangfrisch uses for URLhaus
+          signature downloads, which the desktop user must be able to read.
         '';
       };
     };
@@ -114,6 +171,7 @@ in
         assertion = isOutsideStore keyFilePath;
         message = "services.lazaret.apiKeyFiles: ${keyFilePath} must be an absolute path outside the Nix store, so the key never ends up in it";
       }) apiKeyFileSettings;
+      warnings = rootOnlySecretWarnings;
       programs.dconf = {
         enable = true;
         profiles.user.databases = [
