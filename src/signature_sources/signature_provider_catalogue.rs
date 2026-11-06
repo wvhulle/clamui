@@ -14,12 +14,43 @@ const NIXOS_INTERSERVER_SNIPPET: &str =
     "services.clamav.fangfrisch.settings.interserver.enabled = \"yes\";";
 const FANGFRISCH_SANESECURITY_LINES: &str = "[sanesecurity]\nenabled = yes";
 const FANGFRISCH_INTERSERVER_LINES: &str = "[interserver]\nenabled = yes";
+const FANGFRISCH_URLHAUS_LINES: &str =
+    "[urlhaus]\nenabled = yes\nauth_key = YOUR-ABUSE-CH-AUTH-KEY";
+
+const FANGFRISCH_CONFIG_PATH: &str = "/etc/fangfrisch/fangfrisch.conf";
+const FANGFRISCH_CONFIG_PROTECTION_COMMAND: &str = "sudo chmod 600 /etc/fangfrisch/fangfrisch.conf";
+const FANGFRISCH_MALWAREPATROL_LINES: &str =
+    "[malwarepatrol]\nenabled = yes\nreceipt = YOUR-RECEIPT-NUMBER";
+const FANGFRISCH_SECURITEINFO_LINES: &str =
+    "[securiteinfo]\nenabled = yes\ncustomer_id = YOUR-CUSTOMER-ID";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SettingsOnlyCredential {
+    credential_label: CredentialLabel,
+    signup_url: &'static str,
+    fangfrisch_credential_lines: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CredentialLabel {
+    PurchaseReceipt,
+    CustomerIdentifier,
+}
+
+impl CredentialLabel {
+    fn described(self) -> String {
+        match self {
+            Self::PurchaseReceipt => gettext("purchase receipt number"),
+            Self::CustomerIdentifier => gettext("customer ID"),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProviderCredential {
     NoCredential,
     KeyFileSupported,
-    CredentialInSettingsOnly,
+    CredentialInSettingsOnly(SettingsOnlyCredential),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,7 +70,7 @@ pub const SIGNATURE_PROVIDERS: [SignatureProvider; 5] = [
         file_name_markers: &["urlhaus"],
         credential: ProviderCredential::KeyFileSupported,
         nixos_snippet: NIXOS_URLHAUS_SNIPPET,
-        fangfrisch_lines: "",
+        fangfrisch_lines: FANGFRISCH_URLHAUS_LINES,
     },
     SignatureProvider {
         provider_name: "Sanesecurity",
@@ -61,7 +92,11 @@ pub const SIGNATURE_PROVIDERS: [SignatureProvider; 5] = [
         provider_name: "Malwarepatrol",
         signature_prefixes: &["MalwarePatrol", "Malwarepatrol"],
         file_name_markers: &["malwarepatrol", "malware.patrol"],
-        credential: ProviderCredential::CredentialInSettingsOnly,
+        credential: ProviderCredential::CredentialInSettingsOnly(SettingsOnlyCredential {
+            credential_label: CredentialLabel::PurchaseReceipt,
+            signup_url: "https://www.malwarepatrol.net/",
+            fangfrisch_credential_lines: FANGFRISCH_MALWAREPATROL_LINES,
+        }),
         nixos_snippet: "",
         fangfrisch_lines: "",
     },
@@ -69,7 +104,11 @@ pub const SIGNATURE_PROVIDERS: [SignatureProvider; 5] = [
         provider_name: "SecuriteInfo",
         signature_prefixes: &["SecuriteInfo"],
         file_name_markers: &["securiteinfo"],
-        credential: ProviderCredential::CredentialInSettingsOnly,
+        credential: ProviderCredential::CredentialInSettingsOnly(SettingsOnlyCredential {
+            credential_label: CredentialLabel::CustomerIdentifier,
+            signup_url: "https://www.securiteinfo.com/",
+            fangfrisch_credential_lines: FANGFRISCH_SECURITEINFO_LINES,
+        }),
         nixos_snippet: "",
         fangfrisch_lines: "",
     },
@@ -118,6 +157,47 @@ pub fn hide_addresses_in_text(log_text: &str) -> String {
     )
 }
 
+fn settings_credential_check(
+    inactive_check: AuditCheck,
+    provider_name: &str,
+    settings_credential: SettingsOnlyCredential,
+    distribution_family: DistributionFamily,
+) -> AuditCheck {
+    let credential_text = settings_credential.credential_label.described();
+    if distribution_family == DistributionFamily::NixosFamily {
+        return inactive_check
+            .with_recommendation(
+                gettext(
+                    "{provider} needs a {credential}, and fangfrisch only reads it from its \
+                     settings. On NixOS, services.clamav.fangfrisch.settings is copied into the \
+                     Nix store, which every user of this computer can read, so the {credential} \
+                     would be exposed. Leave {provider} off, or run fangfrisch with a settings \
+                     file kept outside the Nix store, such as an agenix or sops-nix secret.",
+                )
+                .replace("{credential}", &credential_text)
+                .replace("{provider}", provider_name),
+            )
+            .with_documentation(settings_credential.signup_url);
+    }
+    inactive_check
+        .with_recommendation(
+            gettext(
+                "{provider} needs a {credential} from its website. fangfrisch reads it from its \
+                 settings file, usually {path}. Add these lines there, replace the placeholder \
+                 with your {credential}, and make the file readable by root only, so other users \
+                 can't see it.",
+            )
+            .replace("{path}", FANGFRISCH_CONFIG_PATH)
+            .replace("{credential}", &credential_text)
+            .replace("{provider}", provider_name),
+        )
+        .with_suggested_commands([
+            settings_credential.fangfrisch_credential_lines,
+            FANGFRISCH_CONFIG_PROTECTION_COMMAND,
+        ])
+        .with_documentation(settings_credential.signup_url)
+}
+
 fn inactive_provider_check(
     signature_provider: &SignatureProvider,
     distribution_family: DistributionFamily,
@@ -129,23 +209,40 @@ fn inactive_provider_check(
     )
     .starting_collapsed();
     match signature_provider.credential {
-        ProviderCredential::CredentialInSettingsOnly => {
-            inactive_check.with_recommendation(gettext(
-                "This source needs a credential, and fangfrisch reads it from its settings. On \
-                 NixOS those settings end up in the world-readable Nix store, so don't put the \
-                 credential there.",
-            ))
+        ProviderCredential::CredentialInSettingsOnly(settings_credential) => {
+            settings_credential_check(
+                inactive_check,
+                signature_provider.provider_name,
+                settings_credential,
+                distribution_family,
+            )
         }
-        ProviderCredential::KeyFileSupported | ProviderCredential::NoCredential => {
-            let enabling_lines = if distribution_family == DistributionFamily::NixosFamily
-                || signature_provider.fangfrisch_lines.is_empty()
-            {
-                signature_provider.nixos_snippet
-            } else {
-                signature_provider.fangfrisch_lines
-            };
-            inactive_check.with_suggested_commands([enabling_lines])
+        ProviderCredential::KeyFileSupported | ProviderCredential::NoCredential
+            if distribution_family == DistributionFamily::NixosFamily =>
+        {
+            inactive_check.with_suggested_commands([signature_provider.nixos_snippet])
         }
+        ProviderCredential::NoCredential => inactive_check
+            .with_recommendation(
+                gettext("Add these lines to fangfrisch's settings file, usually {path}.")
+                    .replace("{path}", FANGFRISCH_CONFIG_PATH),
+            )
+            .with_suggested_commands([signature_provider.fangfrisch_lines]),
+        ProviderCredential::KeyFileSupported => inactive_check
+            .with_recommendation(
+                gettext(
+                    "{provider} needs a free abuse.ch Auth-Key. Add these lines to fangfrisch's \
+                     settings file, usually {path}, replace the placeholder with your key, and \
+                     make the file readable by root only, so other users can't see it.",
+                )
+                .replace("{path}", FANGFRISCH_CONFIG_PATH)
+                .replace("{provider}", signature_provider.provider_name),
+            )
+            .with_suggested_commands([
+                signature_provider.fangfrisch_lines,
+                FANGFRISCH_CONFIG_PROTECTION_COMMAND,
+            ])
+            .with_documentation("https://auth.abuse.ch/"),
     }
 }
 
@@ -283,7 +380,26 @@ mod signature_provider_catalogue_tests {
             .expect("catalogue entry");
         assert!(commands_of(malwarepatrol_check).is_empty());
         assert!(malwarepatrol_check.check_guidance.iter().any(|check_guidance| {
-            matches!(check_guidance, CheckGuidance::RecommendationText(warning_text) if warning_text.contains("world-readable"))
+            matches!(check_guidance, CheckGuidance::RecommendationText(warning_text) if warning_text.contains("Nix store") && warning_text.contains("purchase receipt number"))
+        }));
+    }
+
+    #[test]
+    fn other_systems_get_placeholder_lines_and_a_permission_command() {
+        let source_checks = signature_source_checks(&[], DistributionFamily::DebianFamily);
+        let securiteinfo_check = source_checks
+            .iter()
+            .find(|source_check| source_check.check_name == "SecuriteInfo")
+            .expect("catalogue entry");
+        assert_eq!(
+            commands_of(securiteinfo_check),
+            vec![
+                FANGFRISCH_SECURITEINFO_LINES,
+                FANGFRISCH_CONFIG_PROTECTION_COMMAND
+            ]
+        );
+        assert!(securiteinfo_check.check_guidance.iter().all(|check_guidance| {
+            !matches!(check_guidance, CheckGuidance::RecommendationText(advice_text) if advice_text.contains("NixOS"))
         }));
     }
 }
