@@ -31,7 +31,7 @@ use crate::{
             scanner_output_parser::ThreatIdentity,
         },
         detection_journal::{
-            detection_history_store::DetectionResolution,
+            detection_history_store::{DetectionSources, DetectionState, ResolutionKind},
             detection_journal_follower::{
                 DetectionJournalEvent, JournalStartPosition, detection_journal_events,
             },
@@ -392,7 +392,10 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     assert_eq!(stored_detections.len(), 1, "one row for the file");
     let stored_detection = stored_detections[0].clone();
     assert_eq!(stored_detection.signature_name, "Eicar-Test-Signature");
-    assert!(stored_detection.found_on_access);
+    assert_eq!(
+        stored_detection.detection_sources,
+        DetectionSources::OnAccessOnly
+    );
     assert_eq!(
         stored_detection.sighting_count,
         i64::try_from(matching_records.len()).expect("line count")
@@ -434,17 +437,21 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
         inspect_detected_file(&eicar_path, OpeningCheck::OpenToCheckBlocking),
         DetectedFileState::NoLongerThere
     );
+    let resolved_at = stored_detection.last_seen + jiff::SignedDuration::from_secs(1);
     activity_history
         .resolve_detection(
             stored_detection.detection_id,
-            DetectionResolution::MovedToQuarantine,
-            stored_detection.last_seen + jiff::SignedDuration::from_secs(1),
+            ResolutionKind::MovedToQuarantine,
+            resolved_at,
         )
         .await
         .expect("resolved");
     assert_eq!(
-        activity_history.list_detections().await.expect("listed")[0].resolution,
-        DetectionResolution::MovedToQuarantine
+        activity_history.list_detections().await.expect("listed")[0].detection_state,
+        DetectionState::Resolved {
+            resolution_kind: ResolutionKind::MovedToQuarantine,
+            resolved_at,
+        }
     );
 }
 

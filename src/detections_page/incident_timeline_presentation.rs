@@ -8,7 +8,9 @@ use crate::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::exact_local_time_text,
-        detection_journal::detection_history_store::{DetectionResolution, StoredDetection},
+        detection_journal::detection_history_store::{
+            DetectionSources, DetectionState, ResolutionKind, StoredDetection,
+        },
         threat_intel::malware_bazaar_client::KnownSampleLookup,
     },
     shared_widgets::step_timeline::timeline_step_contents::{
@@ -46,7 +48,10 @@ pub fn signature_is_test_pattern(signature_name: &str) -> bool {
 }
 
 pub fn detection_needs_attention(displayed_detection: &DisplayedDetection) -> bool {
-    displayed_detection.stored_detection.resolution == DetectionResolution::Unresolved
+    displayed_detection
+        .stored_detection
+        .detection_state
+        .awaits_user_decision()
         && displayed_detection.file_state != DetectedFileState::NoLongerThere
 }
 
@@ -63,35 +68,47 @@ pub fn displayed_file_name(stored_detection: &StoredDetection) -> String {
 
 pub fn detection_state_text(displayed_detection: &DisplayedDetection) -> String {
     let stored_detection = &displayed_detection.stored_detection;
-    match stored_detection.resolution {
-        DetectionResolution::MovedToQuarantine
-            if displayed_detection.file_state.file_is_present() =>
-        {
+    match &stored_detection.detection_state {
+        DetectionState::Resolved {
+            resolution_kind: ResolutionKind::MovedToQuarantine,
+            ..
+        } if displayed_detection.file_state.file_is_present() => {
             gettext("Restored from quarantine")
         }
-        DetectionResolution::MovedToQuarantine => gettext("Moved to quarantine"),
-        DetectionResolution::DeletedByUser => gettext("Deleted"),
-        DetectionResolution::DismissedByUser => gettext("Kept by you"),
-        DetectionResolution::Unresolved => match displayed_detection.file_state {
-            DetectedFileState::Present {
-                owner: FileOwner::OtherUser,
-                ..
-            } => gettext("Belongs to another user"),
-            DetectedFileState::Present {
-                access: FileAccess::BlockedOnAccess,
-                owner: FileOwner::CurrentUser,
-            } => gettext("Blocked, needs a decision"),
-            DetectedFileState::Present {
-                access: FileAccess::Readable,
-                owner: FileOwner::CurrentUser,
-            } => gettext("Not blocked, needs a decision"),
-            DetectedFileState::Present {
-                access: FileAccess::NotOpened,
-                owner: FileOwner::CurrentUser,
-            } => gettext("Needs a decision"),
-            DetectedFileState::NoLongerThere => gettext("No longer there"),
-            DetectedFileState::StateUnknown => gettext("File could not be checked"),
-        },
+        DetectionState::Resolved {
+            resolution_kind: ResolutionKind::MovedToQuarantine,
+            ..
+        } => gettext("Moved to quarantine"),
+        DetectionState::Resolved {
+            resolution_kind: ResolutionKind::DeletedByUser,
+            ..
+        } => gettext("Deleted"),
+        DetectionState::Resolved {
+            resolution_kind: ResolutionKind::DismissedByUser,
+            ..
+        } => gettext("Kept by you"),
+        DetectionState::Open | DetectionState::StoredStateUnreadable { .. } => {
+            match displayed_detection.file_state {
+                DetectedFileState::Present {
+                    owner: FileOwner::OtherUser,
+                    ..
+                } => gettext("Belongs to another user"),
+                DetectedFileState::Present {
+                    access: FileAccess::BlockedOnAccess,
+                    owner: FileOwner::CurrentUser,
+                } => gettext("Blocked, needs a decision"),
+                DetectedFileState::Present {
+                    access: FileAccess::Readable,
+                    owner: FileOwner::CurrentUser,
+                } => gettext("Not blocked, needs a decision"),
+                DetectedFileState::Present {
+                    access: FileAccess::NotOpened,
+                    owner: FileOwner::CurrentUser,
+                } => gettext("Needs a decision"),
+                DetectedFileState::NoLongerThere => gettext("No longer there"),
+                DetectedFileState::StateUnknown => gettext("File could not be checked"),
+            }
+        }
     }
 }
 
@@ -133,13 +150,13 @@ fn plain_step(
 }
 
 fn source_text(stored_detection: &StoredDetection) -> String {
-    match (
-        stored_detection.found_on_access,
-        stored_detection.found_by_schedule,
-    ) {
-        (true, true) => gettext("On-access scanning and the scheduled scan"),
-        (true, false) => gettext("On-access scanning"),
-        (false, _scheduled) => gettext("The scheduled scan"),
+    match stored_detection.detection_sources {
+        DetectionSources::OnAccessAndSchedule => {
+            gettext("On-access scanning and the scheduled scan")
+        }
+        DetectionSources::OnAccessOnly => gettext("On-access scanning"),
+        DetectionSources::ScheduleOnly => gettext("The scheduled scan"),
+        DetectionSources::NoSourceRecorded => gettext("Not recorded"),
     }
 }
 
@@ -210,7 +227,7 @@ fn blocked_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
         DetectedFileState::Present {
             access: FileAccess::Readable,
             ..
-        } if !stored_detection.found_on_access => (
+        } if stored_detection.detection_sources == DetectionSources::ScheduleOnly => (
             StepNodeState::NeedsReview,
             gettext("Not blocked: the scheduled scan found it, and it can still be opened"),
         ),
@@ -429,15 +446,13 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> TimelineStep {
             gettext("Waiting for your decision"),
         );
     }
-    let status_text = if stored_detection.resolution == DetectionResolution::Unresolved {
-        detection_state_text(displayed_detection)
-    } else {
-        gettext("{state}, {time}")
+    let status_text = match &stored_detection.detection_state {
+        DetectionState::Resolved { resolved_at, .. } => gettext("{state}, {time}")
             .replace("{state}", &detection_state_text(displayed_detection))
-            .replace(
-                "{time}",
-                &exact_local_time_text(stored_detection.resolved_at),
-            )
+            .replace("{time}", &exact_local_time_text(*resolved_at)),
+        DetectionState::Open | DetectionState::StoredStateUnreadable { .. } => {
+            detection_state_text(displayed_detection)
+        }
     };
     plain_step(
         step_title,
@@ -471,6 +486,7 @@ mod incident_timeline_presentation_tests {
     use std::path::PathBuf;
 
     use super::*;
+    use crate::host_services::detection_journal::detection_history_store::StoredStateInconsistency;
 
     const BLOCKED_POSITION: usize = 1;
     const REVIEW_POSITION: usize = 2;
@@ -482,13 +498,11 @@ mod incident_timeline_presentation_tests {
                 detection_id: 1,
                 file_path: PathBuf::from("/home/user/Downloads/invoice.exe"),
                 signature_name: "Win.Trojan.Agent-1".to_owned(),
-                found_on_access: true,
-                found_by_schedule: false,
+                detection_sources: DetectionSources::OnAccessOnly,
                 first_seen: jiff::Timestamp::constant(1_793_869_222, 0),
                 last_seen: jiff::Timestamp::constant(1_793_869_225, 0),
                 sighting_count: 6,
-                resolution: DetectionResolution::Unresolved,
-                resolved_at: jiff::Timestamp::UNIX_EPOCH,
+                detection_state: DetectionState::Open,
             },
             file_state: DetectedFileState::Present {
                 access: FileAccess::BlockedOnAccess,
@@ -561,8 +575,7 @@ mod incident_timeline_presentation_tests {
     fn a_file_found_only_by_the_schedule_is_not_reported_as_blocked() {
         let displayed_detection = DisplayedDetection {
             stored_detection: StoredDetection {
-                found_on_access: false,
-                found_by_schedule: true,
+                detection_sources: DetectionSources::ScheduleOnly,
                 ..blocked_detection().stored_detection
             },
             file_state: DetectedFileState::Present {
@@ -628,7 +641,10 @@ mod incident_timeline_presentation_tests {
         }));
         assert!(!detection_needs_attention(&DisplayedDetection {
             stored_detection: StoredDetection {
-                resolution: DetectionResolution::DismissedByUser,
+                detection_state: DetectionState::Resolved {
+                    resolution_kind: ResolutionKind::DismissedByUser,
+                    resolved_at: jiff::Timestamp::constant(1_793_869_300, 0),
+                },
                 ..blocked_detection().stored_detection
             },
             ..blocked_detection()
@@ -636,10 +652,58 @@ mod incident_timeline_presentation_tests {
     }
 
     #[test]
+    fn an_unreadable_stored_state_still_asks_for_a_decision() {
+        let displayed_detection = DisplayedDetection {
+            stored_detection: StoredDetection {
+                detection_state: DetectionState::StoredStateUnreadable {
+                    stored_inconsistency: StoredStateInconsistency::ResolvedWithoutTime {
+                        resolution_kind: ResolutionKind::MovedToQuarantine,
+                    },
+                },
+                ..blocked_detection().stored_detection
+            },
+            ..blocked_detection()
+        };
+        assert!(detection_needs_attention(&displayed_detection));
+        assert_eq!(
+            detection_state_text(&displayed_detection),
+            "Blocked, needs a decision"
+        );
+    }
+
+    #[test]
+    fn a_readable_file_without_a_recorded_source_is_not_blamed_on_the_schedule() {
+        let displayed_detection = DisplayedDetection {
+            stored_detection: StoredDetection {
+                detection_sources: DetectionSources::NoSourceRecorded,
+                ..blocked_detection().stored_detection
+            },
+            file_state: DetectedFileState::Present {
+                access: FileAccess::Readable,
+                owner: FileOwner::CurrentUser,
+            },
+        };
+        let incident_steps = incident_timeline(
+            &displayed_detection,
+            DeletionPrompt::NotAsked,
+            &SignatureLookupState::NotLookedUp,
+            DistributionFamily::NixosFamily,
+        );
+        assert!(
+            !incident_steps[BLOCKED_POSITION]
+                .status_text
+                .contains("scheduled scan")
+        );
+    }
+
+    #[test]
     fn a_quarantined_file_that_came_back_reads_as_restored() {
         let displayed_detection = DisplayedDetection {
             stored_detection: StoredDetection {
-                resolution: DetectionResolution::MovedToQuarantine,
+                detection_state: DetectionState::Resolved {
+                    resolution_kind: ResolutionKind::MovedToQuarantine,
+                    resolved_at: jiff::Timestamp::constant(1_793_869_300, 0),
+                },
                 ..blocked_detection().stored_detection
             },
             file_state: DetectedFileState::Present {

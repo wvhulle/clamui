@@ -6,7 +6,7 @@ use crate::{
         incident_timeline_presentation::{DisplayedDetection, detection_needs_attention},
     },
     host_services::detection_journal::{
-        detection_history_store::{DetectionResolution, StoredDetection},
+        detection_history_store::StoredDetection,
         detection_journal_follower::{DetectionJournalEvent, JournalAccess},
         detection_journal_records::JournalDetectionRecord,
     },
@@ -72,7 +72,7 @@ pub fn file_state_for_detection(
     }
     inspect_file(
         &stored_detection.file_path,
-        if stored_detection.resolution == DetectionResolution::Unresolved {
+        if stored_detection.detection_state.awaits_user_decision() {
             OpeningCheck::OpenToCheckBlocking
         } else {
             OpeningCheck::InspectWithoutOpening
@@ -132,21 +132,22 @@ mod detections_view_state_tests {
     use super::*;
     use crate::{
         detections_page::detected_file_state::{FileAccess, FileOwner},
-        host_services::detection_journal::detection_journal_records::DetectionSource,
+        host_services::detection_journal::{
+            detection_history_store::{DetectionSources, DetectionState, ResolutionKind},
+            detection_journal_records::DetectionSource,
+        },
     };
 
-    fn stored_detection(detection_id: i64, resolution: DetectionResolution) -> StoredDetection {
+    fn stored_detection(detection_id: i64, detection_state: DetectionState) -> StoredDetection {
         StoredDetection {
             detection_id,
             file_path: PathBuf::from("/home/user/Downloads/blocked.exe"),
             signature_name: "Win.Test-1".to_owned(),
-            found_on_access: true,
-            found_by_schedule: false,
+            detection_sources: DetectionSources::OnAccessOnly,
             first_seen: jiff::Timestamp::constant(1, 0),
             last_seen: jiff::Timestamp::constant(2, 0),
             sighting_count: 1,
-            resolution,
-            resolved_at: jiff::Timestamp::UNIX_EPOCH,
+            detection_state,
         }
     }
 
@@ -166,7 +167,7 @@ mod detections_view_state_tests {
 
     #[test]
     fn a_repeat_sighting_never_reopens_the_file_because_that_would_cause_another_sighting() {
-        let detection = stored_detection(7, DetectionResolution::Unresolved);
+        let detection = stored_detection(7, DetectionState::Open);
         let displayed_detections = [DisplayedDetection {
             stored_detection: detection.clone(),
             file_state: DetectedFileState::Present {
@@ -182,7 +183,7 @@ mod detections_view_state_tests {
 
     #[test]
     fn a_new_or_reopened_detection_is_checked_once() {
-        let detection = stored_detection(7, DetectionResolution::Unresolved);
+        let detection = stored_detection(7, DetectionState::Open);
         assert_eq!(opens_needed_for(&detection, &HashMap::new()), 1);
         let displayed_detections = [DisplayedDetection {
             stored_detection: detection.clone(),
@@ -207,7 +208,13 @@ mod detections_view_state_tests {
     fn resolved_detections_are_never_opened() {
         assert_eq!(
             opens_needed_for(
-                &stored_detection(7, DetectionResolution::DismissedByUser),
+                &stored_detection(
+                    7,
+                    DetectionState::Resolved {
+                        resolution_kind: ResolutionKind::DismissedByUser,
+                        resolved_at: jiff::Timestamp::constant(3, 0),
+                    }
+                ),
                 &HashMap::new()
             ),
             0

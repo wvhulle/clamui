@@ -33,7 +33,7 @@ use crate::{
         },
         clamav_scanner::scanner_output_parser::{ThreatIdentity, sanitize_scanner_line},
         detection_journal::{
-            detection_history_store::DetectionResolution,
+            detection_history_store::ResolutionKind,
             detection_journal_follower::{
                 JournalAccess, JournalStartPosition, detection_journal_events,
             },
@@ -140,6 +140,30 @@ pub enum IncidentActionFailure {
     QuarantineFailed(#[from] QuarantineMoveFailure),
     #[error("the decision could not be saved: {0}")]
     HistoryNotUpdated(#[from] ActivityHistoryFailure),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ResolvingIncidentAction {
+    QuarantineFile,
+    DeleteFile,
+    KeepFile,
+}
+
+impl ResolvingIncidentAction {
+    const fn resolution_kind(self) -> ResolutionKind {
+        match self {
+            Self::QuarantineFile => ResolutionKind::MovedToQuarantine,
+            Self::DeleteFile => ResolutionKind::DeletedByUser,
+            Self::KeepFile => ResolutionKind::DismissedByUser,
+        }
+    }
+
+    const fn action_effect(self) -> IncidentActionEffect {
+        match self {
+            Self::QuarantineFile => IncidentActionEffect::QuarantineChanged,
+            Self::DeleteFile | Self::KeepFile => IncidentActionEffect::OnlyHistoryChanged,
+        }
+    }
 }
 
 fn describe_incident_action_failure(action_failure: &IncidentActionFailure) -> String {
@@ -444,15 +468,15 @@ impl BackgroundDetectionsPage {
         &self,
         sender: &ComponentSender<Self>,
         displayed_detection: &DisplayedDetection,
-        chosen_action: TimelineStepAction,
+        resolving_action: ResolvingIncidentAction,
     ) {
         let activity_history = self.activity_history.clone();
         let quarantine_vault = self.quarantine_vault.clone();
         let stored_detection = displayed_detection.stored_detection.clone();
         sender.oneshot_command(async move {
             let action_outcome = async {
-                let (resolution, action_effect) = match chosen_action {
-                    TimelineStepAction::QuarantineIncident => {
+                match resolving_action {
+                    ResolvingIncidentAction::QuarantineFile => {
                         file_state_of_own_file(stored_detection.file_path.clone()).await?;
                         quarantine_vault
                             .move_file_into_quarantine(
@@ -462,27 +486,20 @@ impl BackgroundDetectionsPage {
                                 },
                             )
                             .await?;
-                        (
-                            DetectionResolution::MovedToQuarantine,
-                            IncidentActionEffect::QuarantineChanged,
-                        )
                     }
-                    TimelineStepAction::DeleteIncidentFile => {
+                    ResolvingIncidentAction::DeleteFile => {
                         delete_detected_file(stored_detection.file_path.clone()).await?;
-                        (
-                            DetectionResolution::DeletedByUser,
-                            IncidentActionEffect::OnlyHistoryChanged,
-                        )
                     }
-                    _dismissed => (
-                        DetectionResolution::DismissedByUser,
-                        IncidentActionEffect::OnlyHistoryChanged,
-                    ),
-                };
+                    ResolvingIncidentAction::KeepFile => {}
+                }
                 activity_history
-                    .resolve_detection(stored_detection.detection_id, resolution, Timestamp::now())
+                    .resolve_detection(
+                        stored_detection.detection_id,
+                        resolving_action.resolution_kind(),
+                        Timestamp::now(),
+                    )
                     .await?;
-                Ok(action_effect)
+                Ok(resolving_action.action_effect())
             }
             .await;
             BackgroundDetectionsPageCommand::IncidentActionFinished {
@@ -490,6 +507,17 @@ impl BackgroundDetectionsPage {
                 action_outcome,
             }
         });
+    }
+
+    fn resolve_opened_incident(
+        &mut self,
+        sender: &ComponentSender<Self>,
+        resolving_action: ResolvingIncidentAction,
+    ) {
+        self.deletion_prompt = DeletionPrompt::NotAsked;
+        if let Some(displayed_detection) = self.opened_detection().cloned() {
+            self.resolve_in_background(sender, &displayed_detection, resolving_action);
+        }
     }
 
     fn start_signature_lookup(&mut self, sender: &ComponentSender<Self>) {
@@ -523,13 +551,14 @@ impl BackgroundDetectionsPage {
                 self.deletion_prompt = DeletionPrompt::NotAsked;
                 self.show_opened_incident();
             }
-            TimelineStepAction::QuarantineIncident
-            | TimelineStepAction::DeleteIncidentFile
-            | TimelineStepAction::DismissIncident => {
-                self.deletion_prompt = DeletionPrompt::NotAsked;
-                if let Some(displayed_detection) = self.opened_detection().cloned() {
-                    self.resolve_in_background(sender, &displayed_detection, chosen_action);
-                }
+            TimelineStepAction::QuarantineIncident => {
+                self.resolve_opened_incident(sender, ResolvingIncidentAction::QuarantineFile);
+            }
+            TimelineStepAction::DeleteIncidentFile => {
+                self.resolve_opened_incident(sender, ResolvingIncidentAction::DeleteFile);
+            }
+            TimelineStepAction::DismissIncident => {
+                self.resolve_opened_incident(sender, ResolvingIncidentAction::KeepFile);
             }
             TimelineStepAction::UpdateSignatures
             | TimelineStepAction::CancelSignatureUpdate
