@@ -157,6 +157,15 @@ def activate_application_action(action_name):
     )
 
 
+def activate_window_action(action_name, action_target):
+    as_user(
+        "gdbus call --session --dest page.codeberg.wvhulle.Lazaret "
+        "--object-path /page/codeberg/wvhulle/Lazaret/window/1 "
+        "--method org.gtk.Actions.Activate "
+        f"{action_name} \"[<'{action_target}'>]\" '{{}}'"
+    )
+
+
 def tray_status():
     names = as_user("busctl --user list --no-legend")
     tray_names = [

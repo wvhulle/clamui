@@ -1,7 +1,6 @@
 CONFIRM_APPLY_BUTTON = (705, 462)
-UNLOCK_BUTTON = (863, 132)
-MAX_THREADS_ROW = (600, 697)
-SCANNER_TAB = (679, 745)
+UNLOCK_BUTTON = (1025, 122)
+MAX_THREADS_ROW = (700, 666)
 MERGED_CONFIG = "/run/lazaret/clamd.conf"
 OVERRIDES_FILE = "/var/lib/lazaret/clamd-overrides.conf"
 USER_ANSWER_FILE = "/tmp/helper-answer"
@@ -83,16 +82,14 @@ with subtest("authorization is not retained, so a second change asks again"):
     assert "applied" not in answer, f"applied without a new password: {answer}"
     assert "MaxThreads 9" not in machine.succeed(f"cat {MERGED_CONFIG}")
 
-with subtest("the Preferences page offers to unlock allowed settings"):
+with subtest("the Scanner Engine settings offer to unlock allowed settings"):
     wait_for_lazaret_service()
     activate_application_action("show-window")
     wait_for_lazaret_window()
     time.sleep(2)
-    activate_application_action("preferences")
+    activate_window_action("open-settings", "scanner-engine")
     time.sleep(3)
-    click_at(SCANNER_TAB[0], SCANNER_TAB[1])
-    time.sleep(2)
-    machine.screenshot("preferences_locked")
+    machine.screenshot("scanner_engine_locked")
     machine.wait_for_text("Unlock", timeout=timedelta(seconds=30))
 
 with subtest("while locked, editing a setting only copies a snippet"):
