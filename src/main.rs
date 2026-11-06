@@ -26,7 +26,9 @@ use relm4::{
 use crate::{
     application_window::{
         application_window_shell::ApplicationWindowShell,
-        startup_arguments::parse_startup_arguments,
+        startup_arguments::{
+            StartupPageRequest, known_startup_page_names, parse_startup_arguments,
+        },
     },
     headless_modes::headless_scheduled_scan::{parse_scheduled_scan_options, run_scheduled_scan},
     host_services::desktop::{
@@ -84,6 +86,17 @@ fn main() -> ExitCode {
         return run_scheduled_scan(scan_options);
     }
     let startup_request = parse_startup_arguments(std::env::args());
+    if let StartupPageRequest::UnrecognizedPage {
+        requested_page_name,
+    } = &startup_request.startup_page
+    {
+        eprintln!(
+            "{}",
+            gettext("Lazaret has no page named {page}, so it opens Protection. Pages: {pages}")
+                .replace("{page}", requested_page_name)
+                .replace("{pages}", &known_startup_page_names().join(", "))
+        );
+    }
     if startup_request.start_in_background && another_instance_is_running() {
         return ExitCode::SUCCESS;
     }

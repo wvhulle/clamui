@@ -521,11 +521,10 @@ fn skipped_path_in_line(transcript_line: &str) -> Option<&str> {
     transcript_line
         .strip_prefix("WARNING: Can't open file ")
         .and_then(|unopened_path| {
-            nonempty_trimmed_text(
-                unopened_path
-                    .rsplit_once(':')
-                    .map_or(unopened_path, |path_and_reason| path_and_reason.0),
-            )
+            nonempty_trimmed_text(unopened_path.rsplit_once(':').map_or(
+                unopened_path,
+                |(unopened_file_path, _open_failure_reason)| unopened_file_path,
+            ))
         })
 }
 

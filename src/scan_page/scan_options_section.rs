@@ -10,17 +10,21 @@ use crate::{
     application_window::settings_navigation::{
         SettingsSubpage, settings_link_group, system_settings_group,
     },
-    host_services::desktop::{
-        stored_settings::{
-            SCAN_BACKEND_CHOICES, SCAN_BACKEND_KEY, SHOW_LIVE_PROGRESS_KEY, application_settings,
+    host_services::{
+        clamav_scanner::scanner_command_builder::ScannerBackendPreference,
+        desktop::{
+            stored_settings::{
+                SCAN_BACKEND_CHOICES, SCAN_BACKEND_KEY, SHOW_LIVE_PROGRESS_KEY,
+                application_settings, scanner_backend_preference,
+            },
+            stored_settings_watch::forward_setting_changes,
         },
-        stored_settings_watch::forward_setting_changes,
     },
 };
 
 pub struct ScanOptionsSection {
     stored_settings: gio::Settings,
-    backend_position: u32,
+    backend_preference: ScannerBackendPreference,
     shows_live_progress: bool,
 }
 
@@ -31,21 +35,16 @@ pub enum ScanOptionsSectionInput {
     StoredSettingChanged,
 }
 
-fn stored_backend_position(stored_settings: &gio::Settings) -> u32 {
-    let stored_backend = stored_settings.string(SCAN_BACKEND_KEY);
-    SCAN_BACKEND_CHOICES
-        .iter()
-        .position(|backend_choice| *backend_choice == stored_backend)
-        .and_then(|backend_position| u32::try_from(backend_position).ok())
-        .unwrap_or(0)
+fn backend_choice_label(backend_preference: ScannerBackendPreference) -> String {
+    match backend_preference {
+        ScannerBackendPreference::PreferClamdWhenAvailable => gettext("Automatic"),
+        ScannerBackendPreference::AlwaysClamd => gettext("clamd (daemon)"),
+        ScannerBackendPreference::AlwaysClamscan => gettext("clamscan (standalone)"),
+    }
 }
 
 fn backend_labels() -> gtk::StringList {
-    let backend_labels = [
-        gettext("Automatic"),
-        gettext("clamd (daemon)"),
-        gettext("clamscan (standalone)"),
-    ];
+    let backend_labels = SCAN_BACKEND_CHOICES.map(backend_choice_label);
     gtk::StringList::new(
         &backend_labels
             .iter()
@@ -56,7 +55,7 @@ fn backend_labels() -> gtk::StringList {
 
 impl ScanOptionsSection {
     fn read_stored_settings(&mut self) {
-        self.backend_position = stored_backend_position(&self.stored_settings);
+        self.backend_preference = scanner_backend_preference(&self.stored_settings);
         self.shows_live_progress = self.stored_settings.boolean(SHOW_LIVE_PROGRESS_KEY);
     }
 }
@@ -85,7 +84,7 @@ impl Component for ScanOptionsSection {
                     set_model: Some(&backend_labels()),
                     #[watch]
                     #[block_signal(backend_selected_handler)]
-                    set_selected: model.backend_position,
+                    set_selected: model.backend_preference.choice_position(),
                     connect_selected_notify[sender] => move |changed_row| {
                         sender.input(ScanOptionsSectionInput::BackendChosen(changed_row.selected()));
                     } @backend_selected_handler,
@@ -132,12 +131,11 @@ impl Component for ScanOptionsSection {
             sender.input_sender(),
             |_changed_settings, _changed_key| ScanOptionsSectionInput::StoredSettingChanged,
         );
-        let mut model = Self {
+        let model = Self {
+            backend_preference: scanner_backend_preference(&stored_settings),
+            shows_live_progress: stored_settings.boolean(SHOW_LIVE_PROGRESS_KEY),
             stored_settings,
-            backend_position: 0,
-            shows_live_progress: false,
         };
-        model.read_stored_settings();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -149,15 +147,12 @@ impl Component for ScanOptionsSection {
         _root: &Self::Root,
     ) {
         match section_input {
-            ScanOptionsSectionInput::BackendChosen(backend_position) => {
-                if let Some(backend_choice) = usize::try_from(backend_position)
-                    .ok()
-                    .and_then(|backend_position| SCAN_BACKEND_CHOICES.get(backend_position))
+            ScanOptionsSectionInput::BackendChosen(choice_position) => {
+                if let Some(backend_preference) =
+                    ScannerBackendPreference::from_choice_position(choice_position)
                 {
-                    self.backend_position = backend_position;
-                    let _read_only_settings = self
-                        .stored_settings
-                        .set_string(SCAN_BACKEND_KEY, backend_choice);
+                    self.backend_preference = backend_preference;
+                    backend_preference.store_into(&self.stored_settings);
                 }
             }
             ScanOptionsSectionInput::LiveProgressToggled(shows_live_progress) => {

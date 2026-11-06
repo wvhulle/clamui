@@ -444,13 +444,12 @@ impl BackgroundDetectionsPage {
     fn show_incident_view(&mut self) {
         let incident_steps = self.opened_incident_steps();
         if self.incident_rows.len() == incident_steps.len() {
-            incident_steps
-                .into_iter()
-                .enumerate()
-                .for_each(|positioned_step| {
+            (0..)
+                .zip(incident_steps)
+                .for_each(|(row_position, timeline_step)| {
                     self.incident_rows.send(
-                        positioned_step.0,
-                        TimelineStepRowInput::StepChanged(Box::new(positioned_step.1)),
+                        row_position,
+                        TimelineStepRowInput::StepChanged(Box::new(timeline_step)),
                     );
                 });
         } else {

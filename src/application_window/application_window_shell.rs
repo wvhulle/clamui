@@ -19,10 +19,8 @@ use crate::{
             register_application_action,
         },
         application_pages::ApplicationPage,
-        page_navigation::{
-            PageNavigation, PageNavigationInit, PageNavigationOutput, StartupDestination,
-        },
-        startup_arguments::StartupRequest,
+        page_navigation::{PageNavigation, PageNavigationInit, PageNavigationOutput},
+        startup_arguments::{StartupPage, StartupRequest},
         system_tray_connection::{
             RunningTrayHandle, TrayConnection, TrayStartFailure, show_unresolved_detections,
             start_system_tray,
@@ -45,9 +43,6 @@ use crate::{
     },
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
 };
-
-const PREFERENCES_STARTUP_PAGE: &str = "preferences";
-const DATABASE_STARTUP_PAGE: &str = "database";
 
 enum WindowContent {
     PagesShown {
@@ -160,12 +155,10 @@ fn present_about_dialog(parent_window: &adw::ApplicationWindow) {
         .present(Some(parent_window));
 }
 
-fn startup_destination(startup_page: &str) -> StartupDestination {
+const fn navigation_startup_page(startup_page: StartupPage) -> ApplicationPage {
     match startup_page {
-        DATABASE_STARTUP_PAGE => StartupDestination::ShowPage(ApplicationPage::Protection),
-        startup_page => StartupDestination::ShowPage(
-            ApplicationPage::from_page_name(startup_page).unwrap_or(ApplicationPage::Protection),
-        ),
+        StartupPage::ApplicationPage(application_page) => application_page,
+        StartupPage::PreferencesDialog => ApplicationPage::Protection,
     }
 }
 
@@ -222,7 +215,9 @@ async fn opened_window_content(
                 quarantine_vault: locked_vault.quarantine_vault,
                 data_directory,
                 window_root: window_root.clone(),
-                startup_destination: startup_destination(&startup_request.startup_page),
+                startup_page: navigation_startup_page(
+                    startup_request.startup_page.shown_startup_page(),
+                ),
                 startup_scan_targets: startup_request.scan_targets,
             })
             .forward(
@@ -292,7 +287,7 @@ impl AsyncComponent for ApplicationWindowShell {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let start_in_background = startup_request.start_in_background;
-        let presents_preferences = startup_request.startup_page == PREFERENCES_STARTUP_PAGE;
+        let shown_startup_page = startup_request.startup_page.shown_startup_page();
         let stored_settings = application_settings();
         forward_setting_changes(
             &stored_settings,
@@ -314,7 +309,7 @@ impl AsyncComponent for ApplicationWindowShell {
         sender.oneshot_command(async {
             ApplicationWindowShellCommand::TrayStartFinished(start_system_tray().await)
         });
-        if presents_preferences {
+        if shown_startup_page == StartupPage::PreferencesDialog {
             sender.input(ApplicationWindowShellInput::PreferencesRequested(
                 PreferencesPageName::GeneralPreferences,
             ));

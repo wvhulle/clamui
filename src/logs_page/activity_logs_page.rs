@@ -28,8 +28,8 @@ use crate::{
     },
     shared_widgets::{
         awaited_dialogs::{
-            TextExportOutcome, alert_response, deliver_local_outcome, describe_export_failure,
-            exported_text as exported_text_file,
+            AlertChoice, TextExportOutcome, add_alert_choice, add_dismissing_choice, alert_choice,
+            deliver_local_outcome, describe_export_failure, exported_text as exported_text_file,
         },
         component_streams::{RunningStream, run_stream},
         host_read_failure_text::unit_journal_failure_text,
@@ -48,6 +48,24 @@ enum DaemonLogRefresh {
 }
 
 const SYSTEM_CHANGE_LIMIT: usize = 200;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClearLogsChoice {
+    ClearAllChosen,
+    ClearCancelled,
+}
+
+impl AlertChoice for ClearLogsChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::ClearAllChosen];
+    const DISMISSING_CHOICE: Self = Self::ClearCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::ClearAllChosen => "clear",
+            Self::ClearCancelled => "cancel",
+        }
+    }
+}
 
 pub struct ActivityLogsPage {
     activity_history: ActivityHistory,
@@ -229,15 +247,22 @@ impl ActivityLogsPage {
                 "This will permanently delete all historical logs. This action cannot be undone.",
             )),
         );
-        confirmation_dialog.add_response("cancel", &gettext("Cancel"));
-        confirmation_dialog.add_response("clear", &gettext("Clear All"));
-        confirmation_dialog.set_response_appearance("clear", adw::ResponseAppearance::Destructive);
-        confirmation_dialog.set_close_response("cancel");
+        add_dismissing_choice::<ClearLogsChoice>(&confirmation_dialog, &gettext("Cancel"));
+        add_alert_choice(
+            &confirmation_dialog,
+            ClearLogsChoice::ClearAllChosen,
+            &gettext("Clear All"),
+        );
+        confirmation_dialog.set_response_appearance(
+            ClearLogsChoice::ClearAllChosen.response_id(),
+            adw::ResponseAppearance::Destructive,
+        );
         deliver_local_outcome(
             sender.input_sender().clone(),
-            alert_response(confirmation_dialog, root.clone().upcast()),
-            |chosen_response| {
-                (chosen_response == "clear").then_some(ActivityLogsPageInput::ClearAllConfirmed)
+            alert_choice(confirmation_dialog, root.clone().upcast()),
+            |clear_choice| match clear_choice {
+                ClearLogsChoice::ClearAllChosen => Some(ActivityLogsPageInput::ClearAllConfirmed),
+                ClearLogsChoice::ClearCancelled => None,
             },
         );
     }

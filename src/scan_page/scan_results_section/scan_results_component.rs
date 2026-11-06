@@ -40,8 +40,8 @@ use crate::{
     },
     shared_widgets::{
         awaited_dialogs::{
-            TextExportOutcome, alert_response, deliver_local_outcome, describe_export_failure,
-            exported_text,
+            AlertChoice, TextExportOutcome, add_alert_choice, add_dismissing_choice, alert_choice,
+            deliver_local_outcome, describe_export_failure, exported_text,
         },
         component_streams::run_stream_to_completion,
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
@@ -50,6 +50,24 @@ use crate::{
 };
 
 const EXPORT_FILE_NAME: &str = "lazaret_scan_results.txt";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QuarantineDialogChoice {
+    QuarantineChosen,
+    QuarantineCancelled,
+}
+
+impl AlertChoice for QuarantineDialogChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::QuarantineChosen];
+    const DISMISSING_CHOICE: Self = Self::QuarantineCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::QuarantineChosen => "quarantine",
+            Self::QuarantineCancelled => "cancel",
+        }
+    }
+}
 
 pub struct ScanResultsSection {
     results_view: ScanResultsView,
@@ -184,17 +202,24 @@ impl ScanResultsSection {
                 gettext("This removes each original file from its current location.")
             )),
         );
-        confirmation_dialog.add_response("cancel", &gettext("Cancel"));
-        confirmation_dialog.add_response("quarantine", &gettext("Quarantine"));
-        confirmation_dialog
-            .set_response_appearance("quarantine", adw::ResponseAppearance::Destructive);
-        confirmation_dialog.set_close_response("cancel");
+        add_dismissing_choice::<QuarantineDialogChoice>(&confirmation_dialog, &gettext("Cancel"));
+        add_alert_choice(
+            &confirmation_dialog,
+            QuarantineDialogChoice::QuarantineChosen,
+            &gettext("Quarantine"),
+        );
+        confirmation_dialog.set_response_appearance(
+            QuarantineDialogChoice::QuarantineChosen.response_id(),
+            adw::ResponseAppearance::Destructive,
+        );
         deliver_local_outcome(
             sender.input_sender().clone(),
-            alert_response(confirmation_dialog, root.clone().upcast()),
-            move |chosen_response| {
-                (chosen_response == "quarantine")
-                    .then_some(ScanResultsSectionInput::QuarantineConfirmed(confirmed_rows))
+            alert_choice(confirmation_dialog, root.clone().upcast()),
+            move |quarantine_choice| match quarantine_choice {
+                QuarantineDialogChoice::QuarantineChosen => {
+                    Some(ScanResultsSectionInput::QuarantineConfirmed(confirmed_rows))
+                }
+                QuarantineDialogChoice::QuarantineCancelled => None,
             },
         );
     }

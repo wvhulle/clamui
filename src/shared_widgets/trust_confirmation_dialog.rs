@@ -6,11 +6,28 @@ use crate::{
         desktop::locale_formatting::exact_byte_size_text,
         settings_helper::trust_requests::TrustChoice,
     },
-    shared_widgets::awaited_dialogs::{alert_response, deliver_local_outcome},
+    shared_widgets::awaited_dialogs::{
+        AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice, deliver_local_outcome,
+    },
 };
 
-const CONFIRM_RESPONSE: &str = "confirm";
-const CANCEL_RESPONSE: &str = "cancel";
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TrustDialogChoice {
+    TrustConfirmed,
+    TrustCancelled,
+}
+
+impl AlertChoice for TrustDialogChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::TrustConfirmed];
+    const DISMISSING_CHOICE: Self = Self::TrustCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::TrustConfirmed => "confirm",
+            Self::TrustCancelled => "cancel",
+        }
+    }
+}
 
 struct ConfirmationText {
     heading: String,
@@ -93,23 +110,27 @@ pub fn present_trust_confirmation<Message: 'static>(
     } = confirmation_text(&trust_choice);
     let confirmation_dialog = adw::AlertDialog::new(Some(&heading), Some(&body));
     confirmation_dialog.set_extra_child(Some(&shown_value_label(&shown_value)));
-    confirmation_dialog.add_response(CANCEL_RESPONSE, &gettext("Cancel"));
-    confirmation_dialog.add_response(CONFIRM_RESPONSE, &confirm_label);
+    add_dismissing_choice::<TrustDialogChoice>(&confirmation_dialog, &gettext("Cancel"));
+    add_alert_choice(
+        &confirmation_dialog,
+        TrustDialogChoice::TrustConfirmed,
+        &confirm_label,
+    );
     confirmation_dialog.set_response_appearance(
-        CONFIRM_RESPONSE,
+        TrustDialogChoice::TrustConfirmed.response_id(),
         if lowers_protection {
             adw::ResponseAppearance::Destructive
         } else {
             adw::ResponseAppearance::Suggested
         },
     );
-    confirmation_dialog.set_default_response(Some(CANCEL_RESPONSE));
-    confirmation_dialog.set_close_response(CANCEL_RESPONSE);
+    confirmation_dialog.set_default_response(Some(TrustDialogChoice::TrustCancelled.response_id()));
     deliver_local_outcome(
         message_sender,
-        alert_response(confirmation_dialog, parent_widget.clone().upcast()),
-        move |chosen_response| {
-            (chosen_response == CONFIRM_RESPONSE).then(|| confirmed_message(trust_choice))
+        alert_choice(confirmation_dialog, parent_widget.clone().upcast()),
+        move |trust_dialog_choice| match trust_dialog_choice {
+            TrustDialogChoice::TrustConfirmed => Some(confirmed_message(trust_choice)),
+            TrustDialogChoice::TrustCancelled => None,
         },
     );
 }

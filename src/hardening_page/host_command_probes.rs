@@ -9,7 +9,8 @@ use std::{
 use tokio::{io::AsyncReadExt, process::Child, task::spawn_blocking, time::timeout};
 
 use crate::host_services::desktop::flatpak_sandbox::{
-    host_program_async_command, host_program_search_directories, readable_host_path,
+    C_LOCALE_ENVIRONMENT, host_program_async_command, host_program_search_directories,
+    readable_host_path,
 };
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -114,7 +115,7 @@ async fn run_program_probe(
     program_arguments: &[&str],
     probe_limits: ProbeLimits,
 ) -> CommandProbe {
-    let mut probe_command = host_program_async_command(program_path, &[("LC_ALL", "C")]);
+    let mut probe_command = host_program_async_command(program_path, &[C_LOCALE_ENVIRONMENT]);
     probe_command
         .args(program_arguments)
         .stdin(Stdio::null())

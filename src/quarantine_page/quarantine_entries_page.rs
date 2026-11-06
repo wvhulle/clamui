@@ -42,7 +42,10 @@ use crate::{
         quarantine_page_state::{EntryOperationKind, QuarantineListing, QuarantinePageState},
     },
     shared_widgets::{
-        awaited_dialogs::{alert_response, deliver_local_outcome},
+        awaited_dialogs::{
+            AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice,
+            deliver_local_outcome,
+        },
         component_streams::{run_stream, run_stream_to_completion},
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
@@ -168,6 +171,55 @@ pub fn entry_is_older_than(
         }
         StoredDetectionDate::UnreadableText(_) => false,
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RestoreDialogChoice {
+    RestoreChosen,
+    RestoreCancelled,
+}
+
+impl AlertChoice for RestoreDialogChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::RestoreChosen];
+    const DISMISSING_CHOICE: Self = Self::RestoreCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::RestoreChosen => "restore",
+            Self::RestoreCancelled => "cancel",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DeletionDialogChoice {
+    DeletionConfirmed,
+    DeletionCancelled,
+}
+
+impl AlertChoice for DeletionDialogChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::DeletionConfirmed];
+    const DISMISSING_CHOICE: Self = Self::DeletionCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::DeletionConfirmed => "delete",
+            Self::DeletionCancelled => "cancel",
+        }
+    }
+}
+
+fn add_deletion_choices(confirmation_dialog: &adw::AlertDialog) {
+    add_dismissing_choice::<DeletionDialogChoice>(confirmation_dialog, &gettext("Cancel"));
+    add_alert_choice(
+        confirmation_dialog,
+        DeletionDialogChoice::DeletionConfirmed,
+        &gettext("Delete"),
+    );
+    confirmation_dialog.set_response_appearance(
+        DeletionDialogChoice::DeletionConfirmed.response_id(),
+        adw::ResponseAppearance::Destructive,
+    );
 }
 
 pub struct QuarantineEntriesPage {
@@ -463,26 +515,33 @@ impl QuarantineEntriesPage {
             );
         }
         restore_dialog.set_extra_child(Some(&destination_box));
-        restore_dialog.add_response("cancel", &gettext("Cancel"));
-        restore_dialog.add_response("restore", &confirm_label);
+        add_dismissing_choice::<RestoreDialogChoice>(&restore_dialog, &gettext("Cancel"));
+        add_alert_choice(
+            &restore_dialog,
+            RestoreDialogChoice::RestoreChosen,
+            &confirm_label,
+        );
         restore_dialog.set_response_appearance(
-            "restore",
+            RestoreDialogChoice::RestoreChosen.response_id(),
             if restores_detected_file {
                 adw::ResponseAppearance::Destructive
             } else {
                 adw::ResponseAppearance::Suggested
             },
         );
-        restore_dialog.set_default_response(Some("cancel"));
-        restore_dialog.set_close_response("cancel");
+        restore_dialog
+            .set_default_response(Some(RestoreDialogChoice::RestoreCancelled.response_id()));
         deliver_local_outcome(
             sender.input_sender().clone(),
-            alert_response(restore_dialog, root.clone().upcast()),
-            move |chosen_response| {
-                Some(if chosen_response == "restore" {
-                    QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id }
-                } else {
-                    QuarantineEntriesPageInput::RestoreEntryCancelled { entry_id }
+            alert_choice(restore_dialog, root.clone().upcast()),
+            move |restore_choice| {
+                Some(match restore_choice {
+                    RestoreDialogChoice::RestoreChosen => {
+                        QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id }
+                    }
+                    RestoreDialogChoice::RestoreCancelled => {
+                        QuarantineEntriesPageInput::RestoreEntryCancelled { entry_id }
+                    }
                 })
             },
         );
@@ -575,16 +634,15 @@ impl QuarantineEntriesPage {
                 .replace("{count}", &old_entry_count.to_string()),
             ),
         );
-        confirmation_dialog.add_response("cancel", &gettext("Cancel"));
-        confirmation_dialog.add_response("delete", &gettext("Delete"));
-        confirmation_dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
-        confirmation_dialog.set_close_response("cancel");
+        add_deletion_choices(&confirmation_dialog);
         deliver_local_outcome(
             sender.input_sender().clone(),
-            alert_response(confirmation_dialog, root.clone().upcast()),
-            |chosen_response| {
-                (chosen_response == "delete")
-                    .then_some(QuarantineEntriesPageInput::ClearOldEntriesConfirmed)
+            alert_choice(confirmation_dialog, root.clone().upcast()),
+            |deletion_choice| match deletion_choice {
+                DeletionDialogChoice::DeletionConfirmed => {
+                    Some(QuarantineEntriesPageInput::ClearOldEntriesConfirmed)
+                }
+                DeletionDialogChoice::DeletionCancelled => None,
             },
         );
     }
@@ -599,15 +657,15 @@ impl QuarantineEntriesPage {
             Some(&gettext("Delete Quarantined File?")),
             Some(&gettext("The file will be permanently deleted.")),
         );
-        confirmation_dialog.add_response("cancel", &gettext("Cancel"));
-        confirmation_dialog.add_response("delete", &gettext("Delete"));
-        confirmation_dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+        add_deletion_choices(&confirmation_dialog);
         deliver_local_outcome(
             sender.input_sender().clone(),
-            alert_response(confirmation_dialog, root.clone().upcast()),
-            move |chosen_response| {
-                (chosen_response == "delete")
-                    .then_some(QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id })
+            alert_choice(confirmation_dialog, root.clone().upcast()),
+            move |deletion_choice| match deletion_choice {
+                DeletionDialogChoice::DeletionConfirmed => {
+                    Some(QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id })
+                }
+                DeletionDialogChoice::DeletionCancelled => None,
             },
         );
     }

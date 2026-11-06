@@ -244,8 +244,10 @@ pub async fn first_active_unit(unit_names: &[&'static str]) -> Option<&'static s
     unit_names
         .iter()
         .zip(unit_states)
-        .find(|named_state| named_state.1 == UnitState::UnitLoaded(UnitActivity::UnitActive))
-        .map(|named_state| *named_state.0)
+        .find(|(_unit_name, unit_state)| {
+            *unit_state == UnitState::UnitLoaded(UnitActivity::UnitActive)
+        })
+        .map(|(unit_name, _unit_state)| *unit_name)
 }
 
 async fn read_loaded_service(

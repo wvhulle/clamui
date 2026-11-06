@@ -219,13 +219,12 @@ fn show_group_steps(
     group_steps: Vec<ProtectionStep>,
 ) {
     if group_rows.len() == group_steps.len() {
-        group_steps
-            .into_iter()
-            .enumerate()
-            .for_each(|positioned_step| {
+        (0..)
+            .zip(group_steps)
+            .for_each(|(row_position, timeline_step)| {
                 group_rows.send(
-                    positioned_step.0,
-                    TimelineStepRowInput::StepChanged(Box::new(positioned_step.1)),
+                    row_position,
+                    TimelineStepRowInput::StepChanged(Box::new(timeline_step)),
                 );
             });
     } else {

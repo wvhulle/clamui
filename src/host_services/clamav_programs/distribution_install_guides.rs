@@ -51,8 +51,10 @@ fn os_release_value<'release>(os_release_text: &'release str, release_key: &str)
     os_release_text
         .lines()
         .filter_map(|release_line| release_line.split_once('='))
-        .find(|key_and_value| key_and_value.0.trim() == release_key)
-        .map_or("", |key_and_value| key_and_value.1.trim().trim_matches('"'))
+        .find(|(release_line_key, _release_line_value)| release_line_key.trim() == release_key)
+        .map_or("", |(_release_line_key, release_line_value)| {
+            release_line_value.trim().trim_matches('"')
+        })
 }
 
 pub fn parse_distribution_family(os_release_text: &str) -> DistributionFamily {

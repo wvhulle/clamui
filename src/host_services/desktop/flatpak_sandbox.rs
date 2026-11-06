@@ -68,54 +68,69 @@ pub fn scanner_visible_path(sandbox_path: &Path) -> PathBuf {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProgramEnvironmentVariable {
+    pub variable_name: &'static str,
+    pub variable_value: &'static str,
+}
+
+pub const C_LOCALE_ENVIRONMENT: ProgramEnvironmentVariable = ProgramEnvironmentVariable {
+    variable_name: "LC_ALL",
+    variable_value: "C",
+};
+
 fn flatpak_spawn_arguments(
     program_path: &Path,
-    environment_pairs: &[(&str, &str)],
+    environment_variables: &[ProgramEnvironmentVariable],
 ) -> Vec<OsString> {
     let mut spawn_arguments = vec![OsString::from("--host"), OsString::from("--watch-bus")];
-    spawn_arguments.extend(
-        environment_pairs
-            .iter()
-            .map(|(variable_name, variable_value)| {
-                OsString::from(format!("--env={variable_name}={variable_value}"))
-            }),
-    );
+    spawn_arguments.extend(environment_variables.iter().map(
+        |ProgramEnvironmentVariable {
+             variable_name,
+             variable_value,
+         }| OsString::from(format!("--env={variable_name}={variable_value}")),
+    ));
     spawn_arguments.push(OsString::from(program_path));
     spawn_arguments
 }
 
 fn command_for_sandbox(
     program_path: &Path,
-    environment_pairs: &[(&str, &str)],
+    environment_variables: &[ProgramEnvironmentVariable],
     sandboxed: bool,
 ) -> Command {
     if sandboxed {
         let mut spawn_command = Command::new(FLATPAK_SPAWN_PROGRAM);
-        spawn_command.args(flatpak_spawn_arguments(program_path, environment_pairs));
+        spawn_command.args(flatpak_spawn_arguments(program_path, environment_variables));
         spawn_command
     } else {
         let mut direct_command = Command::new(program_path);
-        direct_command.envs(environment_pairs.iter().copied());
+        direct_command.envs(environment_variables.iter().map(
+            |ProgramEnvironmentVariable {
+                 variable_name,
+                 variable_value,
+             }| (variable_name, variable_value),
+        ));
         direct_command
     }
 }
 
 pub fn host_program_command(
     program_path: impl AsRef<OsStr>,
-    environment_pairs: &[(&str, &str)],
+    environment_variables: &[ProgramEnvironmentVariable],
 ) -> Command {
     command_for_sandbox(
         Path::new(program_path.as_ref()),
-        environment_pairs,
+        environment_variables,
         running_in_flatpak(),
     )
 }
 
 pub fn host_program_async_command(
     program_path: impl AsRef<OsStr>,
-    environment_pairs: &[(&str, &str)],
+    environment_variables: &[ProgramEnvironmentVariable],
 ) -> tokio::process::Command {
-    tokio::process::Command::from(host_program_command(program_path, environment_pairs))
+    tokio::process::Command::from(host_program_command(program_path, environment_variables))
 }
 
 pub fn sandboxed_launcher_words(application_id: &str) -> Vec<String> {
@@ -193,7 +208,8 @@ mod flatpak_sandbox_tests {
 
     #[test]
     fn sandboxed_programs_run_on_the_host_with_their_environment() {
-        let spawn_command = command_for_sandbox(Path::new("clamscan"), &[("LC_ALL", "C")], true);
+        let spawn_command =
+            command_for_sandbox(Path::new("clamscan"), &[C_LOCALE_ENVIRONMENT], true);
         assert_eq!(spawn_command.get_program(), FLATPAK_SPAWN_PROGRAM);
         assert_eq!(
             spawn_command.get_args().collect::<Vec<_>>(),
@@ -203,7 +219,8 @@ mod flatpak_sandbox_tests {
 
     #[test]
     fn programs_outside_the_sandbox_run_directly() {
-        let direct_command = command_for_sandbox(Path::new("clamscan"), &[("LC_ALL", "C")], false);
+        let direct_command =
+            command_for_sandbox(Path::new("clamscan"), &[C_LOCALE_ENVIRONMENT], false);
         assert_eq!(direct_command.get_program(), "clamscan");
         assert_eq!(direct_command.get_args().count(), 0);
         assert_eq!(

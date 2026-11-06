@@ -45,11 +45,43 @@ pub fn deliver_local_outcome<Outcome, Message>(
     });
 }
 
-pub async fn alert_response(
+pub trait AlertChoice: Copy + Eq + 'static {
+    const ANSWERING_CHOICES: &'static [Self];
+    const DISMISSING_CHOICE: Self;
+
+    fn response_id(self) -> &'static str;
+}
+
+pub fn alert_choice_for_response<Choice: AlertChoice>(response_id: &str) -> Choice {
+    Choice::ANSWERING_CHOICES
+        .iter()
+        .copied()
+        .find(|answering_choice| answering_choice.response_id() == response_id)
+        .unwrap_or(Choice::DISMISSING_CHOICE)
+}
+
+pub fn add_alert_choice<Choice: AlertChoice>(
+    alert_dialog: &adw::AlertDialog,
+    alert_choice: Choice,
+    choice_label: &str,
+) {
+    alert_dialog.add_response(alert_choice.response_id(), choice_label);
+}
+
+pub fn add_dismissing_choice<Choice: AlertChoice>(
+    alert_dialog: &adw::AlertDialog,
+    choice_label: &str,
+) {
+    let dismissing_response = Choice::DISMISSING_CHOICE.response_id();
+    alert_dialog.add_response(dismissing_response, choice_label);
+    alert_dialog.set_close_response(dismissing_response);
+}
+
+pub async fn alert_choice<Choice: AlertChoice>(
     alert_dialog: adw::AlertDialog,
     parent_widget: gtk::Widget,
-) -> glib::GString {
-    alert_dialog.choose_future(Some(&parent_widget)).await
+) -> Choice {
+    alert_choice_for_response(&alert_dialog.choose_future(Some(&parent_widget)).await)
 }
 
 pub async fn chosen_files_to_open(dialog_title: String) -> Vec<PathBuf> {
@@ -117,5 +149,58 @@ pub async fn exported_text(suggested_name: String, exported_text: String) -> Tex
             Ok(_written_contents) => TextExportOutcome::TextSaved,
             Err(failed_write) => TextExportOutcome::ExportFailed(failed_write.1),
         },
+    }
+}
+
+#[cfg(test)]
+mod alert_choice_tests {
+    use super::*;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum SampleDialogChoice {
+        KeepChosen,
+        DiscardChosen,
+        SampleDismissed,
+    }
+
+    impl AlertChoice for SampleDialogChoice {
+        const ANSWERING_CHOICES: &'static [Self] = &[Self::KeepChosen, Self::DiscardChosen];
+        const DISMISSING_CHOICE: Self = Self::SampleDismissed;
+
+        fn response_id(self) -> &'static str {
+            match self {
+                Self::KeepChosen => "keep",
+                Self::DiscardChosen => "discard",
+                Self::SampleDismissed => "cancel",
+            }
+        }
+    }
+
+    #[test]
+    fn known_responses_parse_to_their_choice() {
+        assert_eq!(
+            alert_choice_for_response::<SampleDialogChoice>("keep"),
+            SampleDialogChoice::KeepChosen
+        );
+        assert_eq!(
+            alert_choice_for_response::<SampleDialogChoice>("discard"),
+            SampleDialogChoice::DiscardChosen
+        );
+        assert_eq!(
+            alert_choice_for_response::<SampleDialogChoice>("cancel"),
+            SampleDialogChoice::SampleDismissed
+        );
+    }
+
+    #[test]
+    fn unknown_responses_dismiss_the_dialog() {
+        assert_eq!(
+            alert_choice_for_response::<SampleDialogChoice>("close"),
+            SampleDialogChoice::SampleDismissed
+        );
+        assert_eq!(
+            alert_choice_for_response::<SampleDialogChoice>(""),
+            SampleDialogChoice::SampleDismissed
+        );
     }
 }

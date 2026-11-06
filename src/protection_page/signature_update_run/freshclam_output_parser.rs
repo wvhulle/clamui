@@ -96,7 +96,7 @@ fn cooldown_in_line(report_line: &str) -> Option<String> {
         .or_else(|| lowercase_line.find("cooldown until after:"))?;
     report_line[cooldown_position..]
         .split_once(':')
-        .map(|label_and_cooldown| label_and_cooldown.1.trim().to_owned())
+        .map(|(_cooldown_label, cooldown_text)| cooldown_text.trim().to_owned())
         .filter(|cooldown_text| !cooldown_text.is_empty())
 }
 

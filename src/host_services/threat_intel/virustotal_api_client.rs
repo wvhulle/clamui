@@ -106,12 +106,11 @@ pub fn parse_file_report(answer_bytes: &[u8]) -> Result<VirusTotalReport, VirusT
         .attributes
         .last_analysis_results
         .iter()
-        .filter_map(|engine_entry| {
+        .filter_map(|(engine_name, engine_result)| {
             Some(EngineDetection {
-                engine_name: engine_entry.0.clone(),
-                detection_category: detection_category_named(&engine_entry.1.category)?,
-                detection_name: engine_entry
-                    .1
+                engine_name: engine_name.clone(),
+                detection_category: detection_category_named(&engine_result.category)?,
+                detection_name: engine_result
                     .result
                     .clone()
                     .filter(|detection_name| !detection_name.is_empty())

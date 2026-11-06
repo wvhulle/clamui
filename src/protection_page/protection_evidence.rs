@@ -908,8 +908,8 @@ fn first_unit_in_state(unit_states: &[UnitState], wanted_state: UnitState) -> Op
     DAEMON_SERVICE_UNITS
         .iter()
         .zip(unit_states)
-        .find(|named_state| *named_state.1 == wanted_state)
-        .map(|named_state| *named_state.0)
+        .find(|(_unit_name, unit_state)| **unit_state == wanted_state)
+        .map(|(unit_name, _unit_state)| *unit_name)
 }
 
 pub fn silent_daemon_evidence(unit_states: &[UnitState]) -> DaemonEvidence {
@@ -936,8 +936,8 @@ pub fn on_access_scanner_from_states(unit_states: &[UnitState]) -> OnAccessScann
         ON_ACCESS_SERVICE_UNITS
             .iter()
             .zip(unit_states)
-            .find(|named_state| *named_state.1 == wanted_state)
-            .map(|named_state| *named_state.0)
+            .find(|(_unit_name, unit_state)| **unit_state == wanted_state)
+            .map(|(unit_name, _unit_state)| *unit_name)
     };
     if unit_in_state(UnitState::UnitLoaded(UnitActivity::UnitActive)).is_some() {
         return OnAccessScanner::MonitorRunning;

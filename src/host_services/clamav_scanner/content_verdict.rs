@@ -20,7 +20,10 @@ use crate::host_services::{
         },
         scanner_output_parser::sanitize_scanner_line,
     },
-    desktop::{content_pipe::pipe_content_for_child, flatpak_sandbox::host_program_async_command},
+    desktop::{
+        content_pipe::pipe_content_for_child,
+        flatpak_sandbox::{C_LOCALE_ENVIRONMENT, host_program_async_command},
+    },
     quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
 };
 
@@ -128,7 +131,7 @@ pub async fn scan_content_with_current_signatures(
             return VerdictFailure::ContentPipeFailed(pipe_failure).into();
         }
     };
-    let mut verdict_command = host_program_async_command(&scanner_path, &[("LC_ALL", "C")]);
+    let mut verdict_command = host_program_async_command(&scanner_path, &[C_LOCALE_ENVIRONMENT]);
     verdict_command
         .arg("--no-summary")
         .args(detection_arguments)

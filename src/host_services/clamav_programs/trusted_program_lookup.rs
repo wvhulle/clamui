@@ -375,36 +375,44 @@ fn inspect_candidate(
     )
 }
 
+struct InspectedCandidate {
+    candidate_path: PathBuf,
+    candidate_verdict: CandidateVerdict,
+}
+
 pub fn locate_program_among(
     inspector: &impl FilesystemInspector,
     program_name: &str,
     search_directories: impl IntoIterator<Item = PathBuf>,
 ) -> ProgramLocation {
     let mut seen_directories = HashSet::new();
-    let found_candidates: Vec<(PathBuf, CandidateVerdict)> = search_directories
+    let found_candidates: Vec<InspectedCandidate> = search_directories
         .into_iter()
         .filter(|search_directory| seen_directories.insert(search_directory.clone()))
         .map(|search_directory| search_directory.join(program_name))
-        .map(|candidate_path| {
-            let candidate_verdict = inspect_candidate(inspector, &candidate_path);
-            (candidate_path, candidate_verdict)
+        .map(|candidate_path| InspectedCandidate {
+            candidate_verdict: inspect_candidate(inspector, &candidate_path),
+            candidate_path,
         })
-        .filter(|(_candidate_path, candidate_verdict)| {
-            *candidate_verdict != CandidateVerdict::NotRunnable
+        .filter(|inspected_candidate| {
+            inspected_candidate.candidate_verdict != CandidateVerdict::NotRunnable
         })
         .collect();
-    let trusted_position =
-        found_candidates
-            .iter()
-            .position(|(_candidate_path, candidate_verdict)| {
-                matches!(candidate_verdict, CandidateVerdict::Trusted { .. })
-            });
+    let trusted_position = found_candidates.iter().position(|inspected_candidate| {
+        matches!(
+            inspected_candidate.candidate_verdict,
+            CandidateVerdict::Trusted { .. }
+        )
+    });
     let replaceable_before = |candidate_limit: usize| {
         found_candidates
             .iter()
             .take(candidate_limit)
             .filter_map(
-                |(candidate_path, candidate_verdict)| match candidate_verdict {
+                |InspectedCandidate {
+                     candidate_path,
+                     candidate_verdict,
+                 }| match candidate_verdict {
                     CandidateVerdict::Replaceable { replaceable_path } => {
                         Some(ReplaceableCandidate {
                             candidate_path: candidate_path.clone(),
@@ -418,7 +426,7 @@ pub fn locate_program_among(
     };
     match trusted_position {
         Some(trusted_index) => {
-            let (candidate_path, _trusted_verdict) = &found_candidates[trusted_index];
+            let candidate_path = &found_candidates[trusted_index].candidate_path;
             let ignored_candidates = replaceable_before(trusted_index);
             if ignored_candidates.is_empty() {
                 ProgramLocation::TrustedProgram {

@@ -55,15 +55,11 @@ use crate::{
     },
 };
 
-pub enum StartupDestination {
-    ShowPage(ApplicationPage),
-}
-
 pub struct PageNavigationInit {
     pub quarantine_vault: QuarantineVault,
     pub data_directory: PathBuf,
     pub window_root: adw::ApplicationWindow,
-    pub startup_destination: StartupDestination,
+    pub startup_page: ApplicationPage,
     pub startup_scan_targets: Vec<PathBuf>,
 }
 
@@ -196,7 +192,7 @@ impl SettingsSubpageStack for adw::NavigationView {
         let kept_frames = shown_frames
             .iter()
             .zip(subpage_frames)
-            .take_while(|frame_pair| frame_pair.0 == frame_pair.1)
+            .take_while(|(shown_frame, wanted_frame)| shown_frame == wanted_frame)
             .count();
         if kept_frames < shown_frames.len() {
             let _popped = match kept_frames
@@ -580,9 +576,7 @@ impl Component for PageNavigation {
             })
             .detach();
         let model = Self {
-            visible_page: match navigation_init.startup_destination {
-                StartupDestination::ShowPage(application_page) => application_page,
-            },
+            visible_page: navigation_init.startup_page,
             shows_content_when_narrow: false,
             opened_settings_subpages: Vec::new(),
             scan_page,

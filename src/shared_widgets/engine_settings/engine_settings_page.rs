@@ -37,7 +37,10 @@ use crate::{
         },
     },
     shared_widgets::{
-        awaited_dialogs::{alert_response, deliver_local_outcome},
+        awaited_dialogs::{
+            AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice,
+            deliver_local_outcome,
+        },
         engine_settings::{
             config_setting_row::{
                 ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput,
@@ -320,6 +323,24 @@ struct ProposedLiveChange {
     new_values: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SettingChangeChoice {
+    ChangeApplied,
+    ChangeCancelled,
+}
+
+impl AlertChoice for SettingChangeChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::ChangeApplied];
+    const DISMISSING_CHOICE: Self = Self::ChangeCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::ChangeApplied => "apply",
+            Self::ChangeCancelled => "cancel",
+        }
+    }
+}
+
 fn present_live_change_confirmation(
     parent_widget: &impl IsA<gtk::Widget>,
     proposed_change: ProposedLiveChange,
@@ -342,9 +363,10 @@ fn present_live_change_confirmation(
             effect,
         )),
     );
-    confirmation_dialog.add_response("cancel", &gettext("Cancel"));
-    confirmation_dialog.add_response(
-        "apply",
+    add_dismissing_choice::<SettingChangeChoice>(&confirmation_dialog, &gettext("Cancel"));
+    add_alert_choice(
+        &confirmation_dialog,
+        SettingChangeChoice::ChangeApplied,
         &if effect != ProtectionReduction::NoReduction {
             gettext("Reduce Protection")
         } else {
@@ -352,20 +374,26 @@ fn present_live_change_confirmation(
         },
     );
     if effect != ProtectionReduction::NoReduction {
-        confirmation_dialog.set_response_appearance("apply", adw::ResponseAppearance::Destructive);
+        confirmation_dialog.set_response_appearance(
+            SettingChangeChoice::ChangeApplied.response_id(),
+            adw::ResponseAppearance::Destructive,
+        );
     }
-    confirmation_dialog.set_default_response(Some("cancel"));
-    confirmation_dialog.set_close_response("cancel");
+    confirmation_dialog
+        .set_default_response(Some(SettingChangeChoice::ChangeCancelled.response_id()));
     deliver_local_outcome(
         sender.input_sender().clone(),
-        alert_response(confirmation_dialog, parent_widget.clone().upcast()),
-        move |chosen_response| {
-            (chosen_response == "apply").then_some(EngineSettingsPageInput::LiveChangeConfirmed {
-                unlock_generation,
-                changed_row,
-                setting_key,
-                new_values,
-            })
+        alert_choice(confirmation_dialog, parent_widget.clone().upcast()),
+        move |change_choice| match change_choice {
+            SettingChangeChoice::ChangeApplied => {
+                Some(EngineSettingsPageInput::LiveChangeConfirmed {
+                    unlock_generation,
+                    changed_row,
+                    setting_key,
+                    new_values,
+                })
+            }
+            SettingChangeChoice::ChangeCancelled => None,
         },
     );
 }

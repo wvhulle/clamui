@@ -5,11 +5,28 @@ use crate::{
     host_services::clamav_programs::false_positive_submission::{
         FalsePositiveReport, ReporterContact, SubmittedContent, contact_is_complete,
     },
-    shared_widgets::awaited_dialogs::{alert_response, deliver_local_outcome},
+    shared_widgets::awaited_dialogs::{
+        AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice, deliver_local_outcome,
+    },
 };
 
-const SEND_RESPONSE: &str = "send";
-const CANCEL_RESPONSE: &str = "cancel";
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReportDialogChoice {
+    SendReportChosen,
+    ReportCancelled,
+}
+
+impl AlertChoice for ReportDialogChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::SendReportChosen];
+    const DISMISSING_CHOICE: Self = Self::ReportCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::SendReportChosen => "send",
+            Self::ReportCancelled => "cancel",
+        }
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReportedDetection {
@@ -55,34 +72,37 @@ pub fn present_false_positive_report<Message: 'static>(
     contact_list.append(&name_row);
     contact_list.append(&email_row);
     report_dialog.set_extra_child(Some(&contact_list));
-    report_dialog.add_response(CANCEL_RESPONSE, &gettext("Cancel"));
-    report_dialog.add_response(SEND_RESPONSE, &gettext("Send Report"));
-    report_dialog.set_response_appearance(SEND_RESPONSE, adw::ResponseAppearance::Suggested);
-    report_dialog.set_response_enabled(SEND_RESPONSE, false);
-    report_dialog.set_default_response(Some(CANCEL_RESPONSE));
-    report_dialog.set_close_response(CANCEL_RESPONSE);
+    let send_response = ReportDialogChoice::SendReportChosen.response_id();
+    add_dismissing_choice::<ReportDialogChoice>(&report_dialog, &gettext("Cancel"));
+    add_alert_choice(
+        &report_dialog,
+        ReportDialogChoice::SendReportChosen,
+        &gettext("Send Report"),
+    );
+    report_dialog.set_response_appearance(send_response, adw::ResponseAppearance::Suggested);
+    report_dialog.set_response_enabled(send_response, false);
+    report_dialog.set_default_response(Some(ReportDialogChoice::ReportCancelled.response_id()));
     [&name_row, &email_row].into_iter().for_each(|contact_row| {
         let watched_dialog = report_dialog.clone();
         let watched_name = name_row.clone();
         let watched_email = email_row.clone();
         contact_row.connect_changed(move |_edited_row| {
             watched_dialog.set_response_enabled(
-                SEND_RESPONSE,
+                send_response,
                 contact_is_complete(&contact_from_rows(&watched_name, &watched_email)),
             );
         });
     });
     deliver_local_outcome(
         message_sender,
-        alert_response(report_dialog, parent_widget.clone().upcast()),
-        move |chosen_response| {
-            (chosen_response == SEND_RESPONSE).then(|| {
-                confirmed_message(FalsePositiveReport {
-                    reporter_contact: contact_from_rows(&name_row, &email_row),
-                    detection_name: reported_detection.detection_name,
-                    submitted_content: reported_detection.submitted_content,
-                })
-            })
+        alert_choice(report_dialog, parent_widget.clone().upcast()),
+        move |report_choice| match report_choice {
+            ReportDialogChoice::SendReportChosen => Some(confirmed_message(FalsePositiveReport {
+                reporter_contact: contact_from_rows(&name_row, &email_row),
+                detection_name: reported_detection.detection_name,
+                submitted_content: reported_detection.submitted_content,
+            })),
+            ReportDialogChoice::ReportCancelled => None,
         },
     );
 }

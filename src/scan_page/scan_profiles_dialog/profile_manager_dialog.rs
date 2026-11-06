@@ -21,8 +21,9 @@ use crate::{
         },
     },
     shared_widgets::awaited_dialogs::{
-        ImportedFileOutcome, TextExportOutcome, alert_response, deliver_local_outcome,
-        describe_export_failure, exported_text, imported_file,
+        AlertChoice, ImportedFileOutcome, TextExportOutcome, add_alert_choice,
+        add_dismissing_choice, alert_choice, deliver_local_outcome, describe_export_failure,
+        exported_text, imported_file,
     },
 };
 
@@ -83,6 +84,24 @@ pub enum ProfileManagerDialogCommand {
     ExportFinished(TextExportOutcome),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProfileChangeChoice {
+    ChangeConfirmed,
+    ChangeCancelled,
+}
+
+impl AlertChoice for ProfileChangeChoice {
+    const ANSWERING_CHOICES: &'static [Self] = &[Self::ChangeConfirmed];
+    const DISMISSING_CHOICE: Self = Self::ChangeCancelled;
+
+    fn response_id(self) -> &'static str {
+        match self {
+            Self::ChangeConfirmed => "confirm",
+            Self::ChangeCancelled => "cancel",
+        }
+    }
+}
+
 fn present_change_confirmation(
     confirmation_title: String,
     confirmation_body: String,
@@ -93,16 +112,24 @@ fn present_change_confirmation(
 ) {
     let confirmation_dialog =
         adw::AlertDialog::new(Some(&confirmation_title), Some(&confirmation_body));
-    confirmation_dialog.add_response("cancel", &gettext("Cancel"));
-    confirmation_dialog.add_response("confirm", &confirm_label);
-    confirmation_dialog.set_response_appearance("confirm", adw::ResponseAppearance::Destructive);
-    confirmation_dialog.set_close_response("cancel");
+    add_dismissing_choice::<ProfileChangeChoice>(&confirmation_dialog, &gettext("Cancel"));
+    add_alert_choice(
+        &confirmation_dialog,
+        ProfileChangeChoice::ChangeConfirmed,
+        &confirm_label,
+    );
+    confirmation_dialog.set_response_appearance(
+        ProfileChangeChoice::ChangeConfirmed.response_id(),
+        adw::ResponseAppearance::Destructive,
+    );
     deliver_local_outcome(
         sender.input_sender().clone(),
-        alert_response(confirmation_dialog, root.clone().upcast()),
-        move |chosen_response| {
-            (chosen_response == "confirm")
-                .then_some(ProfileManagerDialogInput::ChangeConfirmed(confirmed_change))
+        alert_choice(confirmation_dialog, root.clone().upcast()),
+        move |change_choice| match change_choice {
+            ProfileChangeChoice::ChangeConfirmed => {
+                Some(ProfileManagerDialogInput::ChangeConfirmed(confirmed_change))
+            }
+            ProfileChangeChoice::ChangeCancelled => None,
         },
     );
 }

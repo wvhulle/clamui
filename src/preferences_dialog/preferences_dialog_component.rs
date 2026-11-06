@@ -8,11 +8,12 @@ use relm4::{
 };
 
 use crate::{
+    application_window::window_close_behavior::{CLOSE_ACTION_CHOICES, CloseAction},
     host_services::{
         desktop::{
             file_manager_actions::SUPPORTED_FILE_MANAGERS,
             flatpak_sandbox::{request_background_autostart, running_in_flatpak},
-            stored_settings::{CLOSE_ACTION_CHOICES, CLOSE_ACTION_KEY, application_settings},
+            stored_settings::{CLOSE_ACTION_KEY, application_settings},
             stored_settings_watch::forward_setting_changes,
         },
         threat_intel::service_key_storage::ThreatIntelService,
@@ -51,20 +52,15 @@ impl PreferencesPageName {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct WindowBehaviorSettings {
-    close_action_position: u32,
+    close_action: CloseAction,
     start_in_background: bool,
     notifications_enabled: bool,
 }
 
 impl WindowBehaviorSettings {
     fn read_from(stored_settings: &gio::Settings) -> Self {
-        let stored_close_action = stored_settings.string(CLOSE_ACTION_KEY);
         Self {
-            close_action_position: CLOSE_ACTION_CHOICES
-                .iter()
-                .position(|close_choice| *close_choice == stored_close_action)
-                .and_then(|close_position| u32::try_from(close_position).ok())
-                .unwrap_or(0),
+            close_action: CloseAction::read_from(stored_settings),
             start_in_background: stored_settings.boolean(START_IN_BACKGROUND_KEY),
             notifications_enabled: stored_settings.boolean(NOTIFICATIONS_ENABLED_KEY),
         }
@@ -95,11 +91,7 @@ pub enum PreferencesDialogCommand {
 }
 
 fn close_action_labels() -> gtk::StringList {
-    let close_labels = [
-        gettext("Quit completely"),
-        gettext("Minimize to tray"),
-        gettext("Always ask"),
-    ];
+    let close_labels = CLOSE_ACTION_CHOICES.map(CloseAction::choice_label);
     gtk::StringList::new(&close_labels.iter().map(String::as_str).collect::<Vec<_>>())
 }
 
@@ -142,7 +134,7 @@ impl Component for PreferencesDialog {
                         set_model: Some(&close_action_labels()),
                         #[watch]
                         #[block_signal(close_action_handler)]
-                        set_selected: model.window_behavior.close_action_position,
+                        set_selected: model.window_behavior.close_action.choice_position(),
                         connect_selected_notify[sender] => move |changed_row| {
                             sender.input(PreferencesDialogInput::CloseActionChosen(changed_row.selected()));
                         } @close_action_handler,
@@ -257,15 +249,10 @@ impl Component for PreferencesDialog {
             PreferencesDialogInput::PageShown(preferences_page) => {
                 self.visible_page = preferences_page;
             }
-            PreferencesDialogInput::CloseActionChosen(close_action_position) => {
-                if let Some(close_choice) = usize::try_from(close_action_position)
-                    .ok()
-                    .and_then(|close_position| CLOSE_ACTION_CHOICES.get(close_position))
-                {
-                    self.window_behavior.close_action_position = close_action_position;
-                    let _read_only_settings = self
-                        .stored_settings
-                        .set_string(CLOSE_ACTION_KEY, close_choice);
+            PreferencesDialogInput::CloseActionChosen(choice_position) => {
+                if let Some(close_action) = CloseAction::from_choice_position(choice_position) {
+                    self.window_behavior.close_action = close_action;
+                    close_action.store_into(&self.stored_settings);
                 }
             }
             PreferencesDialogInput::StartInBackgroundToggled(start_in_background) => {
