@@ -19,6 +19,10 @@ use crate::{
         activity_export_formats::{
             activity_detail_text, activity_entries_as_csv, activity_entries_as_json,
         },
+        activity_logs_state::{
+            DaemonLogView, HistoryActionOutcome, HistoryView, SystemChangesReadFailure,
+            SystemChangesView,
+        },
         daemon_log_reader::{DaemonLogContents, daemon_log_updates, read_daemon_log},
         system_change_row::SystemChangeRow,
     },
@@ -28,7 +32,7 @@ use crate::{
             exported_text as exported_text_file,
         },
         component_streams::{RunningStream, run_stream},
-        loading_indicators::{FirstLoad, loading_placeholder_stack},
+        loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
     },
 };
 
@@ -46,16 +50,14 @@ const SYSTEM_CHANGE_LIMIT: usize = 200;
 
 pub struct ActivityLogsPage {
     activity_history: ActivityHistory,
-    listed_entries: Vec<ActivityEntryRecord>,
+    history_view: HistoryView,
     entry_rows: FactoryVecDeque<ActivityEntryRow>,
     selected_entry: SelectedEntryView,
     detail_text_changed: bool,
-    daemon_log_text: String,
+    daemon_log_view: DaemonLogView,
     daemon_log_changed: bool,
-    daemon_source_text: String,
     daemon_log_refresh: DaemonLogRefresh,
-    history_notice: String,
-    first_load: FirstLoad,
+    system_changes_view: SystemChangesView,
     system_change_rows: FactoryVecDeque<SystemChangeRow>,
     toaster: Toaster,
 }
@@ -83,19 +85,19 @@ pub enum ActivityLogsPageCommand {
     EntriesCleared(Result<(), ActivityHistoryFailure>),
     DaemonLogRead(DaemonLogContents),
     TextExportFinished(TextExportOutcome),
-    SystemChangesLoaded(Result<Vec<HelperAuditEntry>, String>),
+    SystemChangesLoaded(Result<Vec<HelperAuditEntry>, SystemChangesReadFailure>),
 }
 
 impl ActivityLogsPage {
     fn reload_system_changes(sender: &ComponentSender<Self>) {
         sender.oneshot_command(async {
             ActivityLogsPageCommand::SystemChangesLoaded(
-                tokio::task::spawn_blocking(|| {
-                    newest_helper_audit_entries(SYSTEM_CHANGE_LIMIT)
-                        .map_err(|journal_failure| journal_failure.to_string())
-                })
-                .await
-                .unwrap_or_else(|interrupted_read| Err(interrupted_read.to_string())),
+                tokio::task::spawn_blocking(|| newest_helper_audit_entries(SYSTEM_CHANGE_LIMIT))
+                    .await
+                    .map_err(SystemChangesReadFailure::from)
+                    .and_then(|journal_outcome| {
+                        journal_outcome.map_err(SystemChangesReadFailure::from)
+                    }),
             )
         });
     }
@@ -145,6 +147,67 @@ impl ActivityLogsPage {
         }
     }
 
+    fn history_notice_text(&self) -> String {
+        match &self.history_view {
+            HistoryView::HistoryLoaded {
+                last_action: HistoryActionOutcome::ClearingFailed(clear_failure),
+                ..
+            } => gettext("Failed to clear logs: {error}")
+                .replace("{error}", &clear_failure.to_string()),
+            HistoryView::HistoryLoaded {
+                last_action: HistoryActionOutcome::NoActionTaken,
+                ..
+            }
+            | HistoryView::HistoryLoading
+            | HistoryView::HistoryLoadFailed(_) => String::new(),
+        }
+    }
+
+    fn history_failure_text(&self) -> String {
+        match &self.history_view {
+            HistoryView::HistoryLoadFailed(load_failure) => {
+                gettext("Failed to load historical logs: {error}")
+                    .replace("{error}", &load_failure.to_string())
+            }
+            HistoryView::HistoryLoading | HistoryView::HistoryLoaded { .. } => String::new(),
+        }
+    }
+
+    fn system_changes_failure_text(&self) -> String {
+        match &self.system_changes_view {
+            SystemChangesView::SystemChangesFailed(
+                SystemChangesReadFailure::JournalUnreadable(journal_failure),
+            ) => gettext("The system journal can't be read: {error}")
+                .replace("{error}", &journal_failure.to_string()),
+            SystemChangesView::SystemChangesFailed(
+                SystemChangesReadFailure::JournalReadInterrupted(interrupted_read),
+            ) => gettext("The system journal can't be read: {error}")
+                .replace("{error}", &interrupted_read.to_string()),
+            SystemChangesView::SystemChangesLoading | SystemChangesView::SystemChangesLoaded => {
+                String::new()
+            }
+        }
+    }
+
+    fn daemon_source_text(&self) -> String {
+        match &self.daemon_log_view {
+            DaemonLogView::DaemonLogReading => gettext("Checking…"),
+            DaemonLogView::DaemonLogRead(DaemonLogContents::FromLogFile { log_path, .. }) => {
+                sanitize_scanner_line(&log_path.to_string_lossy())
+            }
+            DaemonLogView::DaemonLogRead(DaemonLogContents::FromSystemJournal { .. }) => {
+                gettext("System journal")
+            }
+            DaemonLogView::DaemonLogRead(DaemonLogContents::NoReadableLog) => {
+                gettext("Daemon log file not found.")
+            }
+        }
+    }
+
+    fn has_listed_entries(&self) -> bool {
+        !self.history_view.listed_entries().is_empty()
+    }
+
     fn has_selected_entry(&self) -> bool {
         matches!(self.selected_entry, SelectedEntryView::EntrySelected(_))
     }
@@ -175,28 +238,15 @@ impl ActivityLogsPage {
     }
 }
 
-fn show_system_changes(
-    system_change_rows: &mut FactoryVecDeque<SystemChangeRow>,
-    loaded_changes: Result<Vec<HelperAuditEntry>, String>,
-) {
-    let mut row_guard = system_change_rows.guard();
+fn replace_rows<Row>(row_factory: &mut FactoryVecDeque<Row>, row_inits: Vec<Row::Init>)
+where
+    Row: relm4::prelude::FactoryComponent<Index = relm4::prelude::DynamicIndex>,
+{
+    let mut row_guard = row_factory.guard();
     row_guard.clear();
-    match loaded_changes {
-        Ok(audit_entries) if audit_entries.is_empty() => {
-            row_guard.push_back(SystemChangeRow::ListNotice(gettext(
-                "No ClamAV settings or trusted detections were changed through Lazaret",
-            )));
-        }
-        Ok(audit_entries) => audit_entries.into_iter().for_each(|audit_entry| {
-            row_guard.push_back(SystemChangeRow::ChangeRecorded(audit_entry));
-        }),
-        Err(journal_failure) => {
-            row_guard.push_back(SystemChangeRow::ListNotice(
-                gettext("The system journal can't be read: {error}")
-                    .replace("{error}", &journal_failure),
-            ));
-        }
-    }
+    row_inits.into_iter().for_each(|row_init| {
+        row_guard.push_back(row_init);
+    });
 }
 
 #[relm4::component(pub)]
@@ -269,7 +319,7 @@ impl Component for ActivityLogsPage {
                                     set_valign: gtk::Align::Center,
                                     add_css_class: "flat",
                                     #[watch]
-                                    set_sensitive: !model.listed_entries.is_empty(),
+                                    set_sensitive: model.has_listed_entries(),
                                     #[wrap(Some)]
                                     set_popover = &gtk::Popover {
                                         gtk::Box {
@@ -295,7 +345,7 @@ impl Component for ActivityLogsPage {
                                     set_valign: gtk::Align::Center,
                                     add_css_class: "flat",
                                     #[watch]
-                                    set_sensitive: !model.listed_entries.is_empty(),
+                                    set_sensitive: model.has_listed_entries(),
                                     connect_clicked => ActivityLogsPageInput::ClearAllRequested,
                                 },
                             },
@@ -305,9 +355,15 @@ impl Component for ActivityLogsPage {
                                 set_wrap: true,
                                 add_css_class: "error",
                                 #[watch]
-                                set_visible: !model.history_notice.is_empty(),
+                                set_visible: matches!(
+                                    model.history_view,
+                                    HistoryView::HistoryLoaded {
+                                        last_action: HistoryActionOutcome::ClearingFailed(_),
+                                        ..
+                                    }
+                                ),
                                 #[watch]
-                                set_label: &model.history_notice,
+                                set_label: &model.history_notice_text(),
                             },
 
                             gtk::ScrolledWindow {
@@ -323,8 +379,15 @@ impl Component for ActivityLogsPage {
                                     #[wrap(Some)]
                                     #[local_ref]
                                     set_placeholder = placeholder_stack -> gtk::Stack {
+                                        add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
+                                            add_css_class: "compact",
+                                            set_icon_name: Some("dialog-error-symbolic"),
+                                            set_title: &gettext("Historical logs can't be read"),
+                                            #[watch]
+                                            set_description: Some(&gtk::glib::markup_escape_text(&model.history_failure_text())),
+                                        },
                                         #[watch]
-                                        set_visible_child_name: model.first_load.shown_page_name(),
+                                        set_visible_child_name: model.history_view.placeholder_page_name(),
                                     },
                                     connect_row_activated[sender] => move |_entry_list, activated_row| {
                                         sender.input(ActivityLogsPageInput::EntryActivated {
@@ -428,6 +491,19 @@ impl Component for ActivityLogsPage {
                                     add_css_class: "boxed-list",
                                     set_selection_mode: gtk::SelectionMode::None,
                                     set_valign: gtk::Align::Start,
+                                    #[wrap(Some)]
+                                    #[local_ref]
+                                    set_placeholder = system_change_placeholder_stack -> gtk::Stack {
+                                        add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
+                                            add_css_class: "compact",
+                                            set_icon_name: Some("dialog-error-symbolic"),
+                                            set_title: &gettext("System changes can't be read"),
+                                            #[watch]
+                                            set_description: Some(&gtk::glib::markup_escape_text(&model.system_changes_failure_text())),
+                                        },
+                                        #[watch]
+                                        set_visible_child_name: model.system_changes_view.placeholder_page_name(),
+                                    },
                                 },
                             },
                         },
@@ -454,7 +530,7 @@ impl Component for ActivityLogsPage {
                                         set_ellipsize: gtk::pango::EllipsizeMode::Middle,
                                         add_css_class: "dim-label",
                                         #[watch]
-                                        set_label: &model.daemon_source_text,
+                                        set_label: &model.daemon_source_text(),
                                     },
                                 },
 
@@ -477,6 +553,8 @@ impl Component for ActivityLogsPage {
                                     set_tooltip_text: Some(&gettext("Copy")),
                                     set_valign: gtk::Align::Center,
                                     add_css_class: "flat",
+                                    #[watch]
+                                    set_sensitive: model.daemon_log_view.shown_log_text().is_some(),
                                     connect_clicked => ActivityLogsPageInput::CopyDaemonLogRequested,
                                 },
 
@@ -485,6 +563,8 @@ impl Component for ActivityLogsPage {
                                     set_tooltip_text: Some(&gettext("Export Text")),
                                     set_valign: gtk::Align::Center,
                                     add_css_class: "flat",
+                                    #[watch]
+                                    set_sensitive: model.daemon_log_view.shown_log_text().is_some(),
                                     connect_clicked => ActivityLogsPageInput::ExportDaemonLogRequested,
                                 },
                             },
@@ -505,7 +585,7 @@ impl Component for ActivityLogsPage {
                                     #[wrap(Some)]
                                     set_buffer = &gtk::TextBuffer {
                                         #[track(model.daemon_log_changed)]
-                                        set_text: &model.daemon_log_text,
+                                        set_text: model.daemon_log_view.shown_log_text().unwrap_or_default(),
                                     },
                                 },
                             },
@@ -526,16 +606,14 @@ impl Component for ActivityLogsPage {
             .detach();
         let model = Self {
             activity_history,
-            listed_entries: Vec::new(),
+            history_view: HistoryView::HistoryLoading,
             entry_rows,
             selected_entry: SelectedEntryView::NoEntrySelected,
             detail_text_changed: true,
-            daemon_log_text: String::new(),
+            daemon_log_view: DaemonLogView::DaemonLogReading,
             daemon_log_changed: true,
-            daemon_source_text: gettext("Checking…"),
             daemon_log_refresh: DaemonLogRefresh::ManualRefresh,
-            history_notice: String::new(),
-            first_load: FirstLoad::StillLoading,
+            system_changes_view: SystemChangesView::SystemChangesLoading,
             system_change_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
                 .detach(),
@@ -554,6 +632,16 @@ impl Component for ActivityLogsPage {
                 .title(gettext("No historical logs yet."))
                 .build(),
         );
+        let system_change_placeholder_stack = &loading_placeholder_stack(
+            &gettext("Loading system changes…"),
+            &adw::StatusPage::builder()
+                .css_classes(["compact"])
+                .icon_name("changes-prevent-symbolic")
+                .title(gettext(
+                    "No ClamAV settings or trusted detections were changed through Lazaret",
+                ))
+                .build(),
+        );
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -569,12 +657,15 @@ impl Component for ActivityLogsPage {
         match page_input {
             ActivityLogsPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             ActivityLogsPageInput::EntryActivated { row_position } => {
-                if let Some(activity_entry) = self.listed_entries.get(row_position) {
+                if let Some(activity_entry) = self.history_view.listed_entries().get(row_position) {
                     self.select_entry(SelectedEntryView::EntrySelected(activity_entry.clone()));
                 }
             }
             ActivityLogsPageInput::ClearAllRequested => self.confirm_clear_all(root, &sender),
             ActivityLogsPageInput::ClearAllConfirmed => {
+                self.history_view =
+                    std::mem::replace(&mut self.history_view, HistoryView::HistoryLoading)
+                        .with_clearing_started();
                 let activity_history = self.activity_history.clone();
                 sender.oneshot_command(async move {
                     ActivityLogsPageCommand::EntriesCleared(
@@ -585,12 +676,12 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageInput::ExportAllCsvRequested => {
                 self.export_text(
                     "lazaret-logs.csv",
-                    activity_entries_as_csv(&self.listed_entries),
+                    activity_entries_as_csv(self.history_view.listed_entries()),
                     &sender,
                 );
             }
             ActivityLogsPageInput::ExportAllJsonRequested => {
-                match activity_entries_as_json(&self.listed_entries) {
+                match activity_entries_as_json(self.history_view.listed_entries()) {
                     Ok(exported_json) => {
                         self.export_text("lazaret-logs.json", exported_json, &sender);
                     }
@@ -618,12 +709,16 @@ impl Component for ActivityLogsPage {
                 }
             },
             ActivityLogsPageInput::CopyDaemonLogRequested => {
-                root.clipboard().set_text(&self.daemon_log_text);
-                self.toaster
-                    .toast(&gettext("Daemon logs copied to clipboard"));
+                if let Some(log_text) = self.daemon_log_view.shown_log_text() {
+                    root.clipboard().set_text(log_text);
+                    self.toaster
+                        .toast(&gettext("Daemon logs copied to clipboard"));
+                }
             }
             ActivityLogsPageInput::ExportDaemonLogRequested => {
-                self.export_text("clamd-logs.txt", self.daemon_log_text.clone(), &sender);
+                if let Some(log_text) = self.daemon_log_view.shown_log_text() {
+                    self.export_text("clamd-logs.txt", log_text.to_owned(), &sender);
+                }
             }
         }
     }
@@ -637,24 +732,22 @@ impl Component for ActivityLogsPage {
         self.detail_text_changed = false;
         self.daemon_log_changed = false;
         match page_command {
-            ActivityLogsPageCommand::SystemChangesLoaded(loaded_changes) => {
-                show_system_changes(&mut self.system_change_rows, loaded_changes);
+            ActivityLogsPageCommand::SystemChangesLoaded(Ok(audit_entries)) => {
+                self.system_changes_view = SystemChangesView::SystemChangesLoaded;
+                replace_rows(&mut self.system_change_rows, audit_entries);
             }
-            ActivityLogsPageCommand::EntriesLoaded(Ok(listed_entries)) => {
-                self.first_load = FirstLoad::LoadFinished;
-                self.history_notice.clear();
-                let mut entry_rows_guard = self.entry_rows.guard();
-                entry_rows_guard.clear();
-                listed_entries.iter().cloned().for_each(|listed_entry| {
-                    entry_rows_guard.push_back(listed_entry);
-                });
-                drop(entry_rows_guard);
-                self.listed_entries = listed_entries;
+            ActivityLogsPageCommand::SystemChangesLoaded(Err(read_failure)) => {
+                self.system_changes_view = SystemChangesView::SystemChangesFailed(read_failure);
+                replace_rows(&mut self.system_change_rows, Vec::new());
             }
-            ActivityLogsPageCommand::EntriesLoaded(Err(load_failure)) => {
-                self.first_load = FirstLoad::LoadFinished;
-                self.history_notice = gettext("Failed to load historical logs: {error}")
-                    .replace("{error}", &load_failure.to_string());
+            ActivityLogsPageCommand::EntriesLoaded(load_outcome) => {
+                self.history_view =
+                    std::mem::replace(&mut self.history_view, HistoryView::HistoryLoading)
+                        .with_loaded_entries(load_outcome);
+                replace_rows(
+                    &mut self.entry_rows,
+                    self.history_view.listed_entries().to_vec(),
+                );
             }
             ActivityLogsPageCommand::EntriesCleared(clear_outcome) => {
                 match clear_outcome {
@@ -663,29 +756,17 @@ impl Component for ActivityLogsPage {
                         self.toaster.toast(&gettext("Historical logs cleared."));
                     }
                     Err(clear_failure) => {
-                        self.history_notice = gettext("Failed to clear logs: {error}")
-                            .replace("{error}", &clear_failure.to_string());
+                        self.history_view =
+                            std::mem::replace(&mut self.history_view, HistoryView::HistoryLoading)
+                                .with_clearing_failure(clear_failure);
                     }
                 }
                 self.reload_entries(&sender);
             }
-            ActivityLogsPageCommand::DaemonLogRead(daemon_log) => match daemon_log {
-                DaemonLogContents::FromLogFile { log_path, log_text } => {
-                    self.daemon_source_text = sanitize_scanner_line(&log_path.to_string_lossy());
-                    self.daemon_log_text = log_text;
-                    self.daemon_log_changed = true;
-                }
-                DaemonLogContents::FromSystemJournal { log_text } => {
-                    self.daemon_source_text = gettext("System journal");
-                    self.daemon_log_text = log_text;
-                    self.daemon_log_changed = true;
-                }
-                DaemonLogContents::NoReadableLog => {
-                    self.daemon_source_text = gettext("Daemon log file not found.");
-                    self.daemon_log_text.clear();
-                    self.daemon_log_changed = true;
-                }
-            },
+            ActivityLogsPageCommand::DaemonLogRead(daemon_log) => {
+                self.daemon_log_view = DaemonLogView::DaemonLogRead(daemon_log);
+                self.daemon_log_changed = true;
+            }
             ActivityLogsPageCommand::TextExportFinished(TextExportOutcome::TextSaved) => {
                 self.toaster.toast(&gettext("Exported."));
             }

@@ -19,9 +19,10 @@ use crate::{
             quarantine_file_moves::RecordedPayloadHash,
         },
         settings_helper::trust_requests::{FileFingerprint, TrustChoice},
-        threat_intel::file_reputation_check::{
-            ReputationAnswers, SourceAnswer, check_hash_reputation,
-        },
+        threat_intel::file_reputation_check::{ReputationAnswers, SourceAnswer},
+    },
+    quarantine_page::quarantine_page_state::{
+        EntryRowState, QuarantineRowInit, RowActivity, RowRecheckState, RowReputation,
     },
     shared_widgets::false_positive_report_dialog::ReportedDetection,
 };
@@ -41,17 +42,9 @@ pub fn quarantined_false_positive_detection(
         })
 }
 
-#[derive(Clone, Debug)]
-pub enum RowRecheckState {
-    NotRechecked,
-    Rechecking,
-    Rechecked(ContentVerdict),
-}
-
 pub struct QuarantineEntryRow {
     entry_record: QuarantineEntryRecord,
-    reputation_answers: ReputationAnswers,
-    recheck_state: RowRecheckState,
+    row_state: EntryRowState,
 }
 
 #[derive(Debug)]
@@ -62,12 +55,13 @@ pub enum QuarantineEntryRowInput {
     OnlineLookupsRequested,
     TrustFileRequested,
     FalsePositiveReportRequested,
-    RecheckStateChanged(RowRecheckState),
+    RowStateChanged(EntryRowState),
 }
 
 #[derive(Debug)]
 pub enum QuarantineEntryRowOutput {
     RestoreRequested { entry_id: i64 },
+    ReputationCheckRequested { entry_id: i64, content_hash: String },
     DeletionRequested { entry_id: i64 },
     TrustRequested(TrustChoice),
     FalsePositiveReportRequested(ReportedDetection),
@@ -76,18 +70,13 @@ pub enum QuarantineEntryRowOutput {
     ReportLinkRequested(String),
 }
 
-#[derive(Debug)]
-pub enum QuarantineEntryRowCommand {
-    ReputationChecked(ReputationAnswers),
-}
-
 impl QuarantineEntryRow {
     pub const fn entry_id(&self) -> i64 {
         self.entry_record.entry_id
     }
 
     fn recheck_label(&self) -> String {
-        match &self.recheck_state {
+        match &self.row_state.recheck_state {
             RowRecheckState::Rechecking => gettext("Checking…"),
             RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected) => {
                 gettext("No longer detected")
@@ -101,7 +90,7 @@ impl QuarantineEntryRow {
     }
 
     fn recheck_style(&self) -> &'static str {
-        match &self.recheck_state {
+        match &self.row_state.recheck_state {
             RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected) => "success",
             RowRecheckState::Rechecked(ContentVerdict::StillDetected { .. }) => "warning",
             RowRecheckState::Rechecking
@@ -127,16 +116,62 @@ impl QuarantineEntryRow {
         }
     }
 
-    fn reputation_check_running(&self) -> bool {
-        self.reputation_answers.circl_answer == SourceAnswer::Checking
+    fn actions_available(&self) -> bool {
+        self.row_state.row_activity == RowActivity::ActionsAvailable
     }
 
-    fn virustotal_report_url(&self) -> &str {
-        match &self.reputation_answers.virustotal_answer {
-            SourceAnswer::AnsweredWithReport { report_url, .. } => report_url,
-            _no_report => "",
+    fn reputation_check_running(&self) -> bool {
+        matches!(
+            self.row_state.row_reputation,
+            RowReputation::CheckingReputation
+        )
+    }
+
+    fn checked_answers(&self) -> Option<&ReputationAnswers> {
+        match &self.row_state.row_reputation {
+            RowReputation::ReputationChecked(reputation_answers) => Some(reputation_answers),
+            RowReputation::NotChecked | RowReputation::CheckingReputation => None,
         }
     }
+
+    fn source_answer_text(&self, chosen_source: fn(&ReputationAnswers) -> &SourceAnswer) -> String {
+        match &self.row_state.row_reputation {
+            RowReputation::NotChecked => gettext("Not checked yet"),
+            RowReputation::CheckingReputation => gettext("Checking…"),
+            RowReputation::ReputationChecked(reputation_answers) => {
+                chosen_source(reputation_answers).displayed_text()
+            }
+        }
+    }
+
+    fn source_needs_key(&self, chosen_source: fn(&ReputationAnswers) -> &SourceAnswer) -> bool {
+        self.checked_answers().is_some_and(|reputation_answers| {
+            *chosen_source(reputation_answers) == SourceAnswer::NeedsKey
+        })
+    }
+
+    fn virustotal_report_url(&self) -> Option<&str> {
+        self.checked_answers().and_then(|reputation_answers| {
+            match &reputation_answers.virustotal_answer {
+                SourceAnswer::AnsweredWithReport { report_url, .. } => Some(report_url.as_str()),
+                SourceAnswer::NeedsKey
+                | SourceAnswer::Answered { .. }
+                | SourceAnswer::Failed { .. } => None,
+            }
+        })
+    }
+}
+
+const fn circl_source(reputation_answers: &ReputationAnswers) -> &SourceAnswer {
+    &reputation_answers.circl_answer
+}
+
+const fn bazaar_source(reputation_answers: &ReputationAnswers) -> &SourceAnswer {
+    &reputation_answers.bazaar_answer
+}
+
+const fn virustotal_source(reputation_answers: &ReputationAnswers) -> &SourceAnswer {
+    &reputation_answers.virustotal_answer
 }
 
 fn source_row(source_name: &str) -> adw::ActionRow {
@@ -150,10 +185,10 @@ fn source_row(source_name: &str) -> adw::ActionRow {
 
 #[relm4::factory(pub)]
 impl FactoryComponent for QuarantineEntryRow {
-    type Init = QuarantineEntryRecord;
+    type Init = QuarantineRowInit;
     type Input = QuarantineEntryRowInput;
     type Output = QuarantineEntryRowOutput;
-    type CommandOutput = QuarantineEntryRowCommand;
+    type CommandOutput = ();
     type ParentWidget = gtk::ListBox;
 
     view! {
@@ -194,7 +229,8 @@ impl FactoryComponent for QuarantineEntryRow {
             add_suffix = &gtk::Button {
                 set_label: &gettext("Restore"),
                 set_valign: gtk::Align::Center,
-                set_sensitive: self.known_sha256_hex().is_some(),
+                #[watch]
+                set_sensitive: self.known_sha256_hex().is_some() && self.actions_available(),
                 connect_clicked[sender, entry_id = self.entry_record.entry_id] => move |_clicked_button| {
                     let _parent_gone = sender.output(QuarantineEntryRowOutput::RestoreRequested { entry_id });
                 },
@@ -204,6 +240,8 @@ impl FactoryComponent for QuarantineEntryRow {
                 set_label: &gettext("Delete"),
                 set_valign: gtk::Align::Center,
                 add_css_class: "destructive-action",
+                #[watch]
+                set_sensitive: self.actions_available(),
                 connect_clicked[sender, entry_id = self.entry_record.entry_id] => move |_clicked_button| {
                     let _parent_gone = sender.output(QuarantineEntryRowOutput::DeletionRequested { entry_id });
                 },
@@ -225,31 +263,31 @@ impl FactoryComponent for QuarantineEntryRow {
 
             add_row = &source_row("CIRCL hashlookup") -> adw::ActionRow {
                 #[watch]
-                set_subtitle: &self.reputation_answers.circl_answer.displayed_text(),
+                set_subtitle: &self.source_answer_text(circl_source),
             },
 
             add_row = &source_row("MalwareBazaar") -> adw::ActionRow {
                 #[watch]
-                set_subtitle: &self.reputation_answers.bazaar_answer.displayed_text(),
+                set_subtitle: &self.source_answer_text(bazaar_source),
 
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Add Key"),
                     set_valign: gtk::Align::Center,
                     #[watch]
-                    set_visible: self.reputation_answers.bazaar_answer == SourceAnswer::NeedsKey,
+                    set_visible: self.source_needs_key(bazaar_source),
                     connect_clicked => QuarantineEntryRowInput::OnlineLookupsRequested,
                 },
             },
 
             add_row = &source_row("VirusTotal") -> adw::ActionRow {
                 #[watch]
-                set_subtitle: &self.reputation_answers.virustotal_answer.displayed_text(),
+                set_subtitle: &self.source_answer_text(virustotal_source),
 
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Add Key"),
                     set_valign: gtk::Align::Center,
                     #[watch]
-                    set_visible: self.reputation_answers.virustotal_answer == SourceAnswer::NeedsKey,
+                    set_visible: self.source_needs_key(virustotal_source),
                     connect_clicked => QuarantineEntryRowInput::OnlineLookupsRequested,
                 },
 
@@ -257,7 +295,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_label: &gettext("View Report"),
                     set_valign: gtk::Align::Center,
                     #[watch]
-                    set_visible: !self.virustotal_report_url().is_empty(),
+                    set_visible: self.virustotal_report_url().is_some(),
                     connect_clicked => QuarantineEntryRowInput::VirusTotalReportRequested,
                 },
             },
@@ -303,14 +341,16 @@ impl FactoryComponent for QuarantineEntryRow {
     }
 
     fn init_model(
-        entry_record: QuarantineEntryRecord,
+        QuarantineRowInit {
+            entry_record,
+            row_state,
+        }: QuarantineRowInit,
         _row_index: &DynamicIndex,
         _sender: FactorySender<Self>,
     ) -> Self {
         Self {
             entry_record,
-            reputation_answers: ReputationAnswers::all_set_to(&SourceAnswer::NotChecked),
-            recheck_state: RowRecheckState::NotRechecked,
+            row_state,
         }
     }
 
@@ -320,12 +360,11 @@ impl FactoryComponent for QuarantineEntryRow {
                 let Some(content_hash) = self.known_sha256_hex().map(str::to_owned) else {
                     return;
                 };
-                self.reputation_answers = ReputationAnswers::all_set_to(&SourceAnswer::Checking);
-                sender.oneshot_command(async move {
-                    QuarantineEntryRowCommand::ReputationChecked(
-                        check_hash_reputation(content_hash).await,
-                    )
-                });
+                let _page_closed =
+                    sender.output(QuarantineEntryRowOutput::ReputationCheckRequested {
+                        entry_id: self.entry_record.entry_id,
+                        content_hash,
+                    });
             }
             QuarantineEntryRowInput::HashCopyRequested => {
                 if let Some(sha256_hex) = self.known_sha256_hex() {
@@ -353,8 +392,8 @@ impl FactoryComponent for QuarantineEntryRow {
                     },
                 ));
             }
-            QuarantineEntryRowInput::RecheckStateChanged(recheck_state) => {
-                self.recheck_state = recheck_state;
+            QuarantineEntryRowInput::RowStateChanged(row_state) => {
+                self.row_state = row_state;
             }
             QuarantineEntryRowInput::FalsePositiveReportRequested => {
                 let Some(reported_detection) =
@@ -367,17 +406,11 @@ impl FactoryComponent for QuarantineEntryRow {
                 );
             }
             QuarantineEntryRowInput::VirusTotalReportRequested => {
-                let _page_closed = sender.output(QuarantineEntryRowOutput::ReportLinkRequested(
-                    self.virustotal_report_url().to_owned(),
-                ));
-            }
-        }
-    }
-
-    fn update_cmd(&mut self, row_command: QuarantineEntryRowCommand, _sender: FactorySender<Self>) {
-        match row_command {
-            QuarantineEntryRowCommand::ReputationChecked(reputation_answers) => {
-                self.reputation_answers = reputation_answers;
+                if let Some(report_url) = self.virustotal_report_url() {
+                    let _page_closed = sender.output(
+                        QuarantineEntryRowOutput::ReportLinkRequested(report_url.to_owned()),
+                    );
+                }
             }
         }
     }

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 21:35+0100\n"
+"POT-Creation-Date: 2026-11-06 21:45+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -42,7 +42,7 @@ msgstr ""
 
 #: src/application_window/application_pages.rs:49
 #: src/detections_page/incident_timeline_presentation.rs:353
-#: src/quarantine_page/quarantine_entries_page.rs:537
+#: src/quarantine_page/quarantine_entries_page.rs:566
 #: src/scan_page/scan_results_section/detected_threat_row.rs:216
 #: src/scan_page/scan_results_section/scan_results_component.rs:165
 msgid "Quarantine"
@@ -215,11 +215,11 @@ msgstr ""
 
 #: src/application_window/window_close_behavior.rs:49
 #: src/detections_page/incident_timeline_presentation.rs:345
-#: src/logs_page/activity_logs_page.rs:164
+#: src/logs_page/activity_logs_page.rs:227
 #: src/protection_page/protection_timeline_presentation.rs:716
-#: src/quarantine_page/quarantine_entries_page.rs:346
-#: src/quarantine_page/quarantine_entries_page.rs:471
-#: src/quarantine_page/quarantine_entries_page.rs:495
+#: src/quarantine_page/quarantine_entries_page.rs:388
+#: src/quarantine_page/quarantine_entries_page.rs:500
+#: src/quarantine_page/quarantine_entries_page.rs:524
 #: src/scan_page/scan_page_component.rs:621
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:87
 #: src/scan_page/scan_results_section/scan_results_component.rs:164
@@ -830,78 +830,62 @@ msgstr ""
 msgid "Nothing changed: {error}"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:35
-msgid "Not checked yet"
-msgstr ""
-
-#: src/host_services/threat_intel/file_reputation_check.rs:36
-#: src/logs_page/activity_logs_page.rs:535
-#: src/preferences_dialog/online_lookups_page/service_key_section.rs:126
-#: src/preferences_dialog/online_lookups_page/service_key_section.rs:214
-#: src/protection_page/protection_timeline_page.rs:518
-#: src/quarantine_page/quarantine_entry_row.rs:91
-#: src/scan_page/scan_page_component.rs:226
-#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:311
-#: src/shared_widgets/audit_sections/audit_check_row.rs:116
-msgid "Checking…"
-msgstr ""
-
-#: src/host_services/threat_intel/file_reputation_check.rs:37
+#: src/host_services/threat_intel/file_reputation_check.rs:33
 msgid "Needs a key"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:65
+#: src/host_services/threat_intel/file_reputation_check.rs:51
 msgid "Not in the known-files database"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:69
+#: src/host_services/threat_intel/file_reputation_check.rs:55
 #, rust-format
 msgid "Listed as malicious by {source} (as {name})"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:75
+#: src/host_services/threat_intel/file_reputation_check.rs:61
 #, rust-format
 msgid "Listed as a known file by {source}"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:80
+#: src/host_services/threat_intel/file_reputation_check.rs:66
 #, rust-format
 msgid "Known file {name}, listed by {source}"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:89
+#: src/host_services/threat_intel/file_reputation_check.rs:75
 msgid "Not a known malware sample"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:91
+#: src/host_services/threat_intel/file_reputation_check.rs:77
 msgid "Known malware sample"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:94
+#: src/host_services/threat_intel/file_reputation_check.rs:80
 msgid "unnamed family"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:98
+#: src/host_services/threat_intel/file_reputation_check.rs:84
 #, rust-format
 msgid "Known malware: {family}, first seen {date}"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:110
+#: src/host_services/threat_intel/file_reputation_check.rs:96
 msgid "Unknown to VirusTotal"
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:114
+#: src/host_services/threat_intel/file_reputation_check.rs:100
 #, rust-format
 msgid "{count} of {total} engine detects it"
 msgid_plural "{count} of {total} engines detect it"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:127
+#: src/host_services/threat_intel/file_reputation_check.rs:113
 msgid "VirusTotal rejected the API key."
 msgstr ""
 
-#: src/host_services/threat_intel/file_reputation_check.rs:129
+#: src/host_services/threat_intel/file_reputation_check.rs:115
 msgid "The VirusTotal request limit was reached. Try again later."
 msgstr ""
 
@@ -1060,152 +1044,177 @@ msgstr ""
 msgid "Full Output"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:140
+#: src/logs_page/activity_logs_page.rs:142
 msgid "Select a log entry to view details."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:159
+#: src/logs_page/activity_logs_page.rs:155
+#, rust-format
+msgid "Failed to clear logs: {error}"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:169
+#, rust-format
+msgid "Failed to load historical logs: {error}"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:180
+#: src/logs_page/activity_logs_page.rs:184
+#, rust-format
+msgid "The system journal can't be read: {error}"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:194
+#: src/preferences_dialog/online_lookups_page/service_key_section.rs:126
+#: src/preferences_dialog/online_lookups_page/service_key_section.rs:214
+#: src/protection_page/protection_timeline_page.rs:518
+#: src/quarantine_page/quarantine_entry_row.rs:80
+#: src/quarantine_page/quarantine_entry_row.rs:140
+#: src/scan_page/scan_page_component.rs:226
+#: src/scan_page/scan_schedule_page/scan_schedule_component.rs:311
+#: src/shared_widgets/audit_sections/audit_check_row.rs:116
+msgid "Checking…"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:199
+msgid "System journal"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:202
+msgid "Daemon log file not found."
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:222
 msgid "Clear All Logs?"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:161
+#: src/logs_page/activity_logs_page.rs:224
 msgid ""
 "This will permanently delete all historical logs. This action cannot be "
 "undone."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:165
-#: src/logs_page/activity_logs_page.rs:294
+#: src/logs_page/activity_logs_page.rs:228
+#: src/logs_page/activity_logs_page.rs:344
 msgid "Clear All"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:187
-msgid "No ClamAV settings or trusted detections were changed through Lazaret"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:195
-#, rust-format
-msgid "The system journal can't be read: {error}"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:234
-#: src/logs_page/activity_logs_page.rs:248
+#: src/logs_page/activity_logs_page.rs:284
+#: src/logs_page/activity_logs_page.rs:298
 msgid "Historical Logs"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:254
+#: src/logs_page/activity_logs_page.rs:304
 msgid "Previous scan and update operations"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:260
-#: src/logs_page/activity_logs_page.rs:415
-#: src/logs_page/activity_logs_page.rs:469
-#: src/quarantine_page/quarantine_entries_page.rs:576
+#: src/logs_page/activity_logs_page.rs:310
+#: src/logs_page/activity_logs_page.rs:478
+#: src/logs_page/activity_logs_page.rs:545
+#: src/quarantine_page/quarantine_entries_page.rs:605
 msgid "Refresh"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:268
+#: src/logs_page/activity_logs_page.rs:318
 msgid "Export All"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:279
+#: src/logs_page/activity_logs_page.rs:329
 msgid "Export CSV"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:285
+#: src/logs_page/activity_logs_page.rs:335
 msgid "Export JSON"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:344
+#: src/logs_page/activity_logs_page.rs:385
+msgid "Historical logs can't be read"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:407
 msgid "Log Details"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:349
-#: src/logs_page/activity_logs_page.rs:477
+#: src/logs_page/activity_logs_page.rs:412
+#: src/logs_page/activity_logs_page.rs:553
 #: src/shared_widgets/audit_sections/audit_check_row.rs:60
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:553
 #: src/shared_widgets/step_timeline/timeline_detail_row.rs:157
 msgid "Copy"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:358
-#: src/logs_page/activity_logs_page.rs:485
+#: src/logs_page/activity_logs_page.rs:421
+#: src/logs_page/activity_logs_page.rs:563
 msgid "Export Text"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:388
-#: src/logs_page/activity_logs_page.rs:402
+#: src/logs_page/activity_logs_page.rs:451
+#: src/logs_page/activity_logs_page.rs:465
 msgid "System Changes"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:409
+#: src/logs_page/activity_logs_page.rs:472
 msgid ""
 "ClamAV settings and trusted detections changed through Lazaret, as recorded "
 "by the system. Software running as you can't remove these records."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:435
-#: src/logs_page/activity_logs_page.rs:449
+#: src/logs_page/activity_logs_page.rs:500
+msgid "System changes can't be read"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:511
+#: src/logs_page/activity_logs_page.rs:525
 msgid "ClamAV Daemon"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:462
+#: src/logs_page/activity_logs_page.rs:538
 msgid "Live Updates"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:550
+#: src/logs_page/activity_logs_page.rs:628
 msgid "Loading history…"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:554
+#: src/logs_page/activity_logs_page.rs:632
 msgid "No historical logs yet."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:605
+#: src/logs_page/activity_logs_page.rs:636
+msgid "Loading system changes…"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:641
+msgid "No ClamAV settings or trusted detections were changed through Lazaret"
+msgstr ""
+
+#: src/logs_page/activity_logs_page.rs:696
 msgid "Log details copied to clipboard"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:623
+#: src/logs_page/activity_logs_page.rs:715
 msgid "Daemon logs copied to clipboard"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:656
-#, rust-format
-msgid "Failed to load historical logs: {error}"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:663
+#: src/logs_page/activity_logs_page.rs:756
 msgid "Historical logs cleared."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:666
-#, rust-format
-msgid "Failed to clear logs: {error}"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:679
-msgid "System journal"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:684
-msgid "Daemon log file not found."
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:690
+#: src/logs_page/activity_logs_page.rs:771
 msgid "Exported."
 msgstr ""
 
-#: src/logs_page/system_change_row.rs:26
+#: src/logs_page/system_change_row.rs:17
 #, rust-format
 msgid "{time} · {outcome} · requested by user {uid}"
 msgstr ""
 
-#: src/logs_page/system_change_row.rs:30
+#: src/logs_page/system_change_row.rs:20
 #, rust-format
 msgid "{time} · {outcome} · requested by an unknown user"
 msgstr ""
 
-#: src/logs_page/system_change_row.rs:66
+#: src/logs_page/system_change_row.rs:47
 msgid "This change lowered protection"
 msgstr ""
 
@@ -2224,94 +2233,94 @@ msgid ""
 "that you or your administrator added them on purpose."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:56
+#: src/quarantine_page/quarantine_entries_page.rs:58
 msgid "File hash mismatch — file may be corrupted"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:59
+#: src/quarantine_page/quarantine_entries_page.rs:61
 msgid ""
 "This quarantine record has no usable hash, so the file cannot be verified "
 "and is not restored. You can still delete it."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:63
+#: src/quarantine_page/quarantine_entries_page.rs:65
 msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:67
+#: src/quarantine_page/quarantine_entries_page.rs:69
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:70
+#: src/quarantine_page/quarantine_entries_page.rs:72
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:78
+#: src/quarantine_page/quarantine_entries_page.rs:80
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
 "{error}. File may be orphaned at: {path}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:87
+#: src/quarantine_page/quarantine_entries_page.rs:89
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:189
+#: src/quarantine_page/quarantine_entries_page.rs:190
 msgid "the scanner program is not installed"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:195
+#: src/quarantine_page/quarantine_entries_page.rs:196
 #, rust-format
 msgid ""
 "the scanner program at {program} can be replaced by your account through "
 "{path}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:206
+#: src/quarantine_page/quarantine_entries_page.rs:207
 #, rust-format
 msgid "the file could not be passed to the scanner: {error}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:210
+#: src/quarantine_page/quarantine_entries_page.rs:211
 #, rust-format
 msgid "the scanner could not be started: {error}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:213
+#: src/quarantine_page/quarantine_entries_page.rs:214
 msgid "the scan took too long"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:221
+#: src/quarantine_page/quarantine_entries_page.rs:222
 #, rust-format
 msgid "the quarantined copy could not be read: {error}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:237
+#: src/quarantine_page/quarantine_entries_page.rs:238
 msgid "Restore This File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:238
+#: src/quarantine_page/quarantine_entries_page.rs:239
 msgid "ClamAV no longer detects this file with today's signatures."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:239
-#: src/quarantine_page/quarantine_entry_row.rs:195
+#: src/quarantine_page/quarantine_entries_page.rs:240
+#: src/quarantine_page/quarantine_entry_row.rs:230
 msgid "Restore"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:243
+#: src/quarantine_page/quarantine_entries_page.rs:244
 msgid "Restore a File ClamAV Still Detects?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:245
+#: src/quarantine_page/quarantine_entries_page.rs:246
 #, rust-format
 msgid ""
 "ClamAV still detects this file as {detection} with today's signatures. Only "
@@ -2319,40 +2328,40 @@ msgid ""
 "first."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:250
-#: src/quarantine_page/quarantine_entries_page.rs:259
+#: src/quarantine_page/quarantine_entries_page.rs:251
+#: src/quarantine_page/quarantine_entries_page.rs:260
 msgid "Restore Anyway"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:254
+#: src/quarantine_page/quarantine_entries_page.rs:255
 msgid "Restore an Unchecked File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:256
+#: src/quarantine_page/quarantine_entries_page.rs:257
 #, rust-format
 msgid "The file could not be checked again before restoring it: {error}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:270
+#: src/quarantine_page/quarantine_entries_page.rs:271
 msgid "This location is outside your home folder."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:321
+#: src/quarantine_page/quarantine_entries_page.rs:363
 msgid "The file goes back to:"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:433
+#: src/quarantine_page/quarantine_entries_page.rs:465
 #, rust-format
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:461
+#: src/quarantine_page/quarantine_entries_page.rs:490
 msgid "Clear Old Items?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:464
+#: src/quarantine_page/quarantine_entries_page.rs:493
 #, rust-format
 msgid ""
 "{count} quarantined file older than 30 days will be permanently deleted."
@@ -2361,87 +2370,95 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:472
-#: src/quarantine_page/quarantine_entries_page.rs:496
-#: src/quarantine_page/quarantine_entry_row.rs:204
+#: src/quarantine_page/quarantine_entries_page.rs:501
+#: src/quarantine_page/quarantine_entries_page.rs:525
+#: src/quarantine_page/quarantine_entry_row.rs:240
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:315
 #: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:80
 msgid "Delete"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:492
+#: src/quarantine_page/quarantine_entries_page.rs:521
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:493
+#: src/quarantine_page/quarantine_entries_page.rs:522
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:544
+#: src/quarantine_page/quarantine_entries_page.rs:573
 #: src/scan_page/scan_options_section.rs:109
 #: src/scan_page/scan_page_component.rs:566
 msgid "More"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:548
+#: src/quarantine_page/quarantine_entries_page.rs:577
 msgid "Clear Old Items…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:566
+#: src/quarantine_page/quarantine_entries_page.rs:595
 msgid "Check Again"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:567
+#: src/quarantine_page/quarantine_entries_page.rs:596
 msgid "Scan every quarantined file with the current signatures"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:582
+#: src/quarantine_page/quarantine_entries_page.rs:611
 msgid "Search"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:603
+#: src/quarantine_page/quarantine_entries_page.rs:632
 msgid "Search by threat name or path"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:618
+#: src/quarantine_page/quarantine_entries_page.rs:647
 msgid "Quarantine Storage"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:619
+#: src/quarantine_page/quarantine_entries_page.rs:648
 msgid ""
 "Detected threats isolated from your system. Expand an entry to check its "
 "reputation."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:622
+#: src/quarantine_page/quarantine_entries_page.rs:651
 msgid "Total Size"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:701
+#: src/quarantine_page/quarantine_entries_page.rs:674
+msgid "Dismiss"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:691
+msgid "Quarantine can't be read"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:753
 msgid "Loading quarantine…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:705
+#: src/quarantine_page/quarantine_entries_page.rs:757
 msgid "Quarantine is empty"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:706
+#: src/quarantine_page/quarantine_entries_page.rs:758
 msgid "Threats you quarantine will appear here"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:724
+#: src/quarantine_page/quarantine_entries_page.rs:776
 msgid "Hash copied to clipboard"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:782
+#: src/quarantine_page/quarantine_entries_page.rs:834
 msgid "report it from the scan results"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:898
+#: src/quarantine_page/quarantine_entries_page.rs:989
 msgid "Every quarantined file is still detected or couldn't be checked"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:901
+#: src/quarantine_page/quarantine_entries_page.rs:992
 #, rust-format
 msgid ""
 "{count} quarantined file is no longer detected. Check it before restoring it."
@@ -2451,66 +2468,70 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:93
+#: src/quarantine_page/quarantine_entry_row.rs:82
 msgid "No longer detected"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:96
+#: src/quarantine_page/quarantine_entry_row.rs:85
 msgid "Still detected"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:124
+#: src/quarantine_page/quarantine_entry_row.rs:113
 msgid ""
 "Unknown. This quarantine record has no usable hash, so the file cannot be "
 "verified, checked online, trusted or restored. You can still delete it."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:188
+#: src/quarantine_page/quarantine_entry_row.rs:139
+msgid "Not checked yet"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:223
 msgid "Integrity Unknown"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:213
+#: src/quarantine_page/quarantine_entry_row.rs:251
 msgid "Reputation"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:214
+#: src/quarantine_page/quarantine_entry_row.rs:252
 msgid ""
 "Only the file's SHA-256 hash is sent. The file itself never leaves this "
 "computer."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:218
+#: src/quarantine_page/quarantine_entry_row.rs:256
 msgid "Check"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:236
-#: src/quarantine_page/quarantine_entry_row.rs:249
+#: src/quarantine_page/quarantine_entry_row.rs:274
+#: src/quarantine_page/quarantine_entry_row.rs:287
 msgid "Add Key"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:257
+#: src/quarantine_page/quarantine_entry_row.rs:295
 msgid "View Report"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:266
+#: src/quarantine_page/quarantine_entry_row.rs:304
 msgid "False Positive"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:267
+#: src/quarantine_page/quarantine_entry_row.rs:305
 msgid ""
 "Trust this exact file so ClamAV stops reporting it on this computer, then "
 "restore it. Report it so a signature update fixes the detection for everyone."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:271
+#: src/quarantine_page/quarantine_entry_row.rs:309
 msgid "Report…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:278
+#: src/quarantine_page/quarantine_entry_row.rs:316
 msgid "Trust…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:295
+#: src/quarantine_page/quarantine_entry_row.rs:333
 msgid "Copy Hash"
 msgstr ""
 

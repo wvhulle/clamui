@@ -6,48 +6,30 @@ use crate::host_services::{
     settings_helper::helper_audit_records::{HelperAuditEntry, Requester},
 };
 
-pub enum SystemChangeRow {
-    ChangeRecorded(HelperAuditEntry),
-    ListNotice(String),
+pub struct SystemChangeRow {
+    audit_entry: HelperAuditEntry,
 }
 
 impl SystemChangeRow {
-    fn row_title(&self) -> String {
-        match self {
-            Self::ChangeRecorded(audit_entry) => audit_entry.action_subject.clone(),
-            Self::ListNotice(notice_text) => notice_text.clone(),
-        }
-    }
-
     fn row_subtitle(&self) -> String {
-        match self {
-            Self::ChangeRecorded(audit_entry) => match audit_entry.requester {
-                Requester::KnownUser { user_id } => {
-                    gettext("{time} · {outcome} · requested by user {uid}")
-                        .replace("{uid}", &user_id.to_string())
-                }
-                Requester::UnknownUser => {
-                    gettext("{time} · {outcome} · requested by an unknown user")
-                }
+        match self.audit_entry.requester {
+            Requester::KnownUser { user_id } => {
+                gettext("{time} · {outcome} · requested by user {uid}")
+                    .replace("{uid}", &user_id.to_string())
             }
-            .replace("{time}", &exact_local_time_text(audit_entry.recorded_at))
-            .replace("{outcome}", &audit_entry.audited_outcome.described()),
-            Self::ListNotice(_notice_text) => String::new(),
+            Requester::UnknownUser => gettext("{time} · {outcome} · requested by an unknown user"),
         }
-    }
-
-    fn lowered_protection(&self) -> bool {
-        matches!(self, Self::ChangeRecorded(audit_entry) if audit_entry.lowered_protection())
-    }
-
-    const fn is_notice(&self) -> bool {
-        matches!(self, Self::ListNotice(_))
+        .replace(
+            "{time}",
+            &exact_local_time_text(self.audit_entry.recorded_at),
+        )
+        .replace("{outcome}", &self.audit_entry.audited_outcome.described())
     }
 }
 
 #[relm4::factory(pub)]
 impl FactoryComponent for SystemChangeRow {
-    type Init = Self;
+    type Init = HelperAuditEntry;
     type Input = ();
     type Output = ();
     type CommandOutput = ();
@@ -56,25 +38,24 @@ impl FactoryComponent for SystemChangeRow {
     view! {
         adw::ActionRow {
             set_use_markup: false,
-            set_title: &self.row_title(),
+            set_title: &self.audit_entry.action_subject,
             set_title_lines: 0,
             set_subtitle: &self.row_subtitle(),
-            set_css_classes: if self.is_notice() { &["dim-label"] } else { &[] },
 
             add_prefix = &gtk::Image {
                 set_icon_name: Some("dialog-warning-symbolic"),
                 set_tooltip_text: Some(&gettext("This change lowered protection")),
                 add_css_class: "warning",
-                set_visible: self.lowered_protection(),
+                set_visible: self.audit_entry.lowered_protection(),
             },
         }
     }
 
     fn init_model(
-        system_change: Self::Init,
+        audit_entry: Self::Init,
         _row_index: &Self::Index,
         _sender: FactorySender<Self>,
     ) -> Self {
-        system_change
+        Self { audit_entry }
     }
 }

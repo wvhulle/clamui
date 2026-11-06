@@ -14,8 +14,6 @@ use crate::host_services::{
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SourceAnswer {
-    NotChecked,
-    Checking,
     NeedsKey,
     Answered {
         verdict_text: String,
@@ -32,8 +30,6 @@ pub enum SourceAnswer {
 impl SourceAnswer {
     pub fn displayed_text(&self) -> String {
         match self {
-            Self::NotChecked => gettext("Not checked yet"),
-            Self::Checking => gettext("Checking…"),
             Self::NeedsKey => gettext("Needs a key"),
             Self::Answered { verdict_text } | Self::AnsweredWithReport { verdict_text, .. } => {
                 verdict_text.clone()
@@ -48,16 +44,6 @@ pub struct ReputationAnswers {
     pub circl_answer: SourceAnswer,
     pub bazaar_answer: SourceAnswer,
     pub virustotal_answer: SourceAnswer,
-}
-
-impl ReputationAnswers {
-    pub fn all_set_to(shared_answer: &SourceAnswer) -> Self {
-        Self {
-            circl_answer: shared_answer.clone(),
-            bazaar_answer: shared_answer.clone(),
-            virustotal_answer: shared_answer.clone(),
-        }
-    }
 }
 
 pub fn describe_known_file(known_file_lookup: &KnownFileLookup) -> SourceAnswer {

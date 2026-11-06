@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
 use jiff::{SignedDuration, Timestamp};
@@ -34,16 +32,20 @@ use crate::{
         settings_helper::trust_requests::{
             TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
         },
+        threat_intel::file_reputation_check::{ReputationAnswers, check_hash_reputation},
     },
     preferences_dialog::preferences_dialog_component::PreferencesPageName,
-    quarantine_page::quarantine_entry_row::{
-        QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput, RowRecheckState,
+    quarantine_page::{
+        quarantine_entry_row::{
+            QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput,
+        },
+        quarantine_page_state::{EntryOperationKind, QuarantineListing, QuarantinePageState},
     },
     shared_widgets::{
         awaited_dialogs::{alert_response, deliver_local_outcome},
-        component_streams::{RunningStream, run_stream, run_stream_to_completion},
+        component_streams::{run_stream, run_stream_to_completion},
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
-        loading_indicators::{FirstLoad, loading_placeholder_stack},
+        loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
         page_widget_templates::ClampedPage,
         scanner_exit_text::abnormal_scanner_exit_text,
         trust_confirmation_dialog::present_trust_confirmation,
@@ -120,21 +122,11 @@ pub fn entry_is_older_than(
 
 pub struct QuarantineEntriesPage {
     quarantine_vault: QuarantineVault,
-    listed_entries: Vec<QuarantineEntryRecord>,
+    page_state: QuarantinePageState,
     search_text: String,
     entry_rows: FactoryVecDeque<QuarantineEntryRow>,
-    status_message: String,
-    first_load: FirstLoad,
     search_mode_enabled: bool,
     toaster: Toaster,
-    recheck_states: HashMap<i64, RowRecheckState>,
-    recheck_progress: RecheckProgress,
-}
-
-#[derive(Debug)]
-enum RecheckProgress {
-    RecheckIdle,
-    RecheckRunning { _recheck_stream: RunningStream },
 }
 
 #[derive(Debug)]
@@ -142,6 +134,7 @@ pub enum QuarantineEntriesPageInput {
     ReloadEntriesRequested,
     RestoreEntryRequested { entry_id: i64 },
     RestoreEntryConfirmed { entry_id: i64 },
+    RestoreEntryCancelled { entry_id: i64 },
     RecheckAllRequested,
     DeleteEntryRequested { entry_id: i64 },
     DeleteEntryConfirmed { entry_id: i64 },
@@ -149,6 +142,8 @@ pub enum QuarantineEntriesPageInput {
     SearchModeToggled(bool),
     ClearOldEntriesRequested,
     ClearOldEntriesConfirmed,
+    OperationFailuresDismissed,
+    ReputationCheckRequested { entry_id: i64, content_hash: String },
     HashCopyRequested(String),
     OnlineLookupsRequested,
     ReportLinkRequested(String),
@@ -161,8 +156,14 @@ pub enum QuarantineEntriesPageInput {
 #[derive(Debug)]
 pub enum QuarantineEntriesPageCommand {
     EntriesLoaded(Result<Vec<QuarantineEntryRecord>, QuarantineMoveFailure>),
-    EntryOperationFinished(Result<QuarantineEntryRecord, QuarantineMoveFailure>),
-    OldEntriesCleared(Vec<Result<QuarantineEntryRecord, QuarantineMoveFailure>>),
+    EntryOperationFinished {
+        entry_id: i64,
+        operation_outcome: Result<QuarantineEntryRecord, QuarantineMoveFailure>,
+    },
+    ReputationCheckFinished {
+        entry_id: i64,
+        reputation_answers: ReputationAnswers,
+    },
     TrustChangeFinished(TrustOutcome),
     FalsePositiveReportFinished(SubmissionOutcome),
     RestoreCheckFinished {
@@ -279,21 +280,60 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
 }
 
 impl QuarantineEntriesPage {
-    fn send_recheck_states(&self) {
+    fn send_row_states(&self) {
         self.entry_rows
             .iter()
             .enumerate()
             .for_each(|(row_position, entry_row)| {
                 self.entry_rows.send(
                     row_position,
-                    QuarantineEntryRowInput::RecheckStateChanged(
-                        self.recheck_states
-                            .get(&entry_row.entry_id())
-                            .cloned()
-                            .unwrap_or(RowRecheckState::NotRechecked),
+                    QuarantineEntryRowInput::RowStateChanged(
+                        self.page_state.row_state(entry_row.entry_id()),
                     ),
                 );
             });
+    }
+
+    fn listing_failure_text(&self) -> String {
+        match self.page_state.listing() {
+            QuarantineListing::ListingFailed(load_failure) => {
+                describe_quarantine_failure(load_failure)
+            }
+            QuarantineListing::ListingLoading | QuarantineListing::ListingLoaded(_) => {
+                String::new()
+            }
+        }
+    }
+
+    fn operation_failures_text(&self) -> String {
+        self.page_state
+            .operation_failures()
+            .map(describe_quarantine_failure)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn start_entry_operation(&mut self, entry_id: i64, operation_kind: EntryOperationKind) -> bool {
+        let operation_started = self
+            .page_state
+            .begin_entry_operation(entry_id, operation_kind)
+            .is_ok();
+        self.send_row_states();
+        operation_started
+    }
+
+    fn finish_entry_operation(
+        &mut self,
+        entry_id: i64,
+        operation_outcome: Result<QuarantineEntryRecord, QuarantineMoveFailure>,
+        sender: &ComponentSender<Self>,
+    ) {
+        self.page_state
+            .finish_entry_operation(entry_id, operation_outcome);
+        self.send_row_states();
+        if !self.page_state.operations_running() {
+            self.reload_entries(sender);
+        }
     }
 
     fn present_restore_confirmation(
@@ -304,10 +344,12 @@ impl QuarantineEntriesPage {
         sender: &ComponentSender<Self>,
     ) {
         let Some(entry_record) = self
-            .listed_entries
+            .page_state
+            .listed_entries()
             .iter()
             .find(|listed_entry| listed_entry.entry_id == entry_id)
         else {
+            sender.input(QuarantineEntriesPageInput::RestoreEntryCancelled { entry_id });
             return;
         };
         let RestoreConfirmationText {
@@ -359,47 +401,34 @@ impl QuarantineEntriesPage {
             sender.input_sender().clone(),
             alert_response(restore_dialog, root.clone().upcast()),
             move |chosen_response| {
-                (chosen_response == "restore")
-                    .then_some(QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id })
+                Some(if chosen_response == "restore" {
+                    QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id }
+                } else {
+                    QuarantineEntriesPageInput::RestoreEntryCancelled { entry_id }
+                })
             },
         );
     }
 
     fn start_recheck(&mut self, sender: &ComponentSender<Self>) {
-        if matches!(
-            self.recheck_progress,
-            RecheckProgress::RecheckRunning { .. }
-        ) || self.listed_entries.is_empty()
-        {
-            return;
-        }
-        let rechecked_ids = self
-            .listed_entries
-            .iter()
-            .map(|listed_entry| listed_entry.entry_id)
-            .collect::<Vec<_>>();
-        rechecked_ids.iter().for_each(|entry_id| {
-            self.recheck_states
-                .insert(*entry_id, RowRecheckState::Rechecking);
-        });
-        self.send_recheck_states();
         let quarantine_vault = self.quarantine_vault.clone();
-        let recheck_commands = stream::iter(rechecked_ids)
-            .then(move |entry_id| {
-                let quarantine_vault = quarantine_vault.clone();
-                async move {
-                    QuarantineEntriesPageCommand::RecheckVerdictArrived {
-                        entry_id,
-                        content_verdict: verdict_for_entry(&quarantine_vault, entry_id).await,
+        let _recheck_refused = self.page_state.start_recheck_run(|rechecked_ids| {
+            let recheck_commands = stream::iter(rechecked_ids)
+                .then(move |entry_id| {
+                    let quarantine_vault = quarantine_vault.clone();
+                    async move {
+                        QuarantineEntriesPageCommand::RecheckVerdictArrived {
+                            entry_id,
+                            content_verdict: verdict_for_entry(&quarantine_vault, entry_id).await,
+                        }
                     }
-                }
-            })
-            .chain(stream::iter([
-                QuarantineEntriesPageCommand::RecheckFinished,
-            ]));
-        self.recheck_progress = RecheckProgress::RecheckRunning {
-            _recheck_stream: run_stream(sender, recheck_commands),
-        };
+                })
+                .chain(stream::iter([
+                    QuarantineEntriesPageCommand::RecheckFinished,
+                ]));
+            run_stream(sender, recheck_commands)
+        });
+        self.send_row_states();
     }
 
     fn reload_entries(&self, sender: &ComponentSender<Self>) {
@@ -413,7 +442,8 @@ impl QuarantineEntriesPage {
 
     fn old_entries(&self) -> Vec<&QuarantineEntryRecord> {
         let current_time = Timestamp::now();
-        self.listed_entries
+        self.page_state
+            .listed_entries()
             .iter()
             .filter(|entry_record| entry_is_older_than(entry_record, OLD_ENTRY_AGE, current_time))
             .collect()
@@ -421,7 +451,8 @@ impl QuarantineEntriesPage {
 
     fn total_stored_size(&self) -> String {
         byte_size_text(
-            self.listed_entries
+            self.page_state
+                .listed_entries()
                 .iter()
                 .map(|entry_record| entry_record.file_size)
                 .sum(),
@@ -429,26 +460,24 @@ impl QuarantineEntriesPage {
     }
 
     fn entry_count_text(&self) -> String {
+        let listed_count = self.page_state.listed_entries().len();
         ngettext(
             "{count} item",
             "{count} items",
-            u32::try_from(self.listed_entries.len()).unwrap_or(u32::MAX),
+            u32::try_from(listed_count).unwrap_or(u32::MAX),
         )
-        .replace("{count}", &self.listed_entries.len().to_string())
+        .replace("{count}", &listed_count.to_string())
     }
 
     fn show_matching_entries(&mut self) {
         let mut entry_rows_guard = self.entry_rows.guard();
         entry_rows_guard.clear();
-        self.listed_entries
-            .iter()
-            .filter(|entry_record| entry_matches_search(entry_record, &self.search_text))
-            .cloned()
-            .for_each(|entry_record| {
-                entry_rows_guard.push_back(entry_record);
+        self.page_state
+            .matching_rows(&self.search_text)
+            .into_iter()
+            .for_each(|row_init| {
+                entry_rows_guard.push_back(row_init);
             });
-        drop(entry_rows_guard);
-        self.send_recheck_states();
     }
 
     fn confirm_clearing_old_entries(
@@ -566,8 +595,8 @@ impl Component for QuarantineEntriesPage {
                         set_label: &gettext("Check Again"),
                         set_tooltip_text: Some(&gettext("Scan every quarantined file with the current signatures")),
                         #[watch]
-                        set_sensitive: matches!(model.recheck_progress, RecheckProgress::RecheckIdle)
-                            && !model.listed_entries.is_empty(),
+                        set_sensitive: !model.page_state.recheck_running()
+                            && !model.page_state.listed_entries().is_empty(),
                         connect_clicked => QuarantineEntriesPageInput::RecheckAllRequested,
                     },
 
@@ -626,14 +655,27 @@ impl Component for QuarantineEntriesPage {
                             },
                         },
 
-                        gtk::Label {
-                            set_xalign: 0.0,
-                            set_wrap: true,
-                            set_selectable: true,
+                        gtk::Box {
+                            set_spacing: 12,
                             #[watch]
-                            set_visible: !model.status_message.is_empty(),
-                            #[watch]
-                            set_label: &model.status_message,
+                            set_visible: model.page_state.operation_failures().next().is_some(),
+
+                            gtk::Label {
+                                set_xalign: 0.0,
+                                set_hexpand: true,
+                                set_wrap: true,
+                                set_selectable: true,
+                                add_css_class: "error",
+                                #[watch]
+                                set_label: &model.operation_failures_text(),
+                            },
+
+                            gtk::Button {
+                                set_label: &gettext("Dismiss"),
+                                set_valign: gtk::Align::Center,
+                                add_css_class: "flat",
+                                connect_clicked => QuarantineEntriesPageInput::OperationFailuresDismissed,
+                            },
                         },
 
                         #[local_ref]
@@ -643,8 +685,15 @@ impl Component for QuarantineEntriesPage {
                             #[wrap(Some)]
                             #[local_ref]
                             set_placeholder = placeholder_stack -> gtk::Stack {
+                                add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
+                                    add_css_class: "compact",
+                                    set_icon_name: Some("dialog-error-symbolic"),
+                                    set_title: &gettext("Quarantine can't be read"),
+                                    #[watch]
+                                    set_description: Some(&gtk::glib::markup_escape_text(&model.listing_failure_text())),
+                                },
                                 #[watch]
-                                set_visible_child_name: model.first_load.shown_page_name(),
+                                set_visible_child_name: model.page_state.listing().placeholder_page_name(),
                             },
                         },
                     },
@@ -667,6 +716,13 @@ impl Component for QuarantineEntriesPage {
                 QuarantineEntryRowOutput::DeletionRequested { entry_id } => {
                     QuarantineEntriesPageInput::DeleteEntryRequested { entry_id }
                 }
+                QuarantineEntryRowOutput::ReputationCheckRequested {
+                    entry_id,
+                    content_hash,
+                } => QuarantineEntriesPageInput::ReputationCheckRequested {
+                    entry_id,
+                    content_hash,
+                },
                 QuarantineEntryRowOutput::HashCopyRequested(file_hash) => {
                     QuarantineEntriesPageInput::HashCopyRequested(file_hash)
                 }
@@ -685,15 +741,11 @@ impl Component for QuarantineEntriesPage {
             });
         let model = Self {
             quarantine_vault,
-            listed_entries: Vec::new(),
+            page_state: QuarantinePageState::new(),
             search_text: String::new(),
             entry_rows,
-            status_message: String::new(),
-            first_load: FirstLoad::StillLoading,
             search_mode_enabled: false,
             toaster: Toaster::new(&root),
-            recheck_states: HashMap::new(),
-            recheck_progress: RecheckProgress::RecheckIdle,
         };
         model.reload_entries(&sender);
         let entry_list = model.entry_rows.widget();
@@ -788,9 +840,10 @@ impl Component for QuarantineEntriesPage {
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {
-                self.recheck_states
-                    .insert(entry_id, RowRecheckState::Rechecking);
-                self.send_recheck_states();
+                if !self.start_entry_operation(entry_id, EntryOperationKind::VerifyingBeforeRestore)
+                {
+                    return;
+                }
                 sender.oneshot_command(async move {
                     QuarantineEntriesPageCommand::RestoreCheckFinished {
                         entry_id,
@@ -800,14 +853,43 @@ impl Component for QuarantineEntriesPage {
             }
             QuarantineEntriesPageInput::RecheckAllRequested => self.start_recheck(&sender),
             QuarantineEntriesPageInput::RestoreEntryConfirmed { entry_id } => {
+                if self.page_state.confirm_verified_restore(entry_id).is_err() {
+                    return;
+                }
+                self.send_row_states();
                 run_stream_to_completion(
                     &sender,
                     stream::once(async move {
-                        QuarantineEntriesPageCommand::EntryOperationFinished(
-                            quarantine_vault.restore_quarantined_file(entry_id).await,
-                        )
+                        QuarantineEntriesPageCommand::EntryOperationFinished {
+                            entry_id,
+                            operation_outcome: quarantine_vault
+                                .restore_quarantined_file(entry_id)
+                                .await,
+                        }
                     }),
                 );
+            }
+            QuarantineEntriesPageInput::RestoreEntryCancelled { entry_id } => {
+                self.page_state.cancel_verified_restore(entry_id);
+                self.send_row_states();
+            }
+            QuarantineEntriesPageInput::OperationFailuresDismissed => {
+                self.page_state.dismiss_operation_failures();
+            }
+            QuarantineEntriesPageInput::ReputationCheckRequested {
+                entry_id,
+                content_hash,
+            } => {
+                if self.page_state.begin_reputation_check(entry_id).is_err() {
+                    return;
+                }
+                self.send_row_states();
+                sender.oneshot_command(async move {
+                    QuarantineEntriesPageCommand::ReputationCheckFinished {
+                        entry_id,
+                        reputation_answers: check_hash_reputation(content_hash).await,
+                    }
+                });
             }
             QuarantineEntriesPageInput::SearchTextChanged(search_text) => {
                 self.search_text = search_text;
@@ -822,20 +904,27 @@ impl Component for QuarantineEntriesPage {
                     .into_iter()
                     .map(|entry_record| entry_record.entry_id)
                     .collect::<Vec<_>>();
+                let started_entry_ids = old_entry_ids
+                    .into_iter()
+                    .filter(|entry_id| {
+                        self.page_state
+                            .begin_entry_operation(*entry_id, EntryOperationKind::DeletingEntry)
+                            .is_ok()
+                    })
+                    .collect::<Vec<_>>();
+                self.send_row_states();
                 run_stream_to_completion(
                     &sender,
-                    stream::once(async move {
-                        QuarantineEntriesPageCommand::OldEntriesCleared(
-                            stream::iter(old_entry_ids)
-                                .then(|entry_id| {
-                                    let quarantine_vault = quarantine_vault.clone();
-                                    async move {
-                                        quarantine_vault.delete_quarantined_file(entry_id).await
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                                .await,
-                        )
+                    stream::iter(started_entry_ids).then(move |entry_id| {
+                        let quarantine_vault = quarantine_vault.clone();
+                        async move {
+                            QuarantineEntriesPageCommand::EntryOperationFinished {
+                                entry_id,
+                                operation_outcome: quarantine_vault
+                                    .delete_quarantined_file(entry_id)
+                                    .await,
+                            }
+                        }
                     }),
                 );
             }
@@ -843,12 +932,18 @@ impl Component for QuarantineEntriesPage {
                 self.confirm_entry_deletion(entry_id, root, &sender);
             }
             QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id } => {
+                if !self.start_entry_operation(entry_id, EntryOperationKind::DeletingEntry) {
+                    return;
+                }
                 run_stream_to_completion(
                     &sender,
                     stream::once(async move {
-                        QuarantineEntriesPageCommand::EntryOperationFinished(
-                            quarantine_vault.delete_quarantined_file(entry_id).await,
-                        )
+                        QuarantineEntriesPageCommand::EntryOperationFinished {
+                            entry_id,
+                            operation_outcome: quarantine_vault
+                                .delete_quarantined_file(entry_id)
+                                .await,
+                        }
                     }),
                 );
             }
@@ -866,33 +961,29 @@ impl Component for QuarantineEntriesPage {
                 entry_id,
                 content_verdict,
             } => {
-                self.recheck_states.insert(
-                    entry_id,
-                    RowRecheckState::Rechecked(content_verdict.clone()),
-                );
-                self.send_recheck_states();
+                self.page_state
+                    .record_recheck_verdict(entry_id, content_verdict.clone());
+                self.send_row_states();
                 self.present_restore_confirmation(entry_id, &content_verdict, root, &sender);
             }
             QuarantineEntriesPageCommand::RecheckVerdictArrived {
                 entry_id,
                 content_verdict,
             } => {
-                self.recheck_states
-                    .insert(entry_id, RowRecheckState::Rechecked(content_verdict));
-                self.send_recheck_states();
+                self.page_state
+                    .record_recheck_verdict(entry_id, content_verdict);
+                self.send_row_states();
+            }
+            QuarantineEntriesPageCommand::ReputationCheckFinished {
+                entry_id,
+                reputation_answers,
+            } => {
+                self.page_state
+                    .record_reputation_answers(entry_id, reputation_answers);
+                self.send_row_states();
             }
             QuarantineEntriesPageCommand::RecheckFinished => {
-                self.recheck_progress = RecheckProgress::RecheckIdle;
-                let cleared_count = self
-                    .recheck_states
-                    .values()
-                    .filter(|recheck_state| {
-                        matches!(
-                            recheck_state,
-                            RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected)
-                        )
-                    })
-                    .count();
+                let cleared_count = self.page_state.finish_recheck_run();
                 self.toaster
                     .add_toast(plain_text_toast(&if cleared_count == 0 {
                         gettext("Every quarantined file is still detected or couldn't be checked")
@@ -917,32 +1008,14 @@ impl Component for QuarantineEntriesPage {
                 self.toaster
                     .add_toast(plain_text_toast(&trust_outcome_text(&trust_outcome)));
             }
-            QuarantineEntriesPageCommand::EntriesLoaded(Ok(listed_entries)) => {
-                self.first_load = FirstLoad::LoadFinished;
-                self.listed_entries = listed_entries;
+            QuarantineEntriesPageCommand::EntriesLoaded(load_outcome) => {
+                self.page_state.record_loaded_entries(load_outcome);
                 self.show_matching_entries();
             }
-            QuarantineEntriesPageCommand::EntriesLoaded(Err(load_failure)) => {
-                self.first_load = FirstLoad::LoadFinished;
-                self.status_message = describe_quarantine_failure(&load_failure);
-            }
-            QuarantineEntriesPageCommand::EntryOperationFinished(operation_outcome) => {
-                self.status_message = operation_outcome
-                    .err()
-                    .as_ref()
-                    .map(describe_quarantine_failure)
-                    .unwrap_or_default();
-                self.reload_entries(&sender);
-            }
-            QuarantineEntriesPageCommand::OldEntriesCleared(deletion_outcomes) => {
-                self.status_message = deletion_outcomes
-                    .iter()
-                    .filter_map(|deletion_outcome| deletion_outcome.as_ref().err())
-                    .map(describe_quarantine_failure)
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                self.reload_entries(&sender);
-            }
+            QuarantineEntriesPageCommand::EntryOperationFinished {
+                entry_id,
+                operation_outcome,
+            } => self.finish_entry_operation(entry_id, operation_outcome, &sender),
         }
     }
 }

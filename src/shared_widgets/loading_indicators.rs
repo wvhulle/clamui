@@ -2,6 +2,7 @@ use relm4::{adw, gtk, gtk::prelude::*};
 
 pub const LOADING_PAGE_NAME: &str = "loading";
 pub const LOADED_PAGE_NAME: &str = "loaded";
+pub const LOAD_FAILED_PAGE_NAME: &str = "load-failed";
 pub const IDLE_PAGE_NAME: &str = "idle";
 pub const BUSY_PAGE_NAME: &str = "busy";
 
