@@ -16,10 +16,12 @@ use crate::{
             DetectedThreat, ThreatIdentity, ThreatSeverity, displayed_threat_name,
             sanitize_scanner_line,
         },
+        quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
         settings_helper::trust_requests::{
             TrustChoice, signature_can_be_ignored, signature_of_detection,
         },
     },
+    quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     shared_widgets::false_positive_report_dialog::ReportedDetection,
 };
 
@@ -117,7 +119,7 @@ pub enum ThreatQuarantineState {
     AwaitingDecision,
     MovingToQuarantine,
     MovedToQuarantine,
-    QuarantineFailed { failure_message: String },
+    QuarantineFailed(QuarantineMoveFailure),
 }
 
 pub struct DetectedThreatRow {
@@ -169,8 +171,11 @@ impl DetectedThreatRow {
                 gettext("Moved to quarantine: {path}. Check its reputation on the Quarantine page.")
                     .replace("{path}", &displayed_path)
             }
-            ThreatQuarantineState::QuarantineFailed { failure_message } => {
-                format!("{displayed_path}\n{failure_message}")
+            ThreatQuarantineState::QuarantineFailed(move_failure) => {
+                format!(
+                    "{displayed_path}\n{}",
+                    describe_quarantine_failure(move_failure)
+                )
             }
         }
     }
@@ -178,8 +183,7 @@ impl DetectedThreatRow {
     pub fn can_request_quarantine(&self) -> bool {
         matches!(
             self.quarantine_state,
-            ThreatQuarantineState::AwaitingDecision
-                | ThreatQuarantineState::QuarantineFailed { .. }
+            ThreatQuarantineState::AwaitingDecision | ThreatQuarantineState::QuarantineFailed(_)
         )
     }
 

@@ -145,9 +145,8 @@ impl QuarantineEntryRow {
     }
 
     fn source_needs_key(&self, chosen_source: fn(&ReputationAnswers) -> &SourceAnswer) -> bool {
-        self.checked_answers().is_some_and(|reputation_answers| {
-            *chosen_source(reputation_answers) == SourceAnswer::NeedsKey
-        })
+        self.checked_answers()
+            .is_some_and(|reputation_answers| chosen_source(reputation_answers).needs_key())
     }
 
     fn virustotal_report_url(&self) -> Option<&str> {
@@ -156,7 +155,7 @@ impl QuarantineEntryRow {
                 SourceAnswer::AnsweredWithReport { report_url, .. } => Some(report_url.as_str()),
                 SourceAnswer::NeedsKey
                 | SourceAnswer::Answered { .. }
-                | SourceAnswer::Failed { .. } => None,
+                | SourceAnswer::Failed(_) => None,
             }
         })
     }

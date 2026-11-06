@@ -61,24 +61,16 @@ fn describe_resolved_key(resolved_key: &ResolvedApiKey) -> String {
 enum SystemKeyFileStatus {
     CheckingKeyFile,
     KeyFileReadable { masked_key: String },
-    KeyFileNotReadable { denial_explanation: String },
-    KeyFileFailed { failure_explanation: String },
+    KeyFileFailed(KeyStorageFailure),
 }
 
 impl SystemKeyFileStatus {
-    fn from_key_status(key_status: &Result<ResolvedApiKey, KeyStorageFailure>) -> Self {
+    fn from_key_status(key_status: Result<ResolvedApiKey, KeyStorageFailure>) -> Self {
         match key_status {
             Ok(resolved_key) => Self::KeyFileReadable {
-                masked_key: describe_resolved_key(resolved_key),
+                masked_key: describe_resolved_key(&resolved_key),
             },
-            Err(key_failure @ KeyStorageFailure::KeyFilePermissionDenied { .. }) => {
-                Self::KeyFileNotReadable {
-                    denial_explanation: describe_key_failure(key_failure),
-                }
-            }
-            Err(key_failure) => Self::KeyFileFailed {
-                failure_explanation: describe_key_failure(key_failure),
-            },
+            Err(key_failure) => Self::KeyFileFailed(key_failure),
         }
     }
 }
@@ -128,12 +120,12 @@ impl ServiceKeySection {
                     SystemKeyFileStatus::KeyFileReadable { masked_key } => {
                         format!("{masked_key}\n{shown_path}")
                     }
-                    SystemKeyFileStatus::KeyFileNotReadable { denial_explanation } => {
-                        format!("••••\n{shown_path}\n{denial_explanation}")
+                    SystemKeyFileStatus::KeyFileFailed(
+                        key_failure @ KeyStorageFailure::KeyFilePermissionDenied { .. },
+                    ) => format!("••••\n{shown_path}\n{}", describe_key_failure(key_failure)),
+                    SystemKeyFileStatus::KeyFileFailed(key_failure) => {
+                        format!("{shown_path}\n{}", describe_key_failure(key_failure))
                     }
-                    SystemKeyFileStatus::KeyFileFailed {
-                        failure_explanation,
-                    } => format!("{shown_path}\n{failure_explanation}"),
                 }
             }
             KeySource::UserKeyring => String::new(),
@@ -262,16 +254,16 @@ impl Component for ServiceKeySection {
         _root: &Self::Root,
     ) {
         self.entered_key_cleared = false;
-        if let ServiceKeySectionCommand::KeyStatusRead(key_status) = &group_command {
-            self.system_key_file_status = SystemKeyFileStatus::from_key_status(key_status);
-            self.keyring_key_stored = matches!(key_status, Ok(ResolvedApiKey::FromKeyring(_)));
-        }
         match group_command {
-            ServiceKeySectionCommand::KeyStatusRead(Ok(resolved_key)) => {
-                self.key_status_text = describe_resolved_key(&resolved_key);
+            ServiceKeySectionCommand::KeyStatusRead(key_status) => {
+                self.keyring_key_stored = matches!(key_status, Ok(ResolvedApiKey::FromKeyring(_)));
+                self.key_status_text = match &key_status {
+                    Ok(resolved_key) => describe_resolved_key(resolved_key),
+                    Err(key_failure) => describe_key_failure(key_failure),
+                };
+                self.system_key_file_status = SystemKeyFileStatus::from_key_status(key_status);
             }
-            ServiceKeySectionCommand::KeyStatusRead(Err(key_failure))
-            | ServiceKeySectionCommand::KeyChanged(Err(key_failure)) => {
+            ServiceKeySectionCommand::KeyChanged(Err(key_failure)) => {
                 self.key_status_text = describe_key_failure(&key_failure);
             }
             ServiceKeySectionCommand::KeyChanged(Ok(())) => self.refresh_key_status(&sender),

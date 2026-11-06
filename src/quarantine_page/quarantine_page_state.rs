@@ -575,7 +575,8 @@ mod quarantine_page_state_tests {
                     ..
                 },
                 ..
-            }] if *reputation_answers == checked_answers()
+            }] if reputation_answers.virustotal_answer.displayed_text() == "Unknown to VirusTotal"
+                && reputation_answers.circl_answer.needs_key()
         ));
     }
 

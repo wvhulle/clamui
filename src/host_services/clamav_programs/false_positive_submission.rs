@@ -47,13 +47,25 @@ pub fn open_detected_file(file_path: &Path) -> io::Result<File> {
         .open(file_path)
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum SubmissionOutcome {
     ReportSent,
     ContactIncomplete,
     SubmitterMissing,
     SubmitterReplaceable,
-    SubmissionFailed { failure_text: String },
+    SubmissionFailed(SubmissionFailure),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SubmissionFailure {
+    #[error("the content could not be handed to clamsubmit: {0}")]
+    ContentPipeFailed(#[source] io::Error),
+    #[error("clamsubmit could not be run: {0}")]
+    SubmitterRunFailed(#[source] io::Error),
+    #[error("the upload took too long")]
+    UploadTimedOut(#[from] tokio::time::error::Elapsed),
+    #[error("clamsubmit printed: {submitter_output}")]
+    ReportedBySubmitter { submitter_output: String },
 }
 
 fn field_is_plain(field_text: &str) -> bool {
@@ -116,39 +128,42 @@ pub async fn submit_false_positive(
             return SubmissionOutcome::SubmitterReplaceable;
         }
     };
-    let content_pipe = match pipe_content_for_child(plaintext_source) {
-        Ok(content_pipe) => content_pipe,
-        Err(pipe_failure) => {
-            return SubmissionOutcome::SubmissionFailed {
-                failure_text: pipe_failure.to_string(),
-            };
-        }
-    };
-    let mut submission_command = host_program_async_command(&submitter_path, &[]);
+    match run_submitter(&submitter_path, &false_positive_report, plaintext_source).await {
+        Ok(()) => SubmissionOutcome::ReportSent,
+        Err(submission_failure) => SubmissionOutcome::SubmissionFailed(submission_failure),
+    }
+}
+
+fn first_printed_line(submission_output: &std::process::Output) -> String {
+    String::from_utf8_lossy(&submission_output.stderr)
+        .lines()
+        .chain(String::from_utf8_lossy(&submission_output.stdout).lines())
+        .find(|output_line| !output_line.trim().is_empty())
+        .unwrap_or_default()
+        .to_owned()
+}
+
+async fn run_submitter(
+    submitter_path: &Path,
+    false_positive_report: &FalsePositiveReport,
+    plaintext_source: impl Read + Send + 'static,
+) -> Result<(), SubmissionFailure> {
+    let content_pipe =
+        pipe_content_for_child(plaintext_source).map_err(SubmissionFailure::ContentPipeFailed)?;
+    let mut submission_command = host_program_async_command(submitter_path, &[]);
     submission_command
-        .args(submission_arguments(&false_positive_report))
+        .args(submission_arguments(false_positive_report))
         .stdin(Stdio::from(content_pipe))
         .kill_on_drop(true);
-    match timeout(SUBMISSION_TIMEOUT, submission_command.output()).await {
-        Ok(Ok(submission_output)) if submission_output.status.success() => {
-            SubmissionOutcome::ReportSent
-        }
-        Ok(Ok(submission_output)) => SubmissionOutcome::SubmissionFailed {
-            failure_text: sanitize_scanner_line(
-                String::from_utf8_lossy(&submission_output.stderr)
-                    .lines()
-                    .chain(String::from_utf8_lossy(&submission_output.stdout).lines())
-                    .find(|output_line| !output_line.trim().is_empty())
-                    .unwrap_or_default(),
-            ),
-        },
-        Ok(Err(spawn_failure)) => SubmissionOutcome::SubmissionFailed {
-            failure_text: spawn_failure.to_string(),
-        },
-        Err(_submission_timed_out) => SubmissionOutcome::SubmissionFailed {
-            failure_text: gettext("the upload took too long"),
-        },
+    let submission_output = timeout(SUBMISSION_TIMEOUT, submission_command.output())
+        .await?
+        .map_err(SubmissionFailure::SubmitterRunFailed)?;
+    if submission_output.status.success() {
+        return Ok(());
     }
+    Err(SubmissionFailure::ReportedBySubmitter {
+        submitter_output: first_printed_line(&submission_output),
+    })
 }
 
 pub fn submission_outcome_text(submission_outcome: &SubmissionOutcome) -> String {
@@ -165,9 +180,20 @@ pub fn submission_outcome_text(submission_outcome: &SubmissionOutcome) -> String
         SubmissionOutcome::SubmitterReplaceable => {
             gettext("Lazaret refused to run clamsubmit, because your account can replace it")
         }
-        SubmissionOutcome::SubmissionFailed { failure_text } => {
+        SubmissionOutcome::SubmissionFailed(submission_failure) => {
             gettext("The report was not sent: {error}")
-                .replace("{error}", &sanitize_scanner_line(failure_text))
+                .replace("{error}", &submission_failure_text(submission_failure))
+        }
+    }
+}
+
+fn submission_failure_text(submission_failure: &SubmissionFailure) -> String {
+    match submission_failure {
+        SubmissionFailure::ContentPipeFailed(pipe_failure) => pipe_failure.to_string(),
+        SubmissionFailure::SubmitterRunFailed(run_failure) => run_failure.to_string(),
+        SubmissionFailure::UploadTimedOut(_elapsed) => gettext("the upload took too long"),
+        SubmissionFailure::ReportedBySubmitter { submitter_output } => {
+            sanitize_scanner_line(submitter_output)
         }
     }
 }

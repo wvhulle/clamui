@@ -1,18 +1,33 @@
+use std::sync::Arc;
+
 use gettextrs::{gettext, ngettext};
 
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
     threat_intel::{
-        circl_hashlookup_client::{KnownFileLookup, look_up_known_file},
-        malware_bazaar_client::{KnownSampleLookup, look_up_file_hash},
+        circl_hashlookup_client::{CirclLookupFailure, KnownFileLookup, look_up_known_file},
+        malware_bazaar_client::{KnownSampleLookup, MalwareBazaarFailure, look_up_file_hash},
         service_key_storage::{
-            ResolvedApiKey, ThreatIntelService, describe_key_failure, read_api_key,
+            KeyStorageFailure, ResolvedApiKey, ThreatIntelService, describe_key_failure,
+            read_api_key,
         },
         virustotal_api_client::{FileReportLookup, VirusTotalClient, VirusTotalFailure},
     },
 };
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, thiserror::Error)]
+pub enum ReputationLookupFailure {
+    #[error(transparent)]
+    KeyUnavailable(#[from] KeyStorageFailure),
+    #[error(transparent)]
+    CirclLookupFailed(#[from] CirclLookupFailure),
+    #[error(transparent)]
+    BazaarLookupFailed(#[from] MalwareBazaarFailure),
+    #[error(transparent)]
+    VirusTotalLookupFailed(#[from] VirusTotalFailure),
+}
+
+#[derive(Clone, Debug)]
 pub enum SourceAnswer {
     NeedsKey,
     Answered {
@@ -22,9 +37,13 @@ pub enum SourceAnswer {
         verdict_text: String,
         report_url: String,
     },
-    Failed {
-        failure_text: String,
-    },
+    Failed(Arc<ReputationLookupFailure>),
+}
+
+impl From<ReputationLookupFailure> for SourceAnswer {
+    fn from(lookup_failure: ReputationLookupFailure) -> Self {
+        Self::Failed(Arc::new(lookup_failure))
+    }
 }
 
 impl SourceAnswer {
@@ -34,12 +53,16 @@ impl SourceAnswer {
             Self::Answered { verdict_text } | Self::AnsweredWithReport { verdict_text, .. } => {
                 verdict_text.clone()
             }
-            Self::Failed { failure_text } => failure_text.clone(),
+            Self::Failed(lookup_failure) => describe_lookup_failure(lookup_failure),
         }
+    }
+
+    pub const fn needs_key(&self) -> bool {
+        matches!(self, Self::NeedsKey)
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ReputationAnswers {
     pub circl_answer: SourceAnswer,
     pub bazaar_answer: SourceAnswer,
@@ -114,73 +137,127 @@ fn describe_virustotal_failure(virustotal_failure: &VirusTotalFailure) -> String
         VirusTotalFailure::RequestLimitReached => {
             gettext("The VirusTotal request limit was reached. Try again later.")
         }
-        other_failure => other_failure.to_string(),
-    }
-}
-
-async fn stored_key_for(threat_intel_service: ThreatIntelService) -> Result<String, SourceAnswer> {
-    match read_api_key(threat_intel_service).await {
-        Ok(ResolvedApiKey::FromKeyFile(api_key) | ResolvedApiKey::FromKeyring(api_key)) => {
-            Ok(api_key)
+        VirusTotalFailure::UnexpectedStatus { status_code } => {
+            gettext("VirusTotal answered with status {status}")
+                .replace("{status}", &status_code.to_string())
         }
-        Ok(ResolvedApiKey::NotConfigured) => Err(SourceAnswer::NeedsKey),
-        Err(key_failure) => Err(SourceAnswer::Failed {
-            failure_text: describe_key_failure(&key_failure),
-        }),
+        VirusTotalFailure::RequestFailed(request_failure) => {
+            gettext("VirusTotal could not be reached: {error}")
+                .replace("{error}", &request_failure.to_string())
+        }
+        VirusTotalFailure::AnswerUnreadable => {
+            gettext("VirusTotal sent an answer Lazaret cannot read")
+        }
     }
 }
 
-async fn circl_answer(content_hash: &str) -> SourceAnswer {
-    look_up_known_file(content_hash).await.map_or_else(
-        |lookup_failure| SourceAnswer::Failed {
-            failure_text: lookup_failure.to_string(),
-        },
-        |known_file_lookup| describe_known_file(&known_file_lookup),
-    )
+fn describe_circl_failure(circl_failure: &CirclLookupFailure) -> String {
+    match circl_failure {
+        CirclLookupFailure::RequestFailed(request_failure) => {
+            gettext("CIRCL hashlookup could not be reached: {error}")
+                .replace("{error}", &request_failure.to_string())
+        }
+        CirclLookupFailure::AnswerUnreadable => {
+            gettext("CIRCL hashlookup sent an answer that could not be read")
+        }
+        CirclLookupFailure::UnexpectedStatus { status_code } => {
+            gettext("CIRCL hashlookup answered with status {status}")
+                .replace("{status}", &status_code.to_string())
+        }
+    }
 }
 
-async fn bazaar_answer(content_hash: &str) -> SourceAnswer {
-    let auth_key = match stored_key_for(ThreatIntelService::AbuseChService).await {
-        Ok(auth_key) => auth_key,
-        Err(missing_key_answer) => return missing_key_answer,
-    };
-    look_up_file_hash(&auth_key, content_hash)
-        .await
-        .map_or_else(
-            |lookup_failure| SourceAnswer::Failed {
-                failure_text: lookup_failure.to_string(),
-            },
-            |sample_lookup| describe_known_samples(&sample_lookup),
-        )
+fn describe_bazaar_failure(bazaar_failure: &MalwareBazaarFailure) -> String {
+    match bazaar_failure {
+        MalwareBazaarFailure::RequestFailed(request_failure) => {
+            gettext("MalwareBazaar could not be reached: {error}")
+                .replace("{error}", &request_failure.to_string())
+        }
+        MalwareBazaarFailure::AnswerUnreadable => {
+            gettext("MalwareBazaar sent an answer that could not be read")
+        }
+        MalwareBazaarFailure::KeyRefused => gettext("MalwareBazaar refused the API key"),
+        MalwareBazaarFailure::QueryRefused { query_status } => {
+            gettext("MalwareBazaar answered: {status}")
+                .replace("{status}", &sanitize_scanner_line(query_status))
+        }
+    }
 }
 
-async fn virustotal_answer(content_hash: &str) -> SourceAnswer {
-    let api_key = match stored_key_for(ThreatIntelService::VirusTotalService).await {
-        Ok(api_key) => api_key,
-        Err(missing_key_answer) => return missing_key_answer,
+fn describe_lookup_failure(lookup_failure: &ReputationLookupFailure) -> String {
+    match lookup_failure {
+        ReputationLookupFailure::KeyUnavailable(key_failure) => describe_key_failure(key_failure),
+        ReputationLookupFailure::CirclLookupFailed(circl_failure) => {
+            describe_circl_failure(circl_failure)
+        }
+        ReputationLookupFailure::BazaarLookupFailed(bazaar_failure) => {
+            describe_bazaar_failure(bazaar_failure)
+        }
+        ReputationLookupFailure::VirusTotalLookupFailed(virustotal_failure) => {
+            describe_virustotal_failure(virustotal_failure)
+        }
+    }
+}
+
+enum StoredServiceKey {
+    KeyAvailable { api_key: String },
+    KeyNotConfigured,
+}
+
+async fn stored_key_for(
+    threat_intel_service: ThreatIntelService,
+) -> Result<StoredServiceKey, ReputationLookupFailure> {
+    Ok(match read_api_key(threat_intel_service).await? {
+        ResolvedApiKey::FromKeyFile(api_key) | ResolvedApiKey::FromKeyring(api_key) => {
+            StoredServiceKey::KeyAvailable { api_key }
+        }
+        ResolvedApiKey::NotConfigured => StoredServiceKey::KeyNotConfigured,
+    })
+}
+
+async fn look_up_circl(content_hash: &str) -> Result<SourceAnswer, ReputationLookupFailure> {
+    Ok(describe_known_file(
+        &look_up_known_file(content_hash).await?,
+    ))
+}
+
+async fn look_up_bazaar(content_hash: &str) -> Result<SourceAnswer, ReputationLookupFailure> {
+    let StoredServiceKey::KeyAvailable { api_key } =
+        stored_key_for(ThreatIntelService::AbuseChService).await?
+    else {
+        return Ok(SourceAnswer::NeedsKey);
     };
-    let report_lookup = match VirusTotalClient::with_api_key(api_key) {
-        Ok(lookup_client) => lookup_client.look_up_file_report(content_hash).await,
-        Err(client_failure) => Err(client_failure),
+    Ok(describe_known_samples(
+        &look_up_file_hash(&api_key, content_hash).await?,
+    ))
+}
+
+async fn look_up_virustotal(content_hash: &str) -> Result<SourceAnswer, ReputationLookupFailure> {
+    let StoredServiceKey::KeyAvailable { api_key } =
+        stored_key_for(ThreatIntelService::VirusTotalService).await?
+    else {
+        return Ok(SourceAnswer::NeedsKey);
     };
-    report_lookup.map_or_else(
-        |lookup_failure| SourceAnswer::Failed {
-            failure_text: describe_virustotal_failure(&lookup_failure),
-        },
-        |file_report_lookup| describe_virustotal_report(&file_report_lookup),
-    )
+    let lookup_client = VirusTotalClient::with_api_key(api_key)?;
+    Ok(describe_virustotal_report(
+        &lookup_client.look_up_file_report(content_hash).await?,
+    ))
+}
+
+fn answer_or_failure(source_lookup: Result<SourceAnswer, ReputationLookupFailure>) -> SourceAnswer {
+    source_lookup.unwrap_or_else(SourceAnswer::from)
 }
 
 pub async fn check_hash_reputation(content_hash: String) -> ReputationAnswers {
     let (circl_answer, bazaar_answer, virustotal_answer) = futures::join!(
-        circl_answer(&content_hash),
-        bazaar_answer(&content_hash),
-        virustotal_answer(&content_hash),
+        look_up_circl(&content_hash),
+        look_up_bazaar(&content_hash),
+        look_up_virustotal(&content_hash),
     );
     ReputationAnswers {
-        circl_answer,
-        bazaar_answer,
-        virustotal_answer,
+        circl_answer: answer_or_failure(circl_answer),
+        bazaar_answer: answer_or_failure(bazaar_answer),
+        virustotal_answer: answer_or_failure(virustotal_answer),
     }
 }
 
@@ -233,18 +310,40 @@ mod file_reputation_check_tests {
 
     #[test]
     fn a_virustotal_report_counts_engines_and_links_the_report() {
+        let SourceAnswer::AnsweredWithReport {
+            verdict_text,
+            report_url,
+        } = describe_virustotal_report(&FileReportLookup::ReportAvailable(VirusTotalReport {
+            content_hash: "abc".to_owned(),
+            detecting_engine_count: 3,
+            total_engine_count: 71,
+            engine_detections: Vec::new(),
+            report_url: "https://www.virustotal.com/gui/file/abc".to_owned(),
+        }))
+        else {
+            panic!("a VirusTotal report links to its page");
+        };
+        assert_eq!(verdict_text, "3 of 71 engines detect it");
+        assert_eq!(report_url, "https://www.virustotal.com/gui/file/abc");
+    }
+
+    #[test]
+    fn lookup_failures_are_described_by_their_kind() {
         assert_eq!(
-            describe_virustotal_report(&FileReportLookup::ReportAvailable(VirusTotalReport {
-                content_hash: "abc".to_owned(),
-                detecting_engine_count: 3,
-                total_engine_count: 71,
-                engine_detections: Vec::new(),
-                report_url: "https://www.virustotal.com/gui/file/abc".to_owned(),
-            })),
-            SourceAnswer::AnsweredWithReport {
-                verdict_text: "3 of 71 engines detect it".to_owned(),
-                report_url: "https://www.virustotal.com/gui/file/abc".to_owned(),
-            }
+            SourceAnswer::from(ReputationLookupFailure::from(
+                VirusTotalFailure::UnexpectedStatus { status_code: 503 }
+            ))
+            .displayed_text(),
+            "VirusTotal answered with status 503"
+        );
+        assert_eq!(
+            SourceAnswer::from(ReputationLookupFailure::from(
+                MalwareBazaarFailure::QueryRefused {
+                    query_status: "illegal_hash".to_owned(),
+                }
+            ))
+            .displayed_text(),
+            "MalwareBazaar answered: illegal_hash"
         );
     }
 }

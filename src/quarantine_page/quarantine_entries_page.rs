@@ -89,7 +89,57 @@ pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> Stri
             "The file was moved, but its quarantine record could not be removed. It may still \
              appear in the list.",
         ),
-        other_failure => other_failure.to_string(),
+        QuarantineMoveFailure::SystemCallFailed(system_call_failure) => {
+            gettext("A system call failed: {error}")
+                .replace("{error}", &system_call_failure.to_string())
+        }
+        QuarantineMoveFailure::FileOperationFailed(file_failure) => {
+            gettext("A file operation failed: {error}")
+                .replace("{error}", &file_failure.to_string())
+        }
+        QuarantineMoveFailure::DatabaseOperationFailed(database_failure) => {
+            gettext("The quarantine database operation failed: {error}")
+                .replace("{error}", &database_failure.to_string())
+        }
+        QuarantineMoveFailure::BlockingStepInterrupted(interrupted_step) => {
+            gettext("A background quarantine step stopped unexpectedly: {error}")
+                .replace("{error}", &interrupted_step.to_string())
+        }
+        QuarantineMoveFailure::PathContainsNul => gettext("The path contains a NUL byte"),
+        QuarantineMoveFailure::PathHasNoParent => gettext("The path has no parent folder"),
+        QuarantineMoveFailure::PathHasNoFileName => gettext("The path has no file name"),
+        QuarantineMoveFailure::DatabasePathNotUtf8 => {
+            gettext("The quarantine database path is not valid UTF-8")
+        }
+        QuarantineMoveFailure::DatabaseNotRegularFile => {
+            gettext("The quarantine database is not a regular file")
+        }
+        QuarantineMoveFailure::SourceBlockedByOnAccess => {
+            gettext("On-access scanning blocks reading the file")
+        }
+        QuarantineMoveFailure::MovedPayloadStillBlocked => {
+            gettext("The blocked file is still unreadable after moving it to quarantine")
+        }
+        QuarantineMoveFailure::SourceNotRegularFile => gettext("The file is not a regular file"),
+        QuarantineMoveFailure::PayloadNotRegularFile => {
+            gettext("The quarantined file is not a regular file")
+        }
+        QuarantineMoveFailure::NotEnoughFreeSpace => {
+            gettext("There is not enough free space to quarantine the file")
+        }
+        QuarantineMoveFailure::FileReplacedDuringOperation => {
+            gettext("The file was replaced while it was being moved, so it was not removed")
+        }
+        QuarantineMoveFailure::PathOutsideQuarantine => {
+            gettext("The path is not inside the quarantine folder")
+        }
+        QuarantineMoveFailure::InvalidRestorePath => gettext("The restore path is not valid"),
+        QuarantineMoveFailure::ProtectedRestoreDestination => {
+            gettext("Restoring into a protected system folder is not allowed")
+        }
+        QuarantineMoveFailure::StoredPathUnreadable { .. } => {
+            gettext("A path stored in the quarantine database could not be read")
+        }
     }
 }
 
@@ -165,7 +215,7 @@ pub enum QuarantineEntriesPageCommand {
         reputation_answers: ReputationAnswers,
     },
     TrustChangeFinished(TrustOutcome),
-    FalsePositiveReportFinished(SubmissionOutcome),
+    FalsePositiveReportFinished(QuarantinedEntryReportAttempt),
     RestoreCheckFinished {
         entry_id: i64,
         content_verdict: ContentVerdict,
@@ -175,6 +225,30 @@ pub enum QuarantineEntriesPageCommand {
         content_verdict: ContentVerdict,
     },
     RecheckFinished,
+}
+
+#[derive(Debug)]
+pub enum QuarantinedEntryReportAttempt {
+    ReportSubmitted(SubmissionOutcome),
+    PayloadUnreadable(QuarantineMoveFailure),
+    DetectedFileReportedElsewhere,
+}
+
+fn report_attempt_text(report_attempt: &QuarantinedEntryReportAttempt) -> String {
+    let report_not_sent = |failure_reason: String| {
+        gettext("The report was not sent: {error}").replace("{error}", &failure_reason)
+    };
+    match report_attempt {
+        QuarantinedEntryReportAttempt::ReportSubmitted(submission_outcome) => {
+            submission_outcome_text(submission_outcome)
+        }
+        QuarantinedEntryReportAttempt::PayloadUnreadable(read_failure) => {
+            report_not_sent(describe_quarantine_failure(read_failure))
+        }
+        QuarantinedEntryReportAttempt::DetectedFileReportedElsewhere => {
+            report_not_sent(gettext("report it from the scan results"))
+        }
+    }
 }
 
 async fn verdict_for_entry(quarantine_vault: &QuarantineVault, entry_id: i64) -> ContentVerdict {
@@ -817,25 +891,28 @@ impl Component for QuarantineEntriesPage {
             QuarantineEntriesPageInput::FalsePositiveReportConfirmed(false_positive_report) => {
                 let quarantine_vault = self.quarantine_vault.clone();
                 sender.oneshot_command(async move {
-                    let submission_outcome = match &false_positive_report.submitted_content {
+                    let report_attempt = match &false_positive_report.submitted_content {
                         SubmittedContent::QuarantinedEntry { entry_id } => {
                             match quarantine_vault.read_payload_plaintext(*entry_id).await {
                                 Ok(payload_plaintext) => {
-                                    submit_false_positive(false_positive_report, payload_plaintext)
-                                        .await
+                                    QuarantinedEntryReportAttempt::ReportSubmitted(
+                                        submit_false_positive(
+                                            false_positive_report,
+                                            payload_plaintext,
+                                        )
+                                        .await,
+                                    )
                                 }
-                                Err(read_failure) => SubmissionOutcome::SubmissionFailed {
-                                    failure_text: read_failure.to_string(),
-                                },
+                                Err(read_failure) => {
+                                    QuarantinedEntryReportAttempt::PayloadUnreadable(read_failure)
+                                }
                             }
                         }
                         SubmittedContent::DetectedFile { .. } => {
-                            SubmissionOutcome::SubmissionFailed {
-                                failure_text: gettext("report it from the scan results"),
-                            }
+                            QuarantinedEntryReportAttempt::DetectedFileReportedElsewhere
                         }
                     };
-                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(submission_outcome)
+                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(report_attempt)
                 });
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
@@ -998,11 +1075,9 @@ impl Component for QuarantineEntriesPage {
                         .replace("{count}", &cleared_count.to_string())
                     }));
             }
-            QuarantineEntriesPageCommand::FalsePositiveReportFinished(submission_outcome) => {
+            QuarantineEntriesPageCommand::FalsePositiveReportFinished(report_attempt) => {
                 self.toaster
-                    .add_toast(plain_text_toast(&submission_outcome_text(
-                        &submission_outcome,
-                    )));
+                    .add_toast(plain_text_toast(&report_attempt_text(&report_attempt)));
             }
             QuarantineEntriesPageCommand::TrustChangeFinished(trust_outcome) => {
                 self.toaster

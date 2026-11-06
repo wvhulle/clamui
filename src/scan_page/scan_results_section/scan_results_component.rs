@@ -27,7 +27,6 @@ use crate::{
             trust_outcome_text,
         },
     },
-    quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     scan_page::scan_results_section::{
         detected_threat_row::{
             DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput,
@@ -98,7 +97,31 @@ pub enum ScanResultsSectionCommand {
         fingerprint_outcome: std::io::Result<FileFingerprint>,
     },
     TrustChangeFinished(TrustOutcome),
-    FalsePositiveReportFinished(SubmissionOutcome),
+    FalsePositiveReportFinished(DetectedFileReportAttempt),
+}
+
+#[derive(Debug)]
+pub enum DetectedFileReportAttempt {
+    ReportSubmitted(SubmissionOutcome),
+    DetectedFileUnreadable(std::io::Error),
+    QuarantinedEntryReportedElsewhere,
+}
+
+fn report_attempt_text(report_attempt: &DetectedFileReportAttempt) -> String {
+    let report_not_sent = |failure_reason: String| {
+        gettext("The report was not sent: {error}").replace("{error}", &failure_reason)
+    };
+    match report_attempt {
+        DetectedFileReportAttempt::ReportSubmitted(submission_outcome) => {
+            submission_outcome_text(submission_outcome)
+        }
+        DetectedFileReportAttempt::DetectedFileUnreadable(open_failure) => {
+            report_not_sent(fingerprint_failure_text(open_failure))
+        }
+        DetectedFileReportAttempt::QuarantinedEntryReportedElsewhere => {
+            report_not_sent(gettext("report it from the Quarantine page"))
+        }
+    }
 }
 
 struct PendingThreatMove {
@@ -464,25 +487,23 @@ impl Component for ScanResultsSection {
             }
             ScanResultsSectionInput::FalsePositiveReportConfirmed(false_positive_report) => {
                 sender.oneshot_command(async move {
-                    let submission_outcome = match &false_positive_report.submitted_content {
+                    let report_attempt = match &false_positive_report.submitted_content {
                         SubmittedContent::DetectedFile { file_path } => {
                             match open_detected_file(file_path) {
-                                Ok(detected_file) => {
+                                Ok(detected_file) => DetectedFileReportAttempt::ReportSubmitted(
                                     submit_false_positive(false_positive_report, detected_file)
-                                        .await
+                                        .await,
+                                ),
+                                Err(open_failure) => {
+                                    DetectedFileReportAttempt::DetectedFileUnreadable(open_failure)
                                 }
-                                Err(open_failure) => SubmissionOutcome::SubmissionFailed {
-                                    failure_text: fingerprint_failure_text(&open_failure),
-                                },
                             }
                         }
                         SubmittedContent::QuarantinedEntry { .. } => {
-                            SubmissionOutcome::SubmissionFailed {
-                                failure_text: gettext("report it from the Quarantine page"),
-                            }
+                            DetectedFileReportAttempt::QuarantinedEntryReportedElsewhere
                         }
                     };
-                    ScanResultsSectionCommand::FalsePositiveReportFinished(submission_outcome)
+                    ScanResultsSectionCommand::FalsePositiveReportFinished(report_attempt)
                 });
             }
             ScanResultsSectionInput::CopyReportRequested => {
@@ -539,9 +560,9 @@ impl Component for ScanResultsSection {
                     fingerprint_failure_text(&fingerprint_failure),
                 ));
             }
-            ScanResultsSectionCommand::FalsePositiveReportFinished(submission_outcome) => {
+            ScanResultsSectionCommand::FalsePositiveReportFinished(report_attempt) => {
                 let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
-                    submission_outcome_text(&submission_outcome),
+                    report_attempt_text(&report_attempt),
                 ));
             }
             ScanResultsSectionCommand::TrustChangeFinished(trust_outcome) => {
@@ -560,9 +581,7 @@ impl Component for ScanResultsSection {
                             sender.output(ScanResultsSectionOutput::QuarantineEntriesChanged);
                         ThreatQuarantineState::MovedToQuarantine
                     }
-                    Err(move_failure) => ThreatQuarantineState::QuarantineFailed {
-                        failure_message: describe_quarantine_failure(&move_failure),
-                    },
+                    Err(move_failure) => ThreatQuarantineState::QuarantineFailed(move_failure),
                 };
                 if results_generation == self.results_generation {
                     self.threat_rows.send(
