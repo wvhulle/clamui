@@ -7,13 +7,13 @@ Lazaret is a desktop front-end for the ClamAV that is already installed on the h
 ```mermaid
 flowchart LR
     subgraph gui["lazaret (desktop user)"]
-        scan["malware_scan"]
-        quarantine["file_quarantine"]
-        protection["protection_status"]
-        detections["background_detections"]
-        schedules["scheduled_scans"]
-        lookups["threat_intel_lookup"]
-        settings["application_settings"]
+        scan["scan_page"]
+        quarantine["quarantine_page"]
+        protection["protection_page"]
+        detections["detections_page"]
+        schedules["scan_page/scan_schedule_page"]
+        lookups["host_services/threat_intel"]
+        settings["shared_widgets/engine_settings"]
     end
 
     subgraph host["Host"]
@@ -44,13 +44,13 @@ flowchart LR
     helper -->|restarts| systemd
 ```
 
-The source is organised by feature: each directory under `src/` holds the logic of one feature next to its page. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots, packaging and releases.
+The source follows the window as you see it. Each sidebar page has a directory under `src/` (`protection_page/`, `detections_page/`, `scan_page/`, `logs_page/`, `quarantine_page/`, `signatures_page/`, `hardening_page/`). The subpages and dialogs you open from a page sit in directories inside it, for example `scan_page/exclusions_page/`. `application_window/` holds the window, sidebar, tray and actions, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the settings helper and online lookups. `headless_modes/` holds the scheduled scan that runs without a window. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots, packaging and releases.
 
 Lazaret talks to the host in three ways, and never through shell commands like `systemctl` or `journalctl`:
 
 - It spawns the ClamAV programs found on `PATH`: `clamdscan --fdpass`, `clamscan` and `freshclam`. It only runs a copy that the desktop user can't replace: the file, every directory above it and every symbolic link on the way must be out of the user's control. Copies the user could replace, such as one in `~/.local/bin`, are skipped and reported on the Protection page. That way malware running as the user can't plant a fake `clamdscan` that reports every file as clean.
-- It talks to systemd over D-Bus (`src/systemd_bus/`), for unit states, starting units and installing timers.
-- It reads the journal through libsystemd (`src/systemd_journal/`).
+- It talks to systemd over D-Bus (`src/host_services/systemd_bus/`), for unit states, starting units and installing timers.
+- It reads the journal through libsystemd (`src/host_services/systemd_journal/`).
 
 Pages react to D-Bus signals and journal wakeups. They don't refresh on timers.
 

@@ -1,30 +1,17 @@
-mod activity_history;
-mod application_settings;
-mod application_window_shell;
-mod background_detections;
-mod clamav_components;
-mod desktop_integration;
-mod detection_trust;
-mod file_process_lock;
-mod file_quarantine;
+mod application_window;
+mod detections_page;
+mod hardening_page;
+mod headless_modes;
+mod host_services;
 #[cfg(test)]
 mod host_verification_tests;
-mod loading_indicators;
-mod malware_scan;
-mod protection_status;
-mod scan_profiles;
-mod scheduled_scans;
-mod settings_navigation;
-mod shared_page_widget_templates;
-mod signature_sources;
-mod startup_arguments;
-mod step_timeline;
-mod system_audit;
-mod systemd_bus;
-mod systemd_journal;
-mod text_export_dialog;
-mod threat_intel_lookup;
-mod virus_database;
+mod logs_page;
+mod preferences_dialog;
+mod protection_page;
+mod quarantine_page;
+mod scan_page;
+mod shared_widgets;
+mod signatures_page;
 
 use std::{path::PathBuf, process::ExitCode};
 
@@ -37,13 +24,15 @@ use relm4::{
 };
 
 use crate::{
-    application_settings::stored_settings::{application_settings, settings_schema_is_installed},
-    application_window_shell::ApplicationWindowShell,
-    desktop_integration::running_instance_forwarding::{
-        another_instance_is_running, forward_to_running_instance,
+    application_window::{
+        application_window_shell::ApplicationWindowShell,
+        startup_arguments::parse_startup_arguments,
     },
-    scheduled_scans::headless_scheduled_scan::{parse_scheduled_scan_options, run_scheduled_scan},
-    startup_arguments::parse_startup_arguments,
+    headless_modes::headless_scheduled_scan::{parse_scheduled_scan_options, run_scheduled_scan},
+    host_services::desktop::{
+        running_instance_forwarding::{another_instance_is_running, forward_to_running_instance},
+        stored_settings::{application_settings, settings_schema_is_installed},
+    },
 };
 
 pub(crate) const RELEASE_APPLICATION_ID: &str = "page.codeberg.wvhulle.Lazaret";

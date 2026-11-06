@@ -9,28 +9,34 @@ use std::{
 use futures::{StreamExt, future::ready, stream};
 
 use crate::{
-    activity_history::activity_history_database::ActivityHistory,
-    application_settings::scan_exclusion_rules::ScanExclusions,
-    background_detections::{
+    detections_page::{
         background_detections_page::{
             BackgroundDetectionsPageCommand, file_states_to_keep, load_displayed_detections,
         },
         detected_file_state::{DetectedFileState, inspect_detected_file},
-        detection_history_store::DetectionResolution,
-        detection_journal_follower::{
-            DetectionJournalEvent, JournalStartPosition, detection_journal_events,
-        },
         incident_timeline_presentation::{
             DeletionPrompt, DisplayedDetection, SignatureLookupState, incident_timeline,
         },
     },
-    clamav_components::distribution_install_guides::DistributionFamily,
-    file_quarantine::quarantine_entry_database::QuarantineVault,
-    malware_scan::{
-        eicar_test_file::eicar_test_bytes,
-        scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
-        scanner_command_builder::{ScannerBackend, ScannerProgramPaths, probe_clamd_availability},
+    host_services::{
+        activity_history::activity_history_database::ActivityHistory,
+        clamav_programs::distribution_install_guides::DistributionFamily,
+        clamav_scanner::{
+            scan_exclusion_rules::ScanExclusions,
+            scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
+            scanner_command_builder::{
+                ScannerBackend, ScannerProgramPaths, probe_clamd_availability,
+            },
+        },
+        detection_journal::{
+            detection_history_store::DetectionResolution,
+            detection_journal_follower::{
+                DetectionJournalEvent, JournalStartPosition, detection_journal_events,
+            },
+        },
+        quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
+    scan_page::eicar_test_file::eicar_test_bytes,
 };
 
 fn host_scan_request(
@@ -291,23 +297,25 @@ async fn host_cancel_stops_clamscan_scan() {
 #[ignore = "needs a real ClamAV host"]
 async fn host_status_probes_read_the_real_system() {
     let service_state =
-        crate::virus_database::database_directory_status::detect_freshclam_service().await;
+        crate::host_services::clamav_programs::database_directory_status::detect_freshclam_service(
+        )
+        .await;
     println!("freshclam service: {service_state:?}");
     let database_directory =
-        crate::virus_database::database_directory_status::configured_database_directory();
+        crate::host_services::clamav_programs::database_directory_status::configured_database_directory();
     let directory_status =
-        crate::virus_database::database_directory_status::inspect_database_directory(
+        crate::host_services::clamav_programs::database_directory_status::inspect_database_directory(
             &database_directory,
             std::time::SystemTime::now(),
         );
     println!("database directory: {directory_status:#?}");
     println!(
         "update plan: {:?}",
-        crate::virus_database::database_update_events::plan_database_update(service_state)
+        crate::signatures_page::signature_update_dialog::database_update_events::plan_database_update(service_state)
     );
     println!(
         "distribution: {:?}",
-        crate::clamav_components::distribution_install_guides::detect_distribution_family()
+        crate::host_services::clamav_programs::distribution_install_guides::detect_distribution_family()
     );
 }
 

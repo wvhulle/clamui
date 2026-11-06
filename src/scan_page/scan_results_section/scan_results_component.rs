@@ -1,0 +1,842 @@
+use std::time::Duration;
+
+use futures::{StreamExt, stream};
+use gettextrs::{gettext, ngettext};
+use relm4::{
+    Component, ComponentParts, ComponentSender, adw,
+    adw::prelude::*,
+    gtk,
+    prelude::{DynamicIndex, FactoryVecDeque},
+};
+
+use crate::{
+    host_services::{
+        clamav_scanner::{
+            scan_exclusion_rules::exclusion_entry_for_threat,
+            scan_progress_estimates::elapsed_duration_text,
+            scanner_output_parser::{DetectedThreat, displayed_threat_name, sanitize_scanner_line},
+        },
+        desktop::stored_settings::{add_exclusion_entry, application_settings},
+        quarantine_vault::{
+            quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
+            quarantine_file_moves::QuarantineMoveFailure,
+        },
+        settings_helper::trust_requests::{
+            FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file,
+            present_trust_confirmation, request_trust_change, signature_of_detection,
+            trust_outcome_text,
+        },
+    },
+    quarantine_page::quarantine_entries_page::describe_quarantine_failure,
+    scan_page::scan_results_section::detected_threat_row::{
+        DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput, ThreatQuarantineState,
+    },
+    shared_widgets::text_export_dialog::{
+        TextExportOutcome, describe_export_failure, save_text_with_dialog,
+    },
+};
+
+const EXPORT_FILE_NAME: &str = "lazaret_scan_results.txt";
+const PROBLEM_PATH_ROW_LIMIT: usize = 200;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScanResultsStatus {
+    ThreatsDetected,
+    NoThreatsDetected,
+    FinishedWithProblems,
+    ScanCancelled,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProblemPathGroup {
+    pub group_title: String,
+    pub group_explanation: String,
+    pub listed_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ScanResultsView {
+    pub results_status: ScanResultsStatus,
+    pub inspected_file_count: u64,
+    pub planned_file_count: u64,
+    pub scanned_directory_count: u64,
+    pub elapsed_time: Duration,
+    pub detected_threats: Vec<DetectedThreat>,
+    pub problem_path_groups: Vec<ProblemPathGroup>,
+    pub notice_lines: Vec<String>,
+    pub noteworthy_output: String,
+}
+
+impl ScanResultsView {
+    fn headline_text(&self) -> String {
+        match self.results_status {
+            ScanResultsStatus::ThreatsDetected if !self.detected_threats.is_empty() => {
+                threats_found_text(self.detected_threats.len())
+            }
+            other_status => status_title(other_status),
+        }
+    }
+
+    fn summary_text(&self) -> String {
+        let scanned_text = if self.inspected_file_count < self.planned_file_count {
+            ngettext(
+                "{done} of {total} file scanned",
+                "{done} of {total} files scanned",
+                u32::try_from(self.planned_file_count).unwrap_or(u32::MAX),
+            )
+            .replace("{done}", &self.inspected_file_count.to_string())
+            .replace("{total}", &self.planned_file_count.to_string())
+        } else {
+            ngettext(
+                "{count} file scanned",
+                "{count} files scanned",
+                u32::try_from(self.inspected_file_count).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &self.inspected_file_count.to_string())
+        };
+        format!(
+            "{scanned_text} · {}",
+            elapsed_duration_text(self.elapsed_time)
+        )
+    }
+
+    fn has_problems(&self) -> bool {
+        !self.problem_path_groups.is_empty()
+            || !self.notice_lines.is_empty()
+            || !self.noteworthy_output.is_empty()
+    }
+}
+
+fn status_title(results_status: ScanResultsStatus) -> String {
+    match results_status {
+        ScanResultsStatus::ThreatsDetected => gettext("Threats Detected"),
+        ScanResultsStatus::NoThreatsDetected => gettext("No threats found"),
+        ScanResultsStatus::FinishedWithProblems => gettext("The scan did not finish cleanly"),
+        ScanResultsStatus::ScanCancelled => gettext("Scan cancelled by user"),
+    }
+}
+
+fn status_style_class(results_status: ScanResultsStatus) -> &'static str {
+    match results_status {
+        ScanResultsStatus::ThreatsDetected => "error",
+        ScanResultsStatus::FinishedWithProblems => "warning",
+        ScanResultsStatus::NoThreatsDetected => "success",
+        ScanResultsStatus::ScanCancelled => "dim-label",
+    }
+}
+
+fn plain_text_row(row_title: &str) -> adw::ActionRow {
+    let plain_row = adw::ActionRow::new();
+    plain_row.set_use_markup(false);
+    plain_row.set_title(row_title);
+    plain_row
+}
+
+fn notice_row(notice_line: &str) -> adw::ActionRow {
+    let notice_row = plain_text_row(notice_line);
+    notice_row.set_title_lines(0);
+    notice_row
+}
+
+fn problem_path_expander(path_group: &ProblemPathGroup) -> adw::ExpanderRow {
+    let path_expander = adw::ExpanderRow::new();
+    path_expander.set_use_markup(false);
+    path_expander.set_title(&path_group.group_title);
+    path_expander.set_subtitle(&path_group.group_explanation);
+    path_group
+        .listed_paths
+        .iter()
+        .take(PROBLEM_PATH_ROW_LIMIT)
+        .for_each(|listed_path| {
+            path_expander.add_row(&plain_text_row(&sanitize_scanner_line(listed_path)));
+        });
+    let hidden_path_count = path_group
+        .listed_paths
+        .len()
+        .saturating_sub(PROBLEM_PATH_ROW_LIMIT);
+    if hidden_path_count > 0 {
+        path_expander.add_row(
+            &adw::ActionRow::builder()
+                .use_markup(false)
+                .title(
+                    ngettext(
+                        "{count} more file, listed in the exported report",
+                        "{count} more files, listed in the exported report",
+                        u32::try_from(hidden_path_count).unwrap_or(u32::MAX),
+                    )
+                    .replace("{count}", &hidden_path_count.to_string()),
+                )
+                .css_classes(["dim-label"])
+                .build(),
+        );
+    }
+    path_expander
+}
+
+fn scan_details_expander(noteworthy_output: &str) -> adw::ExpanderRow {
+    let details_expander = adw::ExpanderRow::builder()
+        .title(gettext("Scan details"))
+        .build();
+    details_expander.add_row(
+        &gtk::Label::builder()
+            .xalign(0.0)
+            .wrap(true)
+            .wrap_mode(gtk::pango::WrapMode::WordChar)
+            .selectable(true)
+            .use_markup(false)
+            .margin_top(12)
+            .margin_bottom(12)
+            .margin_start(12)
+            .margin_end(12)
+            .css_classes(["monospace"])
+            .label(noteworthy_output)
+            .build(),
+    );
+    details_expander
+}
+
+fn status_icon(results_status: ScanResultsStatus) -> &'static str {
+    match results_status {
+        ScanResultsStatus::ThreatsDetected | ScanResultsStatus::FinishedWithProblems => {
+            "dialog-warning-symbolic"
+        }
+        ScanResultsStatus::NoThreatsDetected => "object-select-symbolic",
+        ScanResultsStatus::ScanCancelled => "process-stop-symbolic",
+    }
+}
+
+fn threats_found_text(threat_count: usize) -> String {
+    ngettext(
+        "{count} threat found",
+        "{count} threats found",
+        u32::try_from(threat_count).unwrap_or(u32::MAX),
+    )
+    .replace("{count}", &threat_count.to_string())
+}
+
+pub fn format_scan_report(results_view: &ScanResultsView) -> String {
+    let statistics_lines = [
+        status_title(results_view.results_status),
+        format!(
+            "{}: {}",
+            gettext("Files scanned"),
+            results_view.inspected_file_count
+        ),
+        format!(
+            "{}: {}",
+            gettext("Files planned"),
+            results_view.planned_file_count
+        ),
+        format!(
+            "{}: {}",
+            gettext("Directories"),
+            results_view.scanned_directory_count
+        ),
+        format!(
+            "{}: {}",
+            gettext("Threats found"),
+            results_view.detected_threats.len()
+        ),
+    ];
+    let threat_lines = results_view.detected_threats.iter().map(|detected_threat| {
+        format!(
+            "{}: {}",
+            sanitize_scanner_line(&detected_threat.file_path.to_string_lossy()),
+            displayed_threat_name(&detected_threat.threat_name)
+        )
+    });
+    let problem_sections = results_view.problem_path_groups.iter().map(|path_group| {
+        std::iter::once(path_group.group_title.clone())
+            .chain(
+                path_group
+                    .listed_paths
+                    .iter()
+                    .map(|listed_path| sanitize_scanner_line(listed_path)),
+            )
+            .collect::<Vec<_>>()
+            .join("\n")
+    });
+    let report_sections = [
+        statistics_lines.join("\n"),
+        results_view.notice_lines.join("\n"),
+        threat_lines.collect::<Vec<_>>().join("\n"),
+    ]
+    .into_iter()
+    .chain(problem_sections)
+    .chain(std::iter::once(
+        results_view.noteworthy_output.trim_end().to_owned(),
+    ));
+    let mut formatted_report = report_sections
+        .filter(|report_section| !report_section.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    formatted_report.push('\n');
+    formatted_report
+}
+
+pub struct ScanResultsSectionInit {
+    pub results_view: ScanResultsView,
+    pub quarantine_vault: QuarantineVault,
+}
+
+pub struct ScanResultsSection {
+    results_view: ScanResultsView,
+    quarantine_vault: QuarantineVault,
+    threat_rows: FactoryVecDeque<DetectedThreatRow>,
+}
+
+#[derive(Debug)]
+pub enum ScanResultsSectionInput {
+    QuarantineThreatRequested(DynamicIndex),
+    QuarantineAllRequested,
+    QuarantineConfirmed(Vec<DynamicIndex>),
+    CopyPathRequested(DynamicIndex),
+    ExcludeThreatRequested(DynamicIndex),
+    TrustFileRequested(DynamicIndex),
+    IgnoreSignatureRequested(DynamicIndex),
+    TrustChangeConfirmed(TrustChoice),
+    CopyReportRequested,
+    ExportReportRequested,
+    NewScanRequested,
+}
+
+#[derive(Debug)]
+pub enum ScanResultsSectionOutput {
+    QuarantineEntriesChanged,
+    NewScanRequested,
+    ToastRequested(String),
+}
+
+#[derive(Debug)]
+pub enum ScanResultsSectionCommand {
+    ThreatQuarantineFinished {
+        row_index: DynamicIndex,
+        move_outcome: Result<QuarantineEntryRecord, QuarantineMoveFailure>,
+    },
+    ReportExportFinished(TextExportOutcome),
+    ThreatFileFingerprinted {
+        shown_path: String,
+        fingerprint_outcome: std::io::Result<FileFingerprint>,
+    },
+    TrustChangeFinished(TrustOutcome),
+}
+
+fn fingerprint_failure_text(fingerprint_failure: &std::io::Error) -> String {
+    match fingerprint_failure.kind() {
+        std::io::ErrorKind::NotFound => gettext(
+            "The file is no longer there. If it is in quarantine, trust it from the Quarantine \
+             page.",
+        ),
+        std::io::ErrorKind::PermissionDenied => gettext(
+            "The file can't be read, possibly because on-access scanning blocks it. Move it to \
+             quarantine, then trust it from the Quarantine page.",
+        ),
+        _other_kind => gettext("The file could not be read: {error}")
+            .replace("{error}", &fingerprint_failure.to_string()),
+    }
+}
+
+struct PendingThreatMove {
+    row_index: DynamicIndex,
+    detected_threat: DetectedThreat,
+}
+
+impl ScanResultsSection {
+    fn remaining_threat_count(&self) -> usize {
+        self.threat_rows
+            .iter()
+            .filter(|threat_row| threat_row.can_request_quarantine())
+            .count()
+    }
+
+    fn quarantine_all_label(&self) -> String {
+        let remaining_threats = self.remaining_threat_count();
+        ngettext(
+            "Quarantine {count} Threat",
+            "Quarantine {count} Threats",
+            u32::try_from(remaining_threats).unwrap_or(u32::MAX),
+        )
+        .replace("{count}", &remaining_threats.to_string())
+    }
+
+    fn confirm_quarantine(
+        &self,
+        confirmed_rows: Vec<DynamicIndex>,
+        confirmation_body: String,
+        root: &gtk::Box,
+        sender: &ComponentSender<Self>,
+    ) {
+        let confirmation_dialog = adw::AlertDialog::new(
+            Some(&gettext("Move to Quarantine?")),
+            Some(&format!(
+                "{confirmation_body}\n{}",
+                gettext("This removes each original file from its current location.")
+            )),
+        );
+        confirmation_dialog.add_response("cancel", &gettext("Cancel"));
+        confirmation_dialog.add_response("quarantine", &gettext("Quarantine"));
+        confirmation_dialog
+            .set_response_appearance("quarantine", adw::ResponseAppearance::Destructive);
+        confirmation_dialog.set_close_response("cancel");
+        let input_sender = sender.input_sender().clone();
+        confirmation_dialog.connect_response(Some("quarantine"), move |_dialog, _response| {
+            input_sender.emit(ScanResultsSectionInput::QuarantineConfirmed(
+                confirmed_rows.clone(),
+            ));
+        });
+        confirmation_dialog.present(Some(root));
+    }
+
+    fn start_threat_moves(
+        &self,
+        confirmed_rows: Vec<DynamicIndex>,
+        sender: &ComponentSender<Self>,
+    ) {
+        let pending_moves = confirmed_rows
+            .into_iter()
+            .filter_map(|row_index| {
+                let current_position = row_index.current_index();
+                let detected_threat = self
+                    .threat_rows
+                    .get(current_position)?
+                    .detected_threat
+                    .clone();
+                self.threat_rows.send(
+                    current_position,
+                    DetectedThreatRowInput::QuarantineStateChanged(
+                        ThreatQuarantineState::MovingToQuarantine,
+                    ),
+                );
+                Some(PendingThreatMove {
+                    row_index,
+                    detected_threat,
+                })
+            })
+            .collect::<Vec<_>>();
+        let quarantine_vault = self.quarantine_vault.clone();
+        let command_sender = sender.command_sender().clone();
+        relm4::spawn(async move {
+            stream::iter(pending_moves)
+                .for_each(|pending_move| {
+                    let quarantine_vault = quarantine_vault.clone();
+                    let command_sender = command_sender.clone();
+                    async move {
+                        let move_outcome = quarantine_vault
+                            .move_file_into_quarantine(
+                                &pending_move.detected_threat.file_path,
+                                &pending_move.detected_threat.threat_name,
+                            )
+                            .await;
+                        let _dialog_closed = command_sender.send(
+                            ScanResultsSectionCommand::ThreatQuarantineFinished {
+                                row_index: pending_move.row_index,
+                                move_outcome,
+                            },
+                        );
+                    }
+                })
+                .await;
+        });
+    }
+}
+
+#[relm4::component(pub)]
+impl Component for ScanResultsSection {
+    type Init = ScanResultsSectionInit;
+    type Input = ScanResultsSectionInput;
+    type Output = ScanResultsSectionOutput;
+    type CommandOutput = ScanResultsSectionCommand;
+
+    view! {
+        gtk::Box {
+            set_orientation: gtk::Orientation::Vertical,
+            set_spacing: 18,
+
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 6,
+                set_margin_top: 12,
+
+                gtk::Image {
+                    set_icon_name: Some(status_icon(model.results_view.results_status)),
+                    set_pixel_size: 64,
+                    add_css_class: status_style_class(model.results_view.results_status),
+                },
+
+                gtk::Label {
+                    add_css_class: "title-1",
+                    set_wrap: true,
+                    set_justify: gtk::Justification::Center,
+                    set_label: &model.results_view.headline_text(),
+                },
+
+                gtk::Label {
+                    add_css_class: "dim-label",
+                    set_wrap: true,
+                    set_justify: gtk::Justification::Center,
+                    set_label: &model.results_view.summary_text(),
+                },
+            },
+
+            gtk::Box {
+                set_spacing: 6,
+                set_halign: gtk::Align::Center,
+
+                gtk::Button {
+                    add_css_class: "suggested-action",
+                    #[watch]
+                    set_label: &model.quarantine_all_label(),
+                    #[watch]
+                    set_visible: model.remaining_threat_count() > 0,
+                    connect_clicked => ScanResultsSectionInput::QuarantineAllRequested,
+                },
+
+                gtk::Button {
+                    set_label: &gettext("New Scan"),
+                    connect_clicked => ScanResultsSectionInput::NewScanRequested,
+                },
+
+
+            },
+
+            adw::PreferencesGroup {
+                set_title: &gettext("Detected Threats"),
+                #[watch]
+                set_visible: !model.threat_rows.is_empty(),
+
+                #[local_ref]
+                threat_list -> gtk::ListBox {
+                    add_css_class: "boxed-list",
+                    set_selection_mode: gtk::SelectionMode::None,
+                },
+            },
+
+            adw::PreferencesGroup {
+                set_title: &gettext("Problems"),
+                set_visible: model.results_view.has_problems(),
+
+                #[name = "problem_list"]
+                gtk::ListBox {
+                    add_css_class: "boxed-list",
+                    set_selection_mode: gtk::SelectionMode::None,
+                },
+            },
+        }
+    }
+
+    fn init(
+        panel_init: ScanResultsSectionInit,
+        root: Self::Root,
+        sender: ComponentSender<Self>,
+    ) -> ComponentParts<Self> {
+        let mut threat_rows = FactoryVecDeque::builder()
+            .launch(gtk::ListBox::default())
+            .forward(sender.input_sender(), |row_output| match row_output {
+                DetectedThreatRowOutput::MoveToQuarantine(row_index) => {
+                    ScanResultsSectionInput::QuarantineThreatRequested(row_index)
+                }
+                DetectedThreatRowOutput::CopyPathToClipboard(row_index) => {
+                    ScanResultsSectionInput::CopyPathRequested(row_index)
+                }
+                DetectedThreatRowOutput::ExcludeFromScans(row_index) => {
+                    ScanResultsSectionInput::ExcludeThreatRequested(row_index)
+                }
+                DetectedThreatRowOutput::TrustFileRequested(row_index) => {
+                    ScanResultsSectionInput::TrustFileRequested(row_index)
+                }
+                DetectedThreatRowOutput::IgnoreSignatureRequested(row_index) => {
+                    ScanResultsSectionInput::IgnoreSignatureRequested(row_index)
+                }
+            });
+        {
+            let mut threat_rows_guard = threat_rows.guard();
+            panel_init
+                .results_view
+                .detected_threats
+                .iter()
+                .cloned()
+                .for_each(|detected_threat| {
+                    threat_rows_guard.push_back(detected_threat);
+                });
+        }
+        let model = Self {
+            results_view: panel_init.results_view,
+            quarantine_vault: panel_init.quarantine_vault,
+            threat_rows,
+        };
+        let threat_list = model.threat_rows.widget();
+        let widgets = view_output!();
+        model
+            .results_view
+            .problem_path_groups
+            .iter()
+            .for_each(|path_group| {
+                widgets
+                    .problem_list
+                    .append(&problem_path_expander(path_group))
+            });
+        model
+            .results_view
+            .notice_lines
+            .iter()
+            .for_each(|notice_line| widgets.problem_list.append(&notice_row(notice_line)));
+        if !model.results_view.noteworthy_output.is_empty() {
+            widgets.problem_list.append(&scan_details_expander(
+                &model.results_view.noteworthy_output,
+            ));
+        }
+        ComponentParts { model, widgets }
+    }
+
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        panel_input: ScanResultsSectionInput,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match panel_input {
+            ScanResultsSectionInput::QuarantineThreatRequested(row_index) => {
+                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
+                    let confirmation_body = gettext("Move '{path}' to quarantine?").replace(
+                        "{path}",
+                        &sanitize_scanner_line(
+                            &threat_row.detected_threat.file_path.to_string_lossy(),
+                        ),
+                    );
+                    self.confirm_quarantine(vec![row_index], confirmation_body, root, &sender);
+                }
+            }
+            ScanResultsSectionInput::QuarantineAllRequested => {
+                let remaining_threats = self.remaining_threat_count();
+                let confirmed_rows = self
+                    .threat_rows
+                    .iter()
+                    .filter(|threat_row| threat_row.can_request_quarantine())
+                    .map(|threat_row| threat_row.row_index.clone())
+                    .collect();
+                let confirmation_body = ngettext(
+                    "Move {count} detected file to quarantine?",
+                    "Move {count} detected files to quarantine?",
+                    u32::try_from(remaining_threats).unwrap_or(u32::MAX),
+                )
+                .replace("{count}", &remaining_threats.to_string());
+                self.confirm_quarantine(confirmed_rows, confirmation_body, root, &sender);
+            }
+            ScanResultsSectionInput::QuarantineConfirmed(confirmed_rows) => {
+                self.start_threat_moves(confirmed_rows, &sender);
+            }
+            ScanResultsSectionInput::CopyPathRequested(row_index) => {
+                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
+                    root.clipboard()
+                        .set_text(&threat_row.detected_threat.file_path.to_string_lossy());
+                    let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                        gettext("Path copied to clipboard"),
+                    ));
+                }
+            }
+            ScanResultsSectionInput::ExcludeThreatRequested(row_index) => {
+                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
+                    let newly_excluded = add_exclusion_entry(
+                        &application_settings(),
+                        exclusion_entry_for_threat(&threat_row.detected_threat.file_path),
+                    );
+                    let exclusion_message = if newly_excluded {
+                        gettext("This file will be skipped in future scans")
+                    } else {
+                        gettext("This exclusion already exists")
+                    };
+                    let _page_closed =
+                        sender.output(ScanResultsSectionOutput::ToastRequested(exclusion_message));
+                }
+            }
+            ScanResultsSectionInput::TrustFileRequested(row_index) => {
+                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
+                    let threat_path = threat_row.detected_threat.file_path.clone();
+                    sender.oneshot_command(async move {
+                        let shown_path = sanitize_scanner_line(&threat_path.to_string_lossy());
+                        let fingerprint_outcome =
+                            tokio::task::spawn_blocking(move || fingerprint_file(&threat_path))
+                                .await
+                                .unwrap_or_else(|interrupted_hashing| {
+                                    Err(std::io::Error::other(interrupted_hashing))
+                                });
+                        ScanResultsSectionCommand::ThreatFileFingerprinted {
+                            shown_path,
+                            fingerprint_outcome,
+                        }
+                    });
+                }
+            }
+            ScanResultsSectionInput::IgnoreSignatureRequested(row_index) => {
+                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
+                    let input_sender = sender.input_sender().clone();
+                    present_trust_confirmation(
+                        root,
+                        TrustChoice::IgnoreSignature {
+                            signature_name: signature_of_detection(
+                                &threat_row.detected_threat.threat_name,
+                            ),
+                        },
+                        move |confirmed_choice| {
+                            input_sender.emit(ScanResultsSectionInput::TrustChangeConfirmed(
+                                confirmed_choice,
+                            ));
+                        },
+                    );
+                }
+            }
+            ScanResultsSectionInput::TrustChangeConfirmed(confirmed_choice) => {
+                sender.oneshot_command(async move {
+                    ScanResultsSectionCommand::TrustChangeFinished(
+                        request_trust_change(confirmed_choice).await,
+                    )
+                });
+            }
+            ScanResultsSectionInput::CopyReportRequested => {
+                root.clipboard()
+                    .set_text(&format_scan_report(&self.results_view));
+                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                    gettext("Results copied to clipboard"),
+                ));
+            }
+            ScanResultsSectionInput::NewScanRequested => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::NewScanRequested);
+            }
+            ScanResultsSectionInput::ExportReportRequested => {
+                let exported_report = format_scan_report(&self.results_view);
+                let parent_widget = root.clone().upcast::<gtk::Widget>();
+                let command_sender = sender.command_sender().clone();
+                relm4::spawn_local(async move {
+                    let export_outcome =
+                        save_text_with_dialog(&parent_widget, EXPORT_FILE_NAME, exported_report)
+                            .await;
+                    let _dialog_closed = command_sender.send(
+                        ScanResultsSectionCommand::ReportExportFinished(export_outcome),
+                    );
+                });
+            }
+        }
+        self.update_view(widgets, sender);
+    }
+
+    fn update_cmd_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        panel_command: ScanResultsSectionCommand,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match panel_command {
+            ScanResultsSectionCommand::ThreatFileFingerprinted {
+                shown_path,
+                fingerprint_outcome: Ok(file_fingerprint),
+            } => {
+                let input_sender = sender.input_sender().clone();
+                present_trust_confirmation(
+                    root,
+                    TrustChoice::TrustFile {
+                        file_fingerprint,
+                        shown_path,
+                    },
+                    move |confirmed_choice| {
+                        input_sender.emit(ScanResultsSectionInput::TrustChangeConfirmed(
+                            confirmed_choice,
+                        ));
+                    },
+                );
+            }
+            ScanResultsSectionCommand::ThreatFileFingerprinted {
+                fingerprint_outcome: Err(fingerprint_failure),
+                ..
+            } => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                    fingerprint_failure_text(&fingerprint_failure),
+                ));
+            }
+            ScanResultsSectionCommand::TrustChangeFinished(trust_outcome) => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                    trust_outcome_text(&trust_outcome),
+                ));
+            }
+            ScanResultsSectionCommand::ThreatQuarantineFinished {
+                row_index,
+                move_outcome,
+            } => {
+                let quarantine_state = match move_outcome {
+                    Ok(_entry_record) => {
+                        let _page_closed =
+                            sender.output(ScanResultsSectionOutput::QuarantineEntriesChanged);
+                        ThreatQuarantineState::MovedToQuarantine
+                    }
+                    Err(move_failure) => ThreatQuarantineState::QuarantineFailed {
+                        failure_message: describe_quarantine_failure(&move_failure),
+                    },
+                };
+                self.threat_rows.send(
+                    row_index.current_index(),
+                    DetectedThreatRowInput::QuarantineStateChanged(quarantine_state),
+                );
+            }
+            ScanResultsSectionCommand::ReportExportFinished(TextExportOutcome::TextSaved) => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                    gettext("Results exported"),
+                ));
+            }
+            ScanResultsSectionCommand::ReportExportFinished(TextExportOutcome::ExportCancelled) => {
+            }
+            ScanResultsSectionCommand::ReportExportFinished(TextExportOutcome::ExportFailed(
+                export_failure,
+            )) => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
+                    describe_export_failure(&export_failure),
+                ));
+            }
+        }
+        self.update_view(widgets, sender);
+    }
+}
+
+#[cfg(test)]
+mod scan_results_panel_tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    fn results_with_threat() -> ScanResultsView {
+        ScanResultsView {
+            results_status: ScanResultsStatus::ThreatsDetected,
+            inspected_file_count: 3,
+            scanned_directory_count: 2,
+            detected_threats: vec![DetectedThreat {
+                file_path: PathBuf::from("/scan/bad\u{1b}[31m.txt"),
+                threat_name: "Eicar-Test-Signature".to_owned(),
+                threat_category: "Test",
+            }],
+            planned_file_count: 3,
+            elapsed_time: Duration::from_secs(4),
+            problem_path_groups: vec![ProblemPathGroup {
+                group_title: "Files not accessible".to_owned(),
+                group_explanation: String::new(),
+                listed_paths: vec!["/scan/locked".to_owned()],
+            }],
+            notice_lines: vec!["1 file could not be accessed".to_owned()],
+            noteworthy_output: "Scanned files: 3\n".to_owned(),
+        }
+    }
+
+    #[test]
+    fn the_report_lists_counts_threats_and_skipped_paths() {
+        let formatted_report = format_scan_report(&results_with_threat());
+        assert!(formatted_report.contains("Files scanned: 3"));
+        assert!(formatted_report.contains("Directories: 2"));
+        assert!(formatted_report.contains("/scan/bad.txt: Eicar-Test-Signature"));
+        assert!(formatted_report.contains("/scan/locked"));
+        assert!(formatted_report.contains("Scanned files: 3"));
+    }
+
+    #[test]
+    fn the_report_removes_terminal_control_sequences_from_paths() {
+        assert!(!format_scan_report(&results_with_threat()).contains('\u{1b}'));
+    }
+}

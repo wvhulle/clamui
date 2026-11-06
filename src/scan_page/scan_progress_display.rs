@@ -1,0 +1,145 @@
+use std::time::Duration;
+
+use gettextrs::{gettext, ngettext};
+use relm4::{adw, adw::prelude::*, gtk};
+
+use crate::host_services::clamav_scanner::{
+    scan_progress_estimates::{file_progress_text, remaining_time_text},
+    scan_target_enumeration::EnumerationProgress,
+    scanner_output_parser::{DetectedThreat, displayed_threat_name, sanitize_scanner_line},
+};
+
+pub struct ScanningSnapshot<'snapshot> {
+    pub inspected_file_count: u64,
+    pub planned_file_count: u64,
+    pub elapsed_time: Duration,
+    pub current_file_text: &'snapshot str,
+}
+
+pub struct ScanProgressDisplay {
+    progress_box: gtk::Box,
+    overall_bar: gtk::ProgressBar,
+    detail_label: gtk::Label,
+    found_threat_group: adw::PreferencesGroup,
+    found_threat_list: gtk::ListBox,
+}
+
+fn caption_label() -> gtk::Label {
+    gtk::Label::builder()
+        .xalign(0.0)
+        .use_markup(false)
+        .ellipsize(gtk::pango::EllipsizeMode::Middle)
+        .css_classes(["dim-label", "caption"])
+        .build()
+}
+
+fn found_threat_row(detected_threat: &DetectedThreat) -> adw::ActionRow {
+    let file_name = detected_threat.file_path.file_name().map_or_else(
+        || detected_threat.file_path.to_string_lossy().into_owned(),
+        |file_name| file_name.to_string_lossy().into_owned(),
+    );
+    let threat_row = adw::ActionRow::new();
+    threat_row.set_use_markup(false);
+    threat_row.set_title(&sanitize_scanner_line(&file_name));
+    threat_row.set_subtitle(&displayed_threat_name(&detected_threat.threat_name));
+    threat_row.set_tooltip_text(Some(&sanitize_scanner_line(
+        &detected_threat.file_path.to_string_lossy(),
+    )));
+    threat_row
+}
+
+impl ScanProgressDisplay {
+    pub fn new() -> Self {
+        let progress_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(6)
+            .build();
+        let overall_bar = gtk::ProgressBar::builder().show_text(true).build();
+        let detail_label = caption_label();
+        let found_threat_list = gtk::ListBox::builder()
+            .selection_mode(gtk::SelectionMode::None)
+            .css_classes(["boxed-list"])
+            .build();
+        let found_threat_group = adw::PreferencesGroup::builder()
+            .title(gettext("Found so far"))
+            .margin_top(12)
+            .visible(false)
+            .build();
+        found_threat_group.add(&found_threat_list);
+        progress_box.append(&overall_bar);
+        progress_box.append(&detail_label);
+        Self {
+            progress_box,
+            overall_bar,
+            detail_label,
+            found_threat_group,
+            found_threat_list,
+        }
+    }
+
+    pub const fn progress_widget(&self) -> &gtk::Box {
+        &self.progress_box
+    }
+
+    pub const fn found_threat_widget(&self) -> &adw::PreferencesGroup {
+        &self.found_threat_group
+    }
+
+    pub fn show_preparation(&self) {
+        self.found_threat_list.remove_all();
+        self.found_threat_group.set_visible(false);
+        self.overall_bar.set_fraction(0.0);
+        self.overall_bar.set_text(Some(&gettext("Preparing…")));
+        self.detail_label.set_label("");
+    }
+
+    pub fn show_finding_files(&self, enumeration_progress: &EnumerationProgress) {
+        self.overall_bar.pulse();
+        self.overall_bar.set_text(Some(
+            &ngettext(
+                "Finding files… {count} found",
+                "Finding files… {count} found",
+                u32::try_from(enumeration_progress.found_file_count).unwrap_or(u32::MAX),
+            )
+            .replace(
+                "{count}",
+                &enumeration_progress.found_file_count.to_string(),
+            ),
+        ));
+        self.detail_label.set_label(&sanitize_scanner_line(
+            &enumeration_progress.current_directory.to_string_lossy(),
+        ));
+    }
+
+    pub fn show_scanning(&self, scanning_snapshot: &ScanningSnapshot<'_>) {
+        self.overall_bar
+            .set_fraction(if scanning_snapshot.planned_file_count == 0 {
+                0.0
+            } else {
+                (scanning_snapshot.inspected_file_count as f64
+                    / scanning_snapshot.planned_file_count as f64)
+                    .clamp(0.0, 1.0)
+            });
+        self.overall_bar.set_text(Some(&file_progress_text(
+            scanning_snapshot.inspected_file_count,
+            scanning_snapshot.planned_file_count,
+        )));
+        let detail_text = [scanning_snapshot.current_file_text.to_owned()]
+            .into_iter()
+            .chain(remaining_time_text(
+                scanning_snapshot.elapsed_time,
+                scanning_snapshot.inspected_file_count,
+                scanning_snapshot.planned_file_count,
+            ))
+            .filter(|detail_part| !detail_part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        self.detail_label.set_label(&detail_text);
+    }
+
+    pub fn add_found_threat(&self, detected_threat: &DetectedThreat) {
+        self.found_threat_list
+            .append(&found_threat_row(detected_threat));
+        self.found_threat_group.set_visible(true);
+    }
+}

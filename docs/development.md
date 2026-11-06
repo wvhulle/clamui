@@ -34,8 +34,8 @@ Debug builds use the application ID `page.codeberg.wvhulle.Lazaret.Devel` and th
 ## Rules for changes
 
 - Keep only features that help block viruses or exploits. Lazaret adds value on top of a ClamAV that is already running.
-- Never bundle the scan engine. Find `clamdscan`, `clamscan` and `freshclam` with `clamav_components::trusted_program_lookup`, which skips copies your account could replace, and run them through `desktop_integration::flatpak_sandbox`, so the Flatpak keeps working.
-- Talk to systemd through `src/systemd_bus/` and read the journal through `src/systemd_journal/`. Don't run `systemctl` or `journalctl`, and don't refresh on timers: react to bus signals and journal wakeups.
+- Never bundle the scan engine. Find `clamdscan`, `clamscan` and `freshclam` with `host_services::clamav_programs::trusted_program_lookup`, which skips copies your account could replace, and run them through `host_services::desktop::flatpak_sandbox`, so the Flatpak keeps working.
+- Talk to systemd through `src/host_services/systemd_bus/` and read the journal through `src/host_services/systemd_journal/`. Don't run `systemctl` or `journalctl`, and don't refresh on timers: react to bus signals and journal wakeups.
 - The GUI never runs as root. `settings_helper/` is the only privileged code: it authorizes every request with polkit and enforces `data/protected-clamav-settings.txt` itself, so never rely on the UI for that.
 - Model scanner output as `impl Stream`. Split it on bytes and decode lossily, because file names can be arbitrary bytes. Sanitize scanner text before showing it, and keep `set_use_markup: false` on rows that show file names.
 - Keep quarantine file operations no-follow and integrity-checked, in this order: copy, pending row, remove source, commit. Never abort a move in progress.

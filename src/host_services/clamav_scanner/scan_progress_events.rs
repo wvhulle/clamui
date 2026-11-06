@@ -1,0 +1,1103 @@
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{self, Write},
+    ops::ControlFlow,
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
+    process::ExitStatus,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use futures::{
+    Stream, StreamExt,
+    channel::mpsc,
+    future::{Either, ready},
+    stream,
+};
+use rustix::{
+    fs::{Mode, OFlags},
+    io::Errno,
+};
+use tempfile::NamedTempFile;
+
+use crate::host_services::{
+    clamav_scanner::{
+        scan_exclusion_rules::ScanExclusions,
+        scan_progress_estimates::RefreshThrottle,
+        scan_target_enumeration::{
+            EnumerationProgress, ScanTargetFailure, enumerate_scan_files_reporting,
+        },
+        scanner_command_builder::{
+            ScannerBackend, ScannerInvocation, ScannerProgramPaths, build_scanner_command,
+        },
+        scanner_output_parser::{
+            DetectedThreat, InterpretedScan, ScanFailureReason, ScanNotice, ScanVerdict,
+            ScannerTranscript, interpret_clamdscan_transcript, interpret_clamscan_transcript,
+            is_blocked_by_on_access, is_noteworthy_scanner_line, on_access_blocked_threat,
+            parse_inaccessible_path_line, parse_inspected_file_line, parse_threat_detection_line,
+            reports_lost_clamd_connection, sanitize_scanner_line,
+        },
+        scanner_process_events::{
+            RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
+        },
+    },
+    desktop::flatpak_sandbox::scanner_visible_path,
+};
+
+const OUTPUT_LIMIT: usize = 64 * 1024 * 1024;
+const ENUMERATION_REPORT_INTERVAL: Duration = Duration::from_millis(100);
+const NOTEWORTHY_OUTPUT_LIMIT: usize = 1024 * 1024;
+const ROOT_LEVEL_TARGETS: &[&str] = &[
+    "/", "/home", "/usr", "/var", "/opt", "/etc", "/tmp", "/root",
+];
+
+#[derive(Clone, Debug)]
+pub struct ScanRequest {
+    pub scan_targets: Vec<PathBuf>,
+    pub scanner_backend: ScannerBackend,
+    pub scanner_programs: ScannerProgramPaths,
+    pub file_list_directory: PathBuf,
+    pub scan_exclusions: ScanExclusions,
+}
+
+#[derive(Debug)]
+pub enum ScanProgressEvent {
+    EnumerationProgressed(EnumerationProgress),
+    TargetEnumerated {
+        planned_file_count: u64,
+        planned_directory_count: u64,
+    },
+    FileInspected {
+        file_path: PathBuf,
+    },
+    ThreatDetected(DetectedThreat),
+    FilesLeftUnscanned {
+        unscanned_paths: Vec<PathBuf>,
+        unscanned_cause: UnscannedFileCause,
+    },
+    ScanPhaseFinished {
+        interpreted_scan: InterpretedScan,
+        noteworthy_output: String,
+    },
+    ScanPhaseUnstartable(ScanStartFailure),
+    TargetRejected(ScanTargetFailure),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UnscannedFileCause {
+    ClamdConnectionLost,
+    ScannerStoppedReporting,
+}
+
+#[derive(Debug)]
+pub enum ScanProblem {
+    ScannerFailed(ScanFailureReason),
+    FilesNotScanned {
+        unscanned_paths: Vec<PathBuf>,
+        unscanned_cause: UnscannedFileCause,
+    },
+    ScanPhaseUnstartable(ScanStartFailure),
+    TargetRejected(ScanTargetFailure),
+}
+
+#[derive(Debug, Default)]
+pub struct CompletedScanOutcome {
+    pub planned_file_count: u64,
+    pub inspected_file_count: u64,
+    pub scanned_directory_count: u64,
+    pub detected_threats: Vec<DetectedThreat>,
+    pub unattributed_threats_reported: bool,
+    pub scan_notices: Vec<ScanNotice>,
+    pub scan_problems: Vec<ScanProblem>,
+    pub skipped_paths: Vec<String>,
+    pub nonfatal_warnings: Vec<String>,
+    pub noteworthy_output: String,
+}
+
+impl CompletedScanOutcome {
+    pub fn absorb_progress_event(&mut self, progress_event: ScanProgressEvent) {
+        match progress_event {
+            ScanProgressEvent::EnumerationProgressed(_enumeration_progress) => {}
+            ScanProgressEvent::TargetEnumerated {
+                planned_file_count,
+                planned_directory_count,
+                ..
+            } => {
+                self.planned_file_count += planned_file_count;
+                self.scanned_directory_count += planned_directory_count;
+            }
+            ScanProgressEvent::FileInspected { .. } => {
+                self.inspected_file_count += 1;
+            }
+            ScanProgressEvent::ThreatDetected(detected_threat) => {
+                self.detected_threats.push(detected_threat);
+            }
+            ScanProgressEvent::FilesLeftUnscanned {
+                unscanned_paths,
+                unscanned_cause,
+            } => {
+                self.scan_problems.push(ScanProblem::FilesNotScanned {
+                    unscanned_paths,
+                    unscanned_cause,
+                });
+            }
+            ScanProgressEvent::ScanPhaseFinished {
+                interpreted_scan,
+                noteworthy_output,
+            } => {
+                self.absorb_interpreted_scan(interpreted_scan);
+                self.noteworthy_output.push_str(&noteworthy_output);
+            }
+            ScanProgressEvent::ScanPhaseUnstartable(start_failure) => {
+                self.scan_problems
+                    .push(ScanProblem::ScanPhaseUnstartable(start_failure));
+            }
+            ScanProgressEvent::TargetRejected(target_failure) => {
+                self.scan_problems
+                    .push(ScanProblem::TargetRejected(target_failure));
+            }
+        }
+    }
+
+    fn absorb_interpreted_scan(&mut self, interpreted_scan: InterpretedScan) {
+        self.scanned_directory_count += interpreted_scan.reported_directory_count;
+        self.skipped_paths.extend(interpreted_scan.skipped_paths);
+        self.nonfatal_warnings
+            .extend(interpreted_scan.nonfatal_warnings);
+        if interpreted_scan.scan_notice != ScanNotice::NoNotice {
+            self.scan_notices.push(interpreted_scan.scan_notice);
+        }
+        match interpreted_scan.scan_verdict {
+            ScanVerdict::NoThreatsFound => {}
+            ScanVerdict::ThreatsFound => self.unattributed_threats_reported = true,
+            ScanVerdict::ScanFailed(failure_reason) => self
+                .scan_problems
+                .push(ScanProblem::ScannerFailed(failure_reason)),
+        }
+    }
+
+    pub fn threats_were_found(&self) -> bool {
+        !self.detected_threats.is_empty() || self.unattributed_threats_reported
+    }
+}
+
+enum ReportedPathIdentity {
+    ReportedByScanner,
+    FixedStandardInputPath(PathBuf),
+}
+
+impl ReportedPathIdentity {
+    fn resolve_reported_path(&self, reported_path: PathBuf) -> PathBuf {
+        match self {
+            Self::ReportedByScanner => reported_path,
+            Self::FixedStandardInputPath(input_path) => input_path.clone(),
+        }
+    }
+}
+
+enum ScannerPhasePlan {
+    StandaloneTarget {
+        target_path: PathBuf,
+    },
+    ClamdFileList {
+        file_list: NamedTempFile,
+        listed_paths: Vec<PathBuf>,
+    },
+    ClamdStandardInput {
+        input_path: PathBuf,
+    },
+}
+
+struct PreparedScanTarget {
+    planned_file_count: u64,
+    planned_directory_count: u64,
+    scanner_phase_plans: Vec<ScannerPhasePlan>,
+}
+
+struct ScannerPhaseTranscript {
+    scanner_backend: ScannerBackend,
+    reported_path_identity: ReportedPathIdentity,
+    planned_file_count: u64,
+    listed_paths: Vec<PathBuf>,
+    report_bytes: Vec<u8>,
+    diagnostic_bytes: Vec<u8>,
+    detected_threats: Vec<DetectedThreat>,
+    inspected_paths: HashSet<PathBuf>,
+    blocked_paths: HashSet<PathBuf>,
+}
+
+fn append_bounded_line(retained_bytes: &mut Vec<u8>, output_line: &[u8]) {
+    let remaining_capacity = OUTPUT_LIMIT.saturating_sub(retained_bytes.len());
+    let retained_length = output_line.len().min(remaining_capacity);
+    retained_bytes.extend_from_slice(&output_line[..retained_length]);
+    if retained_length == output_line.len() && retained_bytes.len() < OUTPUT_LIMIT {
+        retained_bytes.push(b'\n');
+    }
+}
+
+impl ScannerPhaseTranscript {
+    fn absorb_process_event(
+        &mut self,
+        process_event: ScannerProcessEvent,
+    ) -> Vec<ScanProgressEvent> {
+        match process_event {
+            ScannerProcessEvent::ReportLine(report_line) => self.absorb_report_line(&report_line),
+            ScannerProcessEvent::DiagnosticLine(diagnostic_line) => {
+                append_bounded_line(&mut self.diagnostic_bytes, &diagnostic_line);
+                self.on_access_block_events(&diagnostic_line)
+            }
+            ScannerProcessEvent::Exited(exit_status) => {
+                let interpreted_scan = self.interpret_finished_phase(exit_status);
+                let unscanned_event = self.unscanned_files_event(&interpreted_scan.skipped_paths);
+                let connection_loss_explained = matches!(
+                    unscanned_event,
+                    Some(ScanProgressEvent::FilesLeftUnscanned {
+                        unscanned_cause: UnscannedFileCause::ClamdConnectionLost,
+                        ..
+                    })
+                );
+                let noteworthy_output = self.noteworthy_output(connection_loss_explained);
+                unscanned_event
+                    .into_iter()
+                    .chain(std::iter::once(ScanProgressEvent::ScanPhaseFinished {
+                        interpreted_scan,
+                        noteworthy_output,
+                    }))
+                    .collect()
+            }
+        }
+    }
+
+    fn absorb_report_line(&mut self, report_line: &[u8]) -> Vec<ScanProgressEvent> {
+        append_bounded_line(&mut self.report_bytes, report_line);
+        let detected_threat =
+            parse_threat_detection_line(report_line, self.scanner_backend).map(|parsed_threat| {
+                DetectedThreat {
+                    file_path: self
+                        .reported_path_identity
+                        .resolve_reported_path(parsed_threat.file_path.clone()),
+                    ..parsed_threat
+                }
+            });
+        let inspected_path = match &detected_threat {
+            Some(detected_threat) => Some(detected_threat.file_path.clone()),
+            None => {
+                parse_inspected_file_line(report_line, self.scanner_backend).map(|reported_path| {
+                    self.reported_path_identity
+                        .resolve_reported_path(reported_path)
+                })
+            }
+        };
+        let inspected_event = inspected_path
+            .filter(|inspected_path| self.inspected_paths.insert(inspected_path.clone()))
+            .map(|file_path| ScanProgressEvent::FileInspected { file_path });
+        let threat_event = detected_threat.map(|detected_threat| {
+            self.detected_threats.push(detected_threat.clone());
+            ScanProgressEvent::ThreatDetected(detected_threat)
+        });
+        inspected_event
+            .into_iter()
+            .chain(threat_event)
+            .chain(self.on_access_block_events(report_line))
+            .collect()
+    }
+
+    fn on_access_block_events(&mut self, scanner_line: &[u8]) -> Vec<ScanProgressEvent> {
+        let Some(reported_path) = parse_inaccessible_path_line(scanner_line) else {
+            return Vec::new();
+        };
+        let blocked_path = self
+            .reported_path_identity
+            .resolve_reported_path(reported_path);
+        if !is_blocked_by_on_access(&blocked_path)
+            || !self.blocked_paths.insert(blocked_path.clone())
+        {
+            return Vec::new();
+        }
+        let blocked_threat = on_access_blocked_threat(blocked_path);
+        self.detected_threats.push(blocked_threat.clone());
+        vec![ScanProgressEvent::ThreatDetected(blocked_threat)]
+    }
+
+    fn unscanned_files_event(&self, skipped_paths: &[String]) -> Option<ScanProgressEvent> {
+        let unscanned_paths = self
+            .listed_paths
+            .iter()
+            .filter(|listed_path| {
+                !self.inspected_paths.contains(*listed_path)
+                    && !self.blocked_paths.contains(*listed_path)
+                    && !skipped_paths
+                        .iter()
+                        .any(|skipped_path| Path::new(skipped_path) == listed_path.as_path())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if unscanned_paths.is_empty() {
+            return None;
+        }
+        let unscanned_cause = if reports_lost_clamd_connection(
+            &String::from_utf8_lossy(&self.report_bytes),
+            &String::from_utf8_lossy(&self.diagnostic_bytes),
+        ) {
+            UnscannedFileCause::ClamdConnectionLost
+        } else {
+            UnscannedFileCause::ScannerStoppedReporting
+        };
+        Some(ScanProgressEvent::FilesLeftUnscanned {
+            unscanned_paths,
+            unscanned_cause,
+        })
+    }
+
+    fn is_explained_elsewhere(&self, scanner_line: &str, connection_loss_explained: bool) -> bool {
+        (connection_loss_explained && reports_lost_clamd_connection(scanner_line, ""))
+            || self.blocked_paths.iter().any(|blocked_path| {
+                scanner_line
+                    .as_bytes()
+                    .starts_with(blocked_path.as_os_str().as_bytes())
+            })
+    }
+
+    fn noteworthy_output(&self, connection_loss_explained: bool) -> String {
+        let report_text = String::from_utf8_lossy(&self.report_bytes);
+        let diagnostic_text = String::from_utf8_lossy(&self.diagnostic_bytes);
+        report_text
+            .lines()
+            .chain(diagnostic_text.lines())
+            .filter(|scanner_line| is_noteworthy_scanner_line(scanner_line))
+            .filter(|scanner_line| {
+                !self.is_explained_elsewhere(scanner_line, connection_loss_explained)
+            })
+            .scan(0, |retained_length, scanner_line| {
+                *retained_length += scanner_line.len() + 1;
+                (*retained_length <= NOTEWORTHY_OUTPUT_LIMIT)
+                    .then(|| format!("{}\n", sanitize_scanner_line(scanner_line)))
+            })
+            .collect()
+    }
+
+    fn interpret_finished_phase(&mut self, exit_status: io::Result<ExitStatus>) -> InterpretedScan {
+        let report_text = String::from_utf8_lossy(&self.report_bytes);
+        let diagnostic_text = String::from_utf8_lossy(&self.diagnostic_bytes);
+        let exit_code = exit_status
+            .ok()
+            .and_then(|exit_status| exit_status.code())
+            .unwrap_or(-1);
+        let scanner_transcript = ScannerTranscript {
+            report_text: &report_text,
+            diagnostic_text: &diagnostic_text,
+            exit_code,
+            detected_threats: &self.detected_threats,
+        };
+        let interpreted_scan = match self.scanner_backend {
+            ScannerBackend::ClamdDaemon => {
+                interpret_clamdscan_transcript(&scanner_transcript, self.planned_file_count)
+            }
+            ScannerBackend::StandaloneClamscan => interpret_clamscan_transcript(
+                &scanner_transcript,
+                self.inspected_paths.len() as u64,
+            ),
+        };
+        let resolved_skipped_paths = interpreted_scan
+            .skipped_paths
+            .iter()
+            .map(|skipped_path| match &self.reported_path_identity {
+                ReportedPathIdentity::ReportedByScanner => skipped_path.clone(),
+                ReportedPathIdentity::FixedStandardInputPath(input_path) => {
+                    input_path.to_string_lossy().into_owned()
+                }
+            })
+            .collect();
+        InterpretedScan {
+            skipped_paths: resolved_skipped_paths,
+            ..interpreted_scan
+        }
+    }
+}
+
+fn requires_clamd_standard_input(file_path: &Path) -> bool {
+    file_path
+        .as_os_str()
+        .as_bytes()
+        .iter()
+        .any(|path_byte| matches!(path_byte, b'\n' | b'\r'))
+}
+
+fn is_root_level_target(target_path: &Path) -> bool {
+    ROOT_LEVEL_TARGETS
+        .iter()
+        .any(|root_level_target| target_path == Path::new(root_level_target))
+}
+
+fn write_private_file_list(
+    file_list_directory: &Path,
+    listed_paths: &[PathBuf],
+) -> io::Result<NamedTempFile> {
+    std::fs::create_dir_all(file_list_directory)?;
+    let mut file_list = tempfile::Builder::new()
+        .prefix(".clamdscan-")
+        .suffix(".list")
+        .tempfile_in(file_list_directory)?;
+    listed_paths.iter().try_for_each(|listed_path| {
+        file_list.write_all(listed_path.as_os_str().as_bytes())?;
+        file_list.write_all(b"\n")
+    })?;
+    file_list.as_file().sync_all()?;
+    Ok(file_list)
+}
+
+fn prepare_clamd_phases(
+    target_path: &Path,
+    scan_request: &ScanRequest,
+    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
+) -> Result<PreparedScanTarget, ScanTargetFailure> {
+    let enumerated_files = enumerate_scan_files_reporting(
+        target_path,
+        &scan_request.scan_exclusions,
+        report_progress,
+    )?;
+    let planned_file_count = enumerated_files.file_paths.len() as u64;
+    let (standard_input_paths, listed_paths): (Vec<PathBuf>, Vec<PathBuf>) = enumerated_files
+        .file_paths
+        .into_iter()
+        .partition(|file_path| requires_clamd_standard_input(file_path));
+    let listed_paths = listed_paths
+        .iter()
+        .map(|listed_path| scanner_visible_path(listed_path))
+        .collect::<Vec<_>>();
+    let file_list_phase = if listed_paths.is_empty() {
+        None
+    } else {
+        Some(ScannerPhasePlan::ClamdFileList {
+            file_list: write_private_file_list(&scan_request.file_list_directory, &listed_paths)?,
+            listed_paths,
+        })
+    };
+    let standard_input_phases = standard_input_paths
+        .into_iter()
+        .map(|input_path| ScannerPhasePlan::ClamdStandardInput { input_path });
+    Ok(PreparedScanTarget {
+        planned_file_count,
+        planned_directory_count: enumerated_files.directory_count,
+        scanner_phase_plans: file_list_phase
+            .into_iter()
+            .chain(standard_input_phases)
+            .collect(),
+    })
+}
+
+fn prepare_standalone_phase(
+    target_path: &Path,
+    scan_exclusions: &ScanExclusions,
+    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
+) -> Result<PreparedScanTarget, ScanTargetFailure> {
+    let enumerated_paths = if is_root_level_target(target_path) {
+        Vec::new()
+    } else {
+        enumerate_scan_files_reporting(target_path, scan_exclusions, report_progress)?.file_paths
+    };
+    Ok(PreparedScanTarget {
+        planned_file_count: enumerated_paths.len() as u64,
+        planned_directory_count: 0,
+        scanner_phase_plans: vec![ScannerPhasePlan::StandaloneTarget {
+            target_path: target_path.to_path_buf(),
+        }],
+    })
+}
+
+fn prepare_scan_target(
+    target_path: &Path,
+    scan_request: &ScanRequest,
+    report_progress: &mut dyn FnMut(&EnumerationProgress) -> ControlFlow<()>,
+) -> Result<PreparedScanTarget, ScanTargetFailure> {
+    match scan_request.scanner_backend {
+        ScannerBackend::ClamdDaemon => {
+            prepare_clamd_phases(target_path, scan_request, report_progress)
+        }
+        ScannerBackend::StandaloneClamscan => {
+            prepare_standalone_phase(target_path, &scan_request.scan_exclusions, report_progress)
+        }
+    }
+}
+
+fn open_standard_input_file(input_path: &Path) -> Result<File, ScanStartFailure> {
+    let open_input = || -> io::Result<File> {
+        let input_file = File::from(rustix::fs::open(
+            input_path,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+            Mode::empty(),
+        )?);
+        if input_file.metadata()?.is_file() {
+            Ok(input_file)
+        } else {
+            Err(io::Error::from(io::ErrorKind::InvalidInput))
+        }
+    };
+    open_input().map_err(|input_failure| ScanStartFailure::ScanInputUnavailable {
+        input_path: input_path.to_path_buf(),
+        input_failure,
+    })
+}
+
+struct StartedPhaseParts {
+    scanner_command: tokio::process::Command,
+    phase_transcript: ScannerPhaseTranscript,
+    retained_files: RetainedScannerFiles,
+}
+
+fn create_scanner_work_directory(scan_request: &ScanRequest) -> io::Result<tempfile::TempDir> {
+    std::fs::create_dir_all(&scan_request.file_list_directory)?;
+    tempfile::Builder::new()
+        .prefix(".clamscan-")
+        .tempdir_in(&scan_request.file_list_directory)
+}
+
+fn prepare_phase_parts(
+    scanner_phase_plan: ScannerPhasePlan,
+    scan_request: &ScanRequest,
+) -> Result<StartedPhaseParts, ScanStartFailure> {
+    let scanner_programs = &scan_request.scanner_programs;
+    Ok(match scanner_phase_plan {
+        ScannerPhasePlan::StandaloneTarget { target_path } => {
+            let work_directory = create_scanner_work_directory(scan_request)
+                .map_err(ScanStartFailure::ScannerWorkDirectoryUnavailable)?;
+            StartedPhaseParts {
+                scanner_command: build_scanner_command(
+                    scanner_programs,
+                    ScannerInvocation::StandaloneTarget {
+                        target_path: &target_path,
+                        scanner_work_directory: work_directory.path(),
+                        scan_exclusions: &scan_request.scan_exclusions,
+                    },
+                )?,
+                phase_transcript: new_phase_transcript(
+                    ScannerBackend::StandaloneClamscan,
+                    ReportedPathIdentity::ReportedByScanner,
+                    0,
+                    Vec::new(),
+                ),
+                retained_files: RetainedScannerFiles::TemporaryWorkDirectory(work_directory),
+            }
+        }
+        ScannerPhasePlan::ClamdFileList {
+            file_list,
+            listed_paths,
+        } => StartedPhaseParts {
+            scanner_command: build_scanner_command(
+                scanner_programs,
+                ScannerInvocation::ClamdFileList {
+                    file_list_path: file_list.path(),
+                },
+            )?,
+            phase_transcript: new_phase_transcript(
+                ScannerBackend::ClamdDaemon,
+                ReportedPathIdentity::ReportedByScanner,
+                listed_paths.len() as u64,
+                listed_paths,
+            ),
+            retained_files: RetainedScannerFiles::TemporaryFileList(file_list),
+        },
+        ScannerPhasePlan::ClamdStandardInput { input_path } => StartedPhaseParts {
+            scanner_command: build_scanner_command(
+                scanner_programs,
+                ScannerInvocation::ClamdStandardInput {
+                    scan_input_file: open_standard_input_file(&input_path)?,
+                },
+            )?,
+            phase_transcript: new_phase_transcript(
+                ScannerBackend::ClamdDaemon,
+                ReportedPathIdentity::FixedStandardInputPath(input_path),
+                1,
+                Vec::new(),
+            ),
+            retained_files: RetainedScannerFiles::NoRetainedFiles,
+        },
+    })
+}
+
+fn start_scanner_phase(
+    scanner_phase_plan: ScannerPhasePlan,
+    scan_request: &ScanRequest,
+) -> Result<impl Stream<Item = ScanProgressEvent> + Send + 'static + use<>, ScanStartFailure> {
+    let StartedPhaseParts {
+        scanner_command,
+        phase_transcript,
+        retained_files,
+    } = prepare_phase_parts(scanner_phase_plan, scan_request)?;
+    Ok(scanner_process_events(scanner_command, retained_files)?
+        .scan(phase_transcript, |phase_transcript, process_event| {
+            ready(Some(phase_transcript.absorb_process_event(process_event)))
+        })
+        .flat_map(stream::iter))
+}
+
+fn new_phase_transcript(
+    scanner_backend: ScannerBackend,
+    reported_path_identity: ReportedPathIdentity,
+    planned_file_count: u64,
+    listed_paths: Vec<PathBuf>,
+) -> ScannerPhaseTranscript {
+    ScannerPhaseTranscript {
+        planned_file_count,
+        scanner_backend,
+        reported_path_identity,
+        listed_paths,
+        report_bytes: Vec::new(),
+        diagnostic_bytes: Vec::new(),
+        detected_threats: Vec::new(),
+        inspected_paths: HashSet::new(),
+        blocked_paths: HashSet::new(),
+    }
+}
+
+fn scanner_phase_events(
+    scanner_phase_plan: ScannerPhasePlan,
+    scan_request: &ScanRequest,
+) -> impl Stream<Item = ScanProgressEvent> + Send + 'static + use<> {
+    match start_scanner_phase(scanner_phase_plan, scan_request) {
+        Ok(phase_events) => Either::Left(phase_events),
+        Err(ScanStartFailure::ScanInputUnavailable {
+            input_path,
+            input_failure,
+        }) if input_failure.raw_os_error() == Some(Errno::PERM.raw_os_error()) => {
+            Either::Right(stream::once(ready(ScanProgressEvent::ThreatDetected(
+                on_access_blocked_threat(input_path),
+            ))))
+        }
+        Err(start_failure) => Either::Right(stream::once(ready(
+            ScanProgressEvent::ScanPhaseUnstartable(start_failure),
+        ))),
+    }
+}
+
+fn prepared_target_events(
+    prepared_target: Result<PreparedScanTarget, ScanTargetFailure>,
+    scan_request: Arc<ScanRequest>,
+) -> impl Stream<Item = ScanProgressEvent> + Send + 'static {
+    match prepared_target {
+        Ok(prepared_target) => Either::Left(
+            stream::once(ready(ScanProgressEvent::TargetEnumerated {
+                planned_file_count: prepared_target.planned_file_count,
+                planned_directory_count: prepared_target.planned_directory_count,
+            }))
+            .chain(stream::iter(prepared_target.scanner_phase_plans).flat_map(
+                move |scanner_phase_plan| scanner_phase_events(scanner_phase_plan, &scan_request),
+            )),
+        ),
+        Err(target_failure) => Either::Right(stream::once(ready(
+            ScanProgressEvent::TargetRejected(target_failure),
+        ))),
+    }
+}
+
+fn target_progress_events(
+    target_path: PathBuf,
+    scan_request: Arc<ScanRequest>,
+) -> impl Stream<Item = ScanProgressEvent> + Send + 'static {
+    let preparation_request = Arc::clone(&scan_request);
+    let (progress_sender, progress_receiver) = mpsc::unbounded();
+    let target_preparation = tokio::task::spawn_blocking(move || {
+        let mut report_throttle =
+            RefreshThrottle::starting_at(ENUMERATION_REPORT_INTERVAL, Instant::now());
+        prepare_scan_target(
+            &target_path,
+            &preparation_request,
+            &mut |enumeration_progress| {
+                if progress_sender.is_closed() {
+                    return ControlFlow::Break(());
+                }
+                if report_throttle.allows_refresh(Instant::now()) {
+                    let _scan_abandoned =
+                        progress_sender.unbounded_send(enumeration_progress.clone());
+                }
+                ControlFlow::Continue(())
+            },
+        )
+    });
+    progress_receiver
+        .map(ScanProgressEvent::EnumerationProgressed)
+        .chain(
+            stream::once(target_preparation).flat_map(move |prepared_target| {
+                prepared_target_events(
+                    prepared_target.unwrap_or(Err(ScanTargetFailure::EnumerationInterrupted)),
+                    Arc::clone(&scan_request),
+                )
+            }),
+        )
+}
+
+pub fn scan_progress_events(
+    scan_request: ScanRequest,
+) -> impl Stream<Item = ScanProgressEvent> + Send + 'static {
+    let shared_request = Arc::new(scan_request);
+    stream::iter(shared_request.scan_targets.clone()).flat_map(move |target_path| {
+        target_progress_events(target_path, Arc::clone(&shared_request))
+    })
+}
+
+#[cfg(test)]
+mod scan_progress_events_tests {
+    use std::{
+        collections::BTreeSet,
+        fs,
+        os::unix::{fs::PermissionsExt, process::ExitStatusExt},
+    };
+
+    use rustix::fs::{CWD, FileType, mknodat};
+    use tempfile::TempDir;
+
+    use super::*;
+
+    fn exit_status_with_code(exit_code: i32) -> ExitStatus {
+        ExitStatus::from_raw(exit_code << 8)
+    }
+
+    fn transcript_progress_events(
+        mut phase_transcript: ScannerPhaseTranscript,
+        report_lines: &[&[u8]],
+        exit_code: i32,
+    ) -> Vec<ScanProgressEvent> {
+        report_lines
+            .iter()
+            .map(|report_line| ScannerProcessEvent::ReportLine(report_line.to_vec()))
+            .chain(std::iter::once(ScannerProcessEvent::Exited(Ok(
+                exit_status_with_code(exit_code),
+            ))))
+            .flat_map(|process_event| phase_transcript.absorb_process_event(process_event))
+            .collect()
+    }
+
+    fn fold_scan_outcome(progress_events: Vec<ScanProgressEvent>) -> CompletedScanOutcome {
+        progress_events.into_iter().fold(
+            CompletedScanOutcome::default(),
+            |mut scan_outcome, progress_event| {
+                scan_outcome.absorb_progress_event(progress_event);
+                scan_outcome
+            },
+        )
+    }
+
+    fn inspected_paths_of(progress_events: &[ScanProgressEvent]) -> BTreeSet<PathBuf> {
+        progress_events
+            .iter()
+            .filter_map(|progress_event| match progress_event {
+                ScanProgressEvent::FileInspected { file_path } => Some(file_path.clone()),
+                _other_event => None,
+            })
+            .collect()
+    }
+
+    fn file_list_transcript(planned_file_count: u64) -> ScannerPhaseTranscript {
+        new_phase_transcript(
+            ScannerBackend::ClamdDaemon,
+            ReportedPathIdentity::ReportedByScanner,
+            planned_file_count,
+            Vec::new(),
+        )
+    }
+
+    fn standard_input_transcript(input_path: &Path) -> ScannerPhaseTranscript {
+        new_phase_transcript(
+            ScannerBackend::ClamdDaemon,
+            ReportedPathIdentity::FixedStandardInputPath(input_path.to_path_buf()),
+            1,
+            Vec::new(),
+        )
+    }
+
+    fn clamd_request(temporary_root: &TempDir, scan_targets: Vec<PathBuf>) -> ScanRequest {
+        ScanRequest {
+            scan_targets,
+            scanner_backend: ScannerBackend::ClamdDaemon,
+            scanner_programs: ScannerProgramPaths::locate_trusted_programs(),
+            file_list_directory: temporary_root.path().join("data"),
+            scan_exclusions: ScanExclusions::default(),
+        }
+    }
+
+    #[test]
+    fn clamscan_transcript_keeps_found_output_and_counts_files_once() {
+        let progress_events = transcript_progress_events(
+            new_phase_transcript(
+                ScannerBackend::StandaloneClamscan,
+                ReportedPathIdentity::ReportedByScanner,
+                0,
+                Vec::new(),
+            ),
+            &[
+                b"Scanning /scan/target file",
+                b"/scan/target file: Eicar-Test-Signature FOUND",
+                b"Scanned files: 1",
+                b"Infected files: 1",
+            ],
+            2,
+        );
+        let scan_outcome = fold_scan_outcome(progress_events);
+        assert!(scan_outcome.threats_were_found());
+        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(
+            scan_outcome.detected_threats[0].file_path,
+            PathBuf::from("/scan/target file")
+        );
+        assert_eq!(scan_outcome.inspected_file_count, 1);
+    }
+
+    #[test]
+    fn newline_paths_go_through_standard_input_and_others_through_the_file_list() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let scan_target = temporary_root.path().join("scan");
+        fs::create_dir_all(&scan_target).expect("scan directory");
+        let clean_file = scan_target.join("clean.txt");
+        let infected_file = scan_target.join("infected.txt");
+        let carriage_return_file = scan_target.join("carriage\rinfected.txt");
+        let newline_file = scan_target.join("fake: Fake.Signature FOUND\nrest.txt");
+        [
+            &clean_file,
+            &infected_file,
+            &carriage_return_file,
+            &newline_file,
+        ]
+        .iter()
+        .for_each(|file_path| fs::write(file_path, b"fixture").expect("fixture file"));
+
+        let prepared_target = prepare_clamd_phases(
+            &scan_target,
+            &clamd_request(&temporary_root, vec![scan_target.clone()]),
+            &mut |_enumeration_progress| ControlFlow::Continue(()),
+        )
+        .expect("prepared target");
+        assert_eq!(prepared_target.planned_file_count, 4);
+        let (file_list_phases, standard_input_phases): (Vec<_>, Vec<_>) = prepared_target
+            .scanner_phase_plans
+            .iter()
+            .partition(|phase_plan| matches!(phase_plan, ScannerPhasePlan::ClamdFileList { .. }));
+        let [ScannerPhasePlan::ClamdFileList { file_list, .. }] = file_list_phases.as_slice()
+        else {
+            panic!("expected one file list phase");
+        };
+        let listed_paths = fs::read_to_string(file_list.path()).expect("file list");
+        assert!(
+            listed_paths
+                .lines()
+                .any(|listed_path| listed_path == clean_file.to_string_lossy())
+        );
+        assert!(
+            listed_paths
+                .lines()
+                .any(|listed_path| listed_path == infected_file.to_string_lossy())
+        );
+        assert_eq!(listed_paths.lines().count(), 2);
+        let standard_input_paths = standard_input_phases
+            .iter()
+            .filter_map(|phase_plan| match phase_plan {
+                ScannerPhasePlan::ClamdStandardInput { input_path } => Some(input_path.clone()),
+                _other_phase => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            standard_input_paths,
+            BTreeSet::from([carriage_return_file, newline_file])
+        );
+    }
+
+    #[test]
+    fn standard_input_results_keep_the_original_path_identity() {
+        let infected_file = PathBuf::from("/scan/infected\nfile");
+        let clean_file = PathBuf::from("/scan/clean\rfile");
+        let infected_events = transcript_progress_events(
+            standard_input_transcript(&infected_file),
+            &[b"fd[0]: Fixture.Signature FOUND"],
+            1,
+        );
+        let clean_events =
+            transcript_progress_events(standard_input_transcript(&clean_file), &[b"fd[0]: OK"], 0);
+        assert_eq!(
+            inspected_paths_of(&infected_events),
+            BTreeSet::from([infected_file.clone()])
+        );
+        assert_eq!(
+            inspected_paths_of(&clean_events),
+            BTreeSet::from([clean_file])
+        );
+        let scan_outcome =
+            fold_scan_outcome(infected_events.into_iter().chain(clean_events).collect());
+        assert_eq!(scan_outcome.inspected_file_count, 2);
+        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(scan_outcome.detected_threats[0].file_path, infected_file);
+        assert_ne!(
+            scan_outcome.detected_threats[0].threat_name,
+            "Fake.Signature"
+        );
+    }
+
+    #[test]
+    fn a_path_replaced_by_a_fifo_is_refused_without_blocking() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let replaced_file = temporary_root.path().join("replaced\rfifo");
+        mknodat(
+            CWD,
+            &replaced_file,
+            FileType::Fifo,
+            Mode::from_bits_truncate(0o600),
+            0,
+        )
+        .expect("fixture fifo");
+        let Err(start_failure) = open_standard_input_file(&replaced_file) else {
+            panic!("a fifo must not be accepted as scan input");
+        };
+        assert!(matches!(
+            &start_failure,
+            ScanStartFailure::ScanInputUnavailable { input_path, .. } if *input_path == replaced_file
+        ));
+    }
+
+    #[test]
+    fn an_unavailable_input_keeps_results_from_other_phases() {
+        let file_list_events =
+            transcript_progress_events(file_list_transcript(1), &[b"/scan/safe.txt: OK"], 0);
+        let infected_events = transcript_progress_events(
+            standard_input_transcript(Path::new("/scan/infected\nsibling")),
+            &[b"fd[0]: Fixture.Signature FOUND"],
+            1,
+        );
+        let unavailable_event =
+            ScanProgressEvent::ScanPhaseUnstartable(ScanStartFailure::ScanInputUnavailable {
+                input_path: PathBuf::from("/scan/replaced\rfifo"),
+                input_failure: io::Error::from(io::ErrorKind::InvalidInput),
+            });
+        let scan_outcome = fold_scan_outcome(
+            file_list_events
+                .into_iter()
+                .chain(std::iter::once(unavailable_event))
+                .chain(infected_events)
+                .collect(),
+        );
+        assert!(scan_outcome.threats_were_found());
+        assert_eq!(scan_outcome.inspected_file_count, 2);
+        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(scan_outcome.scan_problems.len(), 1);
+    }
+
+    #[test]
+    fn exit_one_without_a_detection_line_still_reports_threats() {
+        let scan_outcome =
+            fold_scan_outcome(transcript_progress_events(file_list_transcript(1), &[], 1));
+        assert!(scan_outcome.threats_were_found());
+        assert!(scan_outcome.detected_threats.is_empty());
+    }
+
+    #[test]
+    fn threats_seen_before_cancelling_are_kept_when_the_phase_is_dropped() {
+        let mut phase_transcript = file_list_transcript(2);
+        let partial_events = phase_transcript.absorb_process_event(
+            ScannerProcessEvent::ReportLine(b"/scan/batched.txt: Fixture.Signature FOUND".to_vec()),
+        );
+        drop(phase_transcript);
+        let scan_outcome = fold_scan_outcome(partial_events);
+        assert_eq!(scan_outcome.detected_threats.len(), 1);
+        assert_eq!(scan_outcome.detected_threats[0].threat_category, "Virus");
+    }
+
+    #[test]
+    fn the_private_file_list_is_owner_only_and_removed_on_drop() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let file_list_directory = temporary_root.path().join("data");
+        let file_list = write_private_file_list(
+            &file_list_directory,
+            &[PathBuf::from("/scan/one"), PathBuf::from("/scan/two")],
+        )
+        .expect("file list");
+        assert_eq!(
+            fs::metadata(file_list.path())
+                .expect("list metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        assert_eq!(
+            fs::read_to_string(file_list.path()).expect("list contents"),
+            "/scan/one\n/scan/two\n"
+        );
+        drop(file_list);
+        assert_eq!(
+            fs::read_dir(file_list_directory)
+                .expect("list directory")
+                .count(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_target_produces_a_problem_and_no_counts() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let scan_outcome = fold_scan_outcome(
+            scan_progress_events(clamd_request(
+                &temporary_root,
+                vec![PathBuf::from("/scan/invalid\0target")],
+            ))
+            .collect()
+            .await,
+        );
+        assert!(!scan_outcome.threats_were_found());
+        assert_eq!(scan_outcome.inspected_file_count, 0);
+        assert!(matches!(
+            scan_outcome.scan_problems.as_slice(),
+            [ScanProblem::TargetRejected(
+                ScanTargetFailure::TargetMissing
+            )]
+        ));
+    }
+
+    #[test]
+    fn files_after_a_lost_clamd_connection_are_reported_as_unscanned() {
+        let listed_paths = ["/scan/first", "/scan/second", "/scan/third"].map(PathBuf::from);
+        let scan_outcome = fold_scan_outcome(transcript_progress_events(
+            new_phase_transcript(
+                ScannerBackend::ClamdDaemon,
+                ReportedPathIdentity::ReportedByScanner,
+                3,
+                listed_paths.to_vec(),
+            ),
+            &[
+                b"/scan/first: OK",
+                b"ERROR: Can't send to clamd: Broken pipe",
+            ],
+            2,
+        ));
+        assert!(
+            scan_outcome
+                .scan_problems
+                .iter()
+                .any(|scan_problem| matches!(
+                    scan_problem,
+                    ScanProblem::FilesNotScanned {
+                        unscanned_paths,
+                        unscanned_cause: UnscannedFileCause::ClamdConnectionLost,
+                    } if unscanned_paths == &listed_paths[1..]
+                ))
+        );
+        assert!(
+            !scan_outcome
+                .noteworthy_output
+                .contains("Can't send to clamd")
+        );
+    }
+
+    #[test]
+    fn a_complete_file_list_reports_no_unscanned_files() {
+        let scan_outcome = fold_scan_outcome(transcript_progress_events(
+            new_phase_transcript(
+                ScannerBackend::ClamdDaemon,
+                ReportedPathIdentity::ReportedByScanner,
+                1,
+                vec![PathBuf::from("/scan/first")],
+            ),
+            &[b"/scan/first: OK"],
+            0,
+        ));
+        assert!(scan_outcome.scan_problems.is_empty());
+    }
+}
