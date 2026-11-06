@@ -165,7 +165,7 @@ pub fn format_scan_report(results_view: &ScanResultsView) -> String {
         format!(
             "{}: {}",
             sanitize_scanner_line(&detected_threat.file_path.to_string_lossy()),
-            displayed_threat_name(&detected_threat.threat_name)
+            displayed_threat_name(&detected_threat.threat_identity)
         )
     });
     let problem_sections = results_view.problem_path_groups.iter().map(|path_group| {
@@ -217,6 +217,7 @@ mod scan_results_state_tests {
     use std::path::PathBuf;
 
     use super::*;
+    use crate::host_services::clamav_scanner::scanner_output_parser::ThreatIdentity;
 
     fn results_with_threat() -> ScanResultsView {
         ScanResultsView {
@@ -226,8 +227,9 @@ mod scan_results_state_tests {
             excluded_entry_count: 4,
             detected_threats: vec![DetectedThreat {
                 file_path: PathBuf::from("/scan/bad\u{1b}[31m.txt"),
-                threat_name: "Eicar-Test-Signature".to_owned(),
-                threat_category: "Test",
+                threat_identity: ThreatIdentity::Signature {
+                    signature_name: "Eicar-Test-Signature".to_owned(),
+                },
             }],
             planned_file_count: 3,
             elapsed_time: Duration::from_secs(4),

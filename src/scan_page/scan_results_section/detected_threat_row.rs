@@ -9,12 +9,18 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::host_services::{
-    clamav_scanner::scanner_output_parser::{
-        DetectedThreat, ThreatSeverity, classify_threat_severity, displayed_threat_name,
-        sanitize_scanner_line,
+use crate::{
+    host_services::{
+        clamav_programs::false_positive_submission::SubmittedContent,
+        clamav_scanner::scanner_output_parser::{
+            DetectedThreat, ThreatIdentity, ThreatSeverity, displayed_threat_name,
+            sanitize_scanner_line,
+        },
+        settings_helper::trust_requests::{
+            TrustChoice, signature_can_be_ignored, signature_of_detection,
+        },
     },
-    settings_helper::trust_requests::signature_can_be_ignored,
+    shared_widgets::false_positive_report_dialog::ReportedDetection,
 };
 
 relm4::new_action_group!(ThreatRowActions, "threat-row");
@@ -28,22 +34,46 @@ relm4::new_stateless_action!(
     "report-false-positive"
 );
 
-fn threat_actions_menu(signature_ignorable: bool) -> gio::Menu {
+pub fn ignore_signature_choice(threat_identity: &ThreatIdentity) -> Option<TrustChoice> {
+    threat_identity
+        .matched_signature_name()
+        .filter(|signature_name| signature_can_be_ignored(signature_name))
+        .map(|signature_name| TrustChoice::IgnoreSignature {
+            signature_name: signature_of_detection(signature_name),
+        })
+}
+
+pub fn false_positive_detection(detected_threat: &DetectedThreat) -> Option<ReportedDetection> {
+    detected_threat
+        .threat_identity
+        .matched_signature_name()
+        .map(|signature_name| ReportedDetection {
+            detection_name: signature_name.to_owned(),
+            submitted_content: SubmittedContent::DetectedFile {
+                file_path: detected_threat.file_path.clone(),
+            },
+            shown_path: sanitize_scanner_line(&detected_threat.file_path.to_string_lossy()),
+        })
+}
+
+fn threat_actions_menu(detected_threat: &DetectedThreat) -> gio::Menu {
     let trust_section = gio::Menu::new();
     trust_section.append(
         Some(&gettext("Trust This File…")),
         Some("threat-row.trust-file"),
     );
-    if signature_ignorable {
+    if ignore_signature_choice(&detected_threat.threat_identity).is_some() {
         trust_section.append(
             Some(&gettext("Ignore This Detection Everywhere…")),
             Some("threat-row.ignore-signature"),
         );
     }
-    trust_section.append(
-        Some(&gettext("Report False Positive…")),
-        Some("threat-row.report-false-positive"),
-    );
+    if false_positive_detection(detected_threat).is_some() {
+        trust_section.append(
+            Some(&gettext("Report False Positive…")),
+            Some("threat-row.report-false-positive"),
+        );
+    }
     let scan_section = gio::Menu::new();
     scan_section.append(
         Some(&gettext("Skip This Path in Lazaret Scans")),
@@ -70,6 +100,18 @@ fn row_action<
     })
 }
 
+fn signature_action<
+    Action: relm4::actions::ActionName<Group = ThreatRowActions, Target = (), State = ()>,
+>(
+    sender: &FactorySender<DetectedThreatRow>,
+    requested_output: DetectedThreatRowOutput,
+) -> RelmAction<Action> {
+    let action_sender = sender.clone();
+    RelmAction::new_stateless(move |_activated_action| {
+        let _parent_gone = action_sender.output(requested_output.clone());
+    })
+}
+
 #[derive(Debug)]
 pub enum ThreatQuarantineState {
     AwaitingDecision,
@@ -89,14 +131,14 @@ pub enum DetectedThreatRowInput {
     QuarantineStateChanged(ThreatQuarantineState),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum DetectedThreatRowOutput {
     QuarantineRequested(DynamicIndex),
     PathCopyRequested(DynamicIndex),
     ExclusionRequested(DynamicIndex),
     TrustFileRequested(DynamicIndex),
-    IgnoreSignatureRequested(DynamicIndex),
-    FalsePositiveReportRequested(DynamicIndex),
+    IgnoreSignatureRequested(TrustChoice),
+    FalsePositiveReportRequested(ReportedDetection),
 }
 
 fn severity_badge_text(threat_severity: ThreatSeverity) -> String {
@@ -142,7 +184,7 @@ impl DetectedThreatRow {
     }
 
     fn threat_severity(&self) -> ThreatSeverity {
-        classify_threat_severity(&self.detected_threat.threat_name)
+        self.detected_threat.threat_identity.threat_severity()
     }
 }
 
@@ -158,14 +200,14 @@ impl FactoryComponent for DetectedThreatRow {
         #[name = "threat_action_row"]
         adw::ActionRow {
             set_use_markup: false,
-            set_title: &displayed_threat_name(&self.detected_threat.threat_name),
+            set_title: &displayed_threat_name(&self.detected_threat.threat_identity),
             #[watch]
             set_subtitle: &self.row_subtitle(),
             set_subtitle_lines: 0,
 
             add_suffix = &gtk::Label {
                 set_label: &severity_badge_text(self.threat_severity()),
-                set_tooltip_text: Some(self.detected_threat.threat_category),
+                set_tooltip_text: Some(self.detected_threat.threat_identity.threat_category()),
                 add_css_class: "caption-heading",
                 add_css_class: severity_badge_class(self.threat_severity()),
             },
@@ -185,9 +227,7 @@ impl FactoryComponent for DetectedThreatRow {
                 set_tooltip_text: Some(&gettext("More Actions")),
                 set_valign: gtk::Align::Center,
                 add_css_class: "flat",
-                set_menu_model: Some(&threat_actions_menu(signature_can_be_ignored(
-                    &self.detected_threat.threat_name,
-                ))),
+                set_menu_model: Some(&threat_actions_menu(&self.detected_threat)),
             },
         }
     }
@@ -218,16 +258,18 @@ impl FactoryComponent for DetectedThreatRow {
             index,
             DetectedThreatRowOutput::TrustFileRequested,
         ));
-        row_actions.add_action(row_action::<IgnoreSignatureAction>(
-            &sender,
-            index,
-            DetectedThreatRowOutput::IgnoreSignatureRequested,
-        ));
-        row_actions.add_action(row_action::<ReportFalsePositiveAction>(
-            &sender,
-            index,
-            DetectedThreatRowOutput::FalsePositiveReportRequested,
-        ));
+        if let Some(trust_choice) = ignore_signature_choice(&self.detected_threat.threat_identity) {
+            row_actions.add_action(signature_action::<IgnoreSignatureAction>(
+                &sender,
+                DetectedThreatRowOutput::IgnoreSignatureRequested(trust_choice),
+            ));
+        }
+        if let Some(reported_detection) = false_positive_detection(&self.detected_threat) {
+            row_actions.add_action(signature_action::<ReportFalsePositiveAction>(
+                &sender,
+                DetectedThreatRowOutput::FalsePositiveReportRequested(reported_detection),
+            ));
+        }
         row_actions.add_action(row_action::<ExcludeFromScansAction>(
             &sender,
             index,
@@ -248,5 +290,60 @@ impl FactoryComponent for DetectedThreatRow {
                 self.quarantine_state = quarantine_state;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod detected_threat_row_tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    fn detected_signature(signature_name: &str) -> DetectedThreat {
+        DetectedThreat {
+            file_path: PathBuf::from("/scan/detected.bin"),
+            threat_identity: ThreatIdentity::Signature {
+                signature_name: signature_name.to_owned(),
+            },
+        }
+    }
+
+    #[test]
+    fn an_on_access_block_offers_no_signature_actions() {
+        let blocked_threat = DetectedThreat {
+            file_path: PathBuf::from("/scan/blocked.bin"),
+            threat_identity: ThreatIdentity::BlockedByOnAccess,
+        };
+        assert_eq!(
+            ignore_signature_choice(&blocked_threat.threat_identity),
+            None
+        );
+        assert_eq!(false_positive_detection(&blocked_threat), None);
+    }
+
+    #[test]
+    fn a_signature_offers_ignoring_its_official_name_and_a_report() {
+        let detected_threat = detected_signature("Sanesecurity.Foo.UNOFFICIAL");
+        assert_eq!(
+            ignore_signature_choice(&detected_threat.threat_identity),
+            Some(TrustChoice::IgnoreSignature {
+                signature_name: "Sanesecurity.Foo".to_owned(),
+            })
+        );
+        assert_eq!(
+            false_positive_detection(&detected_threat)
+                .map(|reported_detection| reported_detection.detection_name),
+            Some("Sanesecurity.Foo.UNOFFICIAL".to_owned())
+        );
+    }
+
+    #[test]
+    fn heuristic_signatures_can_be_reported_but_not_ignored() {
+        let detected_threat = detected_signature("Heuristics.Encrypted.Zip");
+        assert_eq!(
+            ignore_signature_choice(&detected_threat.threat_identity),
+            None
+        );
+        assert!(false_positive_detection(&detected_threat).is_some());
     }
 }

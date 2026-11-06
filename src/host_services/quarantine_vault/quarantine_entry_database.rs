@@ -11,16 +11,19 @@ use jiff::Timestamp;
 use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Database, Row, Value};
 
-use crate::host_services::quarantine_vault::{
-    quarantine_file_moves::{
-        QuarantineMoveFailure, RecordedPayloadHash, copy_file_into_quarantine, delete_payload_file,
-        discard_copied_payload, ensure_quarantine_directory, lexically_normalized_path,
-        neutralize_payload_in_place, open_payload_plaintext, parsed_sha256_hex,
-        payload_content_hash, pin_database_file, plan_blocked_file_rename,
-        remove_quarantined_source, remove_stale_neutralizing_copies,
-        rename_blocked_file_into_quarantine, restore_payload_file, secure_database_files,
+use crate::host_services::{
+    clamav_scanner::scanner_output_parser::ThreatIdentity,
+    quarantine_vault::{
+        quarantine_file_moves::{
+            QuarantineMoveFailure, RecordedPayloadHash, copy_file_into_quarantine,
+            delete_payload_file, discard_copied_payload, ensure_quarantine_directory,
+            lexically_normalized_path, neutralize_payload_in_place, open_payload_plaintext,
+            parsed_sha256_hex, payload_content_hash, pin_database_file, plan_blocked_file_rename,
+            remove_quarantined_source, remove_stale_neutralizing_copies,
+            rename_blocked_file_into_quarantine, restore_payload_file, secure_database_files,
+        },
+        quarantine_payload_format::PlaintextReader,
     },
-    quarantine_payload_format::PlaintextReader,
 };
 
 const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -49,6 +52,8 @@ const QUARANTINE_SCHEMA: &str = "
         original_permissions INTEGER NOT NULL
     );";
 const NOT_YET_HASHED_TEXT: &str = "";
+const BLOCKED_BY_ON_ACCESS_STORED_TEXT: &str = "lazaret:blocked-by-on-access";
+const LEGACY_BLOCKED_BY_ON_ACCESS_TEXT: &str = "Blocked by on-access scanning";
 const ENTRY_COLUMNS: &str = "id, original_path, quarantine_path, threat_name, detection_date, \
                              file_size, file_hash, original_permissions";
 
@@ -67,12 +72,30 @@ impl From<String> for StoredDetectionDate {
     }
 }
 
+fn stored_threat_text(threat_identity: &ThreatIdentity) -> String {
+    match threat_identity {
+        ThreatIdentity::Signature { signature_name } => signature_name.clone(),
+        ThreatIdentity::BlockedByOnAccess => BLOCKED_BY_ON_ACCESS_STORED_TEXT.to_owned(),
+    }
+}
+
+fn threat_identity_from_stored(stored_text: String) -> ThreatIdentity {
+    match stored_text.as_str() {
+        BLOCKED_BY_ON_ACCESS_STORED_TEXT | LEGACY_BLOCKED_BY_ON_ACCESS_TEXT => {
+            ThreatIdentity::BlockedByOnAccess
+        }
+        _signature_text => ThreatIdentity::Signature {
+            signature_name: stored_text,
+        },
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QuarantineEntryRecord {
     pub entry_id: i64,
     pub original_path: PathBuf,
     pub quarantine_path: PathBuf,
-    pub threat_name: String,
+    pub threat_identity: ThreatIdentity,
     pub detection_date: StoredDetectionDate,
     pub file_size: ByteSize,
     pub payload_hash: RecordedPayloadHash,
@@ -115,7 +138,7 @@ impl From<String> for StoredPendingHash {
 struct PendingQuarantineRow {
     quarantine_path: PathBuf,
     original_path: PathBuf,
-    threat_name: String,
+    threat_identity: ThreatIdentity,
     file_size: ByteSize,
     stored_hash: StoredPendingHash,
     original_permissions: i64,
@@ -168,7 +191,7 @@ fn entry_record_from_row(
         entry_id: database_row.get(0)?,
         original_path: stored_path_column(database_row, 1)?,
         quarantine_path: stored_path_column(database_row, 2)?,
-        threat_name: database_row.get(3)?,
+        threat_identity: threat_identity_from_stored(database_row.get(3)?),
         detection_date: StoredDetectionDate::from(database_row.get::<String>(4)?),
         file_size: ByteSize::b(database_row.get::<i64>(5)?.max(0) as u64),
         payload_hash: RecordedPayloadHash::from(database_row.get::<String>(6)?),
@@ -282,7 +305,7 @@ impl QuarantineVault {
             pending_entries.push(PendingQuarantineRow {
                 quarantine_path: stored_path_column(&pending_row, 0)?,
                 original_path: stored_path_column(&pending_row, 1)?,
-                threat_name: pending_row.get(2)?,
+                threat_identity: threat_identity_from_stored(pending_row.get(2)?),
                 file_size: ByteSize::b(pending_row.get::<i64>(3)?.max(0) as u64),
                 stored_hash: StoredPendingHash::from(pending_row.get::<String>(4)?),
                 original_permissions: pending_row.get(5)?,
@@ -335,7 +358,7 @@ impl QuarantineVault {
     async fn record_pending_move(
         &self,
         pending_move: &PendingMove,
-        threat_name: &str,
+        threat_identity: &ThreatIdentity,
     ) -> Result<(), QuarantineMoveFailure> {
         let database_connection = self.open_connection().await?;
         database_connection
@@ -345,7 +368,7 @@ impl QuarantineVault {
                 vec![
                     path_blob(&pending_move.destination_path),
                     path_blob(&pending_move.source_path),
-                    Value::Text(threat_name.to_owned()),
+                    Value::Text(stored_threat_text(threat_identity)),
                     Value::Integer(pending_move.file_size.as_u64() as i64),
                     Value::Text(pending_move.pending_hash.stored_text()),
                     Value::Integer(i64::from(pending_move.original_permissions)),
@@ -369,7 +392,7 @@ impl QuarantineVault {
     pub(super) async fn rename_and_record_blocked_source(
         &self,
         source_path: &Path,
-        threat_name: &str,
+        threat_identity: &ThreatIdentity,
     ) -> Result<RecordedPayload, QuarantineMoveFailure> {
         let normalized_source = lexically_normalized_path(source_path);
         let quarantine_directory = self.quarantine_directory.clone();
@@ -384,7 +407,8 @@ impl QuarantineVault {
             pending_hash: PendingPayloadHash::NotYetHashed,
             original_permissions: planned_rename.original_permissions,
         };
-        self.record_pending_move(&pending_move, threat_name).await?;
+        self.record_pending_move(&pending_move, threat_identity)
+            .await?;
         let rename_outcome =
             spawn_blocking(move || rename_blocked_file_into_quarantine(&planned_rename))
                 .await
@@ -409,7 +433,7 @@ impl QuarantineVault {
     async fn commit_quarantine_entry(
         &self,
         recorded_payload: &RecordedPayload,
-        threat_name: &str,
+        threat_identity: &ThreatIdentity,
     ) -> Result<i64, QuarantineMoveFailure> {
         let database_connection = self.open_connection().await?;
         let entry_transaction = database_connection.unchecked_transaction().await?;
@@ -421,7 +445,7 @@ impl QuarantineVault {
                 vec![
                     path_blob(&recorded_payload.source_path),
                     path_blob(&recorded_payload.destination_path),
-                    Value::Text(threat_name.to_owned()),
+                    Value::Text(stored_threat_text(threat_identity)),
                     Value::Text(format!("{:.3}", Timestamp::now())),
                     Value::Integer(recorded_payload.file_size.as_u64() as i64),
                     Value::Text(recorded_payload.sha256_hex.clone()),
@@ -481,7 +505,7 @@ impl QuarantineVault {
     pub(super) async fn copy_record_and_remove_source(
         &self,
         source_path: &Path,
-        threat_name: &str,
+        threat_identity: &ThreatIdentity,
     ) -> Result<RecordedPayload, QuarantineMoveFailure> {
         let normalized_source = lexically_normalized_path(source_path);
         let quarantine_directory = self.quarantine_directory.clone();
@@ -500,7 +524,7 @@ impl QuarantineVault {
                     },
                     original_permissions: copied_payload.original_permissions,
                 },
-                threat_name,
+                threat_identity,
             )
             .await;
         spawn_blocking(move || {
@@ -523,20 +547,20 @@ impl QuarantineVault {
     pub async fn move_file_into_quarantine(
         &self,
         source_path: &Path,
-        threat_name: &str,
+        threat_identity: &ThreatIdentity,
     ) -> Result<QuarantineEntryRecord, QuarantineMoveFailure> {
         let recorded_payload = match self
-            .copy_record_and_remove_source(source_path, threat_name)
+            .copy_record_and_remove_source(source_path, threat_identity)
             .await
         {
             Err(QuarantineMoveFailure::SourceBlockedByOnAccess) => {
-                self.rename_and_record_blocked_source(source_path, threat_name)
+                self.rename_and_record_blocked_source(source_path, threat_identity)
                     .await?
             }
             copy_outcome => copy_outcome?,
         };
         match self
-            .commit_quarantine_entry(&recorded_payload, threat_name)
+            .commit_quarantine_entry(&recorded_payload, threat_identity)
             .await
         {
             Ok(entry_id) => {
@@ -699,7 +723,7 @@ async fn recover_verified_pending_entry(
             vec![
                 path_blob(&pending_entry.original_path),
                 path_blob(&pending_entry.quarantine_path),
-                Value::Text(pending_entry.threat_name),
+                Value::Text(stored_threat_text(&pending_entry.threat_identity)),
                 Value::Text(format!("{:.3}", Timestamp::now())),
                 Value::Integer(pending_entry.file_size.as_u64() as i64),
                 Value::Text(committed_sha256_hex),
@@ -729,6 +753,12 @@ mod quarantine_entry_database_tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    fn signature_identity(signature_name: &str) -> ThreatIdentity {
+        ThreatIdentity::Signature {
+            signature_name: signature_name.to_owned(),
+        }
+    }
 
     fn stored_plaintext(payload_path: &Path) -> Vec<u8> {
         use std::io::Read;
@@ -833,7 +863,7 @@ mod quarantine_entry_database_tests {
 
         let entry_record = vault_fixture
             .quarantine_vault
-            .move_file_into_quarantine(&source_path, "Test.Signature")
+            .move_file_into_quarantine(&source_path, &signature_identity("Test.Signature"))
             .await
             .expect("quarantined");
         assert!(!source_path.exists());
@@ -895,6 +925,65 @@ mod quarantine_entry_database_tests {
     }
 
     #[tokio::test]
+    async fn on_access_blocks_are_stored_in_a_stable_form_and_read_back() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let source_path = vault_fixture.source_file("blocked.bin", b"blocked bytes");
+        let entry_record = vault_fixture
+            .quarantine_vault
+            .move_file_into_quarantine(&source_path, &ThreatIdentity::BlockedByOnAccess)
+            .await
+            .expect("quarantined");
+        assert_eq!(
+            entry_record.threat_identity,
+            ThreatIdentity::BlockedByOnAccess
+        );
+        let stored_text: String =
+            rusqlite::Connection::open(VaultFixture::database_path(&vault_fixture.temporary_root))
+                .expect("sqlite connection")
+                .query_row(
+                    "SELECT threat_name FROM quarantine WHERE id = ?1",
+                    params![entry_record.entry_id],
+                    |stored_row| stored_row.get(0),
+                )
+                .expect("stored threat text");
+        assert_eq!(stored_text, BLOCKED_BY_ON_ACCESS_STORED_TEXT);
+    }
+
+    #[tokio::test]
+    async fn legacy_on_access_sentence_reads_back_as_a_blocked_entry_and_restores() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let source_path = vault_fixture.source_file("legacy-blocked.bin", b"legacy blocked");
+        let entry_record = vault_fixture
+            .quarantine_vault
+            .move_file_into_quarantine(&source_path, &ThreatIdentity::BlockedByOnAccess)
+            .await
+            .expect("quarantined");
+        rusqlite::Connection::open(VaultFixture::database_path(&vault_fixture.temporary_root))
+            .expect("sqlite connection")
+            .execute(
+                "UPDATE quarantine SET threat_name = 'Blocked by on-access scanning' WHERE id = ?1",
+                params![entry_record.entry_id],
+            )
+            .expect("legacy threat text");
+        let listed_entries = vault_fixture
+            .quarantine_vault
+            .list_quarantine_entries()
+            .await
+            .expect("listed");
+        assert_eq!(listed_entries.len(), 1);
+        assert_eq!(
+            listed_entries[0].threat_identity,
+            ThreatIdentity::BlockedByOnAccess
+        );
+        vault_fixture
+            .quarantine_vault
+            .restore_quarantined_file(entry_record.entry_id)
+            .await
+            .expect("restored");
+        assert_eq!(fs::read(&source_path).expect("restored"), b"legacy blocked");
+    }
+
+    #[tokio::test]
     async fn non_utf8_original_paths_round_trip_through_the_database() {
         let vault_fixture = VaultFixture::open_fixture().await;
         let source_path = vault_fixture
@@ -904,7 +993,7 @@ mod quarantine_entry_database_tests {
         fs::write(&source_path, b"legacy bytes").expect("source");
         let entry_record = vault_fixture
             .quarantine_vault
-            .move_file_into_quarantine(&source_path, "Legacy.Signature")
+            .move_file_into_quarantine(&source_path, &signature_identity("Legacy.Signature"))
             .await
             .expect("quarantined");
         assert_eq!(entry_record.original_path, source_path);
@@ -926,7 +1015,7 @@ mod quarantine_entry_database_tests {
         let source_path = vault_fixture.source_file("infected.bin", b"original payload");
         let entry_record = vault_fixture
             .quarantine_vault
-            .move_file_into_quarantine(&source_path, "Test.Signature")
+            .move_file_into_quarantine(&source_path, &signature_identity("Test.Signature"))
             .await
             .expect("quarantined");
         fs::set_permissions(
@@ -966,7 +1055,7 @@ mod quarantine_entry_database_tests {
         let victim_path = vault_fixture.source_file("victim.txt", b"do not touch");
         let entry_record = vault_fixture
             .quarantine_vault
-            .move_file_into_quarantine(&source_path, "Test.Signature")
+            .move_file_into_quarantine(&source_path, &signature_identity("Test.Signature"))
             .await
             .expect("quarantined");
         symlink(&victim_path, &source_path).expect("destination symlink");
@@ -998,7 +1087,7 @@ mod quarantine_entry_database_tests {
         assert!(
             vault_fixture
                 .quarantine_vault
-                .move_file_into_quarantine(&link_path, "Test.Signature")
+                .move_file_into_quarantine(&link_path, &signature_identity("Test.Signature"))
                 .await
                 .is_err()
         );
@@ -1021,7 +1110,7 @@ mod quarantine_entry_database_tests {
         let source_path = temporary_root.path().join("permission-mask.bin");
         fs::write(&source_path, b"payload").expect("source");
         let entry_record = quarantine_vault
-            .move_file_into_quarantine(&source_path, "Test.Signature")
+            .move_file_into_quarantine(&source_path, &signature_identity("Test.Signature"))
             .await
             .expect("quarantined");
         drop(quarantine_vault);
@@ -1144,7 +1233,7 @@ mod quarantine_entry_database_tests {
         let source_path = vault_fixture.source_file("rollback.bin", b"rollback payload");
         let recorded_payload = vault_fixture
             .quarantine_vault
-            .copy_record_and_remove_source(&source_path, "Test.Signature")
+            .copy_record_and_remove_source(&source_path, &signature_identity("Test.Signature"))
             .await
             .expect("copied and recorded");
         assert!(!source_path.exists());
@@ -1173,7 +1262,7 @@ mod quarantine_entry_database_tests {
         fs::set_permissions(&source_path, fs::Permissions::from_mode(0o640)).expect("mode");
         let recorded_payload = vault_fixture
             .quarantine_vault
-            .rename_and_record_blocked_source(&source_path, "Blocked.Test")
+            .rename_and_record_blocked_source(&source_path, &signature_identity("Blocked.Test"))
             .await
             .expect("renamed");
         assert!(!source_path.exists());
@@ -1188,7 +1277,7 @@ mod quarantine_entry_database_tests {
         );
         let entry_id = vault_fixture
             .quarantine_vault
-            .commit_quarantine_entry(&recorded_payload, "Blocked.Test")
+            .commit_quarantine_entry(&recorded_payload, &signature_identity("Blocked.Test"))
             .await
             .expect("committed");
         assert_eq!(pending_row_count(&vault_fixture.temporary_root), 0);
@@ -1396,7 +1485,10 @@ mod quarantine_entry_database_tests {
         .await
         .expect("opened vault");
         let _recorded_payload = quarantine_vault
-            .copy_record_and_remove_source(&crash_root.join("crash.bin"), "Crash.Test")
+            .copy_record_and_remove_source(
+                &crash_root.join("crash.bin"),
+                &signature_identity("Crash.Test"),
+            )
             .await
             .expect("copied and recorded");
         rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::KILL)

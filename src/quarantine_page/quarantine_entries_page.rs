@@ -17,7 +17,7 @@ use crate::{
         },
         clamav_scanner::{
             content_verdict::{ContentVerdict, scan_content_with_current_signatures},
-            scanner_output_parser::sanitize_scanner_line,
+            scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         },
         desktop::locale_formatting::byte_size_text,
         quarantine_vault::{
@@ -89,8 +89,7 @@ const OLD_ENTRY_AGE: SignedDuration = SignedDuration::from_hours(30 * 24);
 
 pub fn entry_matches_search(entry_record: &QuarantineEntryRecord, search_text: &str) -> bool {
     let lowercase_search = search_text.trim().to_lowercase();
-    entry_record
-        .threat_name
+    displayed_threat_name(&entry_record.threat_identity)
         .to_lowercase()
         .contains(&lowercase_search)
         || entry_record
@@ -906,14 +905,19 @@ mod quarantine_entries_page_tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::host_services::quarantine_vault::quarantine_file_moves::RecordedPayloadHash;
+    use crate::host_services::{
+        clamav_scanner::scanner_output_parser::ThreatIdentity,
+        quarantine_vault::quarantine_file_moves::RecordedPayloadHash,
+    };
 
     fn entry_detected_on(detection_date: &str) -> QuarantineEntryRecord {
         QuarantineEntryRecord {
             entry_id: 1,
             original_path: PathBuf::from("/home/user/Downloads/Invoice.exe"),
             quarantine_path: PathBuf::from("/vault/payload"),
-            threat_name: "Win.Trojan.Agent".to_owned(),
+            threat_identity: ThreatIdentity::Signature {
+                signature_name: "Win.Trojan.Agent".to_owned(),
+            },
             detection_date: StoredDetectionDate::from(detection_date.to_owned()),
             file_size: bytesize::ByteSize::b(1),
             payload_hash: RecordedPayloadHash::IntegrityUnknown,

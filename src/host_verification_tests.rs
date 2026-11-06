@@ -28,6 +28,7 @@ use crate::{
             scanner_command_builder::{
                 ScannerBackend, ScannerProgramPaths, probe_clamd_availability,
             },
+            scanner_output_parser::ThreatIdentity,
         },
         detection_journal::{
             detection_history_store::DetectionResolution,
@@ -121,7 +122,7 @@ async fn verify_detection_quarantine_and_restore(scanner_backend: ScannerBackend
     let moved_record = quarantine_vault
         .move_file_into_quarantine(
             &non_utf8_path,
-            &scan_outcome.detected_threats[0].threat_name,
+            &scan_outcome.detected_threats[0].threat_identity,
         )
         .await
         .expect("quarantined");
@@ -187,7 +188,10 @@ async fn verify_blocked_file_flow(scanner_backend: ScannerBackend, quarantine_di
 
     let quarantine_vault = open_host_vault(&verification_root.path().join("vault")).await;
     let moved_record = quarantine_vault
-        .move_file_into_quarantine(&eicar_path, &scan_outcome.detected_threats[0].threat_name)
+        .move_file_into_quarantine(
+            &eicar_path,
+            &scan_outcome.detected_threats[0].threat_identity,
+        )
         .await
         .expect("blocked file quarantined");
     println!("{scanner_backend:?} quarantined: {moved_record:#?}");
@@ -412,10 +416,20 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
 
     let quarantine_vault = open_host_vault(&verification_root.path().join("vault")).await;
     let moved_record = quarantine_vault
-        .move_file_into_quarantine(&eicar_path, &stored_detection.signature_name)
+        .move_file_into_quarantine(
+            &eicar_path,
+            &ThreatIdentity::Signature {
+                signature_name: stored_detection.signature_name.clone(),
+            },
+        )
         .await
         .expect("blocked file quarantined");
-    assert_eq!(moved_record.threat_name, "Eicar-Test-Signature");
+    assert_eq!(
+        moved_record.threat_identity,
+        ThreatIdentity::Signature {
+            signature_name: "Eicar-Test-Signature".to_owned()
+        }
+    );
     assert_eq!(
         inspect_detected_file(&eicar_path, OpeningCheck::OpenToCheckBlocking),
         DetectedFileState::NoLongerThere

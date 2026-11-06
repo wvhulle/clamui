@@ -33,10 +33,10 @@ use crate::host_services::{
         },
         scanner_output_parser::{
             DetectedThreat, InterpretedScan, ScanFailureReason, ScanNotice, ScanVerdict,
-            ScannerTranscript, interpret_clamdscan_transcript, interpret_clamscan_transcript,
-            is_blocked_by_on_access, is_noteworthy_scanner_line, on_access_blocked_threat,
-            parse_inaccessible_path_line, parse_inspected_file_line, parse_threat_detection_line,
-            reports_lost_clamd_connection, sanitize_scanner_line,
+            ScannerTranscript, ThreatIdentity, interpret_clamdscan_transcript,
+            interpret_clamscan_transcript, is_blocked_by_on_access, is_noteworthy_scanner_line,
+            on_access_blocked_threat, parse_inaccessible_path_line, parse_inspected_file_line,
+            parse_threat_detection_line, reports_lost_clamd_connection, sanitize_scanner_line,
         },
         scanner_process_events::{
             RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
@@ -278,12 +278,14 @@ impl ScannerPhaseTranscript {
     fn absorb_report_line(&mut self, report_line: &[u8]) -> Vec<ScanProgressEvent> {
         append_bounded_line(&mut self.report_bytes, report_line);
         let detected_threat =
-            parse_threat_detection_line(report_line, self.scanner_backend).map(|parsed_threat| {
+            parse_threat_detection_line(report_line, self.scanner_backend).map(|signature_match| {
                 DetectedThreat {
                     file_path: self
                         .reported_path_identity
-                        .resolve_reported_path(parsed_threat.file_path.clone()),
-                    ..parsed_threat
+                        .resolve_reported_path(signature_match.file_path),
+                    threat_identity: ThreatIdentity::Signature {
+                        signature_name: signature_match.signature_name,
+                    },
                 }
             });
         let inspected_path = match &detected_threat {
@@ -949,8 +951,10 @@ mod scan_progress_events_tests {
         assert_eq!(scan_outcome.detected_threats.len(), 1);
         assert_eq!(scan_outcome.detected_threats[0].file_path, infected_file);
         assert_ne!(
-            scan_outcome.detected_threats[0].threat_name,
-            "Fake.Signature"
+            scan_outcome.detected_threats[0].threat_identity,
+            ThreatIdentity::Signature {
+                signature_name: "Fake.Signature".to_owned()
+            }
         );
     }
 
@@ -1019,7 +1023,12 @@ mod scan_progress_events_tests {
         drop(phase_transcript);
         let scan_outcome = fold_scan_outcome(partial_events);
         assert_eq!(scan_outcome.detected_threats.len(), 1);
-        assert_eq!(scan_outcome.detected_threats[0].threat_category, "Virus");
+        assert_eq!(
+            scan_outcome.detected_threats[0]
+                .threat_identity
+                .threat_category(),
+            "Virus"
+        );
     }
 
     #[test]

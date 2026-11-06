@@ -39,12 +39,12 @@ pub fn detection_record_from_fields(
     observed_at: Timestamp,
 ) -> Option<JournalDetectionRecord> {
     let detection_source = detection_source_of_unit(systemd_unit)?;
-    let detected_threat = parse_threat_detection_line(message_bytes, ScannerBackend::ClamdDaemon)?;
+    let signature_match = parse_threat_detection_line(message_bytes, ScannerBackend::ClamdDaemon)?;
     Some(JournalDetectionRecord {
         observed_at,
         detection_source,
-        file_path: detected_threat.file_path,
-        signature_name: detected_threat.threat_name,
+        file_path: signature_match.file_path,
+        signature_name: signature_match.signature_name,
     })
 }
 

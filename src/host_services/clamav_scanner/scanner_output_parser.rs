@@ -3,10 +3,55 @@ use std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf};
 use crate::host_services::clamav_scanner::scanner_command_builder::ScannerBackend;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ThreatIdentity {
+    Signature { signature_name: String },
+    BlockedByOnAccess,
+}
+
+impl ThreatIdentity {
+    pub fn threat_category(&self) -> &'static str {
+        match self {
+            Self::Signature { signature_name } => categorize_threat_name(signature_name),
+            Self::BlockedByOnAccess => ON_ACCESS_BLOCK_CATEGORY,
+        }
+    }
+
+    pub fn threat_severity(&self) -> ThreatSeverity {
+        match self {
+            Self::Signature { signature_name } => classify_threat_severity(signature_name),
+            Self::BlockedByOnAccess => ThreatSeverity::Medium,
+        }
+    }
+
+    pub fn matched_signature_name(&self) -> Option<&str> {
+        match self {
+            Self::Signature { signature_name } => Some(signature_name),
+            Self::BlockedByOnAccess => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DetectedThreat {
     pub file_path: PathBuf,
-    pub threat_name: String,
-    pub threat_category: &'static str,
+    pub threat_identity: ThreatIdentity,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReportedSignatureMatch {
+    pub file_path: PathBuf,
+    pub signature_name: String,
+}
+
+impl From<ReportedSignatureMatch> for DetectedThreat {
+    fn from(signature_match: ReportedSignatureMatch) -> Self {
+        Self {
+            file_path: signature_match.file_path,
+            threat_identity: ThreatIdentity::Signature {
+                signature_name: signature_match.signature_name,
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,7 +107,6 @@ struct ScannerWarningEvidence {
     hard_errors: Vec<String>,
 }
 
-pub const ON_ACCESS_BLOCK_NAME: &str = "Blocked by on-access scanning";
 const ON_ACCESS_BLOCK_CATEGORY: &str = "On-access";
 const ACCESS_FAILURE_PREFIXES: &[&[u8]] =
     &[b"ERROR: Can't access file ", b"WARNING: Can't open file "];
@@ -188,18 +232,18 @@ struct CategoryPosition {
     category_label: &'static str,
 }
 
-pub fn categorize_threat_name(threat_name: &str) -> &'static str {
-    if threat_name.is_empty() {
+fn categorize_threat_name(signature_name: &str) -> &'static str {
+    if signature_name.is_empty() {
         return "Unknown";
     }
-    let lowercase_name = threat_name.to_ascii_lowercase();
+    let lowercase_name = signature_name.to_ascii_lowercase();
     earliest_category_label(&lowercase_name, SPECIFIC_CATEGORY_MARKERS)
         .or_else(|| earliest_category_label(&lowercase_name, GENERIC_CATEGORY_MARKERS))
         .unwrap_or("Virus")
 }
 
-pub fn classify_threat_severity(threat_name: &str) -> ThreatSeverity {
-    let lowercase_name = threat_name.to_ascii_lowercase();
+fn classify_threat_severity(signature_name: &str) -> ThreatSeverity {
+    let lowercase_name = signature_name.to_ascii_lowercase();
     SEVERITY_TIERS
         .iter()
         .find(|severity_tier| {
@@ -226,7 +270,7 @@ fn trim_ascii_whitespace(mut line_bytes: &[u8]) -> &[u8] {
 pub fn parse_threat_detection_line(
     report_line: &[u8],
     scanner_backend: ScannerBackend,
-) -> Option<DetectedThreat> {
+) -> Option<ReportedSignatureMatch> {
     let trimmed_line = trim_ascii_whitespace(report_line);
     if !trimmed_line.ends_with(b"FOUND")
         || (scanner_backend == ScannerBackend::StandaloneClamscan
@@ -238,17 +282,16 @@ pub fn parse_threat_detection_line(
     let reported_path = trim_ascii_whitespace(&trimmed_line[..separator_position]);
     let signature_text = String::from_utf8_lossy(&trimmed_line[separator_position + 1..]);
     let trimmed_signature = signature_text.trim();
-    let threat_name = trimmed_signature
+    let signature_name = trimmed_signature
         .strip_suffix(" FOUND")
         .unwrap_or(trimmed_signature)
         .trim();
-    if reported_path.is_empty() || threat_name.is_empty() {
+    if reported_path.is_empty() || signature_name.is_empty() {
         return None;
     }
-    Some(DetectedThreat {
+    Some(ReportedSignatureMatch {
         file_path: PathBuf::from(OsStr::from_bytes(reported_path)),
-        threat_name: threat_name.to_owned(),
-        threat_category: categorize_threat_name(threat_name),
+        signature_name: signature_name.to_owned(),
     })
 }
 
@@ -312,19 +355,17 @@ pub fn is_blocked_by_on_access(file_path: &std::path::Path) -> bool {
     )
 }
 
-pub fn displayed_threat_name(threat_name: &str) -> String {
-    if threat_name == ON_ACCESS_BLOCK_NAME {
-        gettextrs::gettext("Blocked by on-access scanning")
-    } else {
-        sanitize_scanner_line(threat_name)
+pub fn displayed_threat_name(threat_identity: &ThreatIdentity) -> String {
+    match threat_identity {
+        ThreatIdentity::Signature { signature_name } => sanitize_scanner_line(signature_name),
+        ThreatIdentity::BlockedByOnAccess => gettextrs::gettext("Blocked by on-access scanning"),
     }
 }
 
-pub fn on_access_blocked_threat(file_path: PathBuf) -> DetectedThreat {
+pub const fn on_access_blocked_threat(file_path: PathBuf) -> DetectedThreat {
     DetectedThreat {
         file_path,
-        threat_name: ON_ACCESS_BLOCK_NAME.to_owned(),
-        threat_category: ON_ACCESS_BLOCK_CATEGORY,
+        threat_identity: ThreatIdentity::BlockedByOnAccess,
     }
 }
 
@@ -761,6 +802,7 @@ mod scanner_output_parser_tests {
             .lines()
             .filter_map(|report_line| {
                 parse_threat_detection_line(report_line.as_bytes(), scanner_backend)
+                    .map(DetectedThreat::from)
             })
             .collect()
     }
@@ -789,7 +831,10 @@ mod scanner_output_parser_tests {
         let interpreted_scan = interpret_clamscan_text(report_text, "", 2);
         let detected_threats = transcript_threats(report_text, ScannerBackend::StandaloneClamscan);
         assert_eq!(interpreted_scan.scan_verdict, ScanVerdict::ThreatsFound);
-        assert_eq!(detected_threats[0].threat_category, "Test");
+        assert_eq!(
+            detected_threats[0].threat_identity.threat_category(),
+            "Test"
+        );
         assert_eq!(interpreted_scan.skipped_paths, vec!["/root/locked"]);
     }
 
@@ -864,6 +909,50 @@ mod scanner_output_parser_tests {
             2,
         );
         assert_eq!(interpreted_scan.scan_verdict, ScanVerdict::NoThreatsFound);
+    }
+
+    struct ReportLineCase {
+        report_line: &'static [u8],
+        scanner_backend: ScannerBackend,
+        expected_path: &'static str,
+        expected_signature: &'static str,
+    }
+
+    #[test]
+    fn real_clamd_and_clamonacc_lines_yield_the_reported_signature() {
+        [
+            ReportLineCase {
+                report_line: b"/home/user/Downloads/eicar.com: Win.Test.EICAR_HDB-1 FOUND",
+                scanner_backend: ScannerBackend::ClamdDaemon,
+                expected_path: "/home/user/Downloads/eicar.com",
+                expected_signature: "Win.Test.EICAR_HDB-1",
+            },
+            ReportLineCase {
+                report_line: b"/home/user/Downloads/invoice.exe: Sanesecurity.Foo.UNOFFICIAL FOUND",
+                scanner_backend: ScannerBackend::ClamdDaemon,
+                expected_path: "/home/user/Downloads/invoice.exe",
+                expected_signature: "Sanesecurity.Foo.UNOFFICIAL",
+            },
+            ReportLineCase {
+                report_line: b"/scan/eicar.txt: Eicar-Test-Signature FOUND",
+                scanner_backend: ScannerBackend::StandaloneClamscan,
+                expected_path: "/scan/eicar.txt",
+                expected_signature: "Eicar-Test-Signature",
+            },
+        ]
+        .into_iter()
+        .for_each(|line_case| {
+            assert_eq!(
+                parse_threat_detection_line(line_case.report_line, line_case.scanner_backend)
+                    .map(DetectedThreat::from),
+                Some(DetectedThreat {
+                    file_path: PathBuf::from(line_case.expected_path),
+                    threat_identity: ThreatIdentity::Signature {
+                        signature_name: line_case.expected_signature.to_owned(),
+                    },
+                })
+            );
+        });
     }
 
     #[test]

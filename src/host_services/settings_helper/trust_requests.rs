@@ -74,16 +74,16 @@ pub fn fingerprint_file(file_path: &Path) -> io::Result<FileFingerprint> {
     })
 }
 
-pub fn signature_of_detection(threat_name: &str) -> String {
-    threat_name
+pub fn signature_of_detection(detected_signature_name: &str) -> String {
+    detected_signature_name
         .trim()
         .strip_suffix(UNOFFICIAL_SUFFIX)
-        .unwrap_or(threat_name.trim())
+        .unwrap_or(detected_signature_name.trim())
         .to_owned()
 }
 
-pub fn signature_can_be_ignored(threat_name: &str) -> bool {
-    let signature_name = signature_of_detection(threat_name);
+pub fn signature_can_be_ignored(detected_signature_name: &str) -> bool {
+    let signature_name = signature_of_detection(detected_signature_name);
     !signature_name.is_empty()
         && !ENGINE_HEURISTIC_PREFIXES
             .iter()

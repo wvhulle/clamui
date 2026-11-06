@@ -31,7 +31,7 @@ use crate::{
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
         },
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        clamav_scanner::scanner_output_parser::{ThreatIdentity, sanitize_scanner_line},
         detection_journal::{
             detection_history_store::DetectionResolution,
             detection_journal_follower::{
@@ -457,7 +457,9 @@ impl BackgroundDetectionsPage {
                         quarantine_vault
                             .move_file_into_quarantine(
                                 &stored_detection.file_path,
-                                &stored_detection.signature_name,
+                                &ThreatIdentity::Signature {
+                                    signature_name: stored_detection.signature_name.clone(),
+                                },
                             )
                             .await?;
                         (

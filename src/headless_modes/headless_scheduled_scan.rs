@@ -141,7 +141,7 @@ async fn quarantine_detected_threats(
                 quarantine_vault
                     .move_file_into_quarantine(
                         &detected_threat.file_path,
-                        &detected_threat.threat_name,
+                        &detected_threat.threat_identity,
                     )
                     .await
                     .is_ok()

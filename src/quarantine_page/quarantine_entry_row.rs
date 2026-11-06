@@ -26,6 +26,21 @@ use crate::{
     shared_widgets::false_positive_report_dialog::ReportedDetection,
 };
 
+pub fn quarantined_false_positive_detection(
+    entry_record: &QuarantineEntryRecord,
+) -> Option<ReportedDetection> {
+    entry_record
+        .threat_identity
+        .matched_signature_name()
+        .map(|signature_name| ReportedDetection {
+            detection_name: signature_name.to_owned(),
+            submitted_content: SubmittedContent::QuarantinedEntry {
+                entry_id: entry_record.entry_id,
+            },
+            shown_path: sanitize_scanner_line(&entry_record.original_path.to_string_lossy()),
+        })
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RowRecheckState {
     NotRechecked,
@@ -146,7 +161,7 @@ impl FactoryComponent for QuarantineEntryRow {
         #[name = "entry_expander"]
         adw::ExpanderRow {
             set_use_markup: false,
-            set_title: &displayed_threat_name(&self.entry_record.threat_name),
+            set_title: &displayed_threat_name(&self.entry_record.threat_identity),
             set_subtitle: &format!(
                 "{}\n{} · {}",
                 sanitize_scanner_line(&self.entry_record.original_path.to_string_lossy()),
@@ -255,6 +270,7 @@ impl FactoryComponent for QuarantineEntryRow {
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Report…"),
                     set_valign: gtk::Align::Center,
+                    set_visible: quarantined_false_positive_detection(&self.entry_record).is_some(),
                     connect_clicked => QuarantineEntryRowInput::FalsePositiveReportRequested,
                 },
 
@@ -341,16 +357,13 @@ impl FactoryComponent for QuarantineEntryRow {
                 self.recheck_state = recheck_state;
             }
             QuarantineEntryRowInput::FalsePositiveReportRequested => {
+                let Some(reported_detection) =
+                    quarantined_false_positive_detection(&self.entry_record)
+                else {
+                    return;
+                };
                 let _page_closed = sender.output(
-                    QuarantineEntryRowOutput::FalsePositiveReportRequested(ReportedDetection {
-                        detection_name: self.entry_record.threat_name.clone(),
-                        submitted_content: SubmittedContent::QuarantinedEntry {
-                            entry_id: self.entry_record.entry_id,
-                        },
-                        shown_path: sanitize_scanner_line(
-                            &self.entry_record.original_path.to_string_lossy(),
-                        ),
-                    }),
+                    QuarantineEntryRowOutput::FalsePositiveReportRequested(reported_detection),
                 );
             }
             QuarantineEntryRowInput::VirusTotalReportRequested => {
@@ -367,5 +380,47 @@ impl FactoryComponent for QuarantineEntryRow {
                 self.reputation_answers = reputation_answers;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod quarantine_entry_row_tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::host_services::clamav_scanner::scanner_output_parser::ThreatIdentity;
+
+    fn quarantined_entry(threat_identity: ThreatIdentity) -> QuarantineEntryRecord {
+        QuarantineEntryRecord {
+            entry_id: 7,
+            original_path: PathBuf::from("/home/user/Downloads/blocked.bin"),
+            quarantine_path: PathBuf::from("/vault/payload"),
+            threat_identity,
+            detection_date: StoredDetectionDate::from("2026-11-01T00:00:00Z".to_owned()),
+            file_size: bytesize::ByteSize::b(1),
+            payload_hash: RecordedPayloadHash::IntegrityUnknown,
+            original_permissions: 0o644,
+        }
+    }
+
+    #[test]
+    fn a_quarantined_on_access_block_cannot_be_reported_as_a_false_positive() {
+        assert_eq!(
+            quarantined_false_positive_detection(&quarantined_entry(
+                ThreatIdentity::BlockedByOnAccess
+            )),
+            None
+        );
+    }
+
+    #[test]
+    fn a_quarantined_signature_is_reported_under_its_name() {
+        assert_eq!(
+            quarantined_false_positive_detection(&quarantined_entry(ThreatIdentity::Signature {
+                signature_name: "Win.Test.EICAR_HDB-1".to_owned(),
+            }))
+            .map(|reported_detection| reported_detection.detection_name),
+            Some("Win.Test.EICAR_HDB-1".to_owned())
+        );
     }
 }

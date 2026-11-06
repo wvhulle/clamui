@@ -24,7 +24,7 @@ use crate::{
         },
         settings_helper::trust_requests::{
             FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file, request_trust_change,
-            signature_of_detection, trust_outcome_text,
+            trust_outcome_text,
         },
     },
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
@@ -69,9 +69,9 @@ pub enum ScanResultsSectionInput {
     CopyPathRequested(DynamicIndex),
     ExcludeThreatRequested(DynamicIndex),
     TrustFileRequested(DynamicIndex),
-    IgnoreSignatureRequested(DynamicIndex),
+    IgnoreSignatureRequested(TrustChoice),
     TrustChangeConfirmed(TrustChoice),
-    FalsePositiveReportRequested(DynamicIndex),
+    FalsePositiveReportRequested(ReportedDetection),
     FalsePositiveReportConfirmed(FalsePositiveReport),
     CopyReportRequested,
     ExportReportRequested,
@@ -120,11 +120,11 @@ fn forwarded_threat_output(row_output: DetectedThreatRowOutput) -> ScanResultsSe
         DetectedThreatRowOutput::TrustFileRequested(row_index) => {
             ScanResultsSectionInput::TrustFileRequested(row_index)
         }
-        DetectedThreatRowOutput::IgnoreSignatureRequested(row_index) => {
-            ScanResultsSectionInput::IgnoreSignatureRequested(row_index)
+        DetectedThreatRowOutput::IgnoreSignatureRequested(trust_choice) => {
+            ScanResultsSectionInput::IgnoreSignatureRequested(trust_choice)
         }
-        DetectedThreatRowOutput::FalsePositiveReportRequested(row_index) => {
-            ScanResultsSectionInput::FalsePositiveReportRequested(row_index)
+        DetectedThreatRowOutput::FalsePositiveReportRequested(reported_detection) => {
+            ScanResultsSectionInput::FalsePositiveReportRequested(reported_detection)
         }
     }
 }
@@ -214,7 +214,7 @@ impl ScanResultsSection {
                         move_outcome: quarantine_vault
                             .move_file_into_quarantine(
                                 &pending_move.detected_threat.file_path,
-                                &pending_move.detected_threat.threat_name,
+                                &pending_move.detected_threat.threat_identity,
                             )
                             .await,
                         row_index: pending_move.row_index,
@@ -439,19 +439,13 @@ impl Component for ScanResultsSection {
                     });
                 }
             }
-            ScanResultsSectionInput::IgnoreSignatureRequested(row_index) => {
-                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
-                    present_trust_confirmation(
-                        root,
-                        TrustChoice::IgnoreSignature {
-                            signature_name: signature_of_detection(
-                                &threat_row.detected_threat.threat_name,
-                            ),
-                        },
-                        sender.input_sender().clone(),
-                        ScanResultsSectionInput::TrustChangeConfirmed,
-                    );
-                }
+            ScanResultsSectionInput::IgnoreSignatureRequested(trust_choice) => {
+                present_trust_confirmation(
+                    root,
+                    trust_choice,
+                    sender.input_sender().clone(),
+                    ScanResultsSectionInput::TrustChangeConfirmed,
+                );
             }
             ScanResultsSectionInput::TrustChangeConfirmed(confirmed_choice) => {
                 sender.oneshot_command(async move {
@@ -460,24 +454,13 @@ impl Component for ScanResultsSection {
                     )
                 });
             }
-            ScanResultsSectionInput::FalsePositiveReportRequested(row_index) => {
-                if let Some(threat_row) = self.threat_rows.get(row_index.current_index()) {
-                    let detected_threat = &threat_row.detected_threat;
-                    present_false_positive_report(
-                        root,
-                        ReportedDetection {
-                            detection_name: detected_threat.threat_name.clone(),
-                            submitted_content: SubmittedContent::DetectedFile {
-                                file_path: detected_threat.file_path.clone(),
-                            },
-                            shown_path: sanitize_scanner_line(
-                                &detected_threat.file_path.to_string_lossy(),
-                            ),
-                        },
-                        sender.input_sender().clone(),
-                        ScanResultsSectionInput::FalsePositiveReportConfirmed,
-                    );
-                }
+            ScanResultsSectionInput::FalsePositiveReportRequested(reported_detection) => {
+                present_false_positive_report(
+                    root,
+                    reported_detection,
+                    sender.input_sender().clone(),
+                    ScanResultsSectionInput::FalsePositiveReportConfirmed,
+                );
             }
             ScanResultsSectionInput::FalsePositiveReportConfirmed(false_positive_report) => {
                 sender.oneshot_command(async move {

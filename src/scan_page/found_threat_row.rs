@@ -33,7 +33,7 @@ impl FactoryComponent for FoundThreatRow {
         adw::ActionRow {
             set_use_markup: false,
             set_title: &self.shown_file_name(),
-            set_subtitle: &displayed_threat_name(&self.detected_threat.threat_name),
+            set_subtitle: &displayed_threat_name(&self.detected_threat.threat_identity),
             set_tooltip_text: Some(&sanitize_scanner_line(&self.detected_threat.file_path.to_string_lossy())),
         }
     }
