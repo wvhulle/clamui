@@ -348,6 +348,10 @@ fn verdict_failure_text(verdict_failure: &VerdictFailure) -> String {
             gettext("the clamd detection settings could not be read: {error}")
                 .replace("{error}", &settings_failure.to_string())
         }
+        VerdictFailure::ProgramLookupFailed(lookup_failure) => {
+            gettext("the scanner programs could not be looked up: {error}")
+                .replace("{error}", &lookup_failure.to_string())
+        }
         VerdictFailure::PayloadUnreadable(read_failure) => {
             gettext("the quarantined copy could not be read: {error}")
                 .replace("{error}", &read_failure.to_string())
@@ -393,13 +397,11 @@ fn restore_confirmation_text(content_verdict: &ContentVerdict) -> RestoreConfirm
     }
 }
 
-fn restore_destination_note(entry_record: &QuarantineEntryRecord) -> String {
-    let home_directory = gtk::glib::home_dir();
-    if entry_record.original_path.starts_with(&home_directory) {
-        String::new()
-    } else {
-        gettext("This location is outside your home folder.")
-    }
+fn restore_destination_note(entry_record: &QuarantineEntryRecord) -> Option<String> {
+    (!entry_record
+        .original_path
+        .starts_with(gtk::glib::home_dir()))
+    .then(|| gettext("This location is outside your home folder."))
 }
 
 fn plain_text_toast(toast_text: &str) -> adw::Toast {
@@ -504,8 +506,7 @@ impl QuarantineEntriesPage {
             .build();
         let destination_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
         destination_box.append(&destination_label);
-        let destination_note = restore_destination_note(entry_record);
-        if !destination_note.is_empty() {
+        if let Some(destination_note) = restore_destination_note(entry_record) {
             destination_box.append(
                 &gtk::Label::builder()
                     .label(destination_note)

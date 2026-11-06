@@ -18,6 +18,7 @@ use tokio_stream::wrappers::SplitStream;
 use crate::host_services::{
     clamav_config::detection_options::DetectionSettingsFailure,
     clamav_programs::trusted_program_lookup::ProgramRefusal,
+    clamav_scanner::scanner_command_builder::ProgramLookupFailure,
 };
 
 const TERMINATION_GRACE_PERIOD: Duration = Duration::from_secs(5);
@@ -46,6 +47,8 @@ pub enum ScanStartFailure {
     ScannerWorkDirectoryUnavailable(io::Error),
     #[error("the clamd detection settings could not be read: {0}")]
     DetectionSettingsUnreadable(#[from] DetectionSettingsFailure),
+    #[error("the scanner programs could not be looked up: {0}")]
+    ProgramLookupFailed(#[from] ProgramLookupFailure),
     #[error("the scan input could not be opened safely: {input_failure}")]
     ScanInputUnavailable {
         input_path: std::path::PathBuf,

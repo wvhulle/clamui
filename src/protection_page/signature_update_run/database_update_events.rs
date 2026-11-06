@@ -62,7 +62,9 @@ pub fn plan_database_update(service_state: FreshclamServiceState) -> DatabaseUpd
         | FreshclamServiceState::ServiceStopped { service_unit } => {
             DatabaseUpdatePlan::StartServiceUnit { service_unit }
         }
-        FreshclamServiceState::ServiceNotFound => DatabaseUpdatePlan::RunFreshclamDirectly,
+        FreshclamServiceState::ServiceNotFound | FreshclamServiceState::SystemdUnreachable => {
+            DatabaseUpdatePlan::RunFreshclamDirectly
+        }
     }
 }
 
@@ -205,6 +207,10 @@ mod database_update_events_tests {
         );
         assert_eq!(
             plan_database_update(FreshclamServiceState::ServiceNotFound),
+            DatabaseUpdatePlan::RunFreshclamDirectly
+        );
+        assert_eq!(
+            plan_database_update(FreshclamServiceState::SystemdUnreachable),
             DatabaseUpdatePlan::RunFreshclamDirectly
         );
     }

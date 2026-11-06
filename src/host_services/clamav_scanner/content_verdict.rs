@@ -14,7 +14,9 @@ use crate::host_services::{
     },
     clamav_programs::trusted_program_lookup::ProgramRefusal,
     clamav_scanner::{
-        scanner_command_builder::{ScannerBackend, ScannerProgramPaths, probe_clamd_availability},
+        scanner_command_builder::{
+            ProgramLookupFailure, ScannerBackend, ScannerProgramPaths, probe_clamd_availability,
+        },
         scanner_exit_classification::{
             AbnormalScannerExit, ScannerExit, classify_scanner_exit_status,
         },
@@ -49,6 +51,8 @@ pub enum VerdictFailure {
     PayloadUnreadable(QuarantineMoveFailure),
     #[error("the clamd detection settings could not be read: {0}")]
     DetectionSettingsUnreadable(#[from] DetectionSettingsFailure),
+    #[error("the scanner programs could not be looked up: {0}")]
+    ProgramLookupFailed(#[from] ProgramLookupFailure),
 }
 
 #[derive(Clone, Debug)]
@@ -103,10 +107,11 @@ pub fn verdict_from_exit(
 pub async fn scan_content_with_current_signatures(
     content_source: impl Read + Send + 'static,
 ) -> ContentVerdict {
-    let scanner_programs =
-        tokio::task::spawn_blocking(ScannerProgramPaths::locate_trusted_programs)
-            .await
-            .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
+    let scanner_programs = match ScannerProgramPaths::locate_trusted_programs_in_background().await
+    {
+        Ok(scanner_programs) => scanner_programs,
+        Err(lookup_failure) => return VerdictFailure::from(lookup_failure).into(),
+    };
     let scanner_backend = probe_clamd_availability(&scanner_programs).await;
     let (scanner_location, detection_arguments) = match scanner_backend {
         ScannerBackend::ClamdDaemon => (&scanner_programs.clamdscan_program, Vec::new()),

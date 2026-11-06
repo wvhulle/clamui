@@ -36,13 +36,14 @@ const RECORDED_PROTECTION_REDUCTIONS: [ProtectionReduction; 8] = [
     ProtectionReduction::NoReduction,
 ];
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuditedOutcome {
     ActionApplied,
     ActionRolledBack,
     AuthorizationRefused,
     ActionFailed,
     OutcomeNotRecorded,
+    UnrecognizedOutcome { outcome_field: String },
 }
 
 impl AuditedOutcome {
@@ -52,19 +53,26 @@ impl AuditedOutcome {
                 "applied" => Self::ActionApplied,
                 "rolled-back" => Self::ActionRolledBack,
                 "refused" => Self::AuthorizationRefused,
-                _failed_or_unknown => Self::ActionFailed,
+                "failed" => Self::ActionFailed,
+                unrecognized_value => Self::UnrecognizedOutcome {
+                    outcome_field: unrecognized_value.to_owned(),
+                },
             },
             JournalFieldPresence::FieldAbsent => Self::OutcomeNotRecorded,
         }
     }
 
-    pub fn described(self) -> String {
+    pub fn described(&self) -> String {
         match self {
             Self::ActionApplied => gettext("Applied"),
             Self::ActionRolledBack => gettext("Rolled back"),
             Self::AuthorizationRefused => gettext("Refused without a password"),
             Self::ActionFailed => gettext("Failed"),
             Self::OutcomeNotRecorded => gettext("Outcome not recorded"),
+            Self::UnrecognizedOutcome { outcome_field } => {
+                gettext("Unrecognized outcome {outcome}")
+                    .replace("{outcome}", &sanitize_scanner_line(outcome_field))
+            }
         }
     }
 }
@@ -564,6 +572,26 @@ mod helper_audit_records_tests {
         println!(
             "{:#?}",
             newest_helper_audit_entries(10).expect("readable journal")
+        );
+    }
+
+    #[test]
+    fn an_unknown_outcome_is_not_reported_as_a_failure() {
+        let audit_entry = entry_of(&AuditJournalFields {
+            outcome_field: JournalFieldPresence::FieldPresent {
+                field_value: "postponed".to_owned(),
+            },
+            ..applied_fields("change-settings", "MaxThreads 2")
+        });
+        assert_eq!(
+            audit_entry.audited_outcome,
+            AuditedOutcome::UnrecognizedOutcome {
+                outcome_field: "postponed".to_owned()
+            }
+        );
+        assert_eq!(
+            audit_entry.audited_outcome.described(),
+            "Unrecognized outcome postponed"
         );
     }
 }

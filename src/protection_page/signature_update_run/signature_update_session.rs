@@ -339,6 +339,9 @@ fn service_description(service_state: FreshclamServiceState) -> String {
         FreshclamServiceState::ServiceNotFound => {
             gettext("No freshclam service detected; updates run manually")
         }
+        FreshclamServiceState::SystemdUnreachable => {
+            gettext("systemd could not be asked about a freshclam service; updates run manually")
+        }
     }
 }
 
@@ -550,6 +553,7 @@ fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
         | ScanStartFailure::ScannerOutputUncaptured
         | ScanStartFailure::ScannerWorkDirectoryUnavailable(_)
         | ScanStartFailure::DetectionSettingsUnreadable(_)
+        | ScanStartFailure::ProgramLookupFailed(_)
         | ScanStartFailure::ScanInputUnavailable { .. } => {
             describe_scan_start_failure(start_failure)
         }
@@ -623,6 +627,7 @@ impl SignatureUpdateSession {
                 !matches!(
                     host_status.service_state,
                     FreshclamServiceState::ServiceNotFound
+                        | FreshclamServiceState::SystemdUnreachable
                 ) || matches!(
                     host_status.freshclam_probe,
                     ProgramProbe::VersionReported { .. }

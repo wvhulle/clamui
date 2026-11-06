@@ -85,6 +85,10 @@ pub fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
              {error}",
         )
         .replace("{error}", &settings_failure.to_string()),
+        ScanStartFailure::ProgramLookupFailed(lookup_failure) => gettext(
+            "The scan did not start, because the scanner programs could not be looked up: {error}",
+        )
+        .replace("{error}", &lookup_failure.to_string()),
         ScanStartFailure::ScanInputUnavailable {
             input_path,
             input_failure,
@@ -349,7 +353,10 @@ pub fn results_status(
 #[cfg(test)]
 mod scan_run_state_tests {
     use super::*;
-    use crate::host_services::clamav_config::detection_options::DetectionSettingsFailure;
+    use crate::host_services::{
+        clamav_config::detection_options::DetectionSettingsFailure,
+        clamav_scanner::scanner_command_builder::ProgramLookupFailure,
+    };
 
     #[tokio::test]
     async fn unreadable_detection_settings_stop_the_scan_with_a_reason() {
@@ -360,5 +367,16 @@ mod scan_run_state_tests {
             DetectionSettingsFailure::ReadingTaskInterrupted(interrupted_read),
         ));
         assert!(start_text.contains("detection settings could not be read"));
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_program_lookup_stops_the_scan_with_a_reason() {
+        let abandoned_lookup = tokio::spawn(std::future::pending::<()>());
+        abandoned_lookup.abort();
+        let interrupted_lookup = abandoned_lookup.await.expect_err("the lookup was aborted");
+        let start_text = describe_start_failure(&ScanStartFailure::ProgramLookupFailed(
+            ProgramLookupFailure::LookupInterrupted(interrupted_lookup),
+        ));
+        assert!(start_text.contains("scanner programs could not be looked up"));
     }
 }

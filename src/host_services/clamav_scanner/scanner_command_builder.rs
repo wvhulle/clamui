@@ -48,12 +48,15 @@ impl ScannerProgramPaths {
         }
     }
 
-    pub const fn nothing_found() -> Self {
-        Self {
-            clamdscan_program: ProgramLocation::ProgramNotFound,
-            clamscan_program: ProgramLocation::ProgramNotFound,
-        }
+    pub async fn locate_trusted_programs_in_background() -> Result<Self, ProgramLookupFailure> {
+        Ok(tokio::task::spawn_blocking(Self::locate_trusted_programs).await?)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProgramLookupFailure {
+    #[error("looking up the scanner programs stopped unexpectedly: {0}")]
+    LookupInterrupted(#[from] tokio::task::JoinError),
 }
 
 pub enum ScannerInvocation<'invocation> {

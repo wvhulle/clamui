@@ -26,7 +26,7 @@ use crate::{
             scan_progress_estimates::file_progress_text,
             scan_progress_events::{ScanProgressEvent, ScanRequest, scan_progress_events},
             scanner_command_builder::{
-                ScannerBackend, ScannerProgramPaths, choose_scanner_backend,
+                ProgramLookupFailure, ScannerBackend, ScannerProgramPaths, choose_scanner_backend,
             },
             scanner_output_parser::sanitize_scanner_line,
             scanner_process_events::ScanStartFailure,
@@ -94,6 +94,7 @@ enum ProfileManagerView {
 enum ScannerBackendView {
     DetectingBackend,
     BackendDetected(ScannerBackend),
+    BackendUndetermined(ProgramLookupFailure),
 }
 
 pub struct ScanPageInit {
@@ -101,6 +102,32 @@ pub struct ScanPageInit {
     pub activity_history: ActivityHistory,
     pub profile_store: ScanProfileStore,
     pub file_list_directory: PathBuf,
+}
+
+#[derive(Debug)]
+enum ScanPageNotice {
+    NoNoticeShown,
+    ProfilesUnloadable(ProfileStoreFailure),
+    EicarTestFileUnwritable(EicarTestFileFailure),
+    ScanNotRecorded(ActivityHistoryFailure),
+}
+
+fn describe_page_notice(page_notice: &ScanPageNotice) -> String {
+    match page_notice {
+        ScanPageNotice::NoNoticeShown => String::new(),
+        ScanPageNotice::ProfilesUnloadable(load_failure) => {
+            describe_profile_store_failure(load_failure)
+        }
+        ScanPageNotice::EicarTestFileUnwritable(eicar_failure) => eicar_failure_text(eicar_failure),
+        ScanPageNotice::ScanNotRecorded(recording_failure) => {
+            gettext("The scan could not be added to the history: {error}")
+                .replace("{error}", &recording_failure.to_string())
+        }
+    }
+}
+
+const fn shows_page_notice(page_notice: &ScanPageNotice) -> bool {
+    !matches!(page_notice, ScanPageNotice::NoNoticeShown)
 }
 
 pub struct ScanPage {
@@ -117,7 +144,7 @@ pub struct ScanPage {
     scan_target_rows: FactoryVecDeque<ScanTargetRow>,
     scanner_backend_view: ScannerBackendView,
     scanner_program_trust: ScannerProgramTrust,
-    page_notice: String,
+    page_notice: ScanPageNotice,
     scan_options_section: Controller<ScanOptionsSection>,
     stored_settings: gio::Settings,
     device_auto_scan_settings: DeviceAutoScanSettings,
@@ -165,6 +192,7 @@ pub enum ScanPageCommand {
     ScanStreamFinished {
         scan_run_number: ScanRunNumber,
     },
+    ScannerLookupFailed(ProgramLookupFailure),
     ScannerBackendDetected {
         scanner_backend: ScannerBackend,
         scanner_program_trust: ScannerProgramTrust,
@@ -231,8 +259,12 @@ impl ScanPage {
     }
 
     fn scanner_backend_text(&self) -> String {
-        match self.scanner_backend_view {
+        match &self.scanner_backend_view {
             ScannerBackendView::DetectingBackend => gettext("Checking…"),
+            ScannerBackendView::BackendUndetermined(lookup_failure) => {
+                gettext("Backend: unknown, the scanner programs could not be looked up: {error}")
+                    .replace("{error}", &lookup_failure.to_string())
+            }
             ScannerBackendView::BackendDetected(ScannerBackend::ClamdDaemon) => {
                 gettext("Backend: clamd (daemon)")
             }
@@ -243,7 +275,7 @@ impl ScanPage {
     }
 
     fn start_eicar_test(&mut self, start_permit: ScanStartPermit, sender: &ComponentSender<Self>) {
-        self.page_notice.clear();
+        self.page_notice = ScanPageNotice::NoNoticeShown;
         self.scan_page_state.begin_writing_eicar_file(start_permit);
         let file_list_directory = self.file_list_directory.clone();
         sender.oneshot_command(async move {
@@ -390,7 +422,7 @@ impl ScanPage {
         temporary_scan_target: TemporaryScanTarget,
         sender: &ComponentSender<Self>,
     ) {
-        self.page_notice.clear();
+        self.page_notice = ScanPageNotice::NoNoticeShown;
         let scan_run_number = self.next_scan_run_number;
         self.next_scan_run_number = scan_run_number.following_run();
         self.found_threat_rows.guard().clear();
@@ -418,26 +450,23 @@ impl ScanPage {
         );
         let scan_events = stream::once(async move {
             let scanner_programs =
-                tokio::task::spawn_blocking(ScannerProgramPaths::locate_trusted_programs)
-                    .await
-                    .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
+                ScannerProgramPaths::locate_trusted_programs_in_background().await?;
             let scanner_backend =
                 choose_scanner_backend(backend_preference, &scanner_programs).await;
-            read_host_clamscan_detection_arguments()
-                .await
-                .map(|detection_arguments| ScanRequest {
-                    scan_exclusions,
-                    scan_targets,
-                    scanner_backend,
-                    scanner_programs,
-                    file_list_directory,
-                    detection_arguments,
-                })
+            let detection_arguments = read_host_clamscan_detection_arguments().await?;
+            Ok::<ScanRequest, ScanStartFailure>(ScanRequest {
+                scan_exclusions,
+                scan_targets,
+                scanner_backend,
+                scanner_programs,
+                file_list_directory,
+                detection_arguments,
+            })
         })
         .flat_map(|scan_request| match scan_request {
             Ok(scan_request) => scan_progress_events(scan_request).left_stream(),
-            Err(settings_failure) => stream::once(ready(ScanProgressEvent::ScanPhaseUnstartable(
-                ScanStartFailure::DetectionSettingsUnreadable(settings_failure),
+            Err(start_failure) => stream::once(ready(ScanProgressEvent::ScanPhaseUnstartable(
+                start_failure,
             )))
             .right_stream(),
         });
@@ -773,9 +802,9 @@ impl Component for ScanPage {
                             set_wrap: true,
                             add_css_class: "error",
                             #[watch]
-                            set_visible: !model.page_notice.is_empty(),
+                            set_visible: shows_page_notice(&model.page_notice),
                             #[watch]
-                            set_label: &model.page_notice,
+                            set_label: &describe_page_notice(&model.page_notice),
                         },
 
                         #[local_ref]
@@ -819,17 +848,16 @@ impl Component for ScanPage {
         root.add_controller(drop_target);
         let startup_backend_preference = scanner_backend_preference(&application_settings());
         sender.oneshot_command(async move {
-            let scanner_programs =
-                tokio::task::spawn_blocking(ScannerProgramPaths::locate_trusted_programs)
-                    .await
-                    .unwrap_or_else(|_interrupted_lookup| ScannerProgramPaths::nothing_found());
-            ScanPageCommand::ScannerBackendDetected {
-                scanner_backend: choose_scanner_backend(
-                    startup_backend_preference,
-                    &scanner_programs,
-                )
-                .await,
-                scanner_program_trust: scanner_program_trust(&scanner_programs),
+            match ScannerProgramPaths::locate_trusted_programs_in_background().await {
+                Ok(scanner_programs) => ScanPageCommand::ScannerBackendDetected {
+                    scanner_backend: choose_scanner_backend(
+                        startup_backend_preference,
+                        &scanner_programs,
+                    )
+                    .await,
+                    scanner_program_trust: scanner_program_trust(&scanner_programs),
+                },
+                Err(lookup_failure) => ScanPageCommand::ScannerLookupFailed(lookup_failure),
             }
         });
         let stored_settings = application_settings();
@@ -882,7 +910,7 @@ impl Component for ScanPage {
             stored_settings,
             _device_monitor: device_monitor,
             toaster: Toaster::new(&root),
-            page_notice: String::new(),
+            page_notice: ScanPageNotice::NoNoticeShown,
         };
         model.reload_known_profiles(&sender);
         let scan_target_list = model.scan_target_rows.widget();
@@ -1039,7 +1067,7 @@ impl Component for ScanPage {
                 self.change_target_rows(target_rows_change);
             }
             ScanPageCommand::ProfilesLoaded(Err(load_failure)) => {
-                self.page_notice = describe_profile_store_failure(&load_failure);
+                self.page_notice = ScanPageNotice::ProfilesUnloadable(load_failure);
             }
             ScanPageCommand::EicarTestFileWritten(write_outcome) => {
                 if let ScanStartPermission::ScanMayStart(start_permit) =
@@ -1059,7 +1087,8 @@ impl Component for ScanPage {
                         }
                         Err(eicar_failure) => {
                             self.scan_page_state.abandon_scan_start(start_permit);
-                            self.page_notice = eicar_failure_text(&eicar_failure);
+                            self.page_notice =
+                                ScanPageNotice::EicarTestFileUnwritable(eicar_failure);
                         }
                     }
                 }
@@ -1115,12 +1144,14 @@ impl Component for ScanPage {
                 self.scanner_backend_view = ScannerBackendView::BackendDetected(scanner_backend);
                 self.scanner_program_trust = scanner_program_trust;
             }
+            ScanPageCommand::ScannerLookupFailed(lookup_failure) => {
+                self.scanner_backend_view = ScannerBackendView::BackendUndetermined(lookup_failure);
+            }
             ScanPageCommand::ActivityRecordingFinished(Ok(())) => {
                 let _shell_closed = sender.output(ScanPageOutput::ActivityRecorded);
             }
             ScanPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
-                self.page_notice = gettext("The scan could not be added to the history: {error}")
-                    .replace("{error}", &recording_failure.to_string());
+                self.page_notice = ScanPageNotice::ScanNotRecorded(recording_failure);
             }
         }
     }

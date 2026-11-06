@@ -65,6 +65,18 @@ pub enum FreshclamServiceState {
     TimerScheduled { service_unit: &'static str },
     ServiceStopped { service_unit: &'static str },
     ServiceNotFound,
+    SystemdUnreachable,
+}
+
+impl FreshclamServiceState {
+    const fn names_a_service_unit(self) -> bool {
+        match self {
+            Self::DaemonRunning { .. }
+            | Self::TimerScheduled { .. }
+            | Self::ServiceStopped { .. } => true,
+            Self::ServiceNotFound | Self::SystemdUnreachable => false,
+        }
+    }
 }
 
 pub fn database_directory_in_config(config_text: &str) -> Option<PathBuf> {
@@ -138,21 +150,35 @@ pub fn classify_service_state(
     service_unit: &'static str,
     service_state: UnitState,
     timer_state: UnitState,
-) -> Option<FreshclamServiceState> {
+) -> FreshclamServiceState {
     match service_state {
         UnitState::UnitLoaded(UnitActivity::UnitActive) => {
-            Some(FreshclamServiceState::DaemonRunning { service_unit })
+            FreshclamServiceState::DaemonRunning { service_unit }
         }
         UnitState::UnitLoaded(UnitActivity::UnitInactive)
             if timer_state == UnitState::UnitLoaded(UnitActivity::UnitActive) =>
         {
-            Some(FreshclamServiceState::TimerScheduled { service_unit })
+            FreshclamServiceState::TimerScheduled { service_unit }
         }
         UnitState::UnitLoaded(UnitActivity::UnitInactive) => {
-            Some(FreshclamServiceState::ServiceStopped { service_unit })
+            FreshclamServiceState::ServiceStopped { service_unit }
         }
-        UnitState::UnitNotFound | UnitState::SystemdUnavailable => None,
+        UnitState::UnitNotFound => FreshclamServiceState::ServiceNotFound,
+        UnitState::SystemdUnavailable => FreshclamServiceState::SystemdUnreachable,
     }
+}
+
+pub fn combined_service_state(classified_units: &[FreshclamServiceState]) -> FreshclamServiceState {
+    let fallback_state = if classified_units.contains(&FreshclamServiceState::SystemdUnreachable) {
+        FreshclamServiceState::SystemdUnreachable
+    } else {
+        FreshclamServiceState::ServiceNotFound
+    };
+    classified_units
+        .iter()
+        .copied()
+        .find(|unit_state| unit_state.names_a_service_unit())
+        .unwrap_or(fallback_state)
 }
 
 pub async fn detect_freshclam_service() -> FreshclamServiceState {
@@ -165,11 +191,7 @@ pub async fn detect_freshclam_service() -> FreshclamServiceState {
             )
         }))
         .await;
-    classified_units
-        .into_iter()
-        .flatten()
-        .next()
-        .unwrap_or(FreshclamServiceState::ServiceNotFound)
+    combined_service_state(&classified_units)
 }
 
 #[cfg(test)]
@@ -260,7 +282,7 @@ mod database_directory_status_tests {
                 UnitState::UnitNotFound,
                 UnitState::UnitNotFound
             ),
-            None
+            FreshclamServiceState::ServiceNotFound
         );
         assert_eq!(
             classify_service_state(
@@ -268,9 +290,9 @@ mod database_directory_status_tests {
                 UnitState::UnitLoaded(UnitActivity::UnitActive),
                 UnitState::UnitNotFound
             ),
-            Some(FreshclamServiceState::DaemonRunning {
+            FreshclamServiceState::DaemonRunning {
                 service_unit: "freshclam"
-            })
+            }
         );
         assert_eq!(
             classify_service_state(
@@ -278,9 +300,9 @@ mod database_directory_status_tests {
                 UnitState::UnitLoaded(UnitActivity::UnitInactive),
                 UnitState::UnitLoaded(UnitActivity::UnitActive)
             ),
-            Some(FreshclamServiceState::TimerScheduled {
+            FreshclamServiceState::TimerScheduled {
                 service_unit: "freshclam"
-            })
+            }
         );
         assert_eq!(
             classify_service_state(
@@ -288,9 +310,43 @@ mod database_directory_status_tests {
                 UnitState::UnitLoaded(UnitActivity::UnitInactive),
                 UnitState::UnitNotFound
             ),
-            Some(FreshclamServiceState::ServiceStopped {
+            FreshclamServiceState::ServiceStopped {
                 service_unit: "freshclam"
-            })
+            }
+        );
+    }
+
+    #[test]
+    fn an_unreachable_systemd_is_not_reported_as_a_missing_service() {
+        assert_eq!(
+            classify_service_state(
+                "freshclam",
+                UnitState::SystemdUnavailable,
+                UnitState::SystemdUnavailable
+            ),
+            FreshclamServiceState::SystemdUnreachable
+        );
+        assert_eq!(
+            combined_service_state(&[
+                FreshclamServiceState::ServiceNotFound,
+                FreshclamServiceState::SystemdUnreachable,
+            ]),
+            FreshclamServiceState::SystemdUnreachable
+        );
+        assert_eq!(
+            combined_service_state(&[
+                FreshclamServiceState::SystemdUnreachable,
+                FreshclamServiceState::ServiceStopped {
+                    service_unit: "clamav-freshclam"
+                },
+            ]),
+            FreshclamServiceState::ServiceStopped {
+                service_unit: "clamav-freshclam"
+            }
+        );
+        assert_eq!(
+            combined_service_state(&[FreshclamServiceState::ServiceNotFound]),
+            FreshclamServiceState::ServiceNotFound
         );
     }
 }
