@@ -1,11 +1,6 @@
 use std::{os::unix::ffi::OsStrExt, path::PathBuf};
 
-use relm4::gtk::{
-    gio,
-    gio::prelude::*,
-    glib,
-    glib::{VariantTy, variant::ToVariant},
-};
+use relm4::gtk::{gio, gio::prelude::*, glib, glib::variant::ToVariant};
 
 use crate::APPLICATION_ID;
 
@@ -24,18 +19,12 @@ pub fn paths_as_variant(scan_targets: &[PathBuf]) -> glib::Variant {
         .to_variant()
 }
 
-pub fn paths_from_variant(forwarded_paths: &glib::Variant) -> Vec<PathBuf> {
+pub fn paths_from_bytes(forwarded_paths: Vec<Vec<u8>>) -> Vec<PathBuf> {
     use std::os::unix::ffi::OsStringExt;
     forwarded_paths
-        .get::<Vec<Vec<u8>>>()
-        .unwrap_or_default()
         .into_iter()
         .map(|path_bytes| PathBuf::from(std::ffi::OsString::from_vec(path_bytes)))
         .collect()
-}
-
-pub fn scan_paths_action_type() -> &'static VariantTy {
-    VariantTy::new("aay").expect("the action type is a valid variant type")
 }
 
 fn running_instance_exists(session_bus: &gio::DBusConnection) -> bool {
@@ -93,7 +82,11 @@ mod running_instance_forwarding_tests {
             PathBuf::from("/scan/plain"),
         ];
         assert_eq!(
-            paths_from_variant(&paths_as_variant(&scan_targets)),
+            paths_from_bytes(
+                paths_as_variant(&scan_targets)
+                    .get::<Vec<Vec<u8>>>()
+                    .unwrap_or_default()
+            ),
             scan_targets
         );
     }

@@ -47,11 +47,17 @@ use crate::{
                 SHOW_LIVE_PROGRESS_KEY, application_settings, read_exclusion_entries,
                 scanner_backend_preference,
             },
+            stored_settings_watch::forward_setting_changes,
         },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
     scan_page::{
+        device_auto_scan_page::device_mount_scans::{
+            DEVICE_SCAN_SETTING_KEYS, DeviceAutoScanSettings, MountedDevice,
+            device_qualifies_for_scan, mounted_device_of, settled_device_passes_limits,
+        },
         eicar_test_file::write_eicar_test_file,
+        scan_options_section::ScanOptionsSection,
         scan_profiles_dialog::{
             profile_manager_dialog::{ProfileManagerDialog, ProfileManagerDialogOutput},
             scan_profile_store::{ScanProfile, ScanProfileStore},
@@ -61,7 +67,6 @@ use crate::{
             ProblemPathGroup, ScanResultsSection, ScanResultsSectionInit, ScanResultsSectionInput,
             ScanResultsSectionOutput, ScanResultsStatus, ScanResultsView,
         },
-        scan_settings::scan_settings_sections,
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
     },
     shared_widgets::file_dialog_requests::{request_files_to_open, request_folder_to_open},
@@ -140,6 +145,10 @@ pub struct ScanPage {
     scanner_program_trust: ScannerProgramTrust,
     eicar_test_files: Vec<NamedTempFile>,
     page_notice: String,
+    scan_options_section: Controller<ScanOptionsSection>,
+    stored_settings: gio::Settings,
+    device_auto_scan_settings: DeviceAutoScanSettings,
+    _device_monitor: gio::VolumeMonitor,
 }
 
 #[derive(Debug)]
@@ -149,6 +158,8 @@ pub enum ScanPageInput {
     ScanTargetsChosen(Vec<PathBuf>),
     ScanTargetsAdded(Vec<PathBuf>),
     QuickScanRequested,
+    DeviceMountAdded(MountedDevice),
+    DeviceAutoScanSettingsChanged,
     DeviceMounted(PathBuf),
     ProfileRowSelected { row_position: usize },
     ManageProfilesRequested,
@@ -180,6 +191,10 @@ pub enum ScanPageCommand {
         scanner_program_trust: ScannerProgramTrust,
     },
     ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
+    DeviceSettled {
+        mount_path: PathBuf,
+        passes_limits: bool,
+    },
 }
 
 const PROTECTION_PAGE_NAME: &str = "protection";
@@ -1109,7 +1124,7 @@ impl Component for ScanPage {
                         },
 
                         #[local_ref]
-                        scan_settings -> gtk::Box {
+                        scan_options_widget -> gtk::Box {
                             #[watch]
                             set_visible: model.shows_scan_settings(),
                         },
@@ -1156,6 +1171,20 @@ impl Component for ScanPage {
                 scanner_program_trust: scanner_program_trust(&scanner_programs),
             }
         });
+        let stored_settings = application_settings();
+        forward_setting_changes(
+            &stored_settings,
+            &DEVICE_SCAN_SETTING_KEYS,
+            sender.input_sender(),
+            |_changed_settings, _changed_key| ScanPageInput::DeviceAutoScanSettingsChanged,
+        );
+        let device_monitor = gio::VolumeMonitor::get();
+        let mount_sender = sender.input_sender().clone();
+        device_monitor.connect_mount_added(move |_volume_monitor, added_mount| {
+            if let Some(mounted_device) = mounted_device_of(added_mount) {
+                mount_sender.emit(ScanPageInput::DeviceMountAdded(mounted_device));
+            }
+        });
         let mut model = Self {
             profile_store: page_init.profile_store,
             known_profiles: Vec::new(),
@@ -1184,6 +1213,10 @@ impl Component for ScanPage {
             scanner_backend_view: ScannerBackendView::DetectingBackend,
             scanner_program_trust: ScannerProgramTrust::ProgramsTrusted,
             eicar_test_files: Vec::new(),
+            scan_options_section: ScanOptionsSection::builder().launch(()).detach(),
+            device_auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
+            stored_settings,
+            _device_monitor: device_monitor,
             page_notice: String::new(),
         };
         model.reload_known_profiles();
@@ -1191,7 +1224,7 @@ impl Component for ScanPage {
         let scan_progress_box = &model.progress_display.progress_widget().clone();
         let found_threat_group = &model.progress_display.found_threat_widget().clone();
         let results_container = &model.results_container.clone();
-        let scan_settings = &scan_settings_sections(&application_settings());
+        let scan_options_widget = model.scan_options_section.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -1243,6 +1276,28 @@ impl Component for ScanPage {
                 if !self.scan_target_rows.is_empty() && !self.scan_is_running() {
                     self.start_scan(self.chosen_scan_targets(), &sender);
                 }
+            }
+            ScanPageInput::DeviceMountAdded(mounted_device) => {
+                if self.device_auto_scan_settings.auto_scan_enabled
+                    && device_qualifies_for_scan(mounted_device.device_traits)
+                {
+                    let auto_scan_settings = self.device_auto_scan_settings;
+                    sender.oneshot_command(async move {
+                        let passes_limits = settled_device_passes_limits(
+                            mounted_device.mount_path.clone(),
+                            auto_scan_settings,
+                        )
+                        .await;
+                        ScanPageCommand::DeviceSettled {
+                            mount_path: mounted_device.mount_path,
+                            passes_limits,
+                        }
+                    });
+                }
+            }
+            ScanPageInput::DeviceAutoScanSettingsChanged => {
+                self.device_auto_scan_settings =
+                    DeviceAutoScanSettings::read_from(&self.stored_settings);
             }
             ScanPageInput::DeviceMounted(mount_path) => {
                 if self.scan_is_running() {
@@ -1320,6 +1375,14 @@ impl Component for ScanPage {
         _root: &Self::Root,
     ) {
         match page_command {
+            ScanPageCommand::DeviceSettled {
+                mount_path,
+                passes_limits: true,
+            } => sender.input(ScanPageInput::DeviceMounted(mount_path)),
+            ScanPageCommand::DeviceSettled {
+                passes_limits: false,
+                ..
+            } => {}
             ScanPageCommand::ProgressBatchArrived(progress_batch) => {
                 self.absorb_progress_batch(progress_batch);
             }

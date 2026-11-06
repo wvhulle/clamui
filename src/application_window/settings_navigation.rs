@@ -1,6 +1,8 @@
 use gettextrs::gettext;
 use relm4::{adw, adw::prelude::*, gtk};
 
+use crate::application_window::application_pages::ApplicationPage;
+
 pub const OPEN_SETTINGS_ACTION_NAME: &str = "open-settings";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,14 +45,14 @@ impl SettingsSubpage {
             .find(|settings_subpage| settings_subpage.action_target() == action_target)
     }
 
-    pub const fn owning_page_name(self) -> &'static str {
+    pub const fn owning_page(self) -> ApplicationPage {
         match self {
             Self::ScanExclusions
             | Self::ScanSchedule
             | Self::DeviceAutoScan
-            | Self::ScannerEngine => "scan",
-            Self::OnAccessScanning | Self::TrustedDetections => "protection",
-            Self::SignatureUpdates => "signatures",
+            | Self::ScannerEngine => ApplicationPage::Scan,
+            Self::OnAccessScanning | Self::TrustedDetections => ApplicationPage::Protection,
+            Self::SignatureUpdates => ApplicationPage::Signatures,
         }
     }
 
@@ -156,10 +158,13 @@ mod settings_navigation_tests {
 
     #[test]
     fn scan_settings_open_on_the_scan_page() {
-        assert_eq!(SettingsSubpage::ScanSchedule.owning_page_name(), "scan");
         assert_eq!(
-            SettingsSubpage::SignatureUpdates.owning_page_name(),
-            "signatures"
+            SettingsSubpage::ScanSchedule.owning_page(),
+            ApplicationPage::Scan
+        );
+        assert_eq!(
+            SettingsSubpage::SignatureUpdates.owning_page(),
+            ApplicationPage::Signatures
         );
     }
 }

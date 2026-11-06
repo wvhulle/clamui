@@ -138,6 +138,47 @@ pub fn managed_config_description(config_file_owner: ConfigFileOwner, config_pat
     .replace("{path}", config_path)
 }
 
+pub fn drift_snippet_text(
+    active_overrides: &[(String, String)],
+    config_kind: ClamavConfigKind,
+    config_file_owner: ConfigFileOwner,
+) -> String {
+    let mut override_keys = active_overrides
+        .iter()
+        .map(|active_override| active_override.0.as_str())
+        .collect::<Vec<_>>();
+    override_keys.dedup();
+    override_keys
+        .iter()
+        .map(|override_key| {
+            let override_values = active_overrides
+                .iter()
+                .filter(|active_override| active_override.0 == *override_key)
+                .map(|active_override| active_override.1.clone())
+                .collect::<Vec<_>>();
+            change_snippet(
+                config_file_owner,
+                config_kind,
+                override_key,
+                &override_values,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn values_with_edit(
+    setting_values: &[String],
+    value_position: usize,
+    edited_text: String,
+) -> Vec<String> {
+    let mut edited_values = setting_values.to_vec();
+    if let Some(edited_value) = edited_values.get_mut(value_position) {
+        *edited_value = edited_text;
+    }
+    edited_values
+}
+
 #[cfg(test)]
 mod setting_provenance_tests {
     use super::*;
@@ -259,6 +300,36 @@ mod setting_provenance_tests {
                 &["/home/a".to_owned(), "/home/b".to_owned()],
             ),
             "OnAccessIncludePath /home/a\nOnAccessIncludePath /home/b"
+        );
+    }
+
+    #[test]
+    fn an_edit_replaces_only_the_value_at_its_position() {
+        let setting_values = vec!["/home".to_owned(), "/srv".to_owned()];
+        assert_eq!(
+            values_with_edit(&setting_values, 1, "/data".to_owned()),
+            vec!["/home".to_owned(), "/data".to_owned()]
+        );
+        assert_eq!(
+            values_with_edit(&setting_values, 5, "/data".to_owned()),
+            setting_values
+        );
+    }
+
+    #[test]
+    fn drift_snippets_group_repeated_override_keys() {
+        let active_overrides = vec![
+            ("OnAccessIncludePath".to_owned(), "/home".to_owned()),
+            ("OnAccessIncludePath".to_owned(), "/srv".to_owned()),
+            ("MaxThreads".to_owned(), "8".to_owned()),
+        ];
+        assert_eq!(
+            drift_snippet_text(
+                &active_overrides,
+                ClamavConfigKind::ClamdDaemonConfig,
+                ConfigFileOwner::SystemPackage,
+            ),
+            "OnAccessIncludePath /home\nOnAccessIncludePath /srv\nMaxThreads 8"
         );
     }
 }
