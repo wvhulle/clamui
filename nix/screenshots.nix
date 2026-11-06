@@ -15,6 +15,11 @@ let
     paths = [ xtask ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
+      fixtureDirectory=$out/libexec/lazaret-fixture-programs
+      mkdir -p $fixtureDirectory
+      for programName in clamscan clamdscan freshclam clamd; do
+        ln -s ${pkgs.lib.getExe xtask} $fixtureDirectory/$programName
+      done
       for taskName in render-screenshots list-widgets; do
         makeWrapper $out/bin/xtask $out/bin/$taskName \
           --add-flags $taskName \
@@ -28,6 +33,7 @@ let
             ]
           } \
           --prefix PATH : ${pkgs.at-spi2-core}/libexec \
+          --set LAZARET_FIXTURE_PROGRAM_DIRECTORY $fixtureDirectory \
           --set FONTCONFIG_FILE ${screenshotFonts}
       done
     '';

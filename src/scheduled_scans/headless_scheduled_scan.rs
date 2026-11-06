@@ -197,7 +197,7 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
     }
     let started_at_unix = current_unix_time();
     let started_instant = Instant::now();
-    let scanner_programs = ScannerProgramPaths::from_search_path();
+    let scanner_programs = ScannerProgramPaths::locate_trusted_programs();
     let scanner_backend =
         choose_scanner_backend(scanner_backend_preference(&settings), &scanner_programs).await;
     let scan_outcome = scan_progress_events(ScanRequest {

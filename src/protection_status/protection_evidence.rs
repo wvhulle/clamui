@@ -1,6 +1,7 @@
 use std::{fs, path::Path, time::SystemTime};
 
 use futures::future::join_all;
+use gettextrs::gettext;
 use relm4::gtk::gio::prelude::SettingsExt;
 use tokio::task::spawn_blocking;
 
@@ -9,8 +10,11 @@ use crate::{
         clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
         stored_settings::application_settings,
     },
-    clamav_components::component_availability::{
-        ProgramProbe, clamd_answers_ping, probe_program_version,
+    clamav_components::{
+        component_availability::{
+            ProgramProbe, located_clamd_answers_ping, probe_located_program_version,
+        },
+        trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
     },
     malware_scan::scanner_output_parser::sanitize_scanner_line,
     protection_status::{
@@ -26,8 +30,11 @@ use crate::{
     virus_database::database_directory_status::configured_database_directory,
 };
 
-const CLAMDSCAN_PROGRAM: &str = "clamdscan";
-const CLAMSCAN_PROGRAM: &str = "clamscan";
+const CHECKED_CLAMAV_PROGRAMS: [ClamavProgram; 3] = [
+    ClamavProgram::ClamdClient,
+    ClamavProgram::StandaloneScanner,
+    ClamavProgram::SignatureUpdater,
+];
 const DAEMON_SERVICE_UNITS: [&str; 3] = [
     "clamav-daemon.service",
     "clamd@scan.service",
@@ -167,7 +174,21 @@ pub enum ScheduledScanEvidence {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProgramTrustFinding {
+    ReplaceableProgramIgnored {
+        program_name: &'static str,
+        trusted_path: String,
+        ignored_paths: Vec<String>,
+    },
+    OnlyReplaceableProgram {
+        program_name: &'static str,
+        replaceable_paths: Vec<String>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionEvidence {
+    pub program_trust_findings: Vec<ProgramTrustFinding>,
     pub engine_installation: EngineInstallation,
     pub signature_evidence: SignatureEvidence,
     pub daemon_evidence: DaemonEvidence,
@@ -251,9 +272,57 @@ pub fn on_access_evidence_from_config(
     }
 }
 
+fn sanitized_path_text(shown_path: &Path) -> String {
+    sanitize_scanner_line(&shown_path.to_string_lossy())
+}
+
+fn program_trust_finding(
+    clamav_program: ClamavProgram,
+    program_location: &ProgramLocation,
+) -> Option<ProgramTrustFinding> {
+    let replaceable_paths = program_location
+        .replaceable_candidates()
+        .iter()
+        .map(|replaceable_candidate| sanitized_path_text(&replaceable_candidate.candidate_path))
+        .collect();
+    match program_location {
+        ProgramLocation::ShadowedTrustedProgram { program_path, .. } => {
+            Some(ProgramTrustFinding::ReplaceableProgramIgnored {
+                program_name: clamav_program.program_name(),
+                trusted_path: sanitized_path_text(program_path),
+                ignored_paths: replaceable_paths,
+            })
+        }
+        ProgramLocation::OnlyReplaceableCandidates { .. } => {
+            Some(ProgramTrustFinding::OnlyReplaceableProgram {
+                program_name: clamav_program.program_name(),
+                replaceable_paths,
+            })
+        }
+        ProgramLocation::TrustedProgram { .. } | ProgramLocation::ProgramNotFound => None,
+    }
+}
+
+fn inspect_program_trust() -> Vec<ProgramTrustFinding> {
+    CHECKED_CLAMAV_PROGRAMS
+        .into_iter()
+        .filter_map(|clamav_program| {
+            program_trust_finding(clamav_program, &locate_trusted_program(clamav_program))
+        })
+        .collect()
+}
+
 async fn inspect_engine_installation() -> EngineInstallation {
-    match probe_program_version(Path::new(CLAMSCAN_PROGRAM)).await {
+    let clamscan_location =
+        spawn_blocking(|| locate_trusted_program(ClamavProgram::StandaloneScanner))
+            .await
+            .unwrap_or(ProgramLocation::ProgramNotFound);
+    match probe_located_program_version(&clamscan_location).await {
         ProgramProbe::NotFoundOnPath => EngineInstallation::EngineMissing,
+        ProgramProbe::ProgramRefused { candidate_path } => EngineInstallation::VersionUnverified {
+            failure_text: gettext("refused {path}, because your account can replace it")
+                .replace("{path}", &sanitized_path_text(&candidate_path)),
+        },
         ProgramProbe::ProbeFailed { failure_text } => EngineInstallation::VersionUnverified {
             failure_text: sanitize_scanner_line(&failure_text),
         },
@@ -347,10 +416,13 @@ async fn inspect_signature_evidence(engine_banner: &str) -> SignatureEvidence {
 }
 
 async fn inspect_daemon_evidence() -> DaemonEvidence {
-    if clamd_answers_ping(Path::new(CLAMDSCAN_PROGRAM)).await {
+    let clamdscan_location = spawn_blocking(|| locate_trusted_program(ClamavProgram::ClamdClient))
+        .await
+        .unwrap_or(ProgramLocation::ProgramNotFound);
+    if located_clamd_answers_ping(&clamdscan_location).await {
         return DaemonEvidence::ClamdAnswering {
             loaded_signatures: compare_loaded_signatures(
-                &probe_program_version(Path::new(CLAMDSCAN_PROGRAM)).await,
+                &probe_located_program_version(&clamdscan_location).await,
                 spawn_blocking(newest_disk_signature_version)
                     .await
                     .ok()
@@ -439,6 +511,9 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
         }
     };
     ProtectionEvidence {
+        program_trust_findings: spawn_blocking(inspect_program_trust)
+            .await
+            .unwrap_or_default(),
         engine_installation,
         signature_evidence: inspect_signature_evidence(&engine_banner).await,
         daemon_evidence: inspect_daemon_evidence().await,

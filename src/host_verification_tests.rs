@@ -41,7 +41,7 @@ fn host_scan_request(
     ScanRequest {
         scan_targets,
         scanner_backend,
-        scanner_programs: ScannerProgramPaths::from_search_path(),
+        scanner_programs: ScannerProgramPaths::locate_trusted_programs(),
         file_list_directory: file_list_directory.to_path_buf(),
         scan_exclusions: ScanExclusions::default(),
     }
@@ -132,7 +132,7 @@ async fn verify_detection_quarantine_and_restore(scanner_backend: ScannerBackend
 #[ignore = "needs a real ClamAV host"]
 async fn host_clamd_detects_quarantines_and_restores_outside_on_access_paths() {
     assert_eq!(
-        probe_clamd_availability(&ScannerProgramPaths::from_search_path()).await,
+        probe_clamd_availability(&ScannerProgramPaths::locate_trusted_programs()).await,
         ScannerBackend::ClamdDaemon
     );
     verify_detection_quarantine_and_restore(ScannerBackend::ClamdDaemon).await;
@@ -240,7 +240,7 @@ async fn verify_cancel_stops_scanner(scanner_backend: ScannerBackend, scan_targe
         "scanner exited"
     );
     assert_eq!(
-        probe_clamd_availability(&ScannerProgramPaths::from_search_path()).await,
+        probe_clamd_availability(&ScannerProgramPaths::locate_trusted_programs()).await,
         ScannerBackend::ClamdDaemon,
         "clamd stays healthy"
     );

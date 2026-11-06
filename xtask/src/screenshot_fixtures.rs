@@ -98,6 +98,15 @@ fn seed_detection_history(session_root: &Path) -> Result<(), TaskFailure> {
     }
 }
 
+const INSTALLED_FIXTURE_DIRECTORY_VARIABLE: &str = "LAZARET_FIXTURE_PROGRAM_DIRECTORY";
+
+fn fixture_program_directory(session_root: &Path) -> Result<PathBuf, TaskFailure> {
+    env::var_os(INSTALLED_FIXTURE_DIRECTORY_VARIABLE).map_or_else(
+        || install_fixture_programs(session_root),
+        |installed_directory| Ok(PathBuf::from(installed_directory)),
+    )
+}
+
 fn install_fixture_programs(session_root: &Path) -> Result<PathBuf, TaskFailure> {
     let fixture_directory = session_root.join("fixture-programs");
     fs::create_dir_all(&fixture_directory)?;
@@ -116,7 +125,7 @@ pub fn prepare_screenshot_fixtures(session_root: &Path) -> Result<ScreenshotFixt
     SCAN_FIXTURE_NAMES
         .iter()
         .try_for_each(|fixture_name| fs::write(scan_directory.join(fixture_name), b"fixture"))?;
-    let fixture_directory = install_fixture_programs(session_root)?;
+    let fixture_directory = fixture_program_directory(session_root)?;
     let inherited_paths = env::var_os("PATH").unwrap_or_default();
     let search_path = env::join_paths(
         std::iter::once(fixture_directory).chain(env::split_paths(&inherited_paths)),

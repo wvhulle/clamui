@@ -10,8 +10,8 @@ use crate::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
             DaemonEvidence, EngineInstallation, LoadedSignatures, OnAccessEvidence,
-            OnAccessScanner, OnAccessSizeLimit, ProtectionEvidence, ScheduledScanEvidence,
-            SignatureEvidence, UpdaterEvidence,
+            OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding, ProtectionEvidence,
+            ScheduledScanEvidence, SignatureEvidence, UpdaterEvidence,
         },
         service_run_journal::ServiceRunHistory,
     },
@@ -111,6 +111,82 @@ fn engine_step(
             )
         },
     }
+}
+
+fn program_trust_rows(program_trust_finding: &ProgramTrustFinding) -> Vec<StepEvidenceRow> {
+    match program_trust_finding {
+        ProgramTrustFinding::ReplaceableProgramIgnored {
+            program_name,
+            trusted_path,
+            ignored_paths,
+        } => std::iter::once(evidence_row(
+            gettext("{program} in use").replace("{program}", program_name),
+            trusted_path.clone(),
+        ))
+        .chain(ignored_paths.iter().map(|ignored_path| {
+            evidence_row(
+                gettext("Ignored {program}").replace("{program}", program_name),
+                ignored_path.clone(),
+            )
+        }))
+        .collect(),
+        ProgramTrustFinding::OnlyReplaceableProgram {
+            program_name,
+            replaceable_paths,
+        } => replaceable_paths
+            .iter()
+            .map(|replaceable_path| {
+                evidence_row(
+                    gettext("Refused {program}").replace("{program}", program_name),
+                    replaceable_path.clone(),
+                )
+            })
+            .collect(),
+    }
+}
+
+fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<TimelineStep> {
+    if program_trust_findings.is_empty() {
+        return None;
+    }
+    let any_program_refused = program_trust_findings.iter().any(|program_trust_finding| {
+        matches!(
+            program_trust_finding,
+            ProgramTrustFinding::OnlyReplaceableProgram { .. }
+        )
+    });
+    let (node_state, status_text) = if any_program_refused {
+        (
+            StepNodeState::HasFailed,
+            gettext(
+                "A ClamAV program can be replaced by your account, so Lazaret refuses to run it",
+            ),
+        )
+    } else {
+        (
+            StepNodeState::NeedsReview,
+            gettext(
+                "A ClamAV program in your account shadows the system copy. Lazaret ignores it, \
+                 but check where it came from",
+            ),
+        )
+    };
+    Some(TimelineStep {
+        evidence_rows: program_trust_findings
+            .iter()
+            .flat_map(program_trust_rows)
+            .collect(),
+        ..no_guidance_step(
+            gettext("Scanner programs can be trusted"),
+            gettext(
+                "Malware running as you could put a fake clamdscan earlier on your search path \
+                 that reports every file as clean. Lazaret only runs ClamAV programs that your \
+                 account can't replace, such as the ones installed for the whole system.",
+            ),
+            node_state,
+            status_text,
+        )
+    })
 }
 
 fn database_state(database_evidence: &DatabaseEvidence) -> StepNodeState {
@@ -594,8 +670,9 @@ pub fn protection_timeline(
     .filter(|installation_step| installation_step.node_state != StepNodeState::Completed);
     ProtectionTimeline {
         coverage_summary: coverage_summary(protection_evidence),
-        timeline_steps: engine_problem
+        timeline_steps: program_trust_step(&protection_evidence.program_trust_findings)
             .into_iter()
+            .chain(engine_problem)
             .chain([
                 signature_step(&protection_evidence.signature_evidence, distribution_family),
                 daemon_step(&protection_evidence.daemon_evidence, distribution_family),
@@ -629,6 +706,7 @@ mod protection_timeline_presentation_tests {
 
     fn healthy_evidence() -> ProtectionEvidence {
         ProtectionEvidence {
+            program_trust_findings: Vec::new(),
             engine_installation: EngineInstallation::VersionReported {
                 version_banner: "ClamAV 1.5.4/28174".to_owned(),
             },
@@ -777,6 +855,39 @@ mod protection_timeline_presentation_tests {
         let node_states = step_states(&protection_evidence);
         assert_eq!(node_states[ON_ACCESS_POSITION], StepNodeState::HasFailed);
         assert_eq!(node_states[SCHEDULED_POSITION], StepNodeState::NeedsReview);
+    }
+
+    #[test]
+    fn a_replaceable_scanner_program_fails_before_every_other_step() {
+        let protection_evidence = ProtectionEvidence {
+            program_trust_findings: vec![ProgramTrustFinding::OnlyReplaceableProgram {
+                program_name: "clamdscan",
+                replaceable_paths: vec!["/home/user/.local/bin/clamdscan".to_owned()],
+            }],
+            ..healthy_evidence()
+        };
+        let node_states = step_states(&protection_evidence);
+        assert_eq!(node_states[0], StepNodeState::HasFailed);
+        assert_eq!(
+            node_states.len(),
+            step_states(&healthy_evidence()).len() + 1
+        );
+    }
+
+    #[test]
+    fn an_ignored_shadowing_program_only_needs_review() {
+        let protection_evidence = ProtectionEvidence {
+            program_trust_findings: vec![ProgramTrustFinding::ReplaceableProgramIgnored {
+                program_name: "clamscan",
+                trusted_path: "/usr/bin/clamscan".to_owned(),
+                ignored_paths: vec!["/home/user/.local/bin/clamscan".to_owned()],
+            }],
+            ..healthy_evidence()
+        };
+        assert_eq!(
+            step_states(&protection_evidence)[0],
+            StepNodeState::NeedsReview
+        );
     }
 
     #[test]

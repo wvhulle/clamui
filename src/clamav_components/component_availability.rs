@@ -6,7 +6,10 @@ use std::{
 
 use tokio::time::timeout;
 
-use crate::desktop_integration::flatpak_sandbox::host_program_async_command;
+use crate::{
+    clamav_components::trusted_program_lookup::{ProgramLocation, ProgramRefusal},
+    desktop_integration::flatpak_sandbox::host_program_async_command,
+};
 
 const PROGRAM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -14,6 +17,7 @@ const PROGRAM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 pub enum ProgramProbe {
     VersionReported { version_text: String },
     NotFoundOnPath,
+    ProgramRefused { candidate_path: std::path::PathBuf },
     ProbeFailed { failure_text: String },
 }
 
@@ -56,7 +60,24 @@ pub async fn probe_program_version(program_path: &Path) -> ProgramProbe {
     }
 }
 
-pub async fn clamd_answers_ping(clamdscan_program: &Path) -> bool {
+pub async fn probe_located_program_version(program_location: &ProgramLocation) -> ProgramProbe {
+    match program_location.runnable_path() {
+        Ok(program_path) => probe_program_version(program_path).await,
+        Err(ProgramRefusal::ProgramMissing) => ProgramProbe::NotFoundOnPath,
+        Err(ProgramRefusal::ProgramReplaceable { candidate_path, .. }) => {
+            ProgramProbe::ProgramRefused { candidate_path }
+        }
+    }
+}
+
+pub async fn located_clamd_answers_ping(clamdscan_location: &ProgramLocation) -> bool {
+    match clamdscan_location.runnable_path() {
+        Ok(clamdscan_program) => clamd_answers_ping(clamdscan_program).await,
+        Err(_refused_program) => false,
+    }
+}
+
+async fn clamd_answers_ping(clamdscan_program: &Path) -> bool {
     let mut ping_command = host_program_async_command(clamdscan_program, &[]);
     ping_command
         .args(["--ping", "1"])

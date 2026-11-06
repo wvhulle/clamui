@@ -48,7 +48,7 @@ The source is organised by feature: each directory under `src/` holds the logic 
 
 Lazaret talks to the host in three ways, and never through shell commands like `systemctl` or `journalctl`:
 
-- It spawns the ClamAV programs found on `PATH`: `clamdscan --fdpass`, `clamscan` and `freshclam`.
+- It spawns the ClamAV programs found on `PATH`: `clamdscan --fdpass`, `clamscan` and `freshclam`. It only runs a copy that the desktop user can't replace: the file, every directory above it and every symbolic link on the way must be out of the user's control. Copies the user could replace, such as one in `~/.local/bin`, are skipped and reported on the Protection page. That way malware running as the user can't plant a fake `clamdscan` that reports every file as clean.
 - It talks to systemd over D-Bus (`src/systemd_bus/`), for unit states, starting units and installing timers.
 - It reads the journal through libsystemd (`src/systemd_journal/`).
 

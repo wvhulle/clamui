@@ -12,7 +12,10 @@ use crate::{
     activity_history::activity_history_database::{
         ActivityHistory, ActivityHistoryFailure, ActivityStatus, NewActivityEntry,
     },
-    clamav_components::component_availability::{ProgramProbe, probe_program_version},
+    clamav_components::{
+        component_availability::{ProgramProbe, probe_located_program_version},
+        trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
+    },
     desktop_integration::desktop_notifications::notify_outside_the_window,
     malware_scan::{
         scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
@@ -241,7 +244,11 @@ fn describe_start_failure(start_failure: &ScanStartFailure) -> String {
 }
 
 async fn load_host_status() -> DatabaseHostStatus {
-    let freshclam_probe = probe_program_version(std::path::Path::new("freshclam")).await;
+    let freshclam_location =
+        tokio::task::spawn_blocking(|| locate_trusted_program(ClamavProgram::SignatureUpdater))
+            .await
+            .unwrap_or(ProgramLocation::ProgramNotFound);
+    let freshclam_probe = probe_located_program_version(&freshclam_location).await;
     let service_state = detect_freshclam_service().await;
     let directory_status = tokio::task::spawn_blocking(|| {
         inspect_database_directory(&configured_database_directory(), SystemTime::now())
@@ -277,6 +284,12 @@ impl DatabaseUpdatePage {
                 sanitize_scanner_line(version_text)
             }
             Some(ProgramProbe::NotFoundOnPath) => gettext("Not installed"),
+            Some(ProgramProbe::ProgramRefused { candidate_path }) => {
+                gettext("Refused {path}, because your account can replace it").replace(
+                    "{path}",
+                    &sanitize_scanner_line(&candidate_path.to_string_lossy()),
+                )
+            }
             Some(ProgramProbe::ProbeFailed { failure_text }) => sanitize_scanner_line(failure_text),
         }
     }

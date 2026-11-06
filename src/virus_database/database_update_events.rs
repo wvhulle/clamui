@@ -8,6 +8,9 @@ use futures::{Stream, StreamExt, future::ready, stream};
 use tokio::{process::Command, task::spawn_blocking};
 
 use crate::{
+    clamav_components::trusted_program_lookup::{
+        ClamavProgram, ProgramRefusal, locate_trusted_program,
+    },
     desktop_integration::flatpak_sandbox::host_program_command,
     malware_scan::scanner_process_events::{
         RetainedScannerFiles, ScanStartFailure, ScannerProcessEvent, scanner_process_events,
@@ -51,13 +54,16 @@ pub fn plan_database_update(service_state: FreshclamServiceState) -> DatabaseUpd
     }
 }
 
-fn build_freshclam_command() -> Command {
-    let mut update_command = host_program_command("freshclam", &[]);
+fn build_freshclam_command() -> Result<Command, ProgramRefusal> {
+    let mut update_command = host_program_command(
+        locate_trusted_program(ClamavProgram::SignatureUpdater).runnable_path()?,
+        &[],
+    );
     update_command
         .arg("--verbose")
         .stdin(Stdio::null())
         .process_group(0);
-    Command::from(update_command)
+    Ok(Command::from(update_command))
 }
 
 fn events_from_unit_outcome(start_outcome: UnitStartOutcome) -> Vec<DatabaseUpdateEvent> {
@@ -162,10 +168,11 @@ pub fn database_update_events(
         })
         .flat_map(stream::iter)
         .boxed(),
-        DatabaseUpdatePlan::RunFreshclamDirectly => match scanner_process_events(
-            build_freshclam_command(),
-            RetainedScannerFiles::NoRetainedFiles,
-        ) {
+        DatabaseUpdatePlan::RunFreshclamDirectly => match build_freshclam_command()
+            .map_err(ScanStartFailure::from)
+            .and_then(|freshclam_command| {
+                scanner_process_events(freshclam_command, RetainedScannerFiles::NoRetainedFiles)
+            }) {
             Ok(process_events) => process_events.map(update_event_from_process).boxed(),
             Err(start_failure) => stream::once(ready(DatabaseUpdateEvent::UpdaterUnstartable(
                 start_failure,
