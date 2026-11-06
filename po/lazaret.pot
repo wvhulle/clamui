@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 15:19+0100\n"
+"POT-Creation-Date: 2026-11-06 15:52+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -123,17 +123,17 @@ msgid "Device Auto-Scan"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:64
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:50
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:53
 msgid "Scanner Engine"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:65
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:51
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:54
 msgid "On-Access Scanning"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:66
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:52
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:55
 msgid "Signature Updates"
 msgstr ""
 
@@ -214,7 +214,7 @@ msgstr ""
 #: src/scan_page/scan_page_component.rs:671
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:87
 #: src/scan_page/scan_results_section/scan_results_component.rs:149
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:206
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:209
 #: src/shared_widgets/trust_confirmation_dialog.rs:91
 #: src/signatures_page/signature_update_dialog/database_update_page.rs:555
 msgid "Cancel"
@@ -236,7 +236,7 @@ msgid ""
 msgstr ""
 
 #: src/detections_page/background_detections_page.rs:293
-#: src/protection_page/protection_timeline_presentation.rs:635
+#: src/protection_page/protection_timeline_presentation.rs:679
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
@@ -666,7 +666,32 @@ msgstr ""
 msgid "Failed"
 msgstr ""
 
-#: src/host_services/settings_helper/live_settings_client.rs:141
+#: src/host_services/settings_helper/live_settings_client.rs:90
+msgid ""
+"Detected files will no longer be blocked when opened. They are only reported."
+msgstr ""
+
+#: src/host_services/settings_helper/live_settings_client.rs:93
+msgid ""
+"ClamAV will stop checking for this kind of file or threat on this computer."
+msgstr ""
+
+#: src/host_services/settings_helper/live_settings_client.rs:96
+msgid ""
+"Files in the removed folder will no longer be checked when they are opened."
+msgstr ""
+
+#: src/host_services/settings_helper/live_settings_client.rs:99
+msgid ""
+"ClamAV will skip the new entry entirely, so malware there goes unnoticed."
+msgstr ""
+
+#: src/host_services/settings_helper/live_settings_client.rs:102
+msgid ""
+"Files or archives above the new limit will be skipped without being checked."
+msgstr ""
+
+#: src/host_services/settings_helper/live_settings_client.rs:114
 #, rust-format
 msgid ""
 "{key}\n"
@@ -674,9 +699,10 @@ msgid ""
 "New: {new}"
 msgstr ""
 
-#: src/host_services/settings_helper/live_settings_client.rs:149
+#: src/host_services/settings_helper/live_settings_client.rs:122
 msgid ""
-"This reduces what ClamAV protects. Only continue if you mean to do that."
+"The system records that this change reduced protection, and the Protection "
+"page keeps showing it until you undo it."
 msgstr ""
 
 #: src/host_services/settings_helper/trust_requests.rs:149
@@ -982,7 +1008,7 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:363
 #: src/logs_page/activity_logs_page.rs:491
 #: src/shared_widgets/audit_sections/audit_check_row.rs:60
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:405
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:408
 #: src/shared_widgets/step_timeline/timeline_detail_row.rs:93
 msgid "Copy"
 msgstr ""
@@ -1179,7 +1205,7 @@ msgid ""
 "only a file's SHA-256 hash is sent."
 msgstr ""
 
-#: src/protection_page/protection_evidence.rs:327
+#: src/protection_page/protection_evidence.rs:412
 #, rust-format
 msgid "refused {path}, because your account can replace it"
 msgstr ""
@@ -1197,7 +1223,8 @@ msgstr[1] ""
 
 #: src/protection_page/protection_timeline_page.rs:131
 #: src/protection_page/protection_timeline_page.rs:304
-#: src/protection_page/protection_timeline_presentation.rs:229
+#: src/protection_page/protection_timeline_presentation.rs:217
+#: src/protection_page/protection_timeline_presentation.rs:273
 msgid "Review"
 msgstr ""
 
@@ -1301,277 +1328,300 @@ msgid ""
 "system."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:205
+#: src/protection_page/protection_timeline_presentation.rs:210
+#, rust-format
+msgid "{base} in your configuration, {changed} now"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:222
+msgid "Protection reduced on purpose"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:224
+msgid ""
+"Someone with the administrator password changed ClamAV settings at runtime "
+"in a way that checks less than your configuration does. The System Changes "
+"tab on the Logs page shows who and when."
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:230
+#, rust-format
+msgid "{count} setting checks less than configured since {time}"
+msgid_plural "{count} settings check less than configured since {time}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/protection_page/protection_timeline_presentation.rs:249
 #, rust-format
 msgid "{count} file or detection is never reported"
 msgid_plural "{count} files or detections are never reported"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_page/protection_timeline_presentation.rs:214
+#: src/protection_page/protection_timeline_presentation.rs:258
 msgid "An allowlist that Lazaret didn't write tells ClamAV to stay silent"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:223
+#: src/protection_page/protection_timeline_presentation.rs:267
 msgid "Other allowlist"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:236
+#: src/protection_page/protection_timeline_presentation.rs:280
 msgid "Trusted detections"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:238
+#: src/protection_page/protection_timeline_presentation.rs:282
 msgid ""
 "Files and detection names on ClamAV's allowlists are never reported, by any "
 "scan. Malware that gets administrator rights could hide itself this way, so "
 "check that every entry was added on purpose."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:268
+#: src/protection_page/protection_timeline_presentation.rs:312
 #, rust-format
 msgid "Definitions built {date}, {days} days ago"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:272
+#: src/protection_page/protection_timeline_presentation.rs:316
 msgid "Definitions exist, but their age could not be determined"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:274
+#: src/protection_page/protection_timeline_presentation.rs:318
 msgid "No virus definitions were found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:284
+#: src/protection_page/protection_timeline_presentation.rs:328
 msgid "Its last update failed"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:287
+#: src/protection_page/protection_timeline_presentation.rs:331
 #, rust-format
 msgid "Last updated {time}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:291
+#: src/protection_page/protection_timeline_presentation.rs:335
 msgid "No completed update recorded yet"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:330
+#: src/protection_page/protection_timeline_presentation.rs:374
 #, rust-format
 msgid "{count} signature, {size}, updated {hours} hours ago ({file})"
 msgid_plural "{count} signatures, {size}, updated {hours} hours ago ({file})"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_page/protection_timeline_presentation.rs:351
+#: src/protection_page/protection_timeline_presentation.rs:395
 msgid "Update Now"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:356
+#: src/protection_page/protection_timeline_presentation.rs:400
 msgid "Signatures current"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:358
+#: src/protection_page/protection_timeline_presentation.rs:402
 msgid ""
 "Signatures describe known malware, and new ones are published constantly. "
 "Old signatures miss recent threats even when everything else is running."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:371
+#: src/protection_page/protection_timeline_presentation.rs:415
 msgid "Daemon running"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:373
+#: src/protection_page/protection_timeline_presentation.rs:417
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:387
+#: src/protection_page/protection_timeline_presentation.rs:431
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:395
+#: src/protection_page/protection_timeline_presentation.rs:439
 msgid "clamd is answering"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:406
-#: src/protection_page/protection_timeline_presentation.rs:471
+#: src/protection_page/protection_timeline_presentation.rs:450
+#: src/protection_page/protection_timeline_presentation.rs:515
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:418
+#: src/protection_page/protection_timeline_presentation.rs:462
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:430
+#: src/protection_page/protection_timeline_presentation.rs:474
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:432
+#: src/protection_page/protection_timeline_presentation.rs:476
 msgid "None configured"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:439
-#: src/protection_page/protection_timeline_presentation.rs:443
+#: src/protection_page/protection_timeline_presentation.rs:483
+#: src/protection_page/protection_timeline_presentation.rs:487
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:440
+#: src/protection_page/protection_timeline_presentation.rs:484
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:454
+#: src/protection_page/protection_timeline_presentation.rs:498
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:456
+#: src/protection_page/protection_timeline_presentation.rs:500
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:463
+#: src/protection_page/protection_timeline_presentation.rs:507
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:467
-#: src/protection_page/protection_timeline_presentation.rs:557
+#: src/protection_page/protection_timeline_presentation.rs:511
+#: src/protection_page/protection_timeline_presentation.rs:601
 msgid "Waiting for the daemon"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:475
+#: src/protection_page/protection_timeline_presentation.rs:519
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:479
+#: src/protection_page/protection_timeline_presentation.rs:523
 msgid "Running, but no watched folders could be read"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:483
+#: src/protection_page/protection_timeline_presentation.rs:527
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:507
+#: src/protection_page/protection_timeline_presentation.rs:551
 #: src/scan_page/scan_schedule_page/scan_schedule_component.rs:73
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:514
+#: src/protection_page/protection_timeline_presentation.rs:558
 #, rust-format
 msgid "{time}, threats found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:519
+#: src/protection_page/protection_timeline_presentation.rs:563
 #, rust-format
 msgid "{time}, nothing found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:523
+#: src/protection_page/protection_timeline_presentation.rs:567
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:540
+#: src/protection_page/protection_timeline_presentation.rs:584
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:542
+#: src/protection_page/protection_timeline_presentation.rs:586
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:562
+#: src/protection_page/protection_timeline_presentation.rs:606
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:567
+#: src/protection_page/protection_timeline_presentation.rs:611
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:572
+#: src/protection_page/protection_timeline_presentation.rs:616
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:577
+#: src/protection_page/protection_timeline_presentation.rs:621
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:578
+#: src/protection_page/protection_timeline_presentation.rs:622
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:581
+#: src/protection_page/protection_timeline_presentation.rs:625
 msgid "Run Now"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:592
+#: src/protection_page/protection_timeline_presentation.rs:636
 msgid "Scheduled by Lazaret"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:600
+#: src/protection_page/protection_timeline_presentation.rs:644
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:610
+#: src/protection_page/protection_timeline_presentation.rs:654
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:621
+#: src/protection_page/protection_timeline_presentation.rs:665
 msgid "Alerts"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:623
+#: src/protection_page/protection_timeline_presentation.rs:667
 msgid ""
 "Lazaret follows the system journal and notifies you when something is "
 "detected. It can only do that while it is running, so it should run in the "
 "background."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:630
+#: src/protection_page/protection_timeline_presentation.rs:674
 msgid ""
 "The system journal can't be read. Add your user to the systemd-journal group."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:640
+#: src/protection_page/protection_timeline_presentation.rs:684
 msgid "Notifications are turned off in the preferences"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:645
+#: src/protection_page/protection_timeline_presentation.rs:689
 msgid ""
 "Alerts stop when you quit Lazaret, because it isn't set up to run in the "
 "background"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:651
+#: src/protection_page/protection_timeline_presentation.rs:695
 msgid "Running in the background and following the journal"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:675
+#: src/protection_page/protection_timeline_presentation.rs:719
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:677
+#: src/protection_page/protection_timeline_presentation.rs:721
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:688
+#: src/protection_page/protection_timeline_presentation.rs:732
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:691
+#: src/protection_page/protection_timeline_presentation.rs:735
 msgid "Scheduled scans set up in Lazaret"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:699
+#: src/protection_page/protection_timeline_presentation.rs:743
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:712
+#: src/protection_page/protection_timeline_presentation.rs:756
 msgid "Files are only checked when you scan them"
 msgstr ""
 
@@ -2533,7 +2583,7 @@ msgid "Scheduled"
 msgstr ""
 
 #: src/scan_page/scan_schedule_page/scan_schedule_component.rs:202
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:212
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:215
 msgid "Apply"
 msgstr ""
 
@@ -2754,34 +2804,34 @@ msgstr ""
 msgid "Applying, and restarting ClamAV"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:66
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:69
 msgid "clamd settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:67
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:70
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:68
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:71
 msgid "freshclam settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:166
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:169
 msgid "Applied, but not yet in your system configuration."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:169
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:172
 msgid ""
 "ClamAV didn't come back healthy with that value, so the previous settings "
 "were restored."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:173
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:176
 #, rust-format
 msgid "The change was not made: {error}"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:181
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:184
 #, rust-format
 msgid ""
 "{path} combines your system configuration with the changes made here. While "
@@ -2789,50 +2839,50 @@ msgid ""
 "configuration. After unlocking, the allowed settings change directly."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:198
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:201
 msgid "Change this setting?"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:210
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:213
 msgid "Reduce Protection"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:328
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:331
 msgid "Reading the configuration…"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:329
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:332
 msgid "Configuration file not found"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:348
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:351
 msgid "Lock"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:350
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:353
 msgid "Unlock"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:369
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:372
 msgid "Change Settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:371
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:374
 msgid ""
 "Unlock to change the settings your system allows at runtime. Unlocking "
 "grants nothing by itself: each change shows what will happen and asks for "
 "administrator authorization. It locks again after two minutes."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:395
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:398
 msgid "Changes your system configuration doesn't know about"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:422
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:425
 msgid "No settings in this section"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:533
+#: src/shared_widgets/engine_settings/engine_settings_page.rs:536
 msgid "Copied. Add it to your configuration to apply it."
 msgstr ""
 

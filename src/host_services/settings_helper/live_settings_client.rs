@@ -1,7 +1,9 @@
-use std::fmt::Write as _;
-
 use gettextrs::gettext;
 use zbus::{Connection, proxy};
+
+use crate::host_services::settings_helper::protection_change_rules::{
+    ProtectionReduction, protection_reduction,
+};
 
 #[proxy(
     interface = "page.codeberg.wvhulle.Lazaret.SettingsHelper",
@@ -30,12 +32,6 @@ pub enum LiveChangeOutcome {
     SettingsApplied,
     PreviousRestored,
     NothingChanged { failure_text: String },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ChangeEffect {
-    KeepsProtection,
-    WeakensProtection,
 }
 
 async fn helper_proxy() -> zbus::Result<SettingsHelperProxy<'static>> {
@@ -80,55 +76,32 @@ pub async fn apply_live_change(
     }
 }
 
-fn size_in_bytes(size_text: &str) -> Option<u64> {
-    let (digits, multiplier) = match size_text.chars().last()? {
-        'k' | 'K' => (&size_text[..size_text.len() - 1], 1024),
-        'm' | 'M' => (&size_text[..size_text.len() - 1], 1024 * 1024),
-        _no_suffix => (size_text, 1),
-    };
-    digits.parse::<u64>().ok()?.checked_mul(multiplier)
-}
-
-fn setting_is_on(setting_value: &str) -> bool {
-    matches!(setting_value, "true" | "yes")
-}
-
 pub fn change_effect(
     setting_key: &str,
     current_values: &[String],
     new_values: &[String],
-) -> ChangeEffect {
-    let weakens_protection = match setting_key {
-        "OnAccessPrevention" | "OnAccessExtraScanning" => {
-            current_values
-                .iter()
-                .any(|current_value| setting_is_on(current_value))
-                && !new_values.iter().any(|new_value| setting_is_on(new_value))
-        }
-        "OnAccessIncludePath" => current_values
-            .iter()
-            .any(|current_value| !new_values.contains(current_value)),
-        "OnAccessExcludePath" | "OnAccessExcludeRootUID" | "ExcludePath" => new_values
-            .iter()
-            .any(|new_value| !current_values.contains(new_value)),
-        size_key if size_key.ends_with("Size") => {
-            let largest_size = |size_values: &[String]| {
-                size_values
-                    .iter()
-                    .filter_map(|size_value| size_in_bytes(size_value))
-                    .max()
-            };
-            match (largest_size(current_values), largest_size(new_values)) {
-                (Some(current_size), Some(new_size)) => new_size < current_size,
-                _unknown_size => true,
-            }
-        }
-        _other_setting => false,
-    };
-    if weakens_protection {
-        ChangeEffect::WeakensProtection
-    } else {
-        ChangeEffect::KeepsProtection
+) -> ProtectionReduction {
+    protection_reduction(setting_key, current_values, new_values)
+}
+
+fn reduction_headline(protection_reduction: ProtectionReduction) -> Option<String> {
+    match protection_reduction {
+        ProtectionReduction::BlockingTurnedOff => Some(gettext(
+            "Detected files will no longer be blocked when opened. They are only reported.",
+        )),
+        ProtectionReduction::CheckTurnedOff => Some(gettext(
+            "ClamAV will stop checking for this kind of file or threat on this computer.",
+        )),
+        ProtectionReduction::WatchedFolderRemoved => Some(gettext(
+            "Files in the removed folder will no longer be checked when they are opened.",
+        )),
+        ProtectionReduction::SkippedLocationAdded => Some(gettext(
+            "ClamAV will skip the new entry entirely, so malware there goes unnoticed.",
+        )),
+        ProtectionReduction::ScanLimitLowered => Some(gettext(
+            "Files or archives above the new limit will be skipped without being checked.",
+        )),
+        ProtectionReduction::NoReduction => None,
     }
 }
 
@@ -136,20 +109,22 @@ pub fn change_confirmation_text(
     setting_key: &str,
     current_values: &[String],
     new_values: &[String],
-    effect: ChangeEffect,
+    protection_reduction: ProtectionReduction,
 ) -> String {
-    let mut confirmation_text = gettext("{key}\nNow: {current}\nNew: {new}")
+    let change_lines = gettext("{key}\nNow: {current}\nNew: {new}")
         .replace("{key}", setting_key)
         .replace("{current}", &current_values.join(", "))
         .replace("{new}", &new_values.join(", "));
-    if effect == ChangeEffect::WeakensProtection {
-        let _writing_to_string_succeeds = write!(
-            confirmation_text,
-            "\n\n{}",
-            gettext("This reduces what ClamAV protects. Only continue if you mean to do that.")
-        );
+    match reduction_headline(protection_reduction) {
+        Some(headline) => format!(
+            "{headline}\n\n{change_lines}\n\n{}",
+            gettext(
+                "The system records that this change reduced protection, and the Protection page \
+                 keeps showing it until you undo it.",
+            )
+        ),
+        None => change_lines,
     }
-    confirmation_text
 }
 
 #[cfg(test)]
@@ -163,64 +138,38 @@ mod live_settings_client_tests {
             .collect()
     }
 
-    fn effect_of(setting_key: &str, current_values: &[&str], new_values: &[&str]) -> ChangeEffect {
+    fn effect_of(setting_key: &str, current_values: &[&str], new_values: &[&str]) -> bool {
         change_effect(setting_key, &values(current_values), &values(new_values))
+            != ProtectionReduction::NoReduction
     }
 
     #[test]
     fn turning_prevention_off_weakens_protection() {
-        assert_eq!(
-            effect_of("OnAccessPrevention", &["true"], &["false"]),
-            ChangeEffect::WeakensProtection
-        );
-        assert_eq!(
-            effect_of("OnAccessPrevention", &["false"], &["true"]),
-            ChangeEffect::KeepsProtection
-        );
+        assert!(effect_of("OnAccessPrevention", &["true"], &["false"]));
+        assert!(!effect_of("OnAccessPrevention", &["false"], &["true"]));
     }
 
     #[test]
     fn removing_a_watched_folder_weakens_protection() {
-        assert_eq!(
-            effect_of("OnAccessIncludePath", &["/a", "/b"], &["/a"]),
-            ChangeEffect::WeakensProtection
-        );
-        assert_eq!(
-            effect_of("OnAccessIncludePath", &["/a"], &["/a", "/b"]),
-            ChangeEffect::KeepsProtection
-        );
+        assert!(effect_of("OnAccessIncludePath", &["/a", "/b"], &["/a"]));
+        assert!(!effect_of("OnAccessIncludePath", &["/a"], &["/a", "/b"]));
     }
 
     #[test]
     fn adding_an_exclusion_weakens_protection() {
-        assert_eq!(
-            effect_of("OnAccessExcludePath", &[], &["/a"]),
-            ChangeEffect::WeakensProtection
-        );
+        assert!(effect_of("OnAccessExcludePath", &[], &["/a"]));
     }
 
     #[test]
     fn scanning_fewer_large_files_weakens_protection() {
-        assert_eq!(
-            effect_of("OnAccessMaxFileSize", &["100M"], &["10M"]),
-            ChangeEffect::WeakensProtection
-        );
-        assert_eq!(
-            effect_of("OnAccessMaxFileSize", &["10M"], &["100M"]),
-            ChangeEffect::KeepsProtection
-        );
-        assert_eq!(
-            effect_of("OnAccessMaxFileSize", &["100M"], &["102400k"]),
-            ChangeEffect::KeepsProtection
-        );
+        assert!(effect_of("OnAccessMaxFileSize", &["100M"], &["10M"]));
+        assert!(!effect_of("OnAccessMaxFileSize", &["10M"], &["100M"]));
+        assert!(!effect_of("OnAccessMaxFileSize", &["100M"], &["102400k"]));
     }
 
     #[test]
     fn a_size_that_cannot_be_compared_is_treated_as_weakening() {
-        assert_eq!(
-            effect_of("MaxFileSize", &["lots"], &["10M"]),
-            ChangeEffect::WeakensProtection
-        );
+        assert!(effect_of("MaxFileSize", &["lots"], &["10M"]));
     }
 
     #[test]
@@ -229,11 +178,11 @@ mod live_settings_client_tests {
             "OnAccessPrevention",
             &values(&["true"]),
             &values(&["false"]),
-            ChangeEffect::WeakensProtection,
+            ProtectionReduction::BlockingTurnedOff,
         );
+        assert!(confirmation_text.starts_with("Detected files will no longer be blocked"));
         assert!(confirmation_text.contains("Now: true"));
         assert!(confirmation_text.contains("New: false"));
-        assert!(confirmation_text.contains("reduces what ClamAV protects"));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 mod detection_trust_files;
 mod helper_audit_journal;
 mod merged_clamd_config;
+mod protection_change_rules;
 mod settings_application;
 mod tunable_setting_rules;
 
@@ -25,12 +26,12 @@ use crate::{
     },
     helper_audit_journal::{AuditOutcome, HelperAuditRecord, RequestingUser, record_helper_action},
     merged_clamd_config::OverrideSetting,
+    protection_change_rules::change_weakens_protection,
     settings_application::{
         ApplicationOutcome, SettingsPaths, SystemClamavServices, apply_setting_changes,
         clamd_reloads_signatures, config_values_in_effect, read_current_overrides,
         read_tunable_settings, write_merged_config,
     },
-    tunable_setting_rules::change_weakens_protection,
 };
 
 const HELPER_BUS_NAME: &str = "page.codeberg.wvhulle.Lazaret.SettingsHelper";

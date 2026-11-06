@@ -25,9 +25,12 @@ use crate::{
             },
         },
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
-        settings_helper::live_settings_client::{
-            ChangeEffect, LiveChangeOutcome, LiveTuningState, apply_live_change,
-            change_confirmation_text, change_effect, read_live_tuning_state,
+        settings_helper::{
+            live_settings_client::{
+                LiveChangeOutcome, LiveTuningState, apply_live_change, change_confirmation_text,
+                change_effect, read_live_tuning_state,
+            },
+            protection_change_rules::ProtectionReduction,
         },
     },
     shared_widgets::engine_settings::config_setting_row::{
@@ -206,13 +209,13 @@ fn present_live_change_confirmation(
     confirmation_dialog.add_response("cancel", &gettext("Cancel"));
     confirmation_dialog.add_response(
         "apply",
-        &if effect == ChangeEffect::WeakensProtection {
+        &if effect != ProtectionReduction::NoReduction {
             gettext("Reduce Protection")
         } else {
             gettext("Apply")
         },
     );
-    if effect == ChangeEffect::WeakensProtection {
+    if effect != ProtectionReduction::NoReduction {
         confirmation_dialog.set_response_appearance("apply", adw::ResponseAppearance::Destructive);
     }
     confirmation_dialog.set_default_response(Some("cancel"));

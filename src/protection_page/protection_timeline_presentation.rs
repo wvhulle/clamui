@@ -16,7 +16,7 @@ use crate::{
         protection_evidence::{
             DaemonEvidence, EngineInstallation, LoadedSignatures, OnAccessEvidence,
             OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding, ProtectionEvidence,
-            ScheduledScanEvidence, SignatureEvidence, UpdaterEvidence,
+            RuntimeReductions, ScheduledScanEvidence, SignatureEvidence, UpdaterEvidence,
         },
         service_run_journal::ServiceRunHistory,
         trusted_detections_page::trust_list_contents::TrustListContents,
@@ -189,6 +189,50 @@ fn program_trust_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<
             ),
             node_state,
             status_text,
+        )
+    })
+}
+
+fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<TimelineStep> {
+    let RuntimeReductions::ReducedSince {
+        changed_unix_seconds,
+        reduced_settings,
+    } = runtime_reductions
+    else {
+        return None;
+    };
+    Some(TimelineStep {
+        evidence_rows: reduced_settings
+            .iter()
+            .map(|reduced_setting| {
+                evidence_row(
+                    reduced_setting.setting_key.clone(),
+                    gettext("{base} in your configuration, {changed} now")
+                        .replace("{base}", &reduced_setting.base_value)
+                        .replace("{changed}", &reduced_setting.changed_value),
+                )
+            })
+            .collect(),
+        action_slot: StepActionSlot::ActionOffered {
+            action_label: gettext("Review"),
+            chosen_action: TimelineStepAction::OpenSettingsSubpage(SettingsSubpage::ScannerEngine),
+            action_suggested: false,
+        },
+        ..no_guidance_step(
+            gettext("Protection reduced on purpose"),
+            gettext(
+                "Someone with the administrator password changed ClamAV settings at runtime in a \
+                 way that checks less than your configuration does. The System Changes tab on the \
+                 Logs page shows who and when.",
+            ),
+            StepNodeState::NeedsReview,
+            ngettext(
+                "{count} setting checks less than configured since {time}",
+                "{count} settings check less than configured since {time}",
+                u32::try_from(reduced_settings.len()).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &reduced_settings.len().to_string())
+            .replace("{time}", &formatted_local_time(*changed_unix_seconds)),
         )
     })
 }
@@ -750,6 +794,9 @@ pub fn protection_timeline(
                     distribution_family,
                 ),
             ])
+            .chain(runtime_reduction_step(
+                &protection_evidence.runtime_reductions,
+            ))
             .chain(trust_list_step(&protection_evidence.trust_list))
             .collect(),
     }
@@ -767,6 +814,7 @@ mod protection_timeline_presentation_tests {
         ProtectionEvidence {
             program_trust_findings: Vec::new(),
             trust_list: TrustListContents::default(),
+            runtime_reductions: RuntimeReductions::NothingReduced,
             engine_installation: EngineInstallation::VersionReported {
                 version_banner: "ClamAV 1.5.4/28174".to_owned(),
             },
@@ -945,6 +993,29 @@ mod protection_timeline_presentation_tests {
                     },
                 ],
                 ..TrustListContents::default()
+            },
+            ..healthy_evidence()
+        };
+        let node_states = step_states(&protection_evidence);
+        assert_eq!(node_states.last(), Some(&StepNodeState::NeedsReview));
+        assert_eq!(
+            node_states.len(),
+            step_states(&healthy_evidence()).len() + 1
+        );
+    }
+
+    #[test]
+    fn a_runtime_reduction_stays_visible_as_needing_review() {
+        let protection_evidence = ProtectionEvidence {
+            runtime_reductions: RuntimeReductions::ReducedSince {
+                changed_unix_seconds: 1_794_223_800,
+                reduced_settings: vec![
+                    crate::protection_page::protection_evidence::ReducedSetting {
+                        setting_key: "OnAccessPrevention".to_owned(),
+                        base_value: "yes".to_owned(),
+                        changed_value: "no".to_owned(),
+                    },
+                ],
             },
             ..healthy_evidence()
         };

@@ -7,7 +7,9 @@ use tokio::task::spawn_blocking;
 
 use crate::{
     host_services::{
-        clamav_config::clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
+        clamav_config::clamav_host_config::{
+            ConfigSetting, HostConfigView, parse_config_settings, read_clamd_config,
+        },
         clamav_programs::{
             component_availability::{
                 ProgramProbe, located_clamd_answers_ping, probe_located_program_version,
@@ -16,7 +18,8 @@ use crate::{
             trusted_program_lookup::{ClamavProgram, ProgramLocation, locate_trusted_program},
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-        desktop::stored_settings::application_settings,
+        desktop::{flatpak_sandbox::readable_host_path, stored_settings::application_settings},
+        settings_helper::protection_change_rules::change_weakens_protection,
         systemd_bus::host_systemd_units::{
             ServiceLastResult, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
             probe_user_unit_state, service_unit_snapshot, timer_unit_snapshot,
@@ -189,10 +192,92 @@ pub enum ProgramTrustFinding {
     },
 }
 
+const RUNTIME_OVERRIDES_PATH: &str = "/var/lib/lazaret/clamd-overrides.conf";
+const BASE_CLAMD_CONFIG_PATH: &str = "/etc/clamav/clamd.conf";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReducedSetting {
+    pub setting_key: String,
+    pub base_value: String,
+    pub changed_value: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum RuntimeReductions {
+    #[default]
+    NothingReduced,
+    ReducedSince {
+        changed_unix_seconds: i64,
+        reduced_settings: Vec<ReducedSetting>,
+    },
+}
+
+fn values_for_key(config_settings: &[ConfigSetting], setting_key: &str) -> Vec<String> {
+    config_settings
+        .iter()
+        .filter(|config_setting| config_setting.setting_key == setting_key)
+        .map(|config_setting| config_setting.setting_value.clone())
+        .collect()
+}
+
+pub fn reduced_settings(
+    base_settings: &[ConfigSetting],
+    override_settings: &[ConfigSetting],
+) -> Vec<ReducedSetting> {
+    let mut overridden_keys = override_settings
+        .iter()
+        .map(|override_setting| override_setting.setting_key.clone())
+        .collect::<Vec<_>>();
+    overridden_keys.dedup();
+    overridden_keys
+        .into_iter()
+        .filter_map(|setting_key| {
+            let base_values = values_for_key(base_settings, &setting_key);
+            let changed_values = values_for_key(override_settings, &setting_key);
+            change_weakens_protection(&setting_key, &base_values, &changed_values).then(|| {
+                ReducedSetting {
+                    base_value: sanitize_scanner_line(&base_values.join(", ")),
+                    changed_value: sanitize_scanner_line(&changed_values.join(", ")),
+                    setting_key: sanitize_scanner_line(&setting_key),
+                }
+            })
+        })
+        .collect()
+}
+
+fn inspect_runtime_reductions() -> RuntimeReductions {
+    let overrides_path = readable_host_path(RUNTIME_OVERRIDES_PATH);
+    let (Ok(overrides_text), Ok(overrides_metadata)) = (
+        fs::read_to_string(&overrides_path),
+        fs::metadata(&overrides_path),
+    ) else {
+        return RuntimeReductions::NothingReduced;
+    };
+    let base_settings = parse_config_settings(
+        &fs::read_to_string(readable_host_path(BASE_CLAMD_CONFIG_PATH)).unwrap_or_default(),
+    );
+    let reduced_settings =
+        reduced_settings(&base_settings, &parse_config_settings(&overrides_text));
+    if reduced_settings.is_empty() {
+        return RuntimeReductions::NothingReduced;
+    }
+    RuntimeReductions::ReducedSince {
+        changed_unix_seconds: overrides_metadata
+            .modified()
+            .ok()
+            .and_then(|modified_time| modified_time.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map_or(0, |since_epoch| {
+                i64::try_from(since_epoch.as_secs()).unwrap_or(i64::MAX)
+            }),
+        reduced_settings,
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionEvidence {
     pub program_trust_findings: Vec<ProgramTrustFinding>,
     pub trust_list: TrustListContents,
+    pub runtime_reductions: RuntimeReductions,
     pub engine_installation: EngineInstallation,
     pub signature_evidence: SignatureEvidence,
     pub daemon_evidence: DaemonEvidence,
@@ -521,6 +606,9 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
         trust_list: spawn_blocking(|| read_trust_list_contents(&configured_database_directory()))
             .await
             .unwrap_or_default(),
+        runtime_reductions: spawn_blocking(inspect_runtime_reductions)
+            .await
+            .unwrap_or_default(),
         engine_installation,
         signature_evidence: inspect_signature_evidence(&engine_banner).await,
         daemon_evidence: inspect_daemon_evidence().await,
@@ -545,6 +633,29 @@ mod protection_evidence_tests {
         ProgramProbe::VersionReported {
             version_text: version_text.to_owned(),
         }
+    }
+
+    #[test]
+    fn only_overrides_that_weaken_the_base_config_are_reduced_settings() {
+        let base_settings = vec![
+            config_setting("OnAccessPrevention", "yes"),
+            config_setting("MaxThreads", "12"),
+            config_setting("OnAccessIncludePath", "/home"),
+        ];
+        let override_settings = vec![
+            config_setting("OnAccessPrevention", "no"),
+            config_setting("MaxThreads", "2"),
+            config_setting("OnAccessIncludePath", "/home"),
+            config_setting("OnAccessIncludePath", "/srv"),
+        ];
+        assert_eq!(
+            reduced_settings(&base_settings, &override_settings),
+            vec![ReducedSetting {
+                setting_key: "OnAccessPrevention".to_owned(),
+                base_value: "yes".to_owned(),
+                changed_value: "no".to_owned(),
+            }]
+        );
     }
 
     #[test]
