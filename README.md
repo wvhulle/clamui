@@ -4,7 +4,7 @@ A GTK desktop front-end for the ClamAV that is already installed on your system.
 
 Lazaret is a hard fork of [ClamUI](https://github.com/linx-systems/clamui).
 
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/results-before-quarantine.png" width="800" alt="Scan results showing two threats found, with a button to quarantine both">
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan-results.webp" width="800" alt="Recording of a scan that found two threats, moving both to quarantine">
 
 More screenshots are in [usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md).
 
