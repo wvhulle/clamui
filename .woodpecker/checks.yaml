@@ -45,6 +45,7 @@ steps:
     failure: ignore
     when:
       - event: [push, manual]
+        status: [success, failure]
     environment:
       <<: *nix_environment
       CACHIX_AUTH_TOKEN:

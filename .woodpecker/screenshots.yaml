@@ -20,7 +20,7 @@ steps:
     environment: *nix_environment
     commands:
       - nix build --quiet .#screenshots .#publish-screenshots
-      - cp -r --no-preserve=mode result screenshots
+      - cp -rL --no-preserve=mode result screenshots
 
   - name: publish-screenshots
     image: nixos/nix:latest
@@ -34,6 +34,8 @@ steps:
   - name: push-to-cachix
     image: nixos/nix:latest
     failure: ignore
+    when:
+      - status: [success, failure]
     environment:
       <<: *nix_environment
       CACHIX_AUTH_TOKEN:
