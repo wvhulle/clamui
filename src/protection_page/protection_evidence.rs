@@ -47,7 +47,7 @@ use crate::{
             SignatureUpdaterProgram, UpdaterExitMeaning, classify_updater_exit_status,
         },
         trusted_detections_page::trust_list_contents::{
-            TrustListContents, read_trust_list_contents,
+            TrustListReading, read_configured_trust_list,
         },
     },
     scan_page::scan_schedule_page::{
@@ -530,7 +530,7 @@ fn inspect_account_settings(lazaret_schedule_enabled: bool) -> Vec<AccountSettin
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionEvidence {
     pub program_trust_findings: Vec<ProgramTrustFinding>,
-    pub trust_list: TrustListContents,
+    pub trust_list: TrustListReading,
     pub runtime_reductions: RuntimeReductions,
     pub account_setting_findings: Vec<AccountSettingFinding>,
     pub engine_installation: EngineInstallation,
@@ -934,9 +934,7 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
         program_trust_findings: spawn_blocking(inspect_program_trust)
             .await
             .unwrap_or_default(),
-        trust_list: spawn_blocking(|| read_trust_list_contents(&configured_database_directory()))
-            .await
-            .unwrap_or_default(),
+        trust_list: read_configured_trust_list().await,
         runtime_reductions: spawn_blocking(inspect_runtime_reductions)
             .await
             .unwrap_or_default(),

@@ -13,7 +13,8 @@ use crate::{
     detections_page::{
         detected_file_state::{DetectedFileState, FileOwner, OpeningCheck, inspect_detected_file},
         detection_alerts::{
-            JournalReplay, plan_detection_alerts, send_detection_alerts, withdraw_detection_alert,
+            DetectionAlert, JournalReplay, JournalResume, plan_detection_alerts,
+            send_detection_alerts, withdraw_detection_alert,
         },
         detection_list_row::{DetectionListRow, DetectionListRowOutput},
         detections_view_state::{
@@ -34,9 +35,7 @@ use crate::{
         clamav_scanner::scanner_output_parser::{ThreatIdentity, sanitize_scanner_line},
         detection_journal::{
             detection_history_store::ResolutionKind,
-            detection_journal_follower::{
-                JournalAccess, JournalStartPosition, detection_journal_events,
-            },
+            detection_journal_follower::{JournalAccess, detection_journal_events},
             detection_journal_records::JournalDetectionRecord,
         },
         quarantine_vault::{
@@ -111,6 +110,7 @@ pub enum BackgroundDetectionsPageCommand {
         journal_replay: JournalReplay,
     },
     JournalAccessChanged(JournalAccess),
+    JournalCursorUnreadable(ActivityHistoryFailure),
     DetectionsLoaded(Vec<DisplayedDetection>),
     LoadingFailed(ActivityHistoryFailure),
     IncidentActionFinished {
@@ -198,21 +198,6 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .build()
 }
 
-async fn journal_start_point(
-    activity_history: &ActivityHistory,
-) -> (JournalStartPosition, JournalReplay) {
-    match activity_history.saved_journal_cursor().await {
-        Ok(Some(journal_cursor)) => (
-            JournalStartPosition::AfterCursor { journal_cursor },
-            JournalReplay::AfterSavedCursor,
-        ),
-        Ok(None) | Err(_) => (
-            JournalStartPosition::FromOldestEntry,
-            JournalReplay::FirstImport,
-        ),
-    }
-}
-
 async fn recorded_batch_commands(
     activity_history: ActivityHistory,
     journal_batch: JournalBatch,
@@ -250,9 +235,17 @@ fn recorded_detection_updates(
     activity_history: ActivityHistory,
 ) -> impl Stream<Item = BackgroundDetectionsPageCommand> + Send + 'static {
     let start_history = activity_history.clone();
-    stream::once(async move { journal_start_point(&start_history).await }).flat_map(
-        move |(start_position, journal_replay)| {
-            let recording_history = activity_history.clone();
+    stream::once(async move {
+        JournalResume::from_saved_cursor(start_history.saved_journal_cursor().await)
+    })
+    .flat_map(move |journal_resume| {
+        let recording_history = activity_history.clone();
+        let start_position = journal_resume.start_position();
+        let journal_replay = journal_resume.journal_replay();
+        let cursor_warning = journal_resume
+            .into_cursor_failure()
+            .map(BackgroundDetectionsPageCommand::JournalCursorUnreadable);
+        stream::iter(cursor_warning).chain(
             detection_journal_events(start_position)
                 .ready_chunks(JOURNAL_BATCH_SIZE)
                 .then(move |journal_events| {
@@ -262,9 +255,9 @@ fn recorded_detection_updates(
                         journal_replay,
                     )
                 })
-                .flat_map(stream::iter)
-        },
-    )
+                .flat_map(stream::iter),
+        )
+    })
 }
 
 pub async fn load_displayed_detections(
@@ -733,6 +726,16 @@ impl Component for BackgroundDetectionsPage {
                 let _shell_closed = sender.output(
                     BackgroundDetectionsPageOutput::JournalAccessChanged(journal_access),
                 );
+            }
+            BackgroundDetectionsPageCommand::JournalCursorUnreadable(cursor_failure) => {
+                send_detection_alerts(&[DetectionAlert::MissedDetectionsUncountable]);
+                self.toaster.add_toast(plain_text_toast(
+                    &gettext(
+                        "Detections while Lazaret wasn't running can't be counted, because where \
+                         it stopped reading the system journal could not be read: {error}",
+                    )
+                    .replace("{error}", &cursor_failure.to_string()),
+                ));
             }
             BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections) => {
                 self.first_load = FirstLoad::LoadFinished;

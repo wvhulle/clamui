@@ -8,9 +8,13 @@ use crate::{
     APPLICATION_ID,
     detections_page::incident_timeline_presentation::signature_is_test_pattern,
     host_services::{
+        activity_history::activity_history_database::ActivityHistoryFailure,
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::stored_settings::application_settings,
-        detection_journal::detection_journal_records::{DetectionSource, JournalDetectionRecord},
+        detection_journal::{
+            detection_journal_follower::JournalStartPosition,
+            detection_journal_records::{DetectionSource, JournalDetectionRecord},
+        },
     },
 };
 
@@ -23,6 +27,49 @@ const MISSED_DETECTIONS_ID: &str = "missed-detections";
 pub enum JournalReplay {
     FirstImport,
     AfterSavedCursor,
+    MissedEntriesSkipped,
+}
+
+#[derive(Debug)]
+pub enum JournalResume {
+    FirstImport,
+    AfterSavedCursor { journal_cursor: String },
+    CursorUnreadable(ActivityHistoryFailure),
+}
+
+impl JournalResume {
+    pub fn from_saved_cursor(saved_cursor: Result<Option<String>, ActivityHistoryFailure>) -> Self {
+        match saved_cursor {
+            Ok(Some(journal_cursor)) => Self::AfterSavedCursor { journal_cursor },
+            Ok(None) => Self::FirstImport,
+            Err(cursor_failure) => Self::CursorUnreadable(cursor_failure),
+        }
+    }
+
+    pub fn start_position(&self) -> JournalStartPosition {
+        match self {
+            Self::FirstImport => JournalStartPosition::FromOldestEntry,
+            Self::AfterSavedCursor { journal_cursor } => JournalStartPosition::AfterCursor {
+                journal_cursor: journal_cursor.clone(),
+            },
+            Self::CursorUnreadable(_) => JournalStartPosition::FromNewestEntry,
+        }
+    }
+
+    pub const fn journal_replay(&self) -> JournalReplay {
+        match self {
+            Self::FirstImport => JournalReplay::FirstImport,
+            Self::AfterSavedCursor { .. } => JournalReplay::AfterSavedCursor,
+            Self::CursorUnreadable(_) => JournalReplay::MissedEntriesSkipped,
+        }
+    }
+
+    pub fn into_cursor_failure(self) -> Option<ActivityHistoryFailure> {
+        match self {
+            Self::FirstImport | Self::AfterSavedCursor { .. } => None,
+            Self::CursorUnreadable(cursor_failure) => Some(cursor_failure),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,6 +80,7 @@ pub enum DetectionAlert {
     MissedDetections {
         missed_count: usize,
     },
+    MissedDetectionsUncountable,
 }
 
 pub fn plan_detection_alerts(
@@ -47,7 +95,11 @@ pub fn plan_detection_alerts(
         .iter()
         .filter(|detection_record| !signature_is_test_pattern(&detection_record.signature_name))
         .count();
-    let missed_alert = (journal_replay == JournalReplay::AfterSavedCursor && missed_count > 0)
+    let summarises_missed = match journal_replay {
+        JournalReplay::AfterSavedCursor => true,
+        JournalReplay::FirstImport | JournalReplay::MissedEntriesSkipped => false,
+    };
+    let missed_alert = (summarises_missed && missed_count > 0)
         .then_some(DetectionAlert::MissedDetections { missed_count });
     live_records
         .into_iter()
@@ -114,6 +166,20 @@ fn missed_detections_notification(missed_count: usize) -> gio::Notification {
     notification
 }
 
+fn uncountable_missed_detections_notification() -> gio::Notification {
+    let notification = gio::Notification::new(&gettext(
+        "Detections while Lazaret wasn't running can't be counted",
+    ));
+    notification.set_body(Some(&gettext(
+        "Lazaret couldn't read where it stopped following the system journal, so it only watches \
+         for new detections. Check the Detections page and the system journal for anything found \
+         while it was closed.",
+    )));
+    notification.set_priority(gio::NotificationPriority::Urgent);
+    notification.set_default_action(&format!("app.{OPEN_DETECTIONS_ACTION}"));
+    notification
+}
+
 fn live_notification_id(file_path: &Path) -> String {
     format!(
         "{APPLICATION_ID}.detection.{}",
@@ -143,6 +209,12 @@ pub fn send_detection_alerts(detection_alerts: &[DetectionAlert]) {
                 main_application.send_notification(
                     Some(MISSED_DETECTIONS_ID),
                     &missed_detections_notification(*missed_count),
+                );
+            }
+            DetectionAlert::MissedDetectionsUncountable => {
+                main_application.send_notification(
+                    Some(MISSED_DETECTIONS_ID),
+                    &uncountable_missed_detections_notification(),
                 );
             }
         });
@@ -198,6 +270,71 @@ mod detection_alerts_tests {
                 STARTED_AT,
             ),
             vec![DetectionAlert::MissedDetections { missed_count: 2 }]
+        );
+    }
+
+    fn cursor_failure() -> ActivityHistoryFailure {
+        ActivityHistoryFailure::HistoryLockUnavailable(std::io::Error::from(
+            std::io::ErrorKind::PermissionDenied,
+        ))
+    }
+
+    #[test]
+    fn a_saved_cursor_resumes_after_it_and_summarises_missed_detections() {
+        let journal_resume = JournalResume::from_saved_cursor(Ok(Some("s=1".to_owned())));
+        assert_eq!(
+            journal_resume.start_position(),
+            JournalStartPosition::AfterCursor {
+                journal_cursor: "s=1".to_owned()
+            }
+        );
+        assert_eq!(
+            journal_resume.journal_replay(),
+            JournalReplay::AfterSavedCursor
+        );
+        assert!(journal_resume.into_cursor_failure().is_none());
+    }
+
+    #[test]
+    fn no_saved_cursor_imports_the_whole_journal_quietly() {
+        let journal_resume = JournalResume::from_saved_cursor(Ok(None));
+        assert_eq!(
+            journal_resume.start_position(),
+            JournalStartPosition::FromOldestEntry
+        );
+        assert_eq!(journal_resume.journal_replay(), JournalReplay::FirstImport);
+    }
+
+    #[test]
+    fn an_unreadable_cursor_follows_new_entries_and_warns_instead_of_replaying() {
+        let journal_resume = JournalResume::from_saved_cursor(Err(cursor_failure()));
+        assert_eq!(
+            journal_resume.start_position(),
+            JournalStartPosition::FromNewestEntry
+        );
+        assert_eq!(
+            journal_resume.journal_replay(),
+            JournalReplay::MissedEntriesSkipped
+        );
+        assert!(matches!(
+            journal_resume.into_cursor_failure(),
+            Some(ActivityHistoryFailure::HistoryLockUnavailable(_))
+        ));
+    }
+
+    #[test]
+    fn live_detections_still_alert_after_an_unreadable_cursor() {
+        assert_eq!(
+            plan_detection_alerts(
+                &[detection_record(
+                    STARTED_AT + jiff::SignedDuration::from_secs(5),
+                    "Win.Test-1"
+                )],
+                JournalReplay::MissedEntriesSkipped,
+                STARTED_AT,
+            )
+            .len(),
+            1
         );
     }
 

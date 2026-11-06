@@ -25,7 +25,13 @@ use crate::{
         signature_update_run::signature_update_session::{
             LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
         },
-        trusted_detections_page::trust_list_contents::TrustListContents,
+        trusted_detections_page::{
+            trust_list_contents::{
+                AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListContents,
+                TrustListReading,
+            },
+            trusted_detections_component::trust_list_failure_text,
+        },
     },
     shared_widgets::step_timeline::timeline_step_contents::{
         EvidenceMoment, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
@@ -394,38 +400,123 @@ fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<T
     })
 }
 
-fn trust_list_step(trust_list: &TrustListContents) -> Option<TimelineStep> {
-    if trust_list.is_empty() {
-        return None;
+struct TrustListVerdict {
+    node_state: StepNodeState,
+    status_text: String,
+    evidence_rows: Vec<StepEvidenceRow>,
+}
+
+fn lazaret_list_failure_row<ListEntry>(
+    list_label: String,
+    list_reading: &LazaretListReading<ListEntry>,
+) -> Option<StepEvidenceRow> {
+    match list_reading {
+        LazaretListReading::ListRead(_) => None,
+        LazaretListReading::ListUnreadable(read_failure) => Some(evidence_row(
+            list_label,
+            trust_list_failure_text(read_failure),
+        )),
     }
-    let lazaret_entries = trust_list.lazaret_entry_count();
-    let (node_state, status_text) = if trust_list.foreign_allowlists.is_empty() {
-        (
-            StepNodeState::Completed,
-            ngettext(
-                "{count} file or detection is never reported",
-                "{count} files or detections are never reported",
-                u32::try_from(lazaret_entries).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &lazaret_entries.to_string()),
-        )
-    } else {
-        (
-            StepNodeState::NeedsReview,
-            gettext("An allowlist that Lazaret didn't write tells ClamAV to stay silent"),
-        )
-    };
-    Some(TimelineStep {
-        evidence_rows: trust_list
+}
+
+fn foreign_allowlist_evidence_row(foreign_allowlist: &ForeignAllowlistFile) -> StepEvidenceRow {
+    match &foreign_allowlist.allowlist_entries {
+        AllowlistEntries::EntriesCounted { .. } => evidence_row(
+            gettext("Other allowlist"),
+            foreign_allowlist.file_name.clone(),
+        ),
+        AllowlistEntries::FileUnreadable(read_failure) => evidence_row(
+            gettext("Other allowlist"),
+            gettext("{file}: {reason}")
+                .replace("{file}", &foreign_allowlist.file_name)
+                .replace("{reason}", &trust_list_failure_text(read_failure)),
+        ),
+    }
+}
+
+fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustListVerdict> {
+    let evidence_rows = [
+        lazaret_list_failure_row(gettext("Trusted files"), &trust_list.trusted_files),
+        lazaret_list_failure_row(
+            gettext("Ignored detections"),
+            &trust_list.ignored_signatures,
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .chain(
+        trust_list
             .foreign_allowlists
             .iter()
-            .map(|foreign_allowlist| {
-                evidence_row(
-                    gettext("Other allowlist"),
-                    foreign_allowlist.file_name.clone(),
+            .map(foreign_allowlist_evidence_row),
+    )
+    .collect();
+    if !trust_list.foreign_allowlists.is_empty() {
+        return Some(TrustListVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext(
+                "An allowlist that Lazaret didn't write tells ClamAV to stay silent",
+            ),
+            evidence_rows,
+        });
+    }
+    match (&trust_list.trusted_files, &trust_list.ignored_signatures) {
+        (
+            LazaretListReading::ListRead(trusted_files),
+            LazaretListReading::ListRead(ignored_signatures),
+        ) => {
+            let lazaret_entries = trusted_files.len() + ignored_signatures.len();
+            (lazaret_entries > 0).then(|| TrustListVerdict {
+                node_state: StepNodeState::Completed,
+                status_text: ngettext(
+                    "{count} file or detection is never reported",
+                    "{count} files or detections are never reported",
+                    u32::try_from(lazaret_entries).unwrap_or(u32::MAX),
                 )
+                .replace("{count}", &lazaret_entries.to_string()),
+                evidence_rows,
             })
-            .collect(),
+        }
+        (LazaretListReading::ListUnreadable(_), _)
+        | (LazaretListReading::ListRead(_), LazaretListReading::ListUnreadable(_)) => {
+            Some(TrustListVerdict {
+                node_state: StepNodeState::NeedsReview,
+                status_text: gettext(
+                    "Lazaret can't read its own allowlist, so it can't tell what ClamAV stays \
+                     silent about",
+                ),
+                evidence_rows,
+            })
+        }
+    }
+}
+
+fn trust_list_verdict(trust_list_reading: &TrustListReading) -> Option<TrustListVerdict> {
+    match trust_list_reading {
+        TrustListReading::ListsRead(trust_list) => trust_list_contents_verdict(trust_list),
+        TrustListReading::FolderMissing => None,
+        TrustListReading::FolderUnreadable(read_failure) => Some(TrustListVerdict {
+            node_state: StepNodeState::NeedsReview,
+            status_text: gettext(
+                "Lazaret can't read the signature folder, so it can't tell what ClamAV stays \
+                 silent about",
+            ),
+            evidence_rows: vec![evidence_row(
+                gettext("Signature folder"),
+                trust_list_failure_text(read_failure),
+            )],
+        }),
+    }
+}
+
+fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<TimelineStep> {
+    let TrustListVerdict {
+        node_state,
+        status_text,
+        evidence_rows,
+    } = trust_list_verdict(trust_list_reading)?;
+    Some(TimelineStep {
+        evidence_rows,
         action_slot: StepActionSlot::ActionOffered {
             action_label: gettext("Review"),
             chosen_action: TimelineStepAction::OpenSettingsSubpage(
@@ -1388,7 +1479,10 @@ mod protection_timeline_presentation_tests {
     use super::*;
     use crate::{
         host_services::systemd_bus::host_systemd_units::ServiceFailureKind,
-        protection_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
+        protection_page::{
+            signature_update_run::updater_exit_status::SignatureUpdaterProgram,
+            trusted_detections_page::trust_list_contents::TrustListReadFailure,
+        },
     };
 
     const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
@@ -1481,7 +1575,7 @@ mod protection_timeline_presentation_tests {
     fn healthy_evidence() -> ProtectionEvidence {
         ProtectionEvidence {
             program_trust_findings: Vec::new(),
-            trust_list: TrustListContents::default(),
+            trust_list: TrustListReading::ListsRead(empty_trust_list()),
             runtime_reductions: RuntimeReductions::NothingReduced,
             account_setting_findings: Vec::new(),
             engine_installation: EngineInstallation::VersionReported {
@@ -1824,23 +1918,79 @@ mod protection_timeline_presentation_tests {
         assert_eq!(engine_steps.len(), 3);
     }
 
-    #[test]
-    fn a_foreign_allowlist_appears_under_needs_review() {
+    fn empty_trust_list() -> TrustListContents {
+        TrustListContents {
+            trusted_files: LazaretListReading::ListRead(Vec::new()),
+            ignored_signatures: LazaretListReading::ListRead(Vec::new()),
+            foreign_allowlists: Vec::new(),
+        }
+    }
+
+    fn trust_review_steps(trust_list_reading: TrustListReading) -> Vec<TimelineStep> {
         let protection_evidence = ProtectionEvidence {
-            trust_list: TrustListContents {
-                foreign_allowlists: vec![
-                    crate::protection_page::trusted_detections_page::trust_list_contents::ForeignAllowlistFile {
-                        file_name: "local.ign2".to_owned(),
-                        entry_count: 3,
-                    },
-                ],
-                ..TrustListContents::default()
-            },
+            trust_list: trust_list_reading,
             ..healthy_evidence()
         };
-        let review_steps = idle_timeline(&protection_evidence).review_steps;
+        idle_timeline(&protection_evidence).review_steps
+    }
+
+    #[test]
+    fn a_foreign_allowlist_appears_under_needs_review() {
+        let review_steps = trust_review_steps(TrustListReading::ListsRead(TrustListContents {
+            foreign_allowlists: vec![ForeignAllowlistFile {
+                file_name: "local.ign2".to_owned(),
+                allowlist_entries: AllowlistEntries::EntriesCounted { entry_count: 3 },
+            }],
+            ..empty_trust_list()
+        }));
         assert_eq!(review_steps.len(), 1);
         assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+    }
+
+    #[test]
+    fn an_unreadable_foreign_allowlist_keeps_its_warning() {
+        let review_steps = trust_review_steps(TrustListReading::ListsRead(TrustListContents {
+            foreign_allowlists: vec![ForeignAllowlistFile {
+                file_name: "local.ign2".to_owned(),
+                allowlist_entries: AllowlistEntries::FileUnreadable(
+                    TrustListReadFailure::AccessDenied,
+                ),
+            }],
+            ..empty_trust_list()
+        }));
+        assert_eq!(review_steps.len(), 1);
+        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+        assert_eq!(
+            review_steps[0].status_text,
+            "An allowlist that Lazaret didn't write tells ClamAV to stay silent"
+        );
+    }
+
+    #[test]
+    fn an_unreadable_signature_folder_is_not_shown_as_nothing_trusted() {
+        let review_steps = trust_review_steps(TrustListReading::FolderUnreadable(
+            TrustListReadFailure::AccessDenied,
+        ));
+        assert_eq!(review_steps.len(), 1);
+        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+    }
+
+    #[test]
+    fn an_unreadable_lazaret_list_needs_review() {
+        let review_steps = trust_review_steps(TrustListReading::ListsRead(TrustListContents {
+            ignored_signatures: LazaretListReading::ListUnreadable(
+                TrustListReadFailure::AccessDenied,
+            ),
+            ..empty_trust_list()
+        }));
+        assert_eq!(review_steps.len(), 1);
+        assert_eq!(review_steps[0].node_state, StepNodeState::NeedsReview);
+    }
+
+    #[test]
+    fn empty_readable_trust_lists_add_no_step() {
+        assert!(trust_review_steps(TrustListReading::ListsRead(empty_trust_list())).is_empty());
+        assert!(trust_review_steps(TrustListReading::FolderMissing).is_empty());
     }
 
     #[test]

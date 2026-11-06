@@ -20,6 +20,7 @@ const MESSAGE_FIELD: &str = "MESSAGE";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JournalStartPosition {
     FromOldestEntry,
+    FromNewestEntry,
     AfterCursor { journal_cursor: String },
 }
 
@@ -98,6 +99,10 @@ fn opened_detection_journal(
         })?;
     match start_position {
         JournalStartPosition::FromOldestEntry => journal.seek_head()?,
+        JournalStartPosition::FromNewestEntry => {
+            journal.seek_tail()?;
+            journal.previous()?;
+        }
         JournalStartPosition::AfterCursor { journal_cursor } => {
             journal.seek_cursor(journal_cursor.as_str())?;
         }
@@ -147,7 +152,8 @@ impl Iterator for FollowedDetections {
                         self.follower_state = FollowerState::Following {
                             journal,
                             skipped_resume_cursor: match start_position {
-                                JournalStartPosition::FromOldestEntry => {
+                                JournalStartPosition::FromOldestEntry
+                                | JournalStartPosition::FromNewestEntry => {
                                     SkippedResumeCursor::NothingToSkip
                                 }
                                 JournalStartPosition::AfterCursor { journal_cursor } => {

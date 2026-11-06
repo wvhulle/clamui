@@ -6,7 +6,6 @@ use relm4::{
 
 use crate::{
     host_services::{
-        clamav_programs::database_directory_status::configured_database_directory,
         desktop::locale_formatting::{byte_size_text, exact_local_time_text},
         settings_helper::{
             helper_audit_records::{
@@ -18,7 +17,8 @@ use crate::{
     },
     protection_page::trusted_detections_page::{
         trust_list_contents::{
-            ForeignAllowlistFile, TrustListContents, TrustedFileEntry, read_trust_list_contents,
+            AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListReadFailure,
+            TrustListReading, TrustedFileEntry, read_configured_trust_list,
         },
         trust_list_row::{TrustListRow, TrustListRowOutput, TrustRemoval},
     },
@@ -27,19 +27,52 @@ use crate::{
 
 const AUDIT_ENTRY_LIMIT: usize = 500;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TrustedDetectionsSnapshot {
-    pub trust_list: TrustListContents,
+    pub trust_list: TrustListReading,
     pub audit_entries: Vec<HelperAuditEntry>,
 }
 
+#[derive(Clone, Debug)]
+enum TrustedDetectionsState {
+    SnapshotLoading,
+    SnapshotShown(TrustedDetectionsSnapshot),
+}
+
+impl TrustedDetectionsState {
+    fn shows_other_allowlists(&self) -> bool {
+        match self {
+            Self::SnapshotLoading => false,
+            Self::SnapshotShown(snapshot) => match &snapshot.trust_list {
+                TrustListReading::ListsRead(trust_list) => {
+                    !trust_list.foreign_allowlists.is_empty()
+                }
+                TrustListReading::FolderMissing => false,
+                TrustListReading::FolderUnreadable(_) => true,
+            },
+        }
+    }
+}
+
 pub async fn load_trusted_detections() -> TrustedDetectionsSnapshot {
-    tokio::task::spawn_blocking(|| TrustedDetectionsSnapshot {
-        trust_list: read_trust_list_contents(&configured_database_directory()),
-        audit_entries: newest_helper_audit_entries(AUDIT_ENTRY_LIMIT).unwrap_or_default(),
-    })
-    .await
-    .unwrap_or_default()
+    TrustedDetectionsSnapshot {
+        trust_list: read_configured_trust_list().await,
+        audit_entries: tokio::task::spawn_blocking(|| {
+            newest_helper_audit_entries(AUDIT_ENTRY_LIMIT).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default(),
+    }
+}
+
+pub fn trust_list_failure_text(read_failure: &TrustListReadFailure) -> String {
+    match read_failure {
+        TrustListReadFailure::AccessDenied => gettext("Permission denied"),
+        TrustListReadFailure::OtherReadFailure { failure_kind } => {
+            gettext("Reading failed: {reason}").replace("{reason}", &failure_kind.to_string())
+        }
+        TrustListReadFailure::ReadingTaskAborted => gettext("Reading stopped before it finished"),
+    }
 }
 
 fn added_text(audit_entries: &[HelperAuditEntry], adding_action: &AuditedAction) -> String {
@@ -56,7 +89,7 @@ fn added_text(audit_entries: &[HelperAuditEntry], adding_action: &AuditedAction)
 }
 
 pub struct TrustedDetectionsPage {
-    snapshot: TrustedDetectionsSnapshot,
+    trusted_detections_state: TrustedDetectionsState,
     trusted_file_rows: FactoryVecDeque<TrustListRow>,
     ignored_signature_rows: FactoryVecDeque<TrustListRow>,
     foreign_allowlist_rows: FactoryVecDeque<TrustListRow>,
@@ -138,12 +171,29 @@ fn ignored_signature_row(signature_name: &str, audit_entries: &[HelperAuditEntry
 fn foreign_allowlist_row(foreign_allowlist: &ForeignAllowlistFile) -> TrustListRow {
     TrustListRow {
         row_title: foreign_allowlist.file_name.clone(),
-        row_subtitle: ngettext(
-            "{count} entry, not added through Lazaret",
-            "{count} entries, not added through Lazaret",
-            u32::try_from(foreign_allowlist.entry_count).unwrap_or(u32::MAX),
-        )
-        .replace("{count}", &foreign_allowlist.entry_count.to_string()),
+        row_subtitle: match &foreign_allowlist.allowlist_entries {
+            AllowlistEntries::EntriesCounted { entry_count } => ngettext(
+                "{count} entry, not added through Lazaret",
+                "{count} entries, not added through Lazaret",
+                u32::try_from(*entry_count).unwrap_or(u32::MAX),
+            )
+            .replace("{count}", &entry_count.to_string()),
+            AllowlistEntries::FileUnreadable(read_failure) => {
+                gettext("Entries can't be counted ({reason}), not added through Lazaret")
+                    .replace("{reason}", &trust_list_failure_text(read_failure))
+            }
+        },
+        shows_hash: false,
+        needs_attention: true,
+        dimmed: false,
+        trust_removal: TrustRemoval::NotRemovableHere,
+    }
+}
+
+fn unreadable_row(row_title: String, read_failure: &TrustListReadFailure) -> TrustListRow {
+    TrustListRow {
+        row_title,
+        row_subtitle: trust_list_failure_text(read_failure),
         shows_hash: false,
         needs_attention: true,
         dimmed: false,
@@ -159,6 +209,71 @@ fn rows_or_empty_notice(listed_rows: Vec<TrustListRow>, empty_text: String) -> V
     }
 }
 
+fn lazaret_list_rows<ListEntry>(
+    list_reading: &LazaretListReading<ListEntry>,
+    entry_row: impl Fn(&ListEntry) -> TrustListRow,
+    empty_text: String,
+) -> Vec<TrustListRow> {
+    match list_reading {
+        LazaretListReading::ListRead(list_entries) => {
+            rows_or_empty_notice(list_entries.iter().map(entry_row).collect(), empty_text)
+        }
+        LazaretListReading::ListUnreadable(read_failure) => vec![unreadable_row(
+            gettext("Lazaret can't read this list"),
+            read_failure,
+        )],
+    }
+}
+
+struct TrustListGroupRows {
+    trusted_file_rows: Vec<TrustListRow>,
+    ignored_signature_rows: Vec<TrustListRow>,
+    foreign_allowlist_rows: Vec<TrustListRow>,
+}
+
+fn trust_list_group_rows(snapshot: &TrustedDetectionsSnapshot) -> TrustListGroupRows {
+    let audit_entries = &snapshot.audit_entries;
+    match &snapshot.trust_list {
+        TrustListReading::ListsRead(trust_list) => TrustListGroupRows {
+            trusted_file_rows: lazaret_list_rows(
+                &trust_list.trusted_files,
+                |trusted_file| trusted_file_row(trusted_file, audit_entries),
+                gettext("No trusted files"),
+            ),
+            ignored_signature_rows: lazaret_list_rows(
+                &trust_list.ignored_signatures,
+                |signature_name| ignored_signature_row(signature_name, audit_entries),
+                gettext("No ignored detections"),
+            ),
+            foreign_allowlist_rows: trust_list
+                .foreign_allowlists
+                .iter()
+                .map(foreign_allowlist_row)
+                .collect(),
+        },
+        TrustListReading::FolderMissing => TrustListGroupRows {
+            trusted_file_rows: vec![TrustListRow::empty_list(gettext("No trusted files"))],
+            ignored_signature_rows: vec![TrustListRow::empty_list(gettext(
+                "No ignored detections",
+            ))],
+            foreign_allowlist_rows: Vec::new(),
+        },
+        TrustListReading::FolderUnreadable(read_failure) => {
+            let folder_row = || {
+                unreadable_row(
+                    gettext("Lazaret can't read the signature folder"),
+                    read_failure,
+                )
+            };
+            TrustListGroupRows {
+                trusted_file_rows: vec![folder_row()],
+                ignored_signature_rows: vec![folder_row()],
+                foreign_allowlist_rows: vec![folder_row()],
+            }
+        }
+    }
+}
+
 fn replace_rows(shown_rows: &mut FactoryVecDeque<TrustListRow>, listed_rows: Vec<TrustListRow>) {
     let mut row_guard = shown_rows.guard();
     row_guard.clear();
@@ -169,41 +284,15 @@ fn replace_rows(shown_rows: &mut FactoryVecDeque<TrustListRow>, listed_rows: Vec
 
 impl TrustedDetectionsPage {
     fn show_snapshot(&mut self, snapshot: TrustedDetectionsSnapshot) {
-        let TrustedDetectionsSnapshot {
-            trust_list,
-            audit_entries,
-        } = &snapshot;
-        replace_rows(
-            &mut self.trusted_file_rows,
-            rows_or_empty_notice(
-                trust_list
-                    .trusted_files
-                    .iter()
-                    .map(|trusted_file| trusted_file_row(trusted_file, audit_entries))
-                    .collect(),
-                gettext("No trusted files"),
-            ),
-        );
-        replace_rows(
-            &mut self.ignored_signature_rows,
-            rows_or_empty_notice(
-                trust_list
-                    .ignored_signatures
-                    .iter()
-                    .map(|signature_name| ignored_signature_row(signature_name, audit_entries))
-                    .collect(),
-                gettext("No ignored detections"),
-            ),
-        );
-        replace_rows(
-            &mut self.foreign_allowlist_rows,
-            trust_list
-                .foreign_allowlists
-                .iter()
-                .map(foreign_allowlist_row)
-                .collect(),
-        );
-        self.snapshot = snapshot;
+        let TrustListGroupRows {
+            trusted_file_rows,
+            ignored_signature_rows,
+            foreign_allowlist_rows,
+        } = trust_list_group_rows(&snapshot);
+        replace_rows(&mut self.trusted_file_rows, trusted_file_rows);
+        replace_rows(&mut self.ignored_signature_rows, ignored_signature_rows);
+        replace_rows(&mut self.foreign_allowlist_rows, foreign_allowlist_rows);
+        self.trusted_detections_state = TrustedDetectionsState::SnapshotShown(snapshot);
     }
 
     fn reload_snapshot(sender: &ComponentSender<Self>) {
@@ -256,7 +345,7 @@ impl Component for TrustedDetectionsPage {
                          Check that you or your administrator added them on purpose.",
                     )),
                     #[watch]
-                    set_visible: !model.snapshot.trust_list.foreign_allowlists.is_empty(),
+                    set_visible: model.trusted_detections_state.shows_other_allowlists(),
                     #[local_ref]
                     foreign_allowlist_list -> gtk::ListBox {},
                 },
@@ -270,7 +359,7 @@ impl Component for TrustedDetectionsPage {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let model = Self {
-            snapshot: TrustedDetectionsSnapshot::default(),
+            trusted_detections_state: TrustedDetectionsState::SnapshotLoading,
             trusted_file_rows: trust_list_rows(&sender),
             ignored_signature_rows: trust_list_rows(&sender),
             foreign_allowlist_rows: trust_list_rows(&sender),

@@ -1,12 +1,34 @@
-use std::{fs, path::Path};
+use std::{fs, io, path::Path};
 
 use bytesize::ByteSize;
 
-use crate::host_services::clamav_scanner::scanner_output_parser::sanitize_scanner_line;
+use crate::host_services::{
+    clamav_programs::database_directory_status::configured_database_directory,
+    clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+};
 
 pub const TRUSTED_FILES_NAME: &str = "lazaret-local.sfp";
 pub const IGNORED_SIGNATURES_NAME: &str = "lazaret-local.ign2";
 const ALLOWLIST_EXTENSIONS: [&str; 4] = ["fp", "sfp", "ign", "ign2"];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum TrustListReadFailure {
+    #[error("permission denied")]
+    AccessDenied,
+    #[error("reading failed: {failure_kind}")]
+    OtherReadFailure { failure_kind: io::ErrorKind },
+    #[error("the task reading the trust lists stopped before it finished")]
+    ReadingTaskAborted,
+}
+
+impl From<io::Error> for TrustListReadFailure {
+    fn from(read_failure: io::Error) -> Self {
+        match read_failure.kind() {
+            io::ErrorKind::PermissionDenied => Self::AccessDenied,
+            failure_kind => Self::OtherReadFailure { failure_kind },
+        }
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrustedFileEntry {
@@ -15,26 +37,35 @@ pub struct TrustedFileEntry {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ForeignAllowlistFile {
-    pub file_name: String,
-    pub entry_count: u64,
+pub enum AllowlistEntries {
+    EntriesCounted { entry_count: u64 },
+    FileUnreadable(TrustListReadFailure),
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ForeignAllowlistFile {
+    pub file_name: String,
+    pub allowlist_entries: AllowlistEntries,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LazaretListReading<ListEntry> {
+    ListRead(Vec<ListEntry>),
+    ListUnreadable(TrustListReadFailure),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrustListContents {
-    pub trusted_files: Vec<TrustedFileEntry>,
-    pub ignored_signatures: Vec<String>,
+    pub trusted_files: LazaretListReading<TrustedFileEntry>,
+    pub ignored_signatures: LazaretListReading<String>,
     pub foreign_allowlists: Vec<ForeignAllowlistFile>,
 }
 
-impl TrustListContents {
-    pub fn lazaret_entry_count(&self) -> usize {
-        self.trusted_files.len() + self.ignored_signatures.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.lazaret_entry_count() == 0 && self.foreign_allowlists.is_empty()
-    }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TrustListReading {
+    ListsRead(TrustListContents),
+    FolderMissing,
+    FolderUnreadable(TrustListReadFailure),
 }
 
 fn list_lines(list_text: &str) -> impl Iterator<Item = &str> {
@@ -73,40 +104,79 @@ fn is_foreign_allowlist(file_name: &str) -> bool {
             .is_some_and(|file_extension| ALLOWLIST_EXTENSIONS.contains(&file_extension))
 }
 
-fn foreign_allowlists(database_directory: &Path) -> Vec<ForeignAllowlistFile> {
-    let mut foreign_files = fs::read_dir(database_directory)
-        .map(|directory_entries| {
-            directory_entries
-                .filter_map(Result::ok)
-                .filter_map(|directory_entry| {
-                    let file_name = directory_entry.file_name().to_string_lossy().into_owned();
-                    is_foreign_allowlist(&file_name).then(|| ForeignAllowlistFile {
-                        entry_count: fs::read_to_string(directory_entry.path())
-                            .map_or(0, |list_text| list_lines(&list_text).count() as u64),
-                        file_name: sanitize_scanner_line(&file_name),
-                    })
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    foreign_files
-        .sort_by(|first_file, second_file| first_file.file_name.cmp(&second_file.file_name));
-    foreign_files
+fn read_list_text(list_path: &Path) -> Result<String, io::Error> {
+    fs::read(list_path).map(|list_bytes| String::from_utf8_lossy(&list_bytes).into_owned())
 }
 
-pub fn read_trust_list_contents(database_directory: &Path) -> TrustListContents {
-    let read_list = |list_name: &str| {
-        fs::read_to_string(database_directory.join(list_name)).unwrap_or_default()
-    };
-    TrustListContents {
-        trusted_files: parse_trusted_files(&read_list(TRUSTED_FILES_NAME)),
-        ignored_signatures: parse_ignored_signatures(&read_list(IGNORED_SIGNATURES_NAME)),
-        foreign_allowlists: foreign_allowlists(database_directory),
+fn foreign_allowlist_file(directory_entry: &fs::DirEntry) -> Option<ForeignAllowlistFile> {
+    let file_name = directory_entry.file_name().to_string_lossy().into_owned();
+    is_foreign_allowlist(&file_name).then(|| ForeignAllowlistFile {
+        allowlist_entries: match read_list_text(&directory_entry.path()) {
+            Ok(list_text) => AllowlistEntries::EntriesCounted {
+                entry_count: list_lines(&list_text).count() as u64,
+            },
+            Err(read_failure) => AllowlistEntries::FileUnreadable(read_failure.into()),
+        },
+        file_name: sanitize_scanner_line(&file_name),
+    })
+}
+
+fn foreign_allowlists(database_directory: &Path) -> Result<Vec<ForeignAllowlistFile>, io::Error> {
+    let directory_entries = fs::read_dir(database_directory)?.collect::<Result<Vec<_>, _>>()?;
+    let mut foreign_files = directory_entries
+        .iter()
+        .filter_map(foreign_allowlist_file)
+        .collect::<Vec<_>>();
+    foreign_files
+        .sort_by(|first_file, second_file| first_file.file_name.cmp(&second_file.file_name));
+    Ok(foreign_files)
+}
+
+fn read_lazaret_list<ListEntry>(
+    list_path: &Path,
+    parse_list: fn(&str) -> Vec<ListEntry>,
+) -> LazaretListReading<ListEntry> {
+    match read_list_text(list_path) {
+        Ok(list_text) => LazaretListReading::ListRead(parse_list(&list_text)),
+        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => {
+            LazaretListReading::ListRead(Vec::new())
+        }
+        Err(read_failure) => LazaretListReading::ListUnreadable(read_failure.into()),
     }
+}
+
+pub fn read_trust_list(database_directory: &Path) -> TrustListReading {
+    match foreign_allowlists(database_directory) {
+        Ok(foreign_allowlists) => TrustListReading::ListsRead(TrustListContents {
+            trusted_files: read_lazaret_list(
+                &database_directory.join(TRUSTED_FILES_NAME),
+                parse_trusted_files,
+            ),
+            ignored_signatures: read_lazaret_list(
+                &database_directory.join(IGNORED_SIGNATURES_NAME),
+                parse_ignored_signatures,
+            ),
+            foreign_allowlists,
+        }),
+        Err(folder_failure) if folder_failure.kind() == io::ErrorKind::NotFound => {
+            TrustListReading::FolderMissing
+        }
+        Err(folder_failure) => TrustListReading::FolderUnreadable(folder_failure.into()),
+    }
+}
+
+pub async fn read_configured_trust_list() -> TrustListReading {
+    tokio::task::spawn_blocking(|| read_trust_list(&configured_database_directory()))
+        .await
+        .unwrap_or(TrustListReading::FolderUnreadable(
+            TrustListReadFailure::ReadingTaskAborted,
+        ))
 }
 
 #[cfg(test)]
 mod trust_list_contents_tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use super::*;
 
     #[test]
@@ -125,18 +195,80 @@ mod trust_list_contents_tests {
         fs::write(database_directory.path().join("local.ign2"), "A\nB\n").unwrap();
         fs::write(database_directory.path().join("main.cvd"), "signatures").unwrap();
         assert_eq!(
-            read_trust_list_contents(database_directory.path()),
-            TrustListContents {
-                trusted_files: vec![TrustedFileEntry {
+            read_trust_list(database_directory.path()),
+            TrustListReading::ListsRead(TrustListContents {
+                trusted_files: LazaretListReading::ListRead(vec![TrustedFileEntry {
                     sha256_hex: "ab12".to_owned(),
                     file_size: ByteSize::b(68),
-                }],
-                ignored_signatures: vec!["Win.Test.EICAR_HDB-1".to_owned()],
+                }]),
+                ignored_signatures: LazaretListReading::ListRead(vec![
+                    "Win.Test.EICAR_HDB-1".to_owned()
+                ]),
                 foreign_allowlists: vec![ForeignAllowlistFile {
                     file_name: "local.ign2".to_owned(),
-                    entry_count: 2,
+                    allowlist_entries: AllowlistEntries::EntriesCounted { entry_count: 2 },
                 }],
-            }
+            })
+        );
+    }
+
+    #[test]
+    fn missing_lazaret_lists_are_read_as_empty() {
+        let database_directory = tempfile::tempdir().unwrap();
+        assert_eq!(
+            read_trust_list(database_directory.path()),
+            TrustListReading::ListsRead(TrustListContents {
+                trusted_files: LazaretListReading::ListRead(Vec::new()),
+                ignored_signatures: LazaretListReading::ListRead(Vec::new()),
+                foreign_allowlists: Vec::new(),
+            })
+        );
+    }
+
+    #[test]
+    fn unreadable_lists_are_reported_instead_of_counted_as_empty() {
+        let database_directory = tempfile::tempdir().unwrap();
+        fs::create_dir(database_directory.path().join(TRUSTED_FILES_NAME)).unwrap();
+        fs::create_dir(database_directory.path().join("local.ign2")).unwrap();
+        let TrustListReading::ListsRead(trust_list_contents) =
+            read_trust_list(database_directory.path())
+        else {
+            panic!("the signature folder itself is readable");
+        };
+        assert!(matches!(
+            trust_list_contents.trusted_files,
+            LazaretListReading::ListUnreadable(TrustListReadFailure::OtherReadFailure { .. })
+        ));
+        assert!(matches!(
+            trust_list_contents.foreign_allowlists.as_slice(),
+            [ForeignAllowlistFile {
+                allowlist_entries: AllowlistEntries::FileUnreadable(_),
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn an_unlistable_signature_folder_is_reported_as_unreadable() {
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        let database_directory = tempfile::tempdir().unwrap();
+        fs::set_permissions(database_directory.path(), fs::Permissions::from_mode(0o300)).unwrap();
+        let trust_list_reading = read_trust_list(database_directory.path());
+        fs::set_permissions(database_directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(
+            trust_list_reading,
+            TrustListReading::FolderUnreadable(TrustListReadFailure::AccessDenied)
+        );
+    }
+
+    #[test]
+    fn a_missing_signature_folder_is_reported_as_missing() {
+        let database_directory = tempfile::tempdir().unwrap();
+        assert_eq!(
+            read_trust_list(&database_directory.path().join("absent")),
+            TrustListReading::FolderMissing
         );
     }
 }
