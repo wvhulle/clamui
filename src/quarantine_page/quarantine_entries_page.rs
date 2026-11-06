@@ -11,12 +11,17 @@ use relm4::{
 use crate::{
     application_window::application_actions::PreferencesPageAction,
     host_services::{
-        clamav_programs::false_positive_submission::{
-            FalsePositiveReport, SubmissionOutcome, SubmittedContent, submission_outcome_text,
-            submit_false_positive,
+        clamav_programs::{
+            false_positive_submission::{
+                FalsePositiveReport, SubmissionOutcome, SubmittedContent, submission_outcome_text,
+                submit_false_positive,
+            },
+            trusted_program_lookup::ProgramRefusal,
         },
         clamav_scanner::{
-            content_verdict::{ContentVerdict, scan_content_with_current_signatures},
+            content_verdict::{
+                ContentVerdict, VerdictFailure, scan_content_with_current_signatures,
+            },
             scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         },
         desktop::locale_formatting::byte_size_text,
@@ -40,6 +45,7 @@ use crate::{
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
         page_widget_templates::ClampedPage,
+        scanner_exit_text::abnormal_scanner_exit_text,
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -173,9 +179,48 @@ pub enum QuarantineEntriesPageCommand {
 async fn verdict_for_entry(quarantine_vault: &QuarantineVault, entry_id: i64) -> ContentVerdict {
     match quarantine_vault.read_payload_plaintext(entry_id).await {
         Ok(payload_plaintext) => scan_content_with_current_signatures(payload_plaintext).await,
-        Err(read_failure) => ContentVerdict::VerdictUnavailable {
-            failure_text: read_failure.to_string(),
-        },
+        Err(read_failure) => VerdictFailure::PayloadUnreadable(read_failure).into(),
+    }
+}
+
+fn verdict_failure_text(verdict_failure: &VerdictFailure) -> String {
+    match verdict_failure {
+        VerdictFailure::ScannerProgramRefused(ProgramRefusal::ProgramMissing) => {
+            gettext("the scanner program is not installed")
+        }
+        VerdictFailure::ScannerProgramRefused(ProgramRefusal::ProgramReplaceable {
+            candidate_path,
+            replaceable_path,
+        }) => gettext(
+            "the scanner program at {program} can be replaced by your account through {path}",
+        )
+        .replace(
+            "{program}",
+            &sanitize_scanner_line(&candidate_path.to_string_lossy()),
+        )
+        .replace(
+            "{path}",
+            &sanitize_scanner_line(&replaceable_path.to_string_lossy()),
+        ),
+        VerdictFailure::ContentPipeFailed(pipe_failure) => {
+            gettext("the file could not be passed to the scanner: {error}")
+                .replace("{error}", &pipe_failure.to_string())
+        }
+        VerdictFailure::ScannerSpawnFailed(spawn_failure) => {
+            gettext("the scanner could not be started: {error}")
+                .replace("{error}", &spawn_failure.to_string())
+        }
+        VerdictFailure::VerdictTimedOut => gettext("the scan took too long"),
+        VerdictFailure::ScannerReported { scanner_message } => {
+            sanitize_scanner_line(scanner_message)
+        }
+        VerdictFailure::ScannerExitedAbnormally(abnormal_exit) => {
+            abnormal_scanner_exit_text(abnormal_exit)
+        }
+        VerdictFailure::PayloadUnreadable(read_failure) => {
+            gettext("the quarantined copy could not be read: {error}")
+                .replace("{error}", &read_failure.to_string())
+        }
     }
 }
 
@@ -205,12 +250,12 @@ fn restore_confirmation_text(content_verdict: &ContentVerdict) -> RestoreConfirm
             confirm_label: gettext("Restore Anyway"),
             restores_detected_file: true,
         },
-        ContentVerdict::VerdictUnavailable { failure_text } => RestoreConfirmationText {
+        ContentVerdict::VerdictUnavailable(verdict_failure) => RestoreConfirmationText {
             heading: gettext("Restore an Unchecked File?"),
             verdict_text: gettext(
                 "The file could not be checked again before restoring it: {error}",
             )
-            .replace("{error}", failure_text),
+            .replace("{error}", &verdict_failure_text(verdict_failure)),
             confirm_label: gettext("Restore Anyway"),
             restores_detected_file: true,
         },
@@ -842,8 +887,10 @@ impl Component for QuarantineEntriesPage {
                     .recheck_states
                     .values()
                     .filter(|recheck_state| {
-                        **recheck_state
-                            == RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected)
+                        matches!(
+                            recheck_state,
+                            RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected)
+                        )
                     })
                     .count();
                 self.toaster

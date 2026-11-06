@@ -8,12 +8,76 @@ const SYSTEMD_UNIT_FIELD: &str = "_SYSTEMD_UNIT";
 const MANAGER_UNIT_FIELD: &str = "UNIT";
 const SENDER_PROCESS_FIELD: &str = "_PID";
 const SERVICE_MANAGER_PROCESS: &str = "1";
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+const UNIT_DEACTIVATED_MESSAGE: &str = "7ad2d189f7e94e70a38c781354912448";
+const PROCESS_EXITED_MESSAGE: &str = "98e322203f7a4ed290d09fe03c09fe15";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum JournalProcessExit {
+    ExitedWithStatus {
+        exit_status: i32,
+    },
+    KilledBySignal {
+        signal_name: String,
+    },
+    DumpedCore {
+        signal_name: String,
+    },
+    UnrecognizedExit {
+        exit_code_field: String,
+        exit_status_field: String,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UnitJournalEvent {
+    UnitDeactivated,
+    MainProcessExited(JournalProcessExit),
+    UnrecognizedMessage { message_id: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManagerUnitRecord {
     pub recorded_at: Timestamp,
-    pub message_id: String,
-    pub exit_code: String,
-    pub exit_status: String,
+    pub unit_journal_event: UnitJournalEvent,
+}
+
+fn classify_process_exit(exit_code_field: &str, exit_status_field: &str) -> JournalProcessExit {
+    match exit_code_field {
+        "exited" => exit_status_field.parse().map_or_else(
+            |_unparsable_status| JournalProcessExit::UnrecognizedExit {
+                exit_code_field: exit_code_field.to_owned(),
+                exit_status_field: exit_status_field.to_owned(),
+            },
+            |exit_status| JournalProcessExit::ExitedWithStatus { exit_status },
+        ),
+        "killed" => JournalProcessExit::KilledBySignal {
+            signal_name: exit_status_field.to_owned(),
+        },
+        "dumped" => JournalProcessExit::DumpedCore {
+            signal_name: exit_status_field.to_owned(),
+        },
+        unrecognized_code => JournalProcessExit::UnrecognizedExit {
+            exit_code_field: unrecognized_code.to_owned(),
+            exit_status_field: exit_status_field.to_owned(),
+        },
+    }
+}
+
+pub fn classify_unit_journal_event(
+    message_id: &str,
+    exit_code_field: &str,
+    exit_status_field: &str,
+) -> UnitJournalEvent {
+    match message_id {
+        UNIT_DEACTIVATED_MESSAGE => UnitJournalEvent::UnitDeactivated,
+        PROCESS_EXITED_MESSAGE => UnitJournalEvent::MainProcessExited(classify_process_exit(
+            exit_code_field,
+            exit_status_field,
+        )),
+        unrecognized_id => UnitJournalEvent::UnrecognizedMessage {
+            message_id: unrecognized_id.to_owned(),
+        },
+    }
 }
 
 pub fn open_system_journal() -> systemd::Result<Journal> {
@@ -38,9 +102,11 @@ pub fn journal_field_text(journal: &mut Journal, field_name: &str) -> systemd::R
 fn manager_record_at_position(journal: &mut Journal) -> systemd::Result<ManagerUnitRecord> {
     Ok(ManagerUnitRecord {
         recorded_at: Timestamp::try_from(journal.timestamp()?).map_err(io::Error::other)?,
-        message_id: journal_field_text(journal, "MESSAGE_ID")?,
-        exit_code: journal_field_text(journal, "EXIT_CODE")?,
-        exit_status: journal_field_text(journal, "EXIT_STATUS")?,
+        unit_journal_event: classify_unit_journal_event(
+            &journal_field_text(journal, "MESSAGE_ID")?,
+            &journal_field_text(journal, "EXIT_CODE")?,
+            &journal_field_text(journal, "EXIT_STATUS")?,
+        ),
     })
 }
 
@@ -125,6 +191,56 @@ pub fn appended_unit_entries(service_units: &[&str]) -> impl Iterator<Item = ()>
 #[cfg(test)]
 mod unit_journal_reader_tests {
     use super::*;
+
+    #[test]
+    fn manager_messages_become_typed_unit_events() {
+        assert_eq!(
+            classify_unit_journal_event(UNIT_DEACTIVATED_MESSAGE, "", ""),
+            UnitJournalEvent::UnitDeactivated
+        );
+        assert_eq!(
+            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "exited", "1"),
+            UnitJournalEvent::MainProcessExited(JournalProcessExit::ExitedWithStatus {
+                exit_status: 1
+            })
+        );
+        assert_eq!(
+            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "killed", "TERM"),
+            UnitJournalEvent::MainProcessExited(JournalProcessExit::KilledBySignal {
+                signal_name: "TERM".to_owned()
+            })
+        );
+        assert_eq!(
+            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "dumped", "SEGV"),
+            UnitJournalEvent::MainProcessExited(JournalProcessExit::DumpedCore {
+                signal_name: "SEGV".to_owned()
+            })
+        );
+    }
+
+    #[test]
+    fn unrecognized_journal_values_keep_their_raw_text() {
+        assert_eq!(
+            classify_unit_journal_event("0123456789abcdef", "", ""),
+            UnitJournalEvent::UnrecognizedMessage {
+                message_id: "0123456789abcdef".to_owned()
+            }
+        );
+        assert_eq!(
+            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "trapped", "TRAP"),
+            UnitJournalEvent::MainProcessExited(JournalProcessExit::UnrecognizedExit {
+                exit_code_field: "trapped".to_owned(),
+                exit_status_field: "TRAP".to_owned()
+            })
+        );
+        assert_eq!(
+            classify_unit_journal_event(PROCESS_EXITED_MESSAGE, "exited", "not-a-number"),
+            UnitJournalEvent::MainProcessExited(JournalProcessExit::UnrecognizedExit {
+                exit_code_field: "exited".to_owned(),
+                exit_status_field: "not-a-number".to_owned()
+            })
+        );
+    }
 
     #[test]
     #[ignore = "reads the real host journal"]

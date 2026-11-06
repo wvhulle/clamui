@@ -1,6 +1,9 @@
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf};
 
-use crate::host_services::clamav_scanner::scanner_command_builder::ScannerBackend;
+use crate::host_services::clamav_scanner::{
+    scanner_command_builder::ScannerBackend,
+    scanner_exit_classification::{AbnormalScannerExit, ScannerExit},
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreatIdentity {
@@ -58,7 +61,7 @@ impl From<ReportedSignatureMatch> for DetectedThreat {
 pub enum ScanFailureReason {
     NoFilesScanned,
     ScannerReported { scanner_message: String },
-    UnexplainedScannerFailure { exit_code: i32 },
+    ScannerExitedAbnormally(AbnormalScannerExit),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -96,7 +99,7 @@ pub enum ThreatSeverity {
 pub struct ScannerTranscript<'transcript> {
     pub report_text: &'transcript str,
     pub diagnostic_text: &'transcript str,
-    pub exit_code: i32,
+    pub scanner_exit: ScannerExit,
     pub detected_threats: &'transcript [DetectedThreat],
 }
 
@@ -108,6 +111,7 @@ struct ScannerWarningEvidence {
 }
 
 const ON_ACCESS_BLOCK_CATEGORY: &str = "On-access";
+const SCANNER_ERROR_EXIT_CODE: i32 = 2;
 const ACCESS_FAILURE_PREFIXES: &[&[u8]] =
     &[b"ERROR: Can't access file ", b"WARNING: Can't open file "];
 const ACCESS_FAILURE_MARKERS: &[&[u8]] = &[
@@ -567,11 +571,11 @@ fn inaccessible_or_warning_notice(
     }
 }
 
-fn scanner_failure_reason(
+fn scanner_reported_message<'transcript>(
     scanner_backend: ScannerBackend,
-    scanner_transcript: &ScannerTranscript<'_>,
-    warning_evidence: &ScannerWarningEvidence,
-) -> ScanFailureReason {
+    scanner_transcript: &ScannerTranscript<'transcript>,
+    warning_evidence: &'transcript ScannerWarningEvidence,
+) -> Option<&'transcript str> {
     let daemon_report_line = || {
         (scanner_backend == ScannerBackend::ClamdDaemon)
             .then(|| {
@@ -588,14 +592,24 @@ fn scanner_failure_reason(
     nonempty_trimmed_text(scanner_transcript.diagnostic_text)
         .or_else(|| warning_evidence.hard_errors.first().map(String::as_str))
         .or_else(daemon_report_line)
-        .map_or(
-            ScanFailureReason::UnexplainedScannerFailure {
-                exit_code: scanner_transcript.exit_code,
-            },
-            |scanner_message| ScanFailureReason::ScannerReported {
-                scanner_message: scanner_message.to_owned(),
-            },
-        )
+}
+
+fn scanner_reported_failure(scanner_message: &str) -> ScanFailureReason {
+    ScanFailureReason::ScannerReported {
+        scanner_message: scanner_message.to_owned(),
+    }
+}
+
+fn scanner_failure_reason(
+    scanner_backend: ScannerBackend,
+    scanner_transcript: &ScannerTranscript<'_>,
+    warning_evidence: &ScannerWarningEvidence,
+    abnormal_exit: AbnormalScannerExit,
+) -> ScanFailureReason {
+    scanner_reported_message(scanner_backend, scanner_transcript, warning_evidence).map_or(
+        ScanFailureReason::ScannerExitedAbnormally(abnormal_exit),
+        scanner_reported_failure,
+    )
 }
 
 fn interpret_scanner_transcript(
@@ -612,15 +626,22 @@ fn interpret_scanner_transcript(
         .iter()
         .any(|hard_error| is_genuine_error(hard_error));
     let total_errors = total_error_count(scanner_transcript.report_text);
-    let failed_verdict = ScanVerdict::ScanFailed(scanner_failure_reason(
-        scanner_backend,
-        scanner_transcript,
-        &warning_evidence,
-    ));
-    let exit_code = scanner_transcript.exit_code;
+    let failed_verdict = |abnormal_exit| {
+        ScanVerdict::ScanFailed(scanner_failure_reason(
+            scanner_backend,
+            scanner_transcript,
+            &warning_evidence,
+            abnormal_exit,
+        ))
+    };
+    let exited_with_scanner_error = scanner_transcript.scanner_exit
+        == ScannerExit::ExitedAbnormally(AbnormalScannerExit::ScannerError {
+            exit_code: SCANNER_ERROR_EXIT_CODE,
+        });
 
     let (scan_verdict, scan_notice) = if !scanner_transcript.detected_threats.is_empty() {
-        let scan_notice = if exit_code == 2 && !warning_evidence.skipped_paths.is_empty() {
+        let scan_notice = if exited_with_scanner_error && !warning_evidence.skipped_paths.is_empty()
+        {
             ScanNotice::FilesInaccessible {
                 file_count: warning_evidence.skipped_paths.len() as u64,
             }
@@ -628,47 +649,65 @@ fn interpret_scanner_transcript(
             ScanNotice::NoNotice
         };
         (ScanVerdict::ThreatsFound, scan_notice)
-    } else if exit_code == 0 {
-        let daemon_reported_failure =
-            scanner_backend == ScannerBackend::ClamdDaemon && hard_error_is_genuine;
-        (
-            if daemon_reported_failure {
-                failed_verdict
-            } else {
-                ScanVerdict::NoThreatsFound
-            },
-            ScanNotice::NoNotice,
-        )
-    } else if exit_code == 1 {
-        (ScanVerdict::ThreatsFound, ScanNotice::NoNotice)
-    } else if exit_code == 2 {
-        let benign_evidence_present = !warning_evidence.skipped_paths.is_empty()
-            || !warning_evidence.nonfatal_warnings.is_empty()
-            || total_errors > 0;
-        let every_file_failed = match scanner_backend {
-            ScannerBackend::ClamdDaemon => {
-                scanned_file_count > 0
-                    && (warning_evidence.skipped_paths.len() as u64 >= scanned_file_count
-                        || total_errors >= scanned_file_count)
-            }
-            ScannerBackend::StandaloneClamscan => scanned_file_count == 0,
-        };
-        if benign_evidence_present && warning_evidence.hard_errors.is_empty() && !every_file_failed
-        {
-            (
-                ScanVerdict::NoThreatsFound,
-                inaccessible_or_warning_notice(&warning_evidence, total_errors),
-            )
-        } else if every_file_failed {
-            (
-                ScanVerdict::ScanFailed(ScanFailureReason::NoFilesScanned),
-                ScanNotice::NoNotice,
-            )
-        } else {
-            (failed_verdict, ScanNotice::NoNotice)
-        }
     } else {
-        (failed_verdict, ScanNotice::NoNotice)
+        match scanner_transcript.scanner_exit {
+            ScannerExit::NoVirusFound => {
+                let daemon_reported_failure =
+                    scanner_backend == ScannerBackend::ClamdDaemon && hard_error_is_genuine;
+                let reported_message = daemon_reported_failure
+                    .then(|| {
+                        scanner_reported_message(
+                            scanner_backend,
+                            scanner_transcript,
+                            &warning_evidence,
+                        )
+                    })
+                    .flatten();
+                (
+                    reported_message.map_or(ScanVerdict::NoThreatsFound, |scanner_message| {
+                        ScanVerdict::ScanFailed(scanner_reported_failure(scanner_message))
+                    }),
+                    ScanNotice::NoNotice,
+                )
+            }
+            ScannerExit::VirusFound => (ScanVerdict::ThreatsFound, ScanNotice::NoNotice),
+            ScannerExit::ExitedAbnormally(
+                abnormal_exit @ AbnormalScannerExit::ScannerError {
+                    exit_code: SCANNER_ERROR_EXIT_CODE,
+                },
+            ) => {
+                let benign_evidence_present = !warning_evidence.skipped_paths.is_empty()
+                    || !warning_evidence.nonfatal_warnings.is_empty()
+                    || total_errors > 0;
+                let every_file_failed = match scanner_backend {
+                    ScannerBackend::ClamdDaemon => {
+                        scanned_file_count > 0
+                            && (warning_evidence.skipped_paths.len() as u64 >= scanned_file_count
+                                || total_errors >= scanned_file_count)
+                    }
+                    ScannerBackend::StandaloneClamscan => scanned_file_count == 0,
+                };
+                if benign_evidence_present
+                    && warning_evidence.hard_errors.is_empty()
+                    && !every_file_failed
+                {
+                    (
+                        ScanVerdict::NoThreatsFound,
+                        inaccessible_or_warning_notice(&warning_evidence, total_errors),
+                    )
+                } else if every_file_failed {
+                    (
+                        ScanVerdict::ScanFailed(ScanFailureReason::NoFilesScanned),
+                        ScanNotice::NoNotice,
+                    )
+                } else {
+                    (failed_verdict(abnormal_exit), ScanNotice::NoNotice)
+                }
+            }
+            ScannerExit::ExitedAbnormally(abnormal_exit) => {
+                (failed_verdict(abnormal_exit), ScanNotice::NoNotice)
+            }
+        }
     };
 
     InterpretedScan {
@@ -748,6 +787,11 @@ pub fn sanitize_scanner_text(scanner_text: &str) -> String {
 mod scanner_output_parser_tests {
     use super::*;
 
+    const SCANNER_ERROR_EXIT: ScannerExit =
+        ScannerExit::ExitedAbnormally(AbnormalScannerExit::ScannerError {
+            exit_code: SCANNER_ERROR_EXIT_CODE,
+        });
+
     #[test]
     fn severity_follows_the_upstream_priority_order() {
         assert_eq!(
@@ -778,7 +822,7 @@ mod scanner_output_parser_tests {
             &ScannerTranscript {
                 report_text: "Scanned directories: 7\nScanned files: 3\n",
                 diagnostic_text: "",
-                exit_code: 0,
+                scanner_exit: ScannerExit::NoVirusFound,
                 detected_threats: &[],
             },
             3,
@@ -810,14 +854,14 @@ mod scanner_output_parser_tests {
     fn interpret_clamscan_text(
         report_text: &str,
         diagnostic_text: &str,
-        exit_code: i32,
+        scanner_exit: ScannerExit,
     ) -> InterpretedScan {
         let detected_threats = transcript_threats(report_text, ScannerBackend::StandaloneClamscan);
         interpret_clamscan_transcript(
             &ScannerTranscript {
                 report_text,
                 diagnostic_text,
-                exit_code,
+                scanner_exit,
                 detected_threats: &detected_threats,
             },
             0,
@@ -828,7 +872,7 @@ mod scanner_output_parser_tests {
     fn infection_wins_over_exit_two_and_preserves_warning_evidence() {
         let report_text = "/scan/eicar: Eicar-Test-Signature FOUND\n/root/locked: Failed to open \
                            file ERROR\nScanned files: 1\n";
-        let interpreted_scan = interpret_clamscan_text(report_text, "", 2);
+        let interpreted_scan = interpret_clamscan_text(report_text, "", SCANNER_ERROR_EXIT);
         let detected_threats = transcript_threats(report_text, ScannerBackend::StandaloneClamscan);
         assert_eq!(interpreted_scan.scan_verdict, ScanVerdict::ThreatsFound);
         assert_eq!(
@@ -845,12 +889,12 @@ mod scanner_output_parser_tests {
             &ScannerTranscript {
                 report_text,
                 diagnostic_text: "",
-                exit_code: 2,
+                scanner_exit: SCANNER_ERROR_EXIT,
                 detected_threats: &[],
             },
             0,
         );
-        let standalone_scan = interpret_clamscan_text(report_text, "", 2);
+        let standalone_scan = interpret_clamscan_text(report_text, "", SCANNER_ERROR_EXIT);
         assert_eq!(daemon_scan.scan_verdict, ScanVerdict::NoThreatsFound);
         assert_eq!(
             standalone_scan.scan_verdict,
@@ -862,7 +906,8 @@ mod scanner_output_parser_tests {
     fn nonfatal_limit_warning_does_not_hide_a_real_error() {
         let diagnostic_text = "LibClamAV Warning: cli_scanxz: file size exceeds limits\nERROR: \
                                unable to initialize engine\n";
-        let interpreted_scan = interpret_clamscan_text("Scanned files: 4\n", diagnostic_text, 2);
+        let interpreted_scan =
+            interpret_clamscan_text("Scanned files: 4\n", diagnostic_text, SCANNER_ERROR_EXIT);
         assert_eq!(interpreted_scan.nonfatal_warnings.len(), 1);
         assert_eq!(
             interpreted_scan.scan_verdict,
@@ -891,7 +936,7 @@ mod scanner_output_parser_tests {
         let interpreted_scan = interpret_clamscan_text(
             "WARNING: database metadata could not be read\nTotal errors: 1\nScanned files: 4\n",
             "",
-            2,
+            SCANNER_ERROR_EXIT,
         );
         assert_eq!(
             interpreted_scan.scan_verdict,
@@ -902,11 +947,39 @@ mod scanner_output_parser_tests {
     }
 
     #[test]
+    fn clean_and_virus_exits_never_become_scanner_failures() {
+        let diagnostic_text = "LibClamAV Error: engine trouble\n";
+        [ScannerExit::NoVirusFound, ScannerExit::VirusFound]
+            .into_iter()
+            .for_each(|scanner_exit| {
+                assert!(!matches!(
+                    interpret_clamscan_text("Scanned files: 1\n", diagnostic_text, scanner_exit)
+                        .scan_verdict,
+                    ScanVerdict::ScanFailed(_)
+                ));
+            });
+    }
+
+    #[test]
+    fn a_killed_scanner_fails_with_its_signal_instead_of_an_exit_code() {
+        let killed_exit = AbnormalScannerExit::KilledBySignal { signal_number: 9 };
+        assert_eq!(
+            interpret_clamscan_text(
+                "Scanned files: 1\n",
+                "",
+                ScannerExit::ExitedAbnormally(killed_exit)
+            )
+            .scan_verdict,
+            ScanVerdict::ScanFailed(ScanFailureReason::ScannerExitedAbnormally(killed_exit))
+        );
+    }
+
+    #[test]
     fn benign_exit_two_evidence_downgrades_to_clean() {
         let interpreted_scan = interpret_clamscan_text(
             "WARNING: /scan/gone: Can't access file\nScanned files: 4\n",
             "",
-            2,
+            SCANNER_ERROR_EXIT,
         );
         assert_eq!(interpreted_scan.scan_verdict, ScanVerdict::NoThreatsFound);
     }

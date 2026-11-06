@@ -19,6 +19,7 @@ use crate::{
         scan_page_state::ScanEnding,
         scan_results_section::scan_results_state::{ProblemPathGroup, ScanResultsStatus},
     },
+    shared_widgets::scanner_exit_text::abnormal_scanner_exit_text,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -124,9 +125,8 @@ fn describe_scan_problem(scan_problem: &ScanProblem) -> String {
         ScanProblem::ScannerFailed(ScanFailureReason::ScannerReported { scanner_message }) => {
             sanitize_scanner_text(scanner_message)
         }
-        ScanProblem::ScannerFailed(ScanFailureReason::UnexplainedScannerFailure { exit_code }) => {
-            gettext("The scanner stopped with exit code {code}.")
-                .replace("{code}", &exit_code.to_string())
+        ScanProblem::ScannerFailed(ScanFailureReason::ScannerExitedAbnormally(abnormal_exit)) => {
+            abnormal_scanner_exit_text(abnormal_exit)
         }
         ScanProblem::FilesNotScanned {
             unscanned_paths,

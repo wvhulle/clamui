@@ -41,7 +41,7 @@ pub fn quarantined_false_positive_detection(
         })
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum RowRecheckState {
     NotRechecked,
     Rechecking,
@@ -95,7 +95,7 @@ impl QuarantineEntryRow {
             RowRecheckState::Rechecked(ContentVerdict::StillDetected { .. }) => {
                 gettext("Still detected")
             }
-            RowRecheckState::Rechecked(ContentVerdict::VerdictUnavailable { .. })
+            RowRecheckState::Rechecked(ContentVerdict::VerdictUnavailable(_))
             | RowRecheckState::NotRechecked => String::new(),
         }
     }
@@ -105,7 +105,7 @@ impl QuarantineEntryRow {
             RowRecheckState::Rechecked(ContentVerdict::NoLongerDetected) => "success",
             RowRecheckState::Rechecked(ContentVerdict::StillDetected { .. }) => "warning",
             RowRecheckState::Rechecking
-            | RowRecheckState::Rechecked(ContentVerdict::VerdictUnavailable { .. })
+            | RowRecheckState::Rechecked(ContentVerdict::VerdictUnavailable(_))
             | RowRecheckState::NotRechecked => "dim-label",
         }
     }

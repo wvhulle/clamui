@@ -54,7 +54,20 @@ pub enum UnitTimestamp {
 pub enum ServiceLastResult {
     ResultSucceeded,
     ExitedWithStatus { exit_status: i32 },
-    FailedWithResult { result_name: String },
+    FailedWithResult { failure_kind: ServiceFailureKind },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ServiceFailureKind {
+    ProtocolViolated,
+    TimedOut,
+    KilledBySignal,
+    DumpedCore,
+    WatchdogExpired,
+    StartLimitHit,
+    ResourcesUnavailable,
+    OutOfMemoryKilled,
+    UnrecognizedResult { result_name: String },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -120,8 +133,24 @@ pub fn classify_service_result(result_name: &str, exit_status: i32) -> ServiceLa
     match result_name {
         SERVICE_SUCCESS_RESULT => ServiceLastResult::ResultSucceeded,
         "exit-code" => ServiceLastResult::ExitedWithStatus { exit_status },
-        other_result => ServiceLastResult::FailedWithResult {
-            result_name: other_result.to_owned(),
+        failure_name => ServiceLastResult::FailedWithResult {
+            failure_kind: classify_service_failure(failure_name),
+        },
+    }
+}
+
+fn classify_service_failure(failure_name: &str) -> ServiceFailureKind {
+    match failure_name {
+        "protocol" => ServiceFailureKind::ProtocolViolated,
+        "timeout" => ServiceFailureKind::TimedOut,
+        "signal" => ServiceFailureKind::KilledBySignal,
+        "core-dump" => ServiceFailureKind::DumpedCore,
+        "watchdog" => ServiceFailureKind::WatchdogExpired,
+        "start-limit-hit" => ServiceFailureKind::StartLimitHit,
+        "resources" => ServiceFailureKind::ResourcesUnavailable,
+        "oom-kill" => ServiceFailureKind::OutOfMemoryKilled,
+        unrecognized_name => ServiceFailureKind::UnrecognizedResult {
+            result_name: unrecognized_name.to_owned(),
         },
     }
 }
@@ -523,7 +552,7 @@ mod host_systemd_units_tests {
     }
 
     #[test]
-    fn exit_codes_keep_their_status_and_other_results_their_name() {
+    fn exit_codes_keep_their_status_and_other_results_their_kind() {
         assert_eq!(
             classify_service_result("success", 0),
             ServiceLastResult::ResultSucceeded
@@ -535,7 +564,15 @@ mod host_systemd_units_tests {
         assert_eq!(
             classify_service_result("timeout", 0),
             ServiceLastResult::FailedWithResult {
-                result_name: "timeout".to_owned()
+                failure_kind: ServiceFailureKind::TimedOut
+            }
+        );
+        assert_eq!(
+            classify_service_result("some-future-result", 0),
+            ServiceLastResult::FailedWithResult {
+                failure_kind: ServiceFailureKind::UnrecognizedResult {
+                    result_name: "some-future-result".to_owned()
+                }
             }
         );
     }

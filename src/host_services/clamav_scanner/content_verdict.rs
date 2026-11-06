@@ -1,28 +1,60 @@
-use std::{io::Read, process::Stdio, time::Duration};
+use std::{
+    io::{self, Read},
+    process::Stdio,
+    sync::Arc,
+    time::Duration,
+};
 
 use gettextrs::gettext;
 use tokio::time::timeout;
 
 use crate::host_services::{
     clamav_config::detection_options::host_clamscan_detection_arguments,
+    clamav_programs::trusted_program_lookup::ProgramRefusal,
     clamav_scanner::{
         scanner_command_builder::{ScannerBackend, ScannerProgramPaths, probe_clamd_availability},
+        scanner_exit_classification::{
+            AbnormalScannerExit, ScannerExit, classify_scanner_exit_status,
+        },
         scanner_output_parser::sanitize_scanner_line,
     },
     desktop::{content_pipe::pipe_content_for_child, flatpak_sandbox::host_program_async_command},
+    quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
 };
 
 const VERDICT_TIMEOUT: Duration = Duration::from_secs(600);
 const STANDARD_INPUT_PREFIX: &str = "stdin: ";
 const FOUND_SUFFIX: &str = " FOUND";
-const CLEAN_EXIT_CODE: i32 = 0;
-const FOUND_EXIT_CODE: i32 = 1;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, thiserror::Error)]
+pub enum VerdictFailure {
+    #[error("the scanner program cannot be used: {0}")]
+    ScannerProgramRefused(#[from] ProgramRefusal),
+    #[error("the content could not be passed to the scanner: {0}")]
+    ContentPipeFailed(io::Error),
+    #[error("the scanner could not be started: {0}")]
+    ScannerSpawnFailed(io::Error),
+    #[error("the scan took too long")]
+    VerdictTimedOut,
+    #[error("the scanner reported: {scanner_message}")]
+    ScannerReported { scanner_message: String },
+    #[error("the scanner exited abnormally: {0}")]
+    ScannerExitedAbnormally(AbnormalScannerExit),
+    #[error("the quarantined content could not be read: {0}")]
+    PayloadUnreadable(QuarantineMoveFailure),
+}
+
+#[derive(Clone, Debug)]
 pub enum ContentVerdict {
     StillDetected { detection_name: String },
     NoLongerDetected,
-    VerdictUnavailable { failure_text: String },
+    VerdictUnavailable(Arc<VerdictFailure>),
+}
+
+impl From<VerdictFailure> for ContentVerdict {
+    fn from(verdict_failure: VerdictFailure) -> Self {
+        Self::VerdictUnavailable(Arc::new(verdict_failure))
+    }
 }
 
 pub fn detection_in_report(report_text: &str) -> Option<String> {
@@ -36,25 +68,28 @@ pub fn detection_in_report(report_text: &str) -> Option<String> {
 }
 
 pub fn verdict_from_exit(
-    exit_code: Option<i32>,
+    scanner_exit: ScannerExit,
     report_text: &str,
     diagnostic_text: &str,
 ) -> ContentVerdict {
-    match exit_code {
-        Some(CLEAN_EXIT_CODE) => ContentVerdict::NoLongerDetected,
-        Some(FOUND_EXIT_CODE) => ContentVerdict::StillDetected {
+    match scanner_exit {
+        ScannerExit::NoVirusFound => ContentVerdict::NoLongerDetected,
+        ScannerExit::VirusFound => ContentVerdict::StillDetected {
             detection_name: detection_in_report(report_text)
                 .unwrap_or_else(|| gettext("an unnamed detection")),
         },
-        _scanner_error => ContentVerdict::VerdictUnavailable {
-            failure_text: sanitize_scanner_line(
-                diagnostic_text
-                    .lines()
-                    .chain(report_text.lines())
-                    .find(|output_line| !output_line.trim().is_empty())
-                    .unwrap_or_default(),
-            ),
-        },
+        ScannerExit::ExitedAbnormally(abnormal_exit) => diagnostic_text
+            .lines()
+            .chain(report_text.lines())
+            .map(str::trim)
+            .find(|output_line| !output_line.is_empty())
+            .map_or(
+                VerdictFailure::ScannerExitedAbnormally(abnormal_exit),
+                |scanner_message| VerdictFailure::ScannerReported {
+                    scanner_message: scanner_message.to_owned(),
+                },
+            )
+            .into(),
     }
 }
 
@@ -78,17 +113,13 @@ pub async fn scan_content_with_current_signatures(
     let scanner_path = match scanner_location.runnable_path() {
         Ok(scanner_path) => scanner_path.to_path_buf(),
         Err(program_refusal) => {
-            return ContentVerdict::VerdictUnavailable {
-                failure_text: program_refusal.to_string(),
-            };
+            return VerdictFailure::from(program_refusal).into();
         }
     };
     let content_pipe = match pipe_content_for_child(content_source) {
         Ok(content_pipe) => content_pipe,
         Err(pipe_failure) => {
-            return ContentVerdict::VerdictUnavailable {
-                failure_text: pipe_failure.to_string(),
-            };
+            return VerdictFailure::ContentPipeFailed(pipe_failure).into();
         }
     };
     let mut verdict_command = host_program_async_command(&scanner_path, &[("LC_ALL", "C")]);
@@ -100,16 +131,12 @@ pub async fn scan_content_with_current_signatures(
         .kill_on_drop(true);
     match timeout(VERDICT_TIMEOUT, verdict_command.output()).await {
         Ok(Ok(scanner_output)) => verdict_from_exit(
-            scanner_output.status.code(),
+            classify_scanner_exit_status(scanner_output.status),
             &String::from_utf8_lossy(&scanner_output.stdout),
             &String::from_utf8_lossy(&scanner_output.stderr),
         ),
-        Ok(Err(spawn_failure)) => ContentVerdict::VerdictUnavailable {
-            failure_text: spawn_failure.to_string(),
-        },
-        Err(_verdict_timed_out) => ContentVerdict::VerdictUnavailable {
-            failure_text: gettext("the scan took too long"),
-        },
+        Ok(Err(spawn_failure)) => VerdictFailure::ScannerSpawnFailed(spawn_failure).into(),
+        Err(_verdict_timed_out) => VerdictFailure::VerdictTimedOut.into(),
     }
 }
 
@@ -118,23 +145,45 @@ mod content_verdict_tests {
     use super::*;
 
     #[test]
-    fn exit_codes_and_reports_become_verdicts() {
-        assert_eq!(
-            verdict_from_exit(Some(1), "stdin: Win.Test.EICAR_HDB-1 FOUND\n", ""),
-            ContentVerdict::StillDetected {
-                detection_name: "Win.Test.EICAR_HDB-1".to_owned()
-            }
-        );
-        assert_eq!(
-            verdict_from_exit(Some(0), "stdin: OK\n", ""),
+    fn scanner_exits_and_reports_become_verdicts() {
+        assert!(matches!(
+            verdict_from_exit(
+                ScannerExit::VirusFound,
+                "stdin: Win.Test.EICAR_HDB-1 FOUND\n",
+                ""
+            ),
+            ContentVerdict::StillDetected { detection_name } if detection_name == "Win.Test.EICAR_HDB-1"
+        ));
+        assert!(matches!(
+            verdict_from_exit(ScannerExit::NoVirusFound, "stdin: OK\n", ""),
             ContentVerdict::NoLongerDetected
-        );
-        assert_eq!(
-            verdict_from_exit(Some(2), "", "ERROR: Can't connect to clamd\n"),
-            ContentVerdict::VerdictUnavailable {
-                failure_text: "ERROR: Can't connect to clamd".to_owned()
-            }
-        );
+        ));
+        assert!(matches!(
+            verdict_from_exit(
+                ScannerExit::ExitedAbnormally(AbnormalScannerExit::ScannerError { exit_code: 2 }),
+                "",
+                "ERROR: Can't connect to clamd\n"
+            ),
+            ContentVerdict::VerdictUnavailable(verdict_failure)
+                if matches!(
+                    verdict_failure.as_ref(),
+                    VerdictFailure::ScannerReported { scanner_message }
+                        if scanner_message == "ERROR: Can't connect to clamd"
+                )
+        ));
+    }
+
+    #[test]
+    fn a_silently_killed_scanner_keeps_its_signal() {
+        let killed_exit = AbnormalScannerExit::KilledBySignal { signal_number: 9 };
+        assert!(matches!(
+            verdict_from_exit(ScannerExit::ExitedAbnormally(killed_exit), "", ""),
+            ContentVerdict::VerdictUnavailable(verdict_failure)
+                if matches!(
+                    verdict_failure.as_ref(),
+                    VerdictFailure::ScannerExitedAbnormally(reported_exit) if *reported_exit == killed_exit
+                )
+        ));
     }
 
     #[test]

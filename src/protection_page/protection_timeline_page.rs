@@ -23,14 +23,15 @@ use crate::{
         },
         detection_journal::detection_journal_follower::JournalAccess,
         systemd_bus::host_systemd_units::{
-            ServiceLastResult, ServiceUnitSnapshot, SystemdBusFailure, UnitStartOutcome,
-            service_unit_snapshot, start_system_unit, watched_unit_changes,
+            SystemdBusFailure, UnitStartOutcome, service_unit_snapshot, start_system_unit,
+            watched_unit_changes,
         },
     },
     protection_page::{
         protection_evidence::{
-            ProtectionEvidence, WATCHED_SERVICE_UNITS, detection_notifications_are_enabled,
-            gather_protection_evidence, lazaret_schedule_is_enabled,
+            ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, WATCHED_SERVICE_UNITS,
+            detection_notifications_are_enabled, gather_protection_evidence,
+            lazaret_schedule_is_enabled, scan_service_evidence,
         },
         protection_timeline_presentation::{
             AlertReadiness, ProtectionActivity, protection_timeline,
@@ -55,7 +56,6 @@ use crate::{
     },
 };
 
-const SCANNER_FOUND_THREATS_STATUS: i32 = 1;
 const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
 const UPDATE_BATCH_SIZE: usize = 64;
 
@@ -116,7 +116,7 @@ pub enum ProtectionTimelinePageCommand {
     WatchedUnitChanged,
     UnitRunFinished {
         start_outcome: UnitStartOutcome,
-        service_snapshot: ServiceUnitSnapshot,
+        scan_service: ScanServiceEvidence,
     },
     SignatureHostStatusLoaded(DatabaseHostStatus),
     SignatureUpdateBatchArrived(Vec<DatabaseUpdateEvent>),
@@ -154,15 +154,13 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
 
 fn scan_found_threats(
     start_outcome: &UnitStartOutcome,
-    service_snapshot: &ServiceUnitSnapshot,
+    scan_service: &ScanServiceEvidence,
 ) -> bool {
     matches!(start_outcome, UnitStartOutcome::JobEnded { .. })
         && matches!(
-            service_snapshot,
-            ServiceUnitSnapshot::LoadedService {
-                last_result: ServiceLastResult::ExitedWithStatus {
-                    exit_status: SCANNER_FOUND_THREATS_STATUS,
-                },
+            scan_service,
+            ScanServiceEvidence::ServiceConfigured {
+                last_result: ScanUnitResult::ThreatsFound,
                 ..
             }
         )
@@ -170,10 +168,10 @@ fn scan_found_threats(
 
 fn unit_run_toast(
     start_outcome: &UnitStartOutcome,
-    service_snapshot: &ServiceUnitSnapshot,
+    scan_service: &ScanServiceEvidence,
 ) -> adw::Toast {
-    let run_toast = plain_text_toast(&unit_run_toast_text(start_outcome, service_snapshot));
-    if scan_found_threats(start_outcome, service_snapshot) {
+    let run_toast = plain_text_toast(&unit_run_toast_text(start_outcome, scan_service));
+    if scan_found_threats(start_outcome, scan_service) {
         run_toast.set_button_label(Some(&gettext("Review")));
         run_toast.set_action_name(Some("win.show-page"));
         run_toast.set_action_target_value(Some(&"detections".to_variant()));
@@ -194,9 +192,9 @@ fn systemd_failure_text(bus_failure: &SystemdBusFailure) -> String {
 
 pub fn unit_run_toast_text(
     start_outcome: &UnitStartOutcome,
-    service_snapshot: &ServiceUnitSnapshot,
+    scan_service: &ScanServiceEvidence,
 ) -> String {
-    if scan_found_threats(start_outcome, service_snapshot) {
+    if scan_found_threats(start_outcome, scan_service) {
         return gettext("The scan found malware");
     }
     match start_outcome {
@@ -389,7 +387,9 @@ impl ProtectionTimelinePage {
                     let start_outcome = start_system_unit(service_unit).await;
                     ProtectionTimelinePageCommand::UnitRunFinished {
                         start_outcome,
-                        service_snapshot: service_unit_snapshot(service_unit).await,
+                        scan_service: scan_service_evidence(
+                            service_unit_snapshot(service_unit).await,
+                        ),
                     }
                 });
             }
@@ -596,11 +596,11 @@ impl Component for ProtectionTimelinePage {
             }
             ProtectionTimelinePageCommand::UnitRunFinished {
                 start_outcome,
-                service_snapshot,
+                scan_service,
             } => {
                 self.scheduled_scan_starting = false;
                 self.toaster
-                    .add_toast(unit_run_toast(&start_outcome, &service_snapshot));
+                    .add_toast(unit_run_toast(&start_outcome, &scan_service));
                 self.show_timeline();
                 self.start_evidence_refresh(&sender);
             }
@@ -636,14 +636,16 @@ impl Component for ProtectionTimelinePage {
 #[cfg(test)]
 mod protection_timeline_page_tests {
     use super::*;
-    use crate::host_services::systemd_bus::host_systemd_units::UnitActivity;
+    use crate::host_services::systemd_bus::host_systemd_units::{
+        ServiceLastResult, ServiceUnitSnapshot, UnitActivity,
+    };
 
-    fn loaded_scan_service(exit_status: i32) -> ServiceUnitSnapshot {
-        ServiceUnitSnapshot::LoadedService {
+    fn loaded_scan_service(exit_status: i32) -> ScanServiceEvidence {
+        scan_service_evidence(ServiceUnitSnapshot::LoadedService {
             unit_activity: UnitActivity::UnitInactive,
             last_result: ServiceLastResult::ExitedWithStatus { exit_status },
             program_arguments: Vec::new(),
-        }
+        })
     }
 
     #[test]
@@ -669,14 +671,16 @@ mod protection_timeline_page_tests {
         assert!(
             unit_run_toast_text(
                 &failed_job,
-                &ServiceUnitSnapshot::SystemdUnreachable(SystemdBusFailure::UnrecognizedLoadState)
+                &scan_service_evidence(ServiceUnitSnapshot::SystemdUnreachable(
+                    SystemdBusFailure::UnrecognizedLoadState
+                ))
             )
             .contains("did not finish cleanly")
         );
         assert_eq!(
             unit_run_toast_text(
                 &UnitStartOutcome::BusFailure(SystemdBusFailure::UnrecognizedLoadState),
-                &ServiceUnitSnapshot::ServiceNotFound
+                &ScanServiceEvidence::ServiceMissing
             ),
             "The scan could not be started: systemd reported a unit state Lazaret does not \
              recognize"

@@ -9,19 +9,18 @@ use crate::{
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
-        systemd_bus::host_systemd_units::{
-            ServiceLastResult, UnitActivity, UnitState, UnitTimestamp,
-        },
+        systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
     },
     protection_page::{
         clamav_engine_evidence::DatabaseEvidence,
         protection_evidence::{
             AccountSettingFinding, DaemonEvidence, EngineInstallation, LoadedSignatures,
             OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProgramTrustFinding,
-            ProtectionEvidence, RuntimeReductions, ScanServiceEvidence, ScheduledScanEvidence,
-            SignatureEvidence, ThirdPartySignatureFile, UpdaterEvidence,
+            ProtectionEvidence, RuntimeReductions, ScanServiceEvidence, ScanUnitResult,
+            ScheduledScanEvidence, SignatureEvidence, ThirdPartySignatureFile, UpdaterEvidence,
+            UpdaterUnitResult,
         },
-        service_run_journal::ServiceRunHistory,
+        service_run_journal::{ScanRunFindings, ScanRunHistory, UpdaterRunHistory},
         signature_update_run::signature_update_session::{
             LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
         },
@@ -37,7 +36,6 @@ use crate::{
 const DATABASE_FRESH_LIMIT: SignedDuration = SignedDuration::from_hours(4 * 24);
 const DATABASE_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(8 * 24);
 const THIRD_PARTY_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(48);
-const SCANNER_ERROR_STATUS: i32 = 2;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AlertReadiness {
@@ -441,16 +439,30 @@ fn database_status_text(
 }
 
 fn updater_failed(updater_evidence: &UpdaterEvidence) -> bool {
-    updater_evidence.last_result != ServiceLastResult::ResultSucceeded
+    match updater_evidence.last_result {
+        UpdaterUnitResult::UpdateSucceeded => false,
+        UpdaterUnitResult::UpdaterError { .. } | UpdaterUnitResult::ServiceFailed { .. } => true,
+    }
 }
 
-impl From<ServiceRunHistory> for EvidenceMoment {
-    fn from(run_history: ServiceRunHistory) -> Self {
+impl From<ScanRunHistory> for EvidenceMoment {
+    fn from(run_history: ScanRunHistory) -> Self {
         match run_history {
-            ServiceRunHistory::CompletedRun(service_run) => Self::PastEvent {
-                happened_at: service_run.finished_at,
+            ScanRunHistory::CompletedScan { finished_at, .. } => Self::PastEvent {
+                happened_at: finished_at,
             },
-            ServiceRunHistory::NoCompletedRun => Self::NeverHappened,
+            ScanRunHistory::NoCompletedScan => Self::NeverHappened,
+        }
+    }
+}
+
+impl From<UpdaterRunHistory> for EvidenceMoment {
+    fn from(run_history: UpdaterRunHistory) -> Self {
+        match run_history {
+            UpdaterRunHistory::CompletedUpdate { finished_at } => Self::PastEvent {
+                happened_at: finished_at,
+            },
+            UpdaterRunHistory::NoCompletedUpdate => Self::NeverHappened,
         }
     }
 }
@@ -851,16 +863,20 @@ fn next_run_row(next_run: UnitTimestamp, moment_context: MomentContext) -> StepE
 }
 
 fn last_run_row(
-    last_completed_run: ServiceRunHistory,
+    last_completed_run: ScanRunHistory,
     row_action: StepActionSlot,
     moment_context: MomentContext,
 ) -> StepEvidenceRow {
     let evidence_value = match last_completed_run {
-        ServiceRunHistory::CompletedRun(service_run) if service_run.threats_found => {
-            gettext("threats found")
-        }
-        ServiceRunHistory::CompletedRun(_) => gettext("nothing found"),
-        ServiceRunHistory::NoCompletedRun => gettext("Not run yet"),
+        ScanRunHistory::CompletedScan {
+            scan_findings: ScanRunFindings::ThreatsFound,
+            ..
+        } => gettext("threats found"),
+        ScanRunHistory::CompletedScan {
+            scan_findings: ScanRunFindings::NothingFound,
+            ..
+        } => gettext("nothing found"),
+        ScanRunHistory::NoCompletedScan => gettext("Not run yet"),
     };
     StepEvidenceRow {
         row_action,
@@ -873,11 +889,10 @@ fn last_run_row(
     }
 }
 
-fn scan_result_failed(last_result: &ServiceLastResult) -> bool {
+fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
     match last_result {
-        ServiceLastResult::ResultSucceeded => false,
-        ServiceLastResult::ExitedWithStatus { exit_status } => *exit_status >= SCANNER_ERROR_STATUS,
-        ServiceLastResult::FailedWithResult { .. } => true,
+        ScanUnitResult::NothingFound | ScanUnitResult::ThreatsFound => false,
+        ScanUnitResult::ScannerError { .. } | ScanUnitResult::ServiceFailed { .. } => true,
     }
 }
 
@@ -1164,6 +1179,7 @@ mod protection_timeline_presentation_tests {
     use bytesize::ByteSize;
 
     use super::*;
+    use crate::host_services::systemd_bus::host_systemd_units::ServiceFailureKind;
 
     const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
 
@@ -1287,9 +1303,9 @@ mod protection_timeline_presentation_tests {
                 },
                 scan_service: ScanServiceEvidence::ServiceConfigured {
                     scan_targets: vec!["/tmp".to_owned(), "/var/tmp".to_owned()],
-                    last_result: ServiceLastResult::ResultSucceeded,
+                    last_result: ScanUnitResult::NothingFound,
                 },
-                last_completed_run: ServiceRunHistory::NoCompletedRun,
+                last_completed_run: ScanRunHistory::NoCompletedScan,
             },
             background_service_state: UnitState::UnitLoaded(UnitActivity::UnitActive),
         }
@@ -1397,14 +1413,12 @@ mod protection_timeline_presentation_tests {
                 },
                 scan_service: ScanServiceEvidence::ServiceConfigured {
                     scan_targets: vec!["/tmp".to_owned()],
-                    last_result: ServiceLastResult::ResultSucceeded,
+                    last_result: ScanUnitResult::NothingFound,
                 },
-                last_completed_run: ServiceRunHistory::CompletedRun(
-                    crate::protection_page::service_run_journal::ServiceRunRecord {
-                        finished_at: REFERENCE_MOMENT - SignedDuration::from_hours(2),
-                        threats_found: false,
-                    },
-                ),
+                last_completed_run: ScanRunHistory::CompletedScan {
+                    finished_at: REFERENCE_MOMENT - SignedDuration::from_hours(2),
+                    scan_findings: ScanRunFindings::NothingFound,
+                },
             },
             ..healthy_evidence()
         }));
@@ -1523,7 +1537,7 @@ mod protection_timeline_presentation_tests {
                     recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
                 },
                 scan_service,
-                last_completed_run: ServiceRunHistory::NoCompletedRun,
+                last_completed_run: ScanRunHistory::NoCompletedScan,
             },
             ..healthy_evidence()
         }
@@ -1685,14 +1699,12 @@ mod protection_timeline_presentation_tests {
 
     #[test]
     fn finding_threats_is_not_a_scan_failure_but_a_scanner_error_is() {
-        assert!(!scan_result_failed(&ServiceLastResult::ExitedWithStatus {
-            exit_status: 1
-        }));
-        assert!(scan_result_failed(&ServiceLastResult::ExitedWithStatus {
+        assert!(!scan_result_failed(&ScanUnitResult::ThreatsFound));
+        assert!(scan_result_failed(&ScanUnitResult::ScannerError {
             exit_status: 2
         }));
-        assert!(scan_result_failed(&ServiceLastResult::FailedWithResult {
-            result_name: "timeout".to_owned()
+        assert!(scan_result_failed(&ScanUnitResult::ServiceFailed {
+            failure_kind: ServiceFailureKind::TimedOut
         }));
     }
 
@@ -1703,8 +1715,8 @@ mod protection_timeline_presentation_tests {
                 updater_evidence: vec![UpdaterEvidence {
                     updater_name: "fangfrisch",
                     service_unit: "clamav-fangfrisch.service",
-                    last_result: ServiceLastResult::ExitedWithStatus { exit_status: 1 },
-                    last_completed_run: ServiceRunHistory::NoCompletedRun,
+                    last_result: UpdaterUnitResult::UpdaterError { exit_status: 1 },
+                    last_completed_run: UpdaterRunHistory::NoCompletedUpdate,
                 }],
                 ..healthy_evidence().signature_evidence
             },

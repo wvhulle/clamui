@@ -31,6 +31,7 @@ use crate::host_services::{
         scanner_command_builder::{
             ScannerBackend, ScannerInvocation, ScannerProgramPaths, build_scanner_command,
         },
+        scanner_exit_classification::classify_scanner_wait,
         scanner_output_parser::{
             DetectedThreat, InterpretedScan, ScanFailureReason, ScanNotice, ScanVerdict,
             ScannerTranscript, ThreatIdentity, interpret_clamdscan_transcript,
@@ -388,14 +389,10 @@ impl ScannerPhaseTranscript {
     fn interpret_finished_phase(&mut self, exit_status: io::Result<ExitStatus>) -> InterpretedScan {
         let report_text = String::from_utf8_lossy(&self.report_bytes);
         let diagnostic_text = String::from_utf8_lossy(&self.diagnostic_bytes);
-        let exit_code = exit_status
-            .ok()
-            .and_then(|exit_status| exit_status.code())
-            .unwrap_or(-1);
         let scanner_transcript = ScannerTranscript {
             report_text: &report_text,
             diagnostic_text: &diagnostic_text,
-            exit_code,
+            scanner_exit: classify_scanner_wait(exit_status),
             detected_threats: &self.detected_threats,
         };
         let interpreted_scan = match self.scanner_backend {
@@ -771,7 +768,10 @@ mod scan_progress_events_tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::host_services::clamav_scanner::scan_target_enumeration::enumerate_scan_files;
+    use crate::host_services::clamav_scanner::{
+        scan_target_enumeration::enumerate_scan_files,
+        scanner_exit_classification::AbnormalScannerExit,
+    };
 
     fn exit_status_with_code(exit_code: i32) -> ExitStatus {
         ExitStatus::from_raw(exit_code << 8)
@@ -976,6 +976,21 @@ mod scan_progress_events_tests {
         assert!(matches!(
             &start_failure,
             ScanStartFailure::ScanInputUnavailable { input_path, .. } if *input_path == replaced_file
+        ));
+    }
+
+    #[test]
+    fn a_killed_scanner_is_reported_by_signal_and_not_as_exit_minus_one() {
+        let mut phase_transcript = file_list_transcript(1);
+        let progress_events = phase_transcript
+            .absorb_process_event(ScannerProcessEvent::Exited(Ok(ExitStatus::from_raw(9))));
+        assert!(matches!(
+            fold_scan_outcome(progress_events).scan_problems.as_slice(),
+            [ScanProblem::ScannerFailed(
+                ScanFailureReason::ScannerExitedAbnormally(AbnormalScannerExit::KilledBySignal {
+                    signal_number: 9
+                })
+            )]
         ));
     }
 

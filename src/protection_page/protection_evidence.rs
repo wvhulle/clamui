@@ -28,16 +28,18 @@ use crate::{
         },
         settings_helper::protection_change_rules::{change_weakens_protection, limit_in_units},
         systemd_bus::host_systemd_units::{
-            ServiceLastResult, ServiceUnitSnapshot, TimerUnitSnapshot, UnitActivity, UnitState,
-            UnitTimestamp, first_active_unit, probe_unit_state, probe_user_unit_state,
-            service_unit_snapshot, timer_unit_snapshot,
+            ServiceFailureKind, ServiceLastResult, ServiceUnitSnapshot, TimerUnitSnapshot,
+            UnitActivity, UnitState, UnitTimestamp, first_active_unit, probe_unit_state,
+            probe_user_unit_state, service_unit_snapshot, timer_unit_snapshot,
         },
     },
     protection_page::{
         clamav_engine_evidence::{
             DatabaseEvidence, inspect_database_evidence, newest_disk_signature_version,
         },
-        service_run_journal::{ServiceRunHistory, newest_service_run},
+        service_run_journal::{
+            ScanRunHistory, UpdaterRunHistory, newest_scan_run, newest_update_run,
+        },
         trusted_detections_page::trust_list_contents::{
             TrustListContents, read_trust_list_contents,
         },
@@ -116,11 +118,63 @@ pub enum EngineInstallation {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScanUnitResult {
+    NothingFound,
+    ThreatsFound,
+    ScannerError { exit_status: i32 },
+    ServiceFailed { failure_kind: ServiceFailureKind },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UpdaterUnitResult {
+    UpdateSucceeded,
+    UpdaterError { exit_status: i32 },
+    ServiceFailed { failure_kind: ServiceFailureKind },
+}
+
+const SCANNER_CLEAN_STATUS: i32 = 0;
+const SCANNER_FOUND_THREATS_STATUS: i32 = 1;
+const UPDATER_SUCCESS_STATUS: i32 = 0;
+
+pub fn classify_scan_unit_result(last_result: ServiceLastResult) -> ScanUnitResult {
+    match last_result {
+        ServiceLastResult::ResultSucceeded
+        | ServiceLastResult::ExitedWithStatus {
+            exit_status: SCANNER_CLEAN_STATUS,
+        } => ScanUnitResult::NothingFound,
+        ServiceLastResult::ExitedWithStatus {
+            exit_status: SCANNER_FOUND_THREATS_STATUS,
+        } => ScanUnitResult::ThreatsFound,
+        ServiceLastResult::ExitedWithStatus { exit_status } => {
+            ScanUnitResult::ScannerError { exit_status }
+        }
+        ServiceLastResult::FailedWithResult { failure_kind } => {
+            ScanUnitResult::ServiceFailed { failure_kind }
+        }
+    }
+}
+
+pub fn classify_updater_unit_result(last_result: ServiceLastResult) -> UpdaterUnitResult {
+    match last_result {
+        ServiceLastResult::ResultSucceeded
+        | ServiceLastResult::ExitedWithStatus {
+            exit_status: UPDATER_SUCCESS_STATUS,
+        } => UpdaterUnitResult::UpdateSucceeded,
+        ServiceLastResult::ExitedWithStatus { exit_status } => {
+            UpdaterUnitResult::UpdaterError { exit_status }
+        }
+        ServiceLastResult::FailedWithResult { failure_kind } => {
+            UpdaterUnitResult::ServiceFailed { failure_kind }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdaterEvidence {
     pub updater_name: &'static str,
     pub service_unit: &'static str,
-    pub last_result: ServiceLastResult,
-    pub last_completed_run: ServiceRunHistory,
+    pub last_result: UpdaterUnitResult,
+    pub last_completed_run: UpdaterRunHistory,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -181,7 +235,7 @@ pub struct OnAccessEvidence {
 pub enum ScanServiceEvidence {
     ServiceConfigured {
         scan_targets: Vec<String>,
-        last_result: ServiceLastResult,
+        last_result: ScanUnitResult,
     },
     ServiceMissing,
     ServiceUnreadable,
@@ -194,7 +248,7 @@ pub enum ScheduledScanEvidence {
         timer_active: bool,
         next_run: UnitTimestamp,
         scan_service: ScanServiceEvidence,
-        last_completed_run: ServiceRunHistory,
+        last_completed_run: ScanRunHistory,
     },
     LazaretSchedule,
     NoSchedule,
@@ -481,9 +535,11 @@ async fn inspect_engine_installation() -> EngineInstallation {
     }
 }
 
-fn updater_last_result(service_snapshot: ServiceUnitSnapshot) -> Option<ServiceLastResult> {
+fn updater_last_result(service_snapshot: ServiceUnitSnapshot) -> Option<UpdaterUnitResult> {
     match service_snapshot {
-        ServiceUnitSnapshot::LoadedService { last_result, .. } => Some(last_result),
+        ServiceUnitSnapshot::LoadedService { last_result, .. } => {
+            Some(classify_updater_unit_result(last_result))
+        }
         ServiceUnitSnapshot::ServiceNotFound | ServiceUnitSnapshot::SystemdUnreachable(_) => None,
     }
 }
@@ -494,7 +550,7 @@ async fn inspect_updater_unit(updater_unit: SignatureUpdaterUnit) -> Option<Upda
         updater_name: updater_unit.updater_name,
         service_unit: updater_unit.service_unit,
         last_result,
-        last_completed_run: newest_service_run(updater_unit.service_unit).await,
+        last_completed_run: newest_update_run(updater_unit.service_unit).await,
     })
 }
 
@@ -614,7 +670,7 @@ async fn inspect_on_access_evidence() -> OnAccessEvidence {
     on_access_evidence_from_config(on_access_scanner, &config_settings)
 }
 
-fn scan_service_evidence(service_snapshot: ServiceUnitSnapshot) -> ScanServiceEvidence {
+pub fn scan_service_evidence(service_snapshot: ServiceUnitSnapshot) -> ScanServiceEvidence {
     match service_snapshot {
         ServiceUnitSnapshot::LoadedService {
             last_result,
@@ -622,7 +678,7 @@ fn scan_service_evidence(service_snapshot: ServiceUnitSnapshot) -> ScanServiceEv
             ..
         } => ScanServiceEvidence::ServiceConfigured {
             scan_targets: scan_targets_from_arguments(&program_arguments),
-            last_result,
+            last_result: classify_scan_unit_result(last_result),
         },
         ServiceUnitSnapshot::ServiceNotFound => ScanServiceEvidence::ServiceMissing,
         ServiceUnitSnapshot::SystemdUnreachable(_) => ScanServiceEvidence::ServiceUnreadable,
@@ -645,7 +701,7 @@ async fn inspect_scheduled_scan(lazaret_schedule_enabled: bool) -> ScheduledScan
             timer_active: unit_activity == UnitActivity::UnitActive,
             next_run,
             scan_service: scan_service_evidence(service_snapshot),
-            last_completed_run: newest_service_run(system_scan_units.service_unit).await,
+            last_completed_run: newest_scan_run(system_scan_units.service_unit).await,
         };
     }
     if lazaret_schedule_enabled {
@@ -752,7 +808,51 @@ mod protection_evidence_tests {
             }),
             ScanServiceEvidence::ServiceConfigured {
                 scan_targets: vec!["/home".to_owned()],
-                last_result: ServiceLastResult::ResultSucceeded,
+                last_result: ScanUnitResult::NothingFound,
+            }
+        );
+    }
+
+    #[test]
+    fn scan_unit_exit_statuses_follow_the_scanner_meaning() {
+        assert_eq!(
+            classify_scan_unit_result(ServiceLastResult::ResultSucceeded),
+            ScanUnitResult::NothingFound
+        );
+        assert_eq!(
+            classify_scan_unit_result(ServiceLastResult::ExitedWithStatus { exit_status: 1 }),
+            ScanUnitResult::ThreatsFound
+        );
+        assert_eq!(
+            classify_scan_unit_result(ServiceLastResult::ExitedWithStatus { exit_status: 2 }),
+            ScanUnitResult::ScannerError { exit_status: 2 }
+        );
+        assert_eq!(
+            classify_scan_unit_result(ServiceLastResult::FailedWithResult {
+                failure_kind: ServiceFailureKind::TimedOut
+            }),
+            ScanUnitResult::ServiceFailed {
+                failure_kind: ServiceFailureKind::TimedOut
+            }
+        );
+    }
+
+    #[test]
+    fn updater_exit_status_one_is_an_error_not_a_finding() {
+        assert_eq!(
+            classify_updater_unit_result(ServiceLastResult::ResultSucceeded),
+            UpdaterUnitResult::UpdateSucceeded
+        );
+        assert_eq!(
+            classify_updater_unit_result(ServiceLastResult::ExitedWithStatus { exit_status: 1 }),
+            UpdaterUnitResult::UpdaterError { exit_status: 1 }
+        );
+        assert_eq!(
+            classify_updater_unit_result(ServiceLastResult::FailedWithResult {
+                failure_kind: ServiceFailureKind::KilledBySignal
+            }),
+            UpdaterUnitResult::ServiceFailed {
+                failure_kind: ServiceFailureKind::KilledBySignal
             }
         );
     }

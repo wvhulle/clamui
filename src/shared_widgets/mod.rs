@@ -5,5 +5,6 @@ pub mod engine_settings;
 pub mod false_positive_report_dialog;
 pub mod loading_indicators;
 pub mod page_widget_templates;
+pub mod scanner_exit_text;
 pub mod step_timeline;
 pub mod trust_confirmation_dialog;
