@@ -6,5 +6,5 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 Before you start:
 
-- [Development](docs/development.md): the dev shell, tests, VM tests, screenshots, translations, packaging, and the rules every change follows.
+- [Development](docs/development.md): the dev shell, tests, VM tests, screenshots and recordings, translations, packaging, and the rules every change follows.
 - [Architecture](docs/architecture.md): the components and the safety rules behind scanning, quarantine and live tuning.

@@ -6,7 +6,7 @@ Lazaret is a hard fork of [ClamUI](https://github.com/linx-systems/clamui).
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan-results.webp" width="800" alt="Recording of a scan that found two threats, moving both to quarantine">
 
-More screenshots are in [usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md).
+Recordings of every page are in [usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md).
 
 ## Install
 
@@ -21,7 +21,7 @@ More screenshots are in [usage](https://codeberg.org/wvhulle/lazaret/src/branch/
 
 - [Usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md): scanning, quarantine, reputation lookups, protection status, alerts and scheduled scans.
 - [Architecture](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/architecture.md): how Lazaret talks to ClamAV, systemd and the settings helper.
-- [Development](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/development.md): building, testing, screenshots, translations and releases.
+- [Development](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/development.md): building, testing, screenshots and recordings, translations and releases.
 
 ## Contributing
 

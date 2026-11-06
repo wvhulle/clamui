@@ -9,7 +9,7 @@ cargo clippy --all-targets
 nix flake check path:.
 ```
 
-`nix flake check` runs the unit tests, Clippy and formatting of the three crates, the checks of the NixOS and Home Manager modules, the screenshot render and four NixOS VM tests. Run one VM test on its own with:
+`nix flake check` runs the unit tests, Clippy and formatting of the three crates, the checks of the NixOS and Home Manager modules, the screenshot and recording render and four NixOS VM tests. Run one VM test on its own with:
 
 ```sh
 nix build path:.#checks.x86_64-linux.vm-live-tuning
@@ -54,16 +54,16 @@ make update-translation-template
 
 To add a language, add its code to `po/LINGUAS` and create `po/<code>.po` from `po/lazaret.pot`.
 
-## Screenshots
+## Screenshots and recordings
 
 ```sh
 nix build path:.#screenshots
 nix run path:.#render-screenshots -- dist/screenshots
 ```
 
-Screenshots are rendered in a headless sway session with fixture ClamAV programs. Every scenario also records an animated webp named after it, with the pointer shown before each click, and the guides use these recordings. The PNG stills remain for the AppStream metainfo. `xtask/src/page_screenshots.rs` lists each scenario as typed steps that find widgets by accessibility role and name, such as `WidgetTarget::button("Start Scan")`, so layout changes don't break them. To see the names on a page, run `nix build path:.#render-screenshots` and then `result/bin/list-widgets -- --page=scan`.
+Recordings and screenshots are rendered in a headless sway session with fixture ClamAV programs. Every scenario records an animated webp named after it, with the pointer shown before each click; the README and the guides embed these recordings. The PNG screenshots taken along the way are for the AppStream metainfo. `xtask/src/page_screenshots.rs` lists each scenario as typed steps that find widgets by accessibility role and name, such as `WidgetTarget::button("Start Scan")`, so layout changes don't break them. To see the names on a page, run `nix build path:.#render-screenshots` and then `result/bin/list-widgets -- --page=scan`.
 
-On every push to `main`, CI renders the screenshots and pushes them, as wvhulle-bot, to the `screenshots` branch. The README and the guides link to that branch. Never commit images to `main`.
+On every push to `main`, CI renders the recordings and screenshots and pushes them, as wvhulle-bot, to the `screenshots` branch. The README, the guides and the metainfo link to that branch. Never commit images to `main`.
 
 ## Packaging
 
