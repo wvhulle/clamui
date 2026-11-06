@@ -12,6 +12,7 @@ use gtk_scene_capture::{
     headless_sway_session::HeadlessSwaySession,
     scene_driver::{SceneDriver, UserInteraction},
     virtual_pointer_input::ScreenSize,
+    webp_animation_encoding::encode_webp_animation,
 };
 
 use crate::{
@@ -21,6 +22,9 @@ use crate::{
 };
 
 const PAGE_SETTLE_DURATION: Duration = Duration::from_secs(4);
+const STEP_FRAME_DURATION: Duration = Duration::from_millis(1800);
+const POINTING_FRAME_DURATION: Duration = Duration::from_millis(900);
+const FINAL_FRAME_DURATION: Duration = Duration::from_secs(4);
 const APPLICATION_EXIT_DURATION: Duration = Duration::from_millis(500);
 pub const SCREEN_SIZE: ScreenSize = ScreenSize {
     logical_width: 900,
@@ -36,100 +40,169 @@ pub enum ScanFixtureUse {
 pub struct PageScenario {
     pub page_argument: &'static str,
     pub scan_fixture_use: ScanFixtureUse,
+    pub animation_name: &'static str,
     pub user_interactions: Vec<UserInteraction>,
 }
 
-fn capture(screenshot_name: &'static str) -> UserInteraction {
-    UserInteraction::CaptureScreen { screenshot_name }
+fn frame() -> Vec<UserInteraction> {
+    vec![UserInteraction::CaptureFrame {
+        shown_for: STEP_FRAME_DURATION,
+    }]
 }
 
-fn idle_page_capture(page_argument: &'static str, screenshot_name: &'static str) -> PageScenario {
-    PageScenario {
-        page_argument,
-        scan_fixture_use: ScanFixtureUse::IdlePage,
-        user_interactions: vec![capture(screenshot_name)],
-    }
+fn shown(screenshot_name: &'static str) -> Vec<UserInteraction> {
+    vec![
+        UserInteraction::CaptureScreen { screenshot_name },
+        UserInteraction::CaptureFrame {
+            shown_for: STEP_FRAME_DURATION,
+        },
+    ]
 }
 
-fn click(widget_target: WidgetTarget) -> UserInteraction {
-    UserInteraction::ClickWidget(widget_target)
+fn point_and_click(widget_target: WidgetTarget) -> Vec<UserInteraction> {
+    vec![
+        UserInteraction::HoverWidget(widget_target.clone()),
+        UserInteraction::CaptureFrame {
+            shown_for: POINTING_FRAME_DURATION,
+        },
+        UserInteraction::ClickWidget(widget_target),
+    ]
 }
 
-fn wait_for(widget_target: WidgetTarget) -> UserInteraction {
-    UserInteraction::WaitForWidget(widget_target)
+fn wait_for(widget_target: WidgetTarget) -> Vec<UserInteraction> {
+    vec![UserInteraction::WaitForWidget(widget_target)]
 }
 
 fn page_scenarios() -> Vec<PageScenario> {
     vec![
         PageScenario {
-            page_argument: "--page=scan",
+            page_argument: "--page=protection",
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            user_interactions: vec![
-                capture("scan"),
-                click(WidgetTarget::button("Manage Profiles")),
-                capture("profile-manager"),
-            ],
+            animation_name: "protection",
+            user_interactions: [
+                shown("protection"),
+                point_and_click(WidgetTarget::list_item("Daemon running")),
+                frame(),
+                point_and_click(WidgetTarget::button("Review")),
+                frame(),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            page_argument: "--page=detections",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "detections",
+            user_interactions: [
+                shown("detections"),
+                point_and_click(WidgetTarget::list_item("invoice.pdf.exe")),
+                shown("detection-incident"),
+            ]
+            .concat(),
         },
         PageScenario {
             page_argument: "--page=scan",
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            user_interactions: vec![
-                click(WidgetTarget::list_item("Exclusions")),
-                capture("scan-exclusions"),
-            ],
+            animation_name: "scan",
+            user_interactions: [
+                shown("scan"),
+                point_and_click(WidgetTarget::button("Manage Profiles")),
+                shown("profile-manager"),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            page_argument: "--page=scan",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "scan-settings",
+            user_interactions: [
+                frame(),
+                point_and_click(WidgetTarget::list_item("Exclusions")),
+                shown("scan-exclusions"),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            page_argument: "--page=database",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "signature-update",
+            user_interactions: shown("database"),
+        },
+        PageScenario {
+            page_argument: "--page=signatures",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "signatures",
+            user_interactions: [
+                shown("signatures"),
+                point_and_click(WidgetTarget::list_item("Sanesecurity")),
+                frame(),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            page_argument: "--page=quarantine",
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "quarantine",
+            user_interactions: [
+                shown("quarantine"),
+                point_and_click(WidgetTarget::list_item("Win.Trojan.Agent")),
+                frame(),
+            ]
+            .concat(),
         },
         PageScenario {
             page_argument: "--page=scan",
             scan_fixture_use: ScanFixtureUse::ScansFixtureFolder,
-            user_interactions: vec![
+            animation_name: "scan-results",
+            user_interactions: [
                 wait_for(WidgetTarget::button("New Scan")),
-                capture("scan-result"),
-            ],
+                vec![UserInteraction::CaptureScreen {
+                    screenshot_name: "scan-result",
+                }],
+                shown("results-before-quarantine"),
+                point_and_click(WidgetTarget::button("Quarantine 2 Threats")),
+                shown("results-quarantine-confirmation"),
+                point_and_click(
+                    WidgetTarget::button("Quarantine")
+                        .inside(WidgetTarget::alert("Move to Quarantine?")),
+                ),
+                shown("results-quarantined"),
+            ]
+            .concat(),
         },
-        idle_page_capture("--page=database", "database"),
-        idle_page_capture("--page=quarantine", "quarantine"),
         PageScenario {
             page_argument: "--page=logs",
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            user_interactions: vec![
-                capture("logs"),
-                click(WidgetTarget::list_item("Found 2 threats")),
-                capture("logs-entry-selected"),
-            ],
+            animation_name: "logs",
+            user_interactions: [
+                shown("logs"),
+                point_and_click(WidgetTarget::list_item("Found 2 threats")),
+                shown("logs-entry-selected"),
+                point_and_click(WidgetTarget::page_tab("System Changes")),
+                frame(),
+            ]
+            .concat(),
         },
-        idle_page_capture("--page=protection", "protection"),
         PageScenario {
-            page_argument: "--page=detections",
+            page_argument: "--page=hardening",
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            user_interactions: vec![
-                capture("detections"),
-                click(WidgetTarget::list_item("invoice.pdf.exe")),
-                capture("detection-incident"),
-            ],
+            animation_name: "hardening",
+            user_interactions: [
+                shown("hardening"),
+                point_and_click(WidgetTarget::list_item("Firewall Service")),
+                frame(),
+            ]
+            .concat(),
         },
         PageScenario {
             page_argument: "--page=preferences",
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            user_interactions: vec![
-                capture("preferences"),
-                click(WidgetTarget::page_tab("Online Lookups")),
-                capture("preferences-online-lookups"),
-            ],
-        },
-        PageScenario {
-            page_argument: "--page=scan",
-            scan_fixture_use: ScanFixtureUse::ScansFixtureFolder,
-            user_interactions: vec![
-                wait_for(WidgetTarget::button("New Scan")),
-                capture("results-before-quarantine"),
-                click(WidgetTarget::button("Quarantine 2 Threats")),
-                capture("results-quarantine-confirmation"),
-                click(
-                    WidgetTarget::button("Quarantine")
-                        .inside(WidgetTarget::alert("Move to Quarantine?")),
-                ),
-                capture("results-quarantined"),
-            ],
+            animation_name: "preferences",
+            user_interactions: [
+                shown("preferences"),
+                point_and_click(WidgetTarget::page_tab("Online Lookups")),
+                shown("preferences-online-lookups"),
+            ]
+            .concat(),
         },
     ]
 }
@@ -188,10 +261,20 @@ fn run_page_scenario(
         page_scenario.page_argument,
         page_scenario.scan_fixture_use,
     )?;
-    let scenario_outcome = SceneDriver::attach(headless_session, output_directory)
-        .and_then(|mut scene_driver| scene_driver.perform_all(&page_scenario.user_interactions));
+    let scenario_outcome =
+        SceneDriver::attach(headless_session, output_directory).and_then(|mut scene_driver| {
+            scene_driver.perform_all(&page_scenario.user_interactions)?;
+            Ok(scene_driver.take_animation_frames())
+        });
     stop_application(application_process);
-    Ok(scenario_outcome?)
+    let mut animation_frames = scenario_outcome?;
+    if let Some(final_frame) = animation_frames.last_mut() {
+        final_frame.shown_for = FINAL_FRAME_DURATION;
+    }
+    let animation_path = output_directory.join(format!("{}.webp", page_scenario.animation_name));
+    encode_webp_animation(&animation_frames, &animation_path)?;
+    println!("rendered {}", animation_path.display());
+    Ok(())
 }
 
 fn verify_fixtures_were_quarantined(

@@ -28,6 +28,7 @@ let
               lazaret
               pkgs.dbus
               pkgs.grim
+              pkgs.libwebp
               pkgs.sqlite
               pkgs.sway
             ]

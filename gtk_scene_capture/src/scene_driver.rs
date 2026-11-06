@@ -9,6 +9,7 @@ use crate::{
     headless_sway_session::HeadlessSwaySession,
     scene_capture_failure::SceneCaptureFailure,
     virtual_pointer_input::{ScreenPosition, VirtualPointerInput},
+    webp_animation_encoding::AnimationFrame,
 };
 
 const WIDGET_WAIT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -22,6 +23,7 @@ pub enum UserInteraction {
     HoverWidget(WidgetTarget),
     WaitForWidget(WidgetTarget),
     CaptureScreen { screenshot_name: &'static str },
+    CaptureFrame { shown_for: Duration },
 }
 
 pub struct SceneDriver<'session> {
@@ -30,6 +32,8 @@ pub struct SceneDriver<'session> {
     accessible_tree: AccessibleTree,
     pointer_input: VirtualPointerInput,
     output_directory: PathBuf,
+    frame_directory: PathBuf,
+    animation_frames: Vec<AnimationFrame>,
 }
 
 fn screen_position_of(located_widget: &LocatedWidget) -> ScreenPosition {
@@ -63,7 +67,11 @@ impl<'session> SceneDriver<'session> {
                 }
             }
         };
+        let frame_directory = headless_session.session_root().join("animation-frames");
+        std::fs::create_dir_all(&frame_directory)?;
         Ok(Self {
+            frame_directory,
+            animation_frames: Vec::new(),
             headless_session,
             pointer_input: VirtualPointerInput::connect(
                 &headless_session.wayland_socket_path(),
@@ -105,6 +113,8 @@ impl<'session> SceneDriver<'session> {
 
     fn click_widget(&mut self, widget_target: &WidgetTarget) -> Result<(), SceneCaptureFailure> {
         let located_widget = self.wait_for_widget(widget_target)?;
+        self.pointer_input
+            .move_to(screen_position_of(&located_widget))?;
         let activation_outcome = self.async_runtime.block_on(
             self.accessible_tree
                 .activate_widget(&located_widget, widget_target),
@@ -125,10 +135,38 @@ impl<'session> SceneDriver<'session> {
     }
 
     fn capture_screen(&self, screenshot_name: &str) -> Result<(), SceneCaptureFailure> {
+        self.run_grim(
+            &[],
+            &self.output_directory.join(format!("{screenshot_name}.png")),
+        )
+    }
+
+    fn capture_frame(&mut self, shown_for: Duration) -> Result<(), SceneCaptureFailure> {
+        let frame_path = self
+            .frame_directory
+            .join(format!("frame-{:04}.png", self.animation_frames.len()));
+        self.run_grim(&["-c"], &frame_path)?;
+        self.animation_frames.push(AnimationFrame {
+            frame_path,
+            shown_for,
+        });
+        Ok(())
+    }
+
+    pub fn take_animation_frames(&mut self) -> Vec<AnimationFrame> {
+        std::mem::take(&mut self.animation_frames)
+    }
+
+    fn run_grim(
+        &self,
+        grim_options: &[&str],
+        captured_path: &Path,
+    ) -> Result<(), SceneCaptureFailure> {
         let exit_status = self
             .headless_session
             .session_command("grim")
-            .arg(self.output_directory.join(format!("{screenshot_name}.png")))
+            .args(grim_options)
+            .arg(captured_path)
             .status()
             .map_err(|start_failure| SceneCaptureFailure::ToolNotStarted {
                 tool_name: "grim",
@@ -162,6 +200,9 @@ impl<'session> SceneDriver<'session> {
             }
             UserInteraction::CaptureScreen { screenshot_name } => {
                 self.capture_screen(screenshot_name)?;
+            }
+            UserInteraction::CaptureFrame { shown_for } => {
+                self.capture_frame(*shown_for)?;
             }
         }
         Ok(())

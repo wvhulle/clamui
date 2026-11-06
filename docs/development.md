@@ -61,7 +61,7 @@ nix build path:.#screenshots
 nix run path:.#render-screenshots -- dist/screenshots
 ```
 
-Screenshots are rendered in a headless sway session with fixture ClamAV programs. `xtask/src/page_screenshots.rs` lists each scenario as typed steps that find widgets by accessibility role and name, such as `WidgetTarget::button("Start Scan")`, so layout changes don't break them. To see the names on a page, run `nix build path:.#render-screenshots` and then `result/bin/list-widgets -- --page=scan`.
+Screenshots are rendered in a headless sway session with fixture ClamAV programs. Every scenario also records an animated webp named after it, with the pointer shown before each click, and the guides use these recordings. The PNG stills remain for the AppStream metainfo. `xtask/src/page_screenshots.rs` lists each scenario as typed steps that find widgets by accessibility role and name, such as `WidgetTarget::button("Start Scan")`, so layout changes don't break them. To see the names on a page, run `nix build path:.#render-screenshots` and then `result/bin/list-widgets -- --page=scan`.
 
 On every push to `main`, CI renders the screenshots and pushes them, as wvhulle-bot, to the `screenshots` branch. The README and the guides link to that branch. Never commit images to `main`.
 

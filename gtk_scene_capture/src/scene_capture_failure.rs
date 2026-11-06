@@ -1,4 +1,4 @@
-use std::{io, process::ExitStatus};
+use std::{io, path::PathBuf, process::ExitStatus};
 
 use crate::accessible_widget_lookup::WidgetLookupFailure;
 
@@ -26,6 +26,8 @@ pub enum SceneCaptureFailure {
         tool_name: &'static str,
         exit_status: ExitStatus,
     },
+    #[error("no frames were captured for {}", .animation_path.display())]
+    AnimationWithoutFrames { animation_path: PathBuf },
     #[error("timed out waiting for {awaited_condition}")]
     NeverReady { awaited_condition: &'static str },
 }
