@@ -53,49 +53,89 @@ impl CredentialLabel {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ProviderCredential {
-    NoCredential,
-    KeyFileSupported,
-    CredentialInSettingsOnly(SettingsOnlyCredential),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SignatureProvider {
-    pub provider_name: &'static str,
-    signature_prefixes: &'static [&'static str],
-    file_name_markers: &'static [&'static str],
-    credential: ProviderCredential,
+pub struct EnablingSnippets {
     nixos_snippet: &'static str,
     fangfrisch_lines: &'static str,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProviderCredential {
+    NoCredential(EnablingSnippets),
+    KeyFileSupported(EnablingSnippets),
+    CredentialInSettingsOnly(SettingsOnlyCredential),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ThirdPartyProvider {
+    AbuseChUrlhaus,
+    Sanesecurity,
+    InterServer,
+    Malwarepatrol,
+    SecuriteInfo,
+}
+
+impl ThirdPartyProvider {
+    pub const fn provider_name(self) -> &'static str {
+        match self {
+            Self::AbuseChUrlhaus => "abuse.ch URLhaus",
+            Self::Sanesecurity => "Sanesecurity",
+            Self::InterServer => "InterServer",
+            Self::Malwarepatrol => "Malwarepatrol",
+            Self::SecuriteInfo => "SecuriteInfo",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SignatureSource {
+    ClamavProject,
+    ThirdPartySignatures(ThirdPartyProvider),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SignatureFileSource {
+    ThirdPartyFile(ThirdPartyProvider),
+    UnrecognizedSource,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SignatureProvider {
+    pub third_party_provider: ThirdPartyProvider,
+    signature_prefixes: &'static [&'static str],
+    file_name_markers: &'static [&'static str],
+    credential: ProviderCredential,
+}
+
 pub const SIGNATURE_PROVIDERS: [SignatureProvider; 5] = [
     SignatureProvider {
-        provider_name: "abuse.ch URLhaus",
+        third_party_provider: ThirdPartyProvider::AbuseChUrlhaus,
         signature_prefixes: &["URLhaus."],
         file_name_markers: &["urlhaus"],
-        credential: ProviderCredential::KeyFileSupported,
-        nixos_snippet: NIXOS_URLHAUS_SNIPPET,
-        fangfrisch_lines: FANGFRISCH_URLHAUS_LINES,
+        credential: ProviderCredential::KeyFileSupported(EnablingSnippets {
+            nixos_snippet: NIXOS_URLHAUS_SNIPPET,
+            fangfrisch_lines: FANGFRISCH_URLHAUS_LINES,
+        }),
     },
     SignatureProvider {
-        provider_name: "Sanesecurity",
+        third_party_provider: ThirdPartyProvider::Sanesecurity,
         signature_prefixes: &["Sanesecurity."],
         file_name_markers: &["sanesecurity", "junk.ndb", "phish.ndb"],
-        credential: ProviderCredential::NoCredential,
-        nixos_snippet: NIXOS_SANESECURITY_SNIPPET,
-        fangfrisch_lines: FANGFRISCH_SANESECURITY_LINES,
+        credential: ProviderCredential::NoCredential(EnablingSnippets {
+            nixos_snippet: NIXOS_SANESECURITY_SNIPPET,
+            fangfrisch_lines: FANGFRISCH_SANESECURITY_LINES,
+        }),
     },
     SignatureProvider {
-        provider_name: "InterServer",
+        third_party_provider: ThirdPartyProvider::InterServer,
         signature_prefixes: &["InterServer", "winnow"],
         file_name_markers: &["interserver", "winnow"],
-        credential: ProviderCredential::NoCredential,
-        nixos_snippet: NIXOS_INTERSERVER_SNIPPET,
-        fangfrisch_lines: FANGFRISCH_INTERSERVER_LINES,
+        credential: ProviderCredential::NoCredential(EnablingSnippets {
+            nixos_snippet: NIXOS_INTERSERVER_SNIPPET,
+            fangfrisch_lines: FANGFRISCH_INTERSERVER_LINES,
+        }),
     },
     SignatureProvider {
-        provider_name: "Malwarepatrol",
+        third_party_provider: ThirdPartyProvider::Malwarepatrol,
         signature_prefixes: &["MalwarePatrol", "Malwarepatrol"],
         file_name_markers: &["malwarepatrol", "malware.patrol"],
         credential: ProviderCredential::CredentialInSettingsOnly(SettingsOnlyCredential {
@@ -103,11 +143,9 @@ pub const SIGNATURE_PROVIDERS: [SignatureProvider; 5] = [
             signup_url: "https://www.malwarepatrol.net/",
             fangfrisch_credential_lines: FANGFRISCH_MALWAREPATROL_LINES,
         }),
-        nixos_snippet: "",
-        fangfrisch_lines: "",
     },
     SignatureProvider {
-        provider_name: "SecuriteInfo",
+        third_party_provider: ThirdPartyProvider::SecuriteInfo,
         signature_prefixes: &["SecuriteInfo"],
         file_name_markers: &["securiteinfo"],
         credential: ProviderCredential::CredentialInSettingsOnly(SettingsOnlyCredential {
@@ -115,12 +153,10 @@ pub const SIGNATURE_PROVIDERS: [SignatureProvider; 5] = [
             signup_url: "https://www.securiteinfo.com/",
             fangfrisch_credential_lines: FANGFRISCH_SECURITEINFO_LINES,
         }),
-        nixos_snippet: "",
-        fangfrisch_lines: "",
     },
 ];
 
-pub fn provider_of_signature(signature_name: &str) -> &'static str {
+pub fn provider_of_signature(signature_name: &str) -> SignatureSource {
     SIGNATURE_PROVIDERS
         .iter()
         .find(|signature_provider| {
@@ -129,12 +165,12 @@ pub fn provider_of_signature(signature_name: &str) -> &'static str {
                 .iter()
                 .any(|signature_prefix| signature_name.starts_with(signature_prefix))
         })
-        .map_or("ClamAV", |signature_provider| {
-            signature_provider.provider_name
+        .map_or(SignatureSource::ClamavProject, |signature_provider| {
+            SignatureSource::ThirdPartySignatures(signature_provider.third_party_provider)
         })
 }
 
-pub fn provider_of_signature_file(file_name: &str) -> &'static str {
+pub fn provider_of_signature_file(file_name: &str) -> SignatureFileSource {
     let lowercase_name = file_name.to_ascii_lowercase();
     SIGNATURE_PROVIDERS
         .iter()
@@ -144,9 +180,30 @@ pub fn provider_of_signature_file(file_name: &str) -> &'static str {
                 .iter()
                 .any(|file_name_marker| lowercase_name.contains(file_name_marker))
         })
-        .map_or("Other source", |signature_provider| {
-            signature_provider.provider_name
-        })
+        .map_or(
+            SignatureFileSource::UnrecognizedSource,
+            |signature_provider| {
+                SignatureFileSource::ThirdPartyFile(signature_provider.third_party_provider)
+            },
+        )
+}
+
+pub fn signature_source_name(signature_source: SignatureSource) -> String {
+    match signature_source {
+        SignatureSource::ClamavProject => "ClamAV".to_owned(),
+        SignatureSource::ThirdPartySignatures(third_party_provider) => {
+            third_party_provider.provider_name().to_owned()
+        }
+    }
+}
+
+pub fn signature_file_source_name(file_source: SignatureFileSource) -> String {
+    match file_source {
+        SignatureFileSource::ThirdPartyFile(third_party_provider) => {
+            third_party_provider.provider_name().to_owned()
+        }
+        SignatureFileSource::UnrecognizedSource => gettext("Other source"),
+    }
 }
 
 pub fn hide_addresses_in_text(log_text: &str) -> String {
@@ -208,8 +265,9 @@ fn inactive_provider_check(
     signature_provider: &SignatureProvider,
     distribution_family: DistributionFamily,
 ) -> AuditCheck {
+    let provider_name = signature_provider.third_party_provider.provider_name();
     let inactive_check = AuditCheck::new(
-        signature_provider.provider_name.to_owned(),
+        provider_name.to_owned(),
         AuditStatus::CheckSkipped,
         gettext("Not in use"),
     )
@@ -218,23 +276,24 @@ fn inactive_provider_check(
         ProviderCredential::CredentialInSettingsOnly(settings_credential) => {
             settings_credential_check(
                 inactive_check,
-                signature_provider.provider_name,
+                provider_name,
                 settings_credential,
                 distribution_family,
             )
         }
-        ProviderCredential::KeyFileSupported | ProviderCredential::NoCredential
+        ProviderCredential::KeyFileSupported(enabling_snippets)
+        | ProviderCredential::NoCredential(enabling_snippets)
             if distribution_family == DistributionFamily::NixosFamily =>
         {
-            inactive_check.with_suggested_commands([signature_provider.nixos_snippet])
+            inactive_check.with_suggested_commands([enabling_snippets.nixos_snippet])
         }
-        ProviderCredential::NoCredential => inactive_check
+        ProviderCredential::NoCredential(enabling_snippets) => inactive_check
             .with_recommendation(
                 gettext("Add these lines to fangfrisch's settings file, usually {path}.")
                     .replace("{path}", FANGFRISCH_CONFIG_PATH),
             )
-            .with_suggested_commands([signature_provider.fangfrisch_lines]),
-        ProviderCredential::KeyFileSupported => inactive_check
+            .with_suggested_commands([enabling_snippets.fangfrisch_lines]),
+        ProviderCredential::KeyFileSupported(enabling_snippets) => inactive_check
             .with_recommendation(
                 gettext(
                     "{provider} needs a free abuse.ch Auth-Key. Add these lines to fangfrisch's \
@@ -242,10 +301,10 @@ fn inactive_provider_check(
                      make the file readable by root only, so other users can't see it.",
                 )
                 .replace("{path}", FANGFRISCH_CONFIG_PATH)
-                .replace("{provider}", signature_provider.provider_name),
+                .replace("{provider}", provider_name),
             )
             .with_suggested_commands([
-                signature_provider.fangfrisch_lines,
+                enabling_snippets.fangfrisch_lines,
                 FANGFRISCH_CONFIG_PROTECTION_COMMAND,
             ])
             .with_documentation("https://auth.abuse.ch/"),
@@ -260,11 +319,15 @@ pub fn signature_source_checks(
         .iter()
         .map(|signature_provider| {
             let provider_in_use = signature_file_names.iter().any(|file_name| {
-                provider_of_signature_file(file_name) == signature_provider.provider_name
+                provider_of_signature_file(file_name)
+                    == SignatureFileSource::ThirdPartyFile(signature_provider.third_party_provider)
             });
             if provider_in_use {
                 AuditCheck::new(
-                    signature_provider.provider_name.to_owned(),
+                    signature_provider
+                        .third_party_provider
+                        .provider_name()
+                        .to_owned(),
                     AuditStatus::CheckPassed,
                     gettext("In use"),
                 )
@@ -280,7 +343,10 @@ pub fn unreadable_source_checks(read_failure: DatabaseFolderReadFailure) -> Vec<
         .iter()
         .map(|signature_provider| {
             AuditCheck::new(
-                signature_provider.provider_name.to_owned(),
+                signature_provider
+                    .third_party_provider
+                    .provider_name()
+                    .to_owned(),
                 AuditStatus::StatusUnknown,
                 gettext("Unknown. {reason}")
                     .replace("{reason}", &database_folder_failure_text(read_failure)),
@@ -307,10 +373,16 @@ mod signature_provider_catalogue_tests {
 
     #[test]
     fn signatures_name_their_source() {
-        assert_eq!(provider_of_signature("URLhaus.15711"), "abuse.ch URLhaus");
-        assert_eq!(provider_of_signature("Win.Trojan.Agent-1"), "ClamAV");
         assert_eq!(
-            provider_of_signature("Sanesecurity.Foxhole.Zip"),
+            provider_of_signature("URLhaus.15711"),
+            SignatureSource::ThirdPartySignatures(ThirdPartyProvider::AbuseChUrlhaus)
+        );
+        assert_eq!(
+            provider_of_signature("Win.Trojan.Agent-1"),
+            SignatureSource::ClamavProject
+        );
+        assert_eq!(
+            signature_source_name(provider_of_signature("Sanesecurity.Foxhole.Zip")),
             "Sanesecurity"
         );
     }
@@ -319,9 +391,12 @@ mod signature_provider_catalogue_tests {
     fn signature_files_name_their_source() {
         assert_eq!(
             provider_of_signature_file("urlhaus_clamav.ndb"),
-            "abuse.ch URLhaus"
+            SignatureFileSource::ThirdPartyFile(ThirdPartyProvider::AbuseChUrlhaus)
         );
-        assert_eq!(provider_of_signature_file("custom.ndb"), "Other source");
+        assert_eq!(
+            signature_file_source_name(provider_of_signature_file("custom.ndb")),
+            "Other source"
+        );
     }
 
     #[test]
@@ -432,5 +507,46 @@ mod signature_provider_catalogue_tests {
         assert!(securiteinfo_check.check_guidance.iter().all(|check_guidance| {
             !matches!(check_guidance, CheckGuidance::RecommendationText(advice_text) if advice_text.contains("NixOS"))
         }));
+    }
+
+    #[test]
+    fn providers_without_a_settings_credential_carry_their_snippets() {
+        let sanesecurity_provider = SIGNATURE_PROVIDERS
+            .iter()
+            .find(|signature_provider| {
+                signature_provider.third_party_provider == ThirdPartyProvider::Sanesecurity
+            })
+            .expect("catalogue entry");
+        assert_eq!(
+            sanesecurity_provider.credential,
+            ProviderCredential::NoCredential(EnablingSnippets {
+                nixos_snippet: NIXOS_SANESECURITY_SNIPPET,
+                fangfrisch_lines: FANGFRISCH_SANESECURITY_LINES,
+            })
+        );
+        let nixos_checks = signature_source_checks(&[], DistributionFamily::NixosFamily);
+        let sanesecurity_check = nixos_checks
+            .iter()
+            .find(|source_check| source_check.check_name == "Sanesecurity")
+            .expect("catalogue entry");
+        assert_eq!(
+            commands_of(sanesecurity_check),
+            vec![NIXOS_SANESECURITY_SNIPPET]
+        );
+    }
+
+    #[test]
+    fn every_suggested_snippet_is_filled_in() {
+        [
+            DistributionFamily::NixosFamily,
+            DistributionFamily::DebianFamily,
+        ]
+        .into_iter()
+        .flat_map(|distribution_family| signature_source_checks(&[], distribution_family))
+        .for_each(|source_check| {
+            commands_of(&source_check)
+                .into_iter()
+                .for_each(|suggested_command| assert!(!suggested_command.is_empty()));
+        });
     }
 }

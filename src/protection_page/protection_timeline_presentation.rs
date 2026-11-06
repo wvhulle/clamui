@@ -48,7 +48,9 @@ use crate::{
             moment_value_text,
         },
     },
-    signatures_page::signature_provider_catalogue::provider_of_signature_file,
+    signatures_page::signature_provider_catalogue::{
+        provider_of_signature_file, signature_file_source_name,
+    },
 };
 
 const DATABASE_FRESH_LIMIT: SignedDuration = SignedDuration::from_hours(4 * 24);
@@ -779,7 +781,7 @@ fn third_party_file_row(
     timed_evidence_row(
         gettext("{provider} fetched").replace(
             "{provider}",
-            provider_of_signature_file(&signature_file.file_name),
+            &signature_file_source_name(provider_of_signature_file(&signature_file.file_name)),
         ),
         EvidenceMoment::PastEvent {
             happened_at: signature_file.modified_at,

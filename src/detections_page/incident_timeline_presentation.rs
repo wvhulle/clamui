@@ -21,7 +21,7 @@ use crate::{
         ActionConsequence, ActionableEvidenceRow, SettledNodeState, SettledStep, StepActionButton,
         StepChoiceRow, StepEvidenceRow, TimelineStep,
     },
-    signatures_page::signature_provider_catalogue::provider_of_signature,
+    signatures_page::signature_provider_catalogue::{provider_of_signature, signature_source_name},
 };
 
 const TEST_SIGNATURE_MARKER: &str = "Eicar-Test-Signature";
@@ -206,7 +206,7 @@ fn detected_step(stored_detection: &StoredDetection) -> IncidentStep {
         evidence_row(gettext("File"), displayed_file_path(stored_detection)),
         evidence_row(
             gettext("Signature source"),
-            provider_of_signature(&stored_detection.signature_name).to_owned(),
+            signature_source_name(provider_of_signature(&stored_detection.signature_name)),
         ),
         evidence_row(gettext("Found by"), source_text(stored_detection)),
         evidence_row(
