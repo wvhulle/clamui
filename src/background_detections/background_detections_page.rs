@@ -8,8 +8,7 @@ use std::{
 use futures::StreamExt;
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
-    adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 use tokio::task::spawn_blocking;
 
@@ -48,20 +47,12 @@ use crate::{
     threat_intel_lookup::{
         malware_bazaar_client::look_up_signature,
         service_key_storage::{ThreatIntelService, read_stored_api_key},
-        virustotal_lookup_dialog::VirusTotalLookupDialog,
     },
 };
 
 const JOURNAL_BATCH_SIZE: usize = 256;
 const LIST_VIEW_NAME: &str = "list";
 const INCIDENT_VIEW_NAME: &str = "incident";
-
-enum VirusTotalDialogHolder {
-    NoDialogOpened,
-    DialogOpened {
-        _lookup_dialog: Controller<VirusTotalLookupDialog>,
-    },
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OpenedIncident {
@@ -86,7 +77,6 @@ pub struct BackgroundDetectionsPage {
     application_started_unix: i64,
     deletion_prompt: DeletionPrompt,
     lookup_state: SignatureLookupState,
-    virustotal_dialog: VirusTotalDialogHolder,
     list_rows: Vec<adw::ActionRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow>,
     list_group: adw::PreferencesGroup,
@@ -539,29 +529,13 @@ impl BackgroundDetectionsPage {
         });
     }
 
-    fn open_virustotal_dialog(&mut self, root: &adw::ToastOverlay) {
-        let Some(file_path) = self
-            .opened_detection()
-            .map(|displayed_detection| displayed_detection.stored_detection.file_path.clone())
-        else {
-            return;
-        };
-        let lookup_dialog = VirusTotalLookupDialog::builder().launch(file_path).detach();
-        lookup_dialog.widget().present(Some(root));
-        self.virustotal_dialog = VirusTotalDialogHolder::DialogOpened {
-            _lookup_dialog: lookup_dialog,
-        };
-    }
-
     fn run_incident_action(
         &mut self,
         chosen_action: TimelineStepAction,
         sender: &ComponentSender<Self>,
-        root: &adw::ToastOverlay,
     ) {
         match chosen_action {
             TimelineStepAction::LookUpIncidentSignature => self.start_signature_lookup(sender),
-            TimelineStepAction::CheckIncidentOnVirusTotal => self.open_virustotal_dialog(root),
             TimelineStepAction::AskIncidentDeletion => {
                 self.deletion_prompt = DeletionPrompt::AwaitingAnswer;
                 self.show_opened_incident();
@@ -654,7 +628,6 @@ impl Component for BackgroundDetectionsPage {
             application_started_unix: current_unix_seconds(),
             deletion_prompt: DeletionPrompt::NotAsked,
             lookup_state: SignatureLookupState::NotLookedUp,
-            virustotal_dialog: VirusTotalDialogHolder::NoDialogOpened,
             list_rows: Vec::new(),
             incident_rows,
             list_group: list_group.clone(),
@@ -718,7 +691,7 @@ impl Component for BackgroundDetectionsPage {
             }
             BackgroundDetectionsPageInput::StepRequested(TimelineStepRequest::ActionChosen(
                 chosen_action,
-            )) => self.run_incident_action(chosen_action, &sender, root),
+            )) => self.run_incident_action(chosen_action, &sender),
         }
     }
 

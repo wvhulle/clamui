@@ -19,7 +19,8 @@ Compares the headless renders from `nix build path:.#screenshots` with upstream'
 
 ## Scan results
 
-- [x] Results in an `adw::Dialog`, with files, directories and threats statistics.
+- [x] Results shown inline on the Scan page after the scan, with files scanned of planned, duration and threats.
+- [x] Files the scanner never reported (for example after a lost clamd connection) listed as a problem.
 - [x] Severity badge per threat.
 - [x] Per-threat Copy Path.
 - [x] Per-threat Exclude.
@@ -83,7 +84,7 @@ Use `adw::PreferencesDialog` and `gio::Settings`.
 - [x] Scheduled scans with user systemd timers, locked when the system already has a scan timer. There's no cron fallback: non-systemd hosts see that scheduling is unavailable.
 - [x] On-access settings, locked in the same way.
 - [x] MalwareBazaar lookups by signature name, with an abuse.ch key in the system keyring. Only the signature name is sent, so blocked files can be looked up too.
-- [x] VirusTotal: key in the system keyring, hash lookup first, and confirmation before any upload. There's no plaintext key fallback. Uploads use a generic file name, so the real name isn't shared.
+- [x] Reputation check on each quarantine entry, using the SHA-256 stored at quarantine time: CIRCL hashlookup (no key; also reports files it lists as malicious), MalwareBazaar (abuse.ch key), and VirusTotal when its key is set. Only the hash is sent; files are never uploaded. Keys live in the system keyring with no plaintext fallback.
 - [x] Device auto-scan for removable and external drives, without auto-quarantine or network and internal volumes.
 
 Debug logs and the in-app language picker are deliberately not ported: this fork has no debug logging, and the language follows the system locale.

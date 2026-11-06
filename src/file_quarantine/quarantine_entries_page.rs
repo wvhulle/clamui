@@ -100,6 +100,7 @@ pub enum QuarantineEntriesPageInput {
     SearchTextChanged(String),
     ClearOldEntriesRequested,
     ClearOldEntriesConfirmed,
+    ToastRequested(String),
 }
 
 #[derive(Debug)]
@@ -207,98 +208,101 @@ impl Component for QuarantineEntriesPage {
     type CommandOutput = QuarantineEntriesPageCommand;
 
     view! {
-        #[template]
-        ClampedPage {
-            #[template_child]
-            page_content {
-                adw::PreferencesGroup {
-                    set_title: &gettext("Quarantine Storage"),
-                    set_description: Some(&gettext("Secure storage for isolated threats")),
+        adw::ToastOverlay {
+            #[wrap(Some)]
+            #[template]
+            set_child = &ClampedPage {
+                #[template_child]
+                page_content {
+                    adw::PreferencesGroup {
+                        set_title: &gettext("Quarantine Storage"),
+                        set_description: Some(&gettext("Secure storage for isolated threats")),
 
-                    adw::ActionRow {
-                        set_title: &gettext("Total Size"),
-                        #[watch]
-                        set_subtitle: &model.total_stored_size(),
-                        add_prefix = &gtk::Image { set_icon_name: Some("drive-harddisk-symbolic") },
-                        add_suffix = &gtk::Label {
-                            add_css_class: "dim-label",
+                        adw::ActionRow {
+                            set_title: &gettext("Total Size"),
                             #[watch]
-                            set_label: &model.entry_count_text(),
+                            set_subtitle: &model.total_stored_size(),
+                            add_prefix = &gtk::Image { set_icon_name: Some("drive-harddisk-symbolic") },
+                            add_suffix = &gtk::Label {
+                                add_css_class: "dim-label",
+                                #[watch]
+                                set_label: &model.entry_count_text(),
+                            },
                         },
                     },
-                },
 
-                gtk::Label {
-                    set_xalign: 0.0,
-                    set_wrap: true,
-                    set_selectable: true,
-                    #[watch]
-                    set_visible: !model.status_message.is_empty(),
-                    #[watch]
-                    set_label: &model.status_message,
-                },
-
-                gtk::Box {
-                    set_spacing: 6,
+                    gtk::Label {
+                        set_xalign: 0.0,
+                        set_wrap: true,
+                        set_selectable: true,
+                        #[watch]
+                        set_visible: !model.status_message.is_empty(),
+                        #[watch]
+                        set_label: &model.status_message,
+                    },
 
                     gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_hexpand: true,
+                        set_spacing: 6,
 
-                        gtk::Label {
-                            set_xalign: 0.0,
-                            add_css_class: "heading",
-                            set_label: &gettext("Quarantined Files"),
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_hexpand: true,
+
+                            gtk::Label {
+                                set_xalign: 0.0,
+                                add_css_class: "heading",
+                                set_label: &gettext("Quarantined Files"),
+                            },
+
+                            gtk::Label {
+                                set_xalign: 0.0,
+                                set_wrap: true,
+                                add_css_class: "dim-label",
+                                set_label: &gettext("Detected threats isolated from your system"),
+                            },
                         },
 
-                        gtk::Label {
-                            set_xalign: 0.0,
-                            set_wrap: true,
-                            add_css_class: "dim-label",
-                            set_label: &gettext("Detected threats isolated from your system"),
+                        gtk::SearchEntry {
+                            set_placeholder_text: Some(&gettext("Search by threat name or path")),
+                            set_valign: gtk::Align::Center,
+                            connect_search_changed[sender] => move |search_entry| {
+                                sender.input(QuarantineEntriesPageInput::SearchTextChanged(
+                                    search_entry.text().to_string(),
+                                ));
+                            },
+                        },
+
+                        gtk::Button {
+                            set_icon_name: "view-refresh-symbolic",
+                            set_tooltip_text: Some(&gettext("Refresh")),
+                            set_valign: gtk::Align::Center,
+                            add_css_class: "flat",
+                            connect_clicked => QuarantineEntriesPageInput::ReloadEntriesRequested,
+                        },
+
+                        gtk::Button {
+                            set_label: &gettext("Clear Old Items"),
+                            set_valign: gtk::Align::Center,
+                            add_css_class: "flat",
+                            #[watch]
+                            set_sensitive: !model.old_entries().is_empty(),
+                            connect_clicked => QuarantineEntriesPageInput::ClearOldEntriesRequested,
                         },
                     },
 
-                    gtk::SearchEntry {
-                        set_placeholder_text: Some(&gettext("Search by threat name or path")),
-                        set_valign: gtk::Align::Center,
-                        connect_search_changed[sender] => move |search_entry| {
-                            sender.input(QuarantineEntriesPageInput::SearchTextChanged(
-                                search_entry.text().to_string(),
-                            ));
-                        },
-                    },
-
-                    gtk::Button {
-                        set_icon_name: "view-refresh-symbolic",
-                        set_tooltip_text: Some(&gettext("Refresh")),
-                        set_valign: gtk::Align::Center,
-                        add_css_class: "flat",
-                        connect_clicked => QuarantineEntriesPageInput::ReloadEntriesRequested,
-                    },
-
-                    gtk::Button {
-                        set_label: &gettext("Clear Old Items"),
-                        set_valign: gtk::Align::Center,
-                        add_css_class: "flat",
-                        #[watch]
-                        set_sensitive: !model.old_entries().is_empty(),
-                        connect_clicked => QuarantineEntriesPageInput::ClearOldEntriesRequested,
-                    },
-                },
-
-                #[local_ref]
-                entry_list -> gtk::ListBox {
-                    add_css_class: "boxed-list",
-                    set_selection_mode: gtk::SelectionMode::None,
-                    #[wrap(Some)]
                     #[local_ref]
-                    set_placeholder = placeholder_stack -> gtk::Stack {
-                        #[watch]
-                        set_visible_child_name: model.first_load.shown_page_name(),
+                    entry_list -> gtk::ListBox {
+                        add_css_class: "boxed-list",
+                        set_selection_mode: gtk::SelectionMode::None,
+                        #[wrap(Some)]
+                        #[local_ref]
+                        set_placeholder = placeholder_stack -> gtk::Stack {
+                            #[watch]
+                            set_visible_child_name: model.first_load.shown_page_name(),
+                        },
                     },
                 },
-            },
+            }
         }
     }
 
@@ -310,11 +314,14 @@ impl Component for QuarantineEntriesPage {
         let entry_rows = FactoryVecDeque::builder()
             .launch(gtk::ListBox::default())
             .forward(sender.input_sender(), |row_output| match row_output {
-                QuarantineEntryRowOutput::RestoreRequested { entry_id } => {
+                QuarantineEntryRowOutput::RestoreEntry { entry_id } => {
                     QuarantineEntriesPageInput::RestoreEntryRequested { entry_id }
                 }
-                QuarantineEntryRowOutput::DeleteRequested { entry_id } => {
+                QuarantineEntryRowOutput::DeleteEntry { entry_id } => {
                     QuarantineEntriesPageInput::DeleteEntryRequested { entry_id }
+                }
+                QuarantineEntryRowOutput::ShowToast(toast_message) => {
+                    QuarantineEntriesPageInput::ToastRequested(toast_message)
                 }
             });
         let model = Self {
@@ -344,11 +351,14 @@ impl Component for QuarantineEntriesPage {
         &mut self,
         page_input: QuarantineEntriesPageInput,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         let quarantine_vault = self.quarantine_vault.clone();
         let command_sender = sender.command_sender().clone();
         match page_input {
+            QuarantineEntriesPageInput::ToastRequested(toast_message) => {
+                root.add_toast(adw::Toast::new(&toast_message));
+            }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {
                 relm4::spawn(async move {

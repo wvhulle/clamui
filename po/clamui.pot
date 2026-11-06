@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: clamui\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 13:52+0100\n"
+"POT-Creation-Date: 2026-11-06 11:04+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -59,9 +59,9 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/activity_history/activity_export_formats.rs:29
-#: src/malware_scan/scan_progress_page.rs:366
-#: src/malware_scan/scan_progress_page.rs:509
-#: src/malware_scan/scan_results_dialog.rs:55
+#: src/malware_scan/scan_progress_page.rs:406
+#: src/malware_scan/scan_progress_page.rs:621
+#: src/malware_scan/scan_results_panel.rs:107
 msgid "No threats found"
 msgstr ""
 
@@ -70,15 +70,15 @@ msgid "Scheduled scan skipped (on battery power)"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:31
-#: src/malware_scan/scan_progress_page.rs:364
-#: src/malware_scan/scan_progress_page.rs:510
-#: src/malware_scan/scan_results_dialog.rs:56
+#: src/malware_scan/scan_progress_page.rs:404
+#: src/malware_scan/scan_progress_page.rs:622
+#: src/malware_scan/scan_results_panel.rs:108
 msgid "The scan did not finish cleanly"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:32
-#: src/malware_scan/scan_progress_page.rs:359
-#: src/malware_scan/scan_results_dialog.rs:57
+#: src/malware_scan/scan_progress_page.rs:399
+#: src/malware_scan/scan_results_panel.rs:109
 msgid "Scan cancelled by user"
 msgstr ""
 
@@ -116,7 +116,7 @@ msgid "Timestamp"
 msgstr ""
 
 #: src/activity_history/activity_export_formats.rs:100
-#: src/threat_intel_lookup/service_key_preferences_page.rs:106
+#: src/threat_intel_lookup/service_key_preferences_page.rs:107
 msgid "Status"
 msgstr ""
 
@@ -136,137 +136,142 @@ msgstr ""
 msgid "Full Output"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:128
+#: src/activity_history/activity_logs_page.rs:130
 msgid "Select a log entry to view details."
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:147
+#: src/activity_history/activity_logs_page.rs:149
 msgid "Clear All Logs?"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:149
+#: src/activity_history/activity_logs_page.rs:151
 msgid ""
 "This will permanently delete all historical logs. This action cannot be "
 "undone."
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:152
-#: src/application_settings/preferences_dialog.rs:258
-#: src/application_window_shell.rs:561
-#: src/background_detections/incident_timeline_presentation.rs:314
-#: src/file_quarantine/quarantine_entries_page.rs:173
-#: src/file_quarantine/quarantine_entries_page.rs:189
-#: src/malware_scan/scan_progress_page.rs:743
-#: src/malware_scan/scan_results_dialog.rs:208
+#: src/activity_history/activity_logs_page.rs:154
+#: src/application_settings/preferences_dialog.rs:307
+#: src/application_window_shell.rs:613
+#: src/background_detections/incident_timeline_presentation.rs:306
+#: src/file_quarantine/quarantine_entries_page.rs:176
+#: src/file_quarantine/quarantine_entries_page.rs:192
+#: src/malware_scan/scan_progress_page.rs:937
+#: src/malware_scan/scan_results_panel.rs:348
 #: src/scan_profiles/profile_manager_dialog.rs:116
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:162
 #: src/virus_database/database_update_page.rs:530
 msgid "Cancel"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:153
-#: src/activity_history/activity_logs_page.rs:271
+#: src/activity_history/activity_logs_page.rs:155
+#: src/activity_history/activity_logs_page.rs:273
 msgid "Clear All"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:211
-#: src/activity_history/activity_logs_page.rs:225
+#: src/activity_history/activity_logs_page.rs:213
+#: src/activity_history/activity_logs_page.rs:227
 msgid "Historical Logs"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:231
+#: src/activity_history/activity_logs_page.rs:233
 msgid "Previous scan and update operations"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:237
-#: src/activity_history/activity_logs_page.rs:380
-#: src/file_quarantine/quarantine_entries_page.rs:272
+#: src/activity_history/activity_logs_page.rs:239
+#: src/activity_history/activity_logs_page.rs:382
+#: src/file_quarantine/quarantine_entries_page.rs:277
 msgid "Refresh"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:245
+#: src/activity_history/activity_logs_page.rs:247
 msgid "Export All"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:256
+#: src/activity_history/activity_logs_page.rs:258
 msgid "Export CSV"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:262
+#: src/activity_history/activity_logs_page.rs:264
 msgid "Export JSON"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:304
-msgid "No historical logs yet."
-msgstr ""
-
-#: src/activity_history/activity_logs_page.rs:321
+#: src/activity_history/activity_logs_page.rs:323
 msgid "Log Details"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:326
-#: src/activity_history/activity_logs_page.rs:388
-#: src/application_settings/preferences_dialog.rs:344
+#: src/activity_history/activity_logs_page.rs:328
+#: src/activity_history/activity_logs_page.rs:390
+#: src/application_settings/preferences_dialog.rs:411
 #: src/step_timeline/timeline_step_row.rs:70
 #: src/system_audit/audit_check_row.rs:45
 msgid "Copy"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:335
-#: src/activity_history/activity_logs_page.rs:396
+#: src/activity_history/activity_logs_page.rs:337
+#: src/activity_history/activity_logs_page.rs:398
 msgid "Export Text"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:346
-#: src/activity_history/activity_logs_page.rs:360
+#: src/activity_history/activity_logs_page.rs:348
+#: src/activity_history/activity_logs_page.rs:362
 msgid "ClamAV Daemon"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:373
+#: src/activity_history/activity_logs_page.rs:375
 msgid "Live Updates"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:425
-#: src/malware_scan/scan_progress_page.rs:318
-#: src/protection_status/protection_timeline_page.rs:290
+#: src/activity_history/activity_logs_page.rs:427
+#: src/malware_scan/scan_progress_page.rs:358
+#: src/protection_status/protection_timeline_page.rs:315
 #: src/scheduled_scans/schedule_preferences_page.rs:265
-#: src/threat_intel_lookup/service_key_preferences_page.rs:147
+#: src/system_audit/audit_check_row.rs:101
+#: src/threat_intel_lookup/file_reputation_check.rs:35
+#: src/threat_intel_lookup/service_key_preferences_page.rs:148
 #: src/virus_database/database_update_page.rs:286
 #: src/virus_database/database_update_page.rs:293
 msgid "Checking…"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:479
+#: src/activity_history/activity_logs_page.rs:437
+msgid "Loading history…"
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:441
+msgid "No historical logs yet."
+msgstr ""
+
+#: src/activity_history/activity_logs_page.rs:490
 msgid "Log details copied to clipboard"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:501
+#: src/activity_history/activity_logs_page.rs:512
 msgid "Daemon logs copied to clipboard"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:535
+#: src/activity_history/activity_logs_page.rs:548
 #, rust-format
 msgid "Failed to load historical logs: {error}"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:542
+#: src/activity_history/activity_logs_page.rs:555
 msgid "Historical logs cleared."
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:545
+#: src/activity_history/activity_logs_page.rs:558
 #, rust-format
 msgid "Failed to clear logs: {error}"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:557
+#: src/activity_history/activity_logs_page.rs:570
 msgid "System journal"
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:561
+#: src/activity_history/activity_logs_page.rs:574
 msgid "Daemon log file not found."
 msgstr ""
 
-#: src/activity_history/activity_logs_page.rs:566
+#: src/activity_history/activity_logs_page.rs:579
 msgid "Exported."
 msgstr ""
 
@@ -317,258 +322,266 @@ msgstr ""
 msgid "Copied. Add it to your configuration to apply it."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:228
-msgid ""
-"Applied. It lasts until you remove it, and your system configuration doesn't "
-"know about it yet."
+#: src/application_settings/preferences_dialog.rs:277
+msgid "Applied, but not yet in your system configuration."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:232
+#: src/application_settings/preferences_dialog.rs:280
 msgid ""
 "ClamAV didn't come back healthy with that value, so the previous settings "
 "were restored."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:236
+#: src/application_settings/preferences_dialog.rs:284
 #, rust-format
 msgid "The change was not made: {error}"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:250
+#: src/application_settings/preferences_dialog.rs:299
 msgid "Change this setting?"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:262
+#: src/application_settings/preferences_dialog.rs:311
 msgid "Reduce Protection"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:264
+#: src/application_settings/preferences_dialog.rs:313
 #: src/scheduled_scans/schedule_preferences_page.rs:194
 msgid "Apply"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:278
-msgid "Applying, and restarting ClamAV…"
+#: src/application_settings/preferences_dialog.rs:329
+msgid "Applying, and restarting ClamAV"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:294
+#: src/application_settings/preferences_dialog.rs:357
 msgid "Change Settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:296
+#: src/application_settings/preferences_dialog.rs:359
 msgid ""
 "Unlock to change the settings your system allows at runtime. Unlocking "
 "grants nothing by itself: each change shows what will happen and asks for "
 "administrator authorization. It locks again after two minutes."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:336
+#: src/application_settings/preferences_dialog.rs:402
 msgid "Changes your system configuration doesn't know about"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:370
+#: src/application_settings/preferences_dialog.rs:449
 msgid ""
-"Managed outside ClamUI. Applying copies the change instead of making it."
+"Managed outside ClamUI. Unless the setting is unlocked, applying copies the "
+"change instead of making it."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:427
+#: src/application_settings/preferences_dialog.rs:484
+#, rust-format
+msgid ""
+"{path} combines your system configuration with the changes made here. While "
+"locked, editing a value and pressing the check mark copies the line for your "
+"configuration. After unlocking, the allowed settings change directly."
+msgstr ""
+
+#: src/application_settings/preferences_dialog.rs:527
 msgid "No settings in this section"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:468
+#: src/application_settings/preferences_dialog.rs:568
 msgid "Configuration file not found"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:492
+#: src/application_settings/preferences_dialog.rs:597
 msgid "File Manager Integration"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:494
+#: src/application_settings/preferences_dialog.rs:599
 msgid "Add context menu actions for supported file managers."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:524
-#: src/malware_scan/scan_progress_page.rs:939
+#: src/application_settings/preferences_dialog.rs:629
+#: src/malware_scan/scan_progress_page.rs:1126
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:526
+#: src/application_settings/preferences_dialog.rs:631
 msgid ""
 "Automatically scan removable and external drives when they are connected."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:530
+#: src/application_settings/preferences_dialog.rs:635
 msgid "Enable Device Auto-Scan"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:537
+#: src/application_settings/preferences_dialog.rs:642
 msgid "Max Device Size (GB)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:538
+#: src/application_settings/preferences_dialog.rs:643
 msgid "0 means no size limit."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:557
+#: src/application_settings/preferences_dialog.rs:662
 #: src/scheduled_scans/schedule_preferences_page.rs:237
 msgid "Skip on Battery"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:568
+#: src/application_settings/preferences_dialog.rs:673
 msgid "Window Behavior"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:570
-msgid "Running in the background needs a desktop with a system tray."
+#: src/application_settings/preferences_dialog.rs:675
+msgid "Detection alerts only work while ClamUI is running."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:574
+#: src/application_settings/preferences_dialog.rs:679
 msgid "Quit completely"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:575
+#: src/application_settings/preferences_dialog.rs:680
 msgid "Minimize to tray"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:576
+#: src/application_settings/preferences_dialog.rs:681
 msgid "Always ask"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:579
+#: src/application_settings/preferences_dialog.rs:684
 msgid "When closing window"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:598
-msgid "Start in System Tray"
+#: src/application_settings/preferences_dialog.rs:703
+msgid "Start in the Background"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:600
-msgid "Launch in the background and show only the tray icon."
+#: src/application_settings/preferences_dialog.rs:705
+msgid "Launch in the background without opening a window."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:608
+#: src/application_settings/preferences_dialog.rs:713
 msgid "Desktop Notifications"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:610
+#: src/application_settings/preferences_dialog.rs:715
 msgid ""
-"Notify about finished scans and updates while the window is not in focus."
+"Notify about detections, and about finished scans and updates while the "
+"window is not in focus."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:622
+#: src/application_settings/preferences_dialog.rs:728
 msgid "Behavior"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:626
+#: src/application_settings/preferences_dialog.rs:732
 msgid "Scan Behavior"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:627
+#: src/application_settings/preferences_dialog.rs:733
 msgid "Configure how scans run and are displayed"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:630
+#: src/application_settings/preferences_dialog.rs:736
 msgid "Show Live Scan Progress"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:631
+#: src/application_settings/preferences_dialog.rs:737
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:638
+#: src/application_settings/preferences_dialog.rs:744
 msgid "Automatic"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:639
+#: src/application_settings/preferences_dialog.rs:745
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:640
+#: src/application_settings/preferences_dialog.rs:746
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:643
+#: src/application_settings/preferences_dialog.rs:749
 msgid "Scan Backend"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:645
+#: src/application_settings/preferences_dialog.rs:751
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:708
+#: src/application_settings/preferences_dialog.rs:814
 #: src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:741
+#: src/application_settings/preferences_dialog.rs:847
 #: src/scan_profiles/profile_editor_dialog.rs:192
 msgid "Exclusions"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:754
+#: src/application_settings/preferences_dialog.rs:860
 msgid ""
 "These apply to scans started from ClamUI. They don't change what on-access "
 "scanning or a system scan timer checks."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:757
+#: src/application_settings/preferences_dialog.rs:863
 msgid "Preset Exclusions"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:759
+#: src/application_settings/preferences_dialog.rs:865
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:764
+#: src/application_settings/preferences_dialog.rs:870
 msgid "Custom Exclusions"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:766
+#: src/application_settings/preferences_dialog.rs:872
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:770
+#: src/application_settings/preferences_dialog.rs:876
 msgid "/path/to/exclude or *.tmp"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:810
-#: src/application_settings/preferences_dialog.rs:817
+#: src/application_settings/preferences_dialog.rs:916
+#: src/application_settings/preferences_dialog.rs:923
 msgid "Unlock"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:815
+#: src/application_settings/preferences_dialog.rs:921
 msgid "Lock"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:866
-#: src/application_window_shell.rs:180
+#: src/application_settings/preferences_dialog.rs:975
+#: src/application_window_shell.rs:183
 msgid "Preferences"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:874
+#: src/application_settings/preferences_dialog.rs:983
 #: src/virus_database/database_update_page.rs:472
 msgid "Database"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:876
+#: src/application_settings/preferences_dialog.rs:985
 msgid "freshclam settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:884
+#: src/application_settings/preferences_dialog.rs:993
 msgid "Scanner"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:886
+#: src/application_settings/preferences_dialog.rs:995
 msgid "clamd settings"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:893
+#: src/application_settings/preferences_dialog.rs:1002
 msgid "On-Access"
 msgstr ""
 
-#: src/application_settings/preferences_dialog.rs:895
+#: src/application_settings/preferences_dialog.rs:1004
 msgid "On-access scanning settings"
 msgstr ""
 
@@ -587,119 +600,141 @@ msgid ""
 "press the check mark to copy the line to put in that file."
 msgstr ""
 
-#: src/application_window_shell.rs:89
+#: src/application_window_shell.rs:94
 msgid "The quarantine database could not be opened"
 msgstr ""
 
-#: src/application_window_shell.rs:166
+#: src/application_window_shell.rs:169
 msgid "Update signatures"
 msgstr ""
 
-#: src/application_window_shell.rs:181
+#: src/application_window_shell.rs:184
 msgid "About ClamUI"
 msgstr ""
 
-#: src/application_window_shell.rs:182 src/application_window_shell.rs:562
-#: src/desktop_integration/system_tray_menu.rs:65
+#: src/application_window_shell.rs:185 src/application_window_shell.rs:614
+#: src/desktop_integration/system_tray_menu.rs:75
 msgid "Quit"
 msgstr ""
 
-#: src/application_window_shell.rs:185
+#: src/application_window_shell.rs:188
 msgid "Menu"
 msgstr ""
 
-#: src/application_window_shell.rs:204
+#: src/application_window_shell.rs:207
 msgid "translator-credits"
 msgstr ""
 
-#: src/application_window_shell.rs:263
+#: src/application_window_shell.rs:266
 msgid "Toggle sidebar"
 msgstr ""
 
-#: src/application_window_shell.rs:388
-#: src/protection_status/protection_timeline_page.rs:247
-#: src/protection_status/protection_timeline_page.rs:250
-msgid "Protection"
+#: src/application_window_shell.rs:390 src/application_window_shell.rs:447
+msgid "Signatures"
 msgstr ""
 
-#: src/application_window_shell.rs:395
-#: src/background_detections/background_detections_page.rs:533
-#: src/background_detections/background_detections_page.rs:571
-msgid "Detections"
+#: src/application_window_shell.rs:392
+msgid ""
+"Where ClamAV's malware signatures come from, and which other sources you "
+"could add."
+msgstr ""
+
+#: src/application_window_shell.rs:400 src/application_window_shell.rs:454
+msgid "Hardening"
 msgstr ""
 
 #: src/application_window_shell.rs:402
-#: src/malware_scan/scan_progress_page.rs:356
+msgid ""
+"Protections outside ClamAV that make exploits harder. They are listed for "
+"reference and don't affect the Protection summary."
+msgstr ""
+
+#: src/application_window_shell.rs:412
+msgid "Protection"
+msgstr ""
+
+#: src/application_window_shell.rs:419
+#: src/background_detections/background_detections_page.rs:577
+#: src/background_detections/background_detections_page.rs:616
+msgid "Detections"
+msgstr ""
+
+#: src/application_window_shell.rs:426
+#: src/malware_scan/scan_progress_page.rs:386
 msgid "Scan"
 msgstr ""
 
-#: src/application_window_shell.rs:409
+#: src/application_window_shell.rs:433
 msgid "Logs"
 msgstr ""
 
-#: src/application_window_shell.rs:416
-#: src/background_detections/incident_timeline_presentation.rs:322
+#: src/application_window_shell.rs:440
+#: src/background_detections/incident_timeline_presentation.rs:314
 #: src/malware_scan/detected_threat_row.rs:111
-#: src/malware_scan/scan_results_dialog.rs:209
+#: src/malware_scan/scan_results_panel.rs:349
 msgid "Quarantine"
 msgstr ""
 
-#: src/application_window_shell.rs:555
+#: src/application_window_shell.rs:607
 msgid "Close ClamUI?"
 msgstr ""
 
-#: src/application_window_shell.rs:557
+#: src/application_window_shell.rs:609
 msgid ""
 "Detection alerts stop while ClamUI isn't running. Keep it running in the "
 "background, or quit completely?"
 msgstr ""
 
-#: src/application_window_shell.rs:563
+#: src/application_window_shell.rs:615
 msgid "Keep Running"
 msgstr ""
 
-#: src/application_window_shell.rs:647
+#: src/application_window_shell.rs:699
 msgid "The quarantine database could not be locked"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:260
+#: src/background_detections/background_detections_page.rs:301
 msgid "This file can't be deleted from here"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:290
+#: src/background_detections/background_detections_page.rs:344
 msgid ""
 "ClamUI can't read the system journal, so new background detections won't "
 "appear here. This does not mean nothing was found. Add your user to the "
 "systemd-journal group."
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:295
-#: src/protection_status/protection_timeline_presentation.rs:497
+#: src/background_detections/background_detections_page.rs:349
+#: src/protection_status/protection_timeline_presentation.rs:501
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:299
+#: src/background_detections/background_detections_page.rs:353
+msgid "Loading detections…"
+msgstr ""
+
+#: src/background_detections/background_detections_page.rs:356
 msgid "Nothing has been detected in the background."
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:302
+#: src/background_detections/background_detections_page.rs:359
 msgid "What on-access scanning and scheduled scans have found."
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:538
+#: src/background_detections/background_detections_page.rs:582
 msgid "Detection"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:546
+#: src/background_detections/background_detections_page.rs:590
 msgid "Back to detections"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:643
+#: src/background_detections/background_detections_page.rs:690
 msgid "Copied to clipboard"
 msgstr ""
 
-#: src/background_detections/background_detections_page.rs:702
+#: src/background_detections/background_detections_page.rs:751
 #, rust-format
 msgid "Detections could not be read: {error}"
 msgstr ""
@@ -876,156 +911,155 @@ msgstr ""
 msgid "Look Up"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:282
-msgid "Ask VirusTotal about this file's hash"
-msgstr ""
-
-#: src/background_detections/incident_timeline_presentation.rs:283
-msgid "Check File"
-msgstr ""
-
-#: src/background_detections/incident_timeline_presentation.rs:298
+#: src/background_detections/incident_timeline_presentation.rs:290
 msgid "Stop asking about this file"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:299
-#: src/background_detections/incident_timeline_presentation.rs:334
+#: src/background_detections/incident_timeline_presentation.rs:291
+#: src/background_detections/incident_timeline_presentation.rs:326
 msgid "Keep"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:307
+#: src/background_detections/incident_timeline_presentation.rs:299
 msgid "Delete this file permanently? This can't be undone."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:308
+#: src/background_detections/incident_timeline_presentation.rs:300
 msgid "Delete Permanently"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:313
+#: src/background_detections/incident_timeline_presentation.rs:305
 msgid "Go back without deleting"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:321
+#: src/background_detections/incident_timeline_presentation.rs:313
 msgid "Move it somewhere safe. You can restore it later."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:327
+#: src/background_detections/incident_timeline_presentation.rs:319
 msgid "Remove it for good"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:328
+#: src/background_detections/incident_timeline_presentation.rs:320
 msgid "Delete…"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:333
+#: src/background_detections/incident_timeline_presentation.rs:325
 msgid "You know this file is fine"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:349
+#: src/background_detections/incident_timeline_presentation.rs:341
 msgid "Your decision"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:351
+#: src/background_detections/incident_timeline_presentation.rs:343
 msgid ""
 "If it's unfamiliar, quarantine it. Keeping a file only stops ClamUI asking: "
 "on-access scanning keeps blocking it until the path is excluded in the "
 "ClamAV configuration, as shown here."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:364
+#: src/background_detections/incident_timeline_presentation.rs:351
+msgid ""
+"Quarantined files can be restored from the Quarantine page. A file you kept "
+"is still blocked by on-access scanning until its path is excluded in the "
+"ClamAV configuration."
+msgstr ""
+
+#: src/background_detections/incident_timeline_presentation.rs:360
 msgid "This file belongs to another user, so ClamUI can't move or delete it"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:366
+#: src/background_detections/incident_timeline_presentation.rs:362
 msgid "Choose what happens to this file"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:374
+#: src/background_detections/incident_timeline_presentation.rs:370
 msgid "MalwareBazaar"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:392
+#: src/background_detections/incident_timeline_presentation.rs:388
 msgid "Resolved"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:394
+#: src/background_detections/incident_timeline_presentation.rs:390
 msgid ""
 "A resolved detection opens again if ClamAV finds the same file again later, "
 "for example after you download it a second time."
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:402
+#: src/background_detections/incident_timeline_presentation.rs:398
 msgid "Waiting for your decision"
 msgstr ""
 
-#: src/background_detections/incident_timeline_presentation.rs:408
+#: src/background_detections/incident_timeline_presentation.rs:404
 #, rust-format
 msgid "{state}, {time}"
 msgstr ""
 
-#: src/desktop_integration/system_tray_menu.rs:60
+#: src/desktop_integration/system_tray_menu.rs:70
 msgid "Show ClamUI"
 msgstr ""
 
-#: src/desktop_integration/system_tray_menu.rs:61
+#: src/desktop_integration/system_tray_menu.rs:71
 msgid "Show Detections"
 msgstr ""
 
-#: src/desktop_integration/system_tray_menu.rs:62
+#: src/desktop_integration/system_tray_menu.rs:72
 #: src/scan_profiles/scan_profile_store.rs:56
 msgid "Quick Scan"
 msgstr ""
 
-#: src/desktop_integration/system_tray_menu.rs:63
+#: src/desktop_integration/system_tray_menu.rs:73
 msgid "Update Definitions"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:23
+#: src/file_quarantine/quarantine_entries_page.rs:24
 msgid "File hash mismatch — file may be corrupted"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:26
+#: src/file_quarantine/quarantine_entries_page.rs:27
 msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:30
+#: src/file_quarantine/quarantine_entries_page.rs:31
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:33
+#: src/file_quarantine/quarantine_entries_page.rs:34
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:41
+#: src/file_quarantine/quarantine_entries_page.rs:42
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
 "{error}. File may be orphaned at: {path}"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:50
+#: src/file_quarantine/quarantine_entries_page.rs:51
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:141
+#: src/file_quarantine/quarantine_entries_page.rs:144
 #, rust-format
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:163
+#: src/file_quarantine/quarantine_entries_page.rs:166
 msgid "Clear Old Items?"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:166
+#: src/file_quarantine/quarantine_entries_page.rs:169
 #, rust-format
 msgid ""
 "{count} quarantined file older than 30 days will be permanently deleted."
@@ -1034,171 +1068,271 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:174
-#: src/file_quarantine/quarantine_entries_page.rs:190
-#: src/file_quarantine/quarantine_entry_row.rs:54
+#: src/file_quarantine/quarantine_entries_page.rs:177
+#: src/file_quarantine/quarantine_entries_page.rs:193
+#: src/file_quarantine/quarantine_entry_row.rs:95
 #: src/scan_profiles/profile_manager_dialog.rs:303
 #: src/scan_profiles/scan_profile_row.rs:80
 msgid "Delete"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:186
+#: src/file_quarantine/quarantine_entries_page.rs:189
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:187
+#: src/file_quarantine/quarantine_entries_page.rs:190
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:213
+#: src/file_quarantine/quarantine_entries_page.rs:218
 msgid "Quarantine Storage"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:214
+#: src/file_quarantine/quarantine_entries_page.rs:219
 msgid "Secure storage for isolated threats"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:217
+#: src/file_quarantine/quarantine_entries_page.rs:222
 msgid "Total Size"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:249
+#: src/file_quarantine/quarantine_entries_page.rs:254
 msgid "Quarantined Files"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:256
+#: src/file_quarantine/quarantine_entries_page.rs:261
 msgid "Detected threats isolated from your system"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:261
+#: src/file_quarantine/quarantine_entries_page.rs:266
 msgid "Search by threat name or path"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:279
+#: src/file_quarantine/quarantine_entries_page.rs:284
 msgid "Clear Old Items"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:296
+#: src/file_quarantine/quarantine_entries_page.rs:338
+msgid "Loading quarantine…"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entries_page.rs:342
 msgid "Quarantine is empty"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entries_page.rs:297
+#: src/file_quarantine/quarantine_entries_page.rs:343
 msgid "Threats you quarantine will appear here"
 msgstr ""
 
-#: src/file_quarantine/quarantine_entry_row.rs:46
+#: src/file_quarantine/quarantine_entry_row.rs:87
 msgid "Restore"
 msgstr ""
 
-#: src/main.rs:75
+#: src/file_quarantine/quarantine_entry_row.rs:104
+msgid "Reputation"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entry_row.rs:105
+msgid ""
+"Only the file's SHA-256 hash is sent. The file itself never leaves this "
+"computer."
+msgstr ""
+
+#: src/file_quarantine/quarantine_entry_row.rs:109
+msgid "Check"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entry_row.rs:132
+msgid "View Report"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entry_row.rs:149
+msgid "Copy Hash"
+msgstr ""
+
+#: src/file_quarantine/quarantine_entry_row.rs:191
+msgid "Hash copied to clipboard"
+msgstr ""
+
+#: src/main.rs:85
 msgid ""
 "The ClamUI settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:43
+#: src/malware_scan/detected_threat_row.rs:42
 msgid "Critical"
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:44
+#: src/malware_scan/detected_threat_row.rs:43
 msgid "High"
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:45
+#: src/malware_scan/detected_threat_row.rs:44
 msgid "Medium"
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:46
+#: src/malware_scan/detected_threat_row.rs:45
 msgid "Low"
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:66
+#: src/malware_scan/detected_threat_row.rs:65
 #, rust-format
-msgid "Moved to quarantine: {path}"
+msgid ""
+"Moved to quarantine: {path}. Check its reputation on the Quarantine page."
 msgstr ""
 
 #: src/malware_scan/detected_threat_row.rs:122
-#: src/malware_scan/scan_progress_page.rs:736
-msgid "Scan with VirusTotal"
-msgstr ""
-
-#: src/malware_scan/detected_threat_row.rs:132
 msgid "Exclude"
 msgstr ""
 
-#: src/malware_scan/detected_threat_row.rs:142
+#: src/malware_scan/detected_threat_row.rs:132
 msgid "Copy Path"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:167
+#: src/malware_scan/scan_progress_display.rs:64
+msgid "Found so far"
+msgstr ""
+
+#: src/malware_scan/scan_progress_display.rs:92
+msgid "Preparing…"
+msgstr ""
+
+#: src/malware_scan/scan_progress_display.rs:100
+#, rust-format
+msgid "Finding files… {count} found"
+msgid_plural "Finding files… {count} found"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_estimates.rs:35
+#, rust-format
+msgid "{done} of {total} file"
+msgid_plural "{done} of {total} files"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_estimates.rs:66
+#, rust-format
+msgid "About {count} second left"
+msgid_plural "About {count} seconds left"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_estimates.rs:75
+#, rust-format
+msgid "About {count} minute left"
+msgid_plural "About {count} minutes left"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_estimates.rs:84
+#, rust-format
+msgid "About {count} hour left"
+msgid_plural "About {count} hours left"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_estimates.rs:101
+#, rust-format
+msgid "{seconds} s"
+msgstr ""
+
+#: src/malware_scan/scan_progress_estimates.rs:102
+#, rust-format
+msgid "{minutes} min {seconds} s"
+msgstr ""
+
+#: src/malware_scan/scan_progress_estimates.rs:105
+#, rust-format
+msgid "{hours} h {minutes} min"
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:173
 msgid "The ClamAV scanner is not installed or not on the search path."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:170
+#: src/malware_scan/scan_progress_page.rs:176
 #, rust-format
 msgid "The scanner could not be started: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:174
+#: src/malware_scan/scan_progress_page.rs:180
 #, rust-format
 msgid "Unable to create the private scanner work directory: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:178
+#: src/malware_scan/scan_progress_page.rs:184
 msgid "The scanner output could not be captured."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:183
+#: src/malware_scan/scan_progress_page.rs:189
 #, rust-format
 msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:195
+#: src/malware_scan/scan_progress_page.rs:201
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:198
+#: src/malware_scan/scan_progress_page.rs:204
 msgid "Scan target is not a regular file or directory"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:203
+#: src/malware_scan/scan_progress_page.rs:209
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:210
+#: src/malware_scan/scan_progress_page.rs:216
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:214
+#: src/malware_scan/scan_progress_page.rs:220
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:222
+#: src/malware_scan/scan_progress_page.rs:228
 msgid "No files could be scanned"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:228
+#: src/malware_scan/scan_progress_page.rs:234
 #, rust-format
 msgid "The scanner stopped with exit code {code}."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:240
+#: src/malware_scan/scan_progress_page.rs:252
+#, rust-format
+msgid "{count} file was not scanned"
+msgid_plural "{count} files were not scanned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_page.rs:262
+msgid "The connection to clamd was lost during the scan."
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:265
+msgid "The scanner did not report a result for these files."
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:287
+#: src/malware_scan/scan_progress_page.rs:490
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:246
+#: src/malware_scan/scan_progress_page.rs:293
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:252
+#: src/malware_scan/scan_progress_page.rs:299
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -1209,35 +1343,42 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:320
+#: src/malware_scan/scan_progress_page.rs:360
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:323
+#: src/malware_scan/scan_progress_page.rs:363
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:338
+#: src/malware_scan/scan_progress_page.rs:378
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:357
-msgid "Scanning…"
+#: src/malware_scan/scan_progress_page.rs:389
+#, rust-format
+msgid "Scanning {name}"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:358
+#: src/malware_scan/scan_progress_page.rs:392
+#, rust-format
+msgid "Scanning {count} location"
+msgid_plural "Scanning {count} locations"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_progress_page.rs:398
 msgid "Cancelling…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:361
-#: src/malware_scan/scan_results_dialog.rs:95
-#: src/malware_scan/scan_results_dialog.rs:358
+#: src/malware_scan/scan_progress_page.rs:401
+#: src/malware_scan/scan_results_panel.rs:232
 msgid "Threats found"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:374
-#: src/malware_scan/scan_results_dialog.rs:73
+#: src/malware_scan/scan_progress_page.rs:414
+#: src/malware_scan/scan_results_panel.rs:205
 #: src/scheduled_scans/headless_scheduled_scan.rs:163
 #, rust-format
 msgid "{count} threat found"
@@ -1245,177 +1386,186 @@ msgid_plural "{count} threats found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:381
+#: src/malware_scan/scan_progress_page.rs:421
+#: src/malware_scan/scan_results_panel.rs:85
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_progress_page.rs:400
-msgid "The scanner reported a threat without naming the file."
-msgstr ""
-
-#: src/malware_scan/scan_progress_page.rs:451
-msgid "No Profile (Manual)"
+#: src/malware_scan/scan_progress_page.rs:495
+msgid "ClamAV could not open these files."
 msgstr ""
 
 #: src/malware_scan/scan_progress_page.rs:508
-#: src/malware_scan/scan_results_dialog.rs:54
+msgid "The scanner reported a threat without naming the file."
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:563
+msgid "No Profile (Manual)"
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:620
+#: src/malware_scan/scan_results_panel.rs:106
 #: src/scheduled_scans/headless_scheduled_scan.rs:241
 msgid "Threats Detected"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:656
+#: src/malware_scan/scan_progress_page.rs:851
 msgid "Scan Profile"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:659
+#: src/malware_scan/scan_progress_page.rs:856
 msgid "Profile"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:669
+#: src/malware_scan/scan_progress_page.rs:866
 #: src/scan_profiles/profile_manager_dialog.rs:139
 msgid "Manage Profiles"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:678
+#: src/malware_scan/scan_progress_page.rs:875
 msgid "Scan Targets"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:679
+#: src/malware_scan/scan_progress_page.rs:876
 msgid "Drop files here or click Add"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:687
+#: src/malware_scan/scan_progress_page.rs:886
 msgid "Add Files"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:694
+#: src/malware_scan/scan_progress_page.rs:893
 #: src/scan_profiles/profile_editor_dialog.rs:170
 #: src/scan_profiles/profile_editor_dialog.rs:269
 msgid "Add Folder"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:706
+#: src/malware_scan/scan_progress_page.rs:905
 msgid "No targets added"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:719
+#: src/malware_scan/scan_progress_page.rs:920
 msgid "Start Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:729
+#: src/malware_scan/scan_progress_page.rs:930
 msgid "EICAR Test"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:798
-msgid "View Results"
-msgstr ""
-
-#: src/malware_scan/scan_progress_page.rs:879
+#: src/malware_scan/scan_progress_page.rs:1063
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:894
+#: src/malware_scan/scan_progress_page.rs:1078
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:941
+#: src/malware_scan/scan_progress_page.rs:1128
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1030
+#: src/malware_scan/scan_progress_page.rs:1207
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:85
-#: src/malware_scan/scan_results_dialog.rs:344
+#: src/malware_scan/scan_results_panel.rs:77
+#, rust-format
+msgid "{done} of {total} file scanned"
+msgid_plural "{done} of {total} files scanned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_results_panel.rs:158
+#, rust-format
+msgid "{count} more file, listed in the exported report"
+msgid_plural "{count} more files, listed in the exported report"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/malware_scan/scan_results_panel.rs:173
+msgid "Scan details"
+msgstr ""
+
+#: src/malware_scan/scan_results_panel.rs:217
 msgid "Files scanned"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:90
-#: src/malware_scan/scan_results_dialog.rs:351
+#: src/malware_scan/scan_results_panel.rs:222
+msgid "Files planned"
+msgstr ""
+
+#: src/malware_scan/scan_results_panel.rs:227
 msgid "Directories"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:187
+#: src/malware_scan/scan_results_panel.rs:327
 #, rust-format
 msgid "Quarantine {count} Threat"
 msgid_plural "Quarantine {count} Threats"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_results_dialog.rs:202
+#: src/malware_scan/scan_results_panel.rs:342
 msgid "Move to Quarantine?"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:205
+#: src/malware_scan/scan_results_panel.rs:345
 msgid "This removes each original file from its current location."
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:284
-msgid "Scan Results"
+#: src/malware_scan/scan_results_panel.rs:467
+msgid "New Scan"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:296
-msgid "Export Results"
-msgstr ""
-
-#: src/malware_scan/scan_results_dialog.rs:302
+#: src/malware_scan/scan_results_panel.rs:473
 msgid "Copy Results"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:332
-msgid "Statistics"
+#: src/malware_scan/scan_results_panel.rs:479
+msgid "Export Results"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:365
-msgid "Not accessible"
-msgstr ""
-
-#: src/malware_scan/scan_results_dialog.rs:383
+#: src/malware_scan/scan_results_panel.rs:485
 msgid "Detected Threats"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:400
-msgid "Files Not Accessible"
+#: src/malware_scan/scan_results_panel.rs:497
+msgid "Problems"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:408
-msgid "Scan details"
-msgstr ""
-
-#: src/malware_scan/scan_results_dialog.rs:496
+#: src/malware_scan/scan_results_panel.rs:577
 #, rust-format
 msgid "Move '{path}' to quarantine?"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:514
+#: src/malware_scan/scan_results_panel.rs:595
 #, rust-format
 msgid "Move {count} detected file to quarantine?"
 msgid_plural "Move {count} detected files to quarantine?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/malware_scan/scan_results_dialog.rs:530
+#: src/malware_scan/scan_results_panel.rs:610
 msgid "Path copied to clipboard"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:542
+#: src/malware_scan/scan_results_panel.rs:621
 msgid "This file will be skipped in future scans"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:544
+#: src/malware_scan/scan_results_panel.rs:623
 msgid "This exclusion already exists"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:564
+#: src/malware_scan/scan_results_panel.rs:633
 msgid "Results copied to clipboard"
 msgstr ""
 
-#: src/malware_scan/scan_results_dialog.rs:613
+#: src/malware_scan/scan_results_panel.rs:685
 msgid "Results exported"
 msgstr ""
 
@@ -1424,45 +1574,66 @@ msgid "Blocked by on-access scanning"
 msgstr ""
 
 #: src/protection_status/protection_timeline_page.rs:85
+msgid "Nothing needs your decision"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:88
 #, rust-format
-msgid "{count} detection needs your decision. {coverage}"
-msgid_plural "{count} detections need your decision. {coverage}"
+msgid "{count} detection needs your decision"
+msgid_plural "{count} detections need your decision"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_status/protection_timeline_page.rs:102
+#: src/protection_status/protection_timeline_page.rs:122
+#: src/protection_status/protection_timeline_page.rs:269
+msgid "Review"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:135
+msgid "The scan found malware"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:138
 msgid "The scan finished"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:104
+#: src/protection_status/protection_timeline_page.rs:140
 #, rust-format
 msgid "The scan did not finish cleanly: {result}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:108
+#: src/protection_status/protection_timeline_page.rs:144
 msgid "Starting the scan needs administrator authorization"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:111
+#: src/protection_status/protection_timeline_page.rs:147
 #, rust-format
 msgid "The scan could not be started: {error}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:196
+#: src/protection_status/protection_timeline_page.rs:222
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:256
+#: src/protection_status/protection_timeline_page.rs:279
+#: src/system_audit/audit_sections_page.rs:109
 msgid "Check again"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:345
-msgid "Command copied to clipboard"
+#: src/protection_status/protection_timeline_page.rs:284
+#: src/system_audit/audit_report_model.rs:30
+#: src/system_audit/audit_section_group.rs:74
+#: src/system_audit/audit_sections_page.rs:114
+msgid "Checking"
 msgstr ""
 
-#: src/protection_status/protection_timeline_page.rs:352
-#, rust-format
-msgid "Could not open documentation: {error}"
+#: src/protection_status/protection_timeline_page.rs:322
+msgid "Checking your protection…"
+msgstr ""
+
+#: src/protection_status/protection_timeline_page.rs:362
+#: src/system_audit/audit_sections_page.rs:166
+msgid "Command copied to clipboard"
 msgstr ""
 
 #: src/protection_status/protection_timeline_presentation.rs:82
@@ -1505,223 +1676,225 @@ msgstr ""
 msgid "No completed update recorded yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:197
+#: src/protection_status/protection_timeline_presentation.rs:198
 #, rust-format
-msgid "{count} signatures, {size}, updated {hours} hours ago ({file})"
-msgstr ""
+msgid "{count} signature, {size}, updated {hours} hours ago ({file})"
+msgid_plural "{count} signatures, {size}, updated {hours} hours ago ({file})"
+msgstr[0] ""
+msgstr[1] ""
 
-#: src/protection_status/protection_timeline_presentation.rs:215
+#: src/protection_status/protection_timeline_presentation.rs:219
 msgid "Update Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:220
+#: src/protection_status/protection_timeline_presentation.rs:224
 msgid "Signatures current"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:222
+#: src/protection_status/protection_timeline_presentation.rs:226
 msgid ""
 "Signatures describe known malware, and new ones are published constantly. "
 "Old signatures miss recent threats even when everything else is running."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:235
+#: src/protection_status/protection_timeline_presentation.rs:239
 msgid "Daemon running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:237
+#: src/protection_status/protection_timeline_presentation.rs:241
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:251
+#: src/protection_status/protection_timeline_presentation.rs:255
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:259
+#: src/protection_status/protection_timeline_presentation.rs:263
 msgid "clamd is answering"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:270
-#: src/protection_status/protection_timeline_presentation.rs:335
+#: src/protection_status/protection_timeline_presentation.rs:274
+#: src/protection_status/protection_timeline_presentation.rs:339
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:282
+#: src/protection_status/protection_timeline_presentation.rs:286
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:294
+#: src/protection_status/protection_timeline_presentation.rs:298
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:296
+#: src/protection_status/protection_timeline_presentation.rs:300
 msgid "None configured"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:303
 #: src/protection_status/protection_timeline_presentation.rs:307
+#: src/protection_status/protection_timeline_presentation.rs:311
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:304
+#: src/protection_status/protection_timeline_presentation.rs:308
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:318
+#: src/protection_status/protection_timeline_presentation.rs:322
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:320
+#: src/protection_status/protection_timeline_presentation.rs:324
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:327
+#: src/protection_status/protection_timeline_presentation.rs:331
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:331
-#: src/protection_status/protection_timeline_presentation.rs:421
+#: src/protection_status/protection_timeline_presentation.rs:335
+#: src/protection_status/protection_timeline_presentation.rs:425
 msgid "Waiting for the daemon"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:339
+#: src/protection_status/protection_timeline_presentation.rs:343
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:343
+#: src/protection_status/protection_timeline_presentation.rs:347
 msgid "Running, but no watched folders could be read"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:347
+#: src/protection_status/protection_timeline_presentation.rs:351
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:371
+#: src/protection_status/protection_timeline_presentation.rs:375
 #: src/scheduled_scans/schedule_preferences_page.rs:84
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:378
+#: src/protection_status/protection_timeline_presentation.rs:382
 #, rust-format
 msgid "{time}, threats found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:383
+#: src/protection_status/protection_timeline_presentation.rs:387
 #, rust-format
 msgid "{time}, nothing found"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:387
+#: src/protection_status/protection_timeline_presentation.rs:391
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:404
+#: src/protection_status/protection_timeline_presentation.rs:408
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:406
+#: src/protection_status/protection_timeline_presentation.rs:410
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:426
+#: src/protection_status/protection_timeline_presentation.rs:430
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:431
+#: src/protection_status/protection_timeline_presentation.rs:435
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:436
+#: src/protection_status/protection_timeline_presentation.rs:440
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:441
+#: src/protection_status/protection_timeline_presentation.rs:445
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:442
+#: src/protection_status/protection_timeline_presentation.rs:446
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:445
+#: src/protection_status/protection_timeline_presentation.rs:449
 msgid "Run Now"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:456
+#: src/protection_status/protection_timeline_presentation.rs:460
 msgid "Scheduled by ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:464
+#: src/protection_status/protection_timeline_presentation.rs:468
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:472
+#: src/protection_status/protection_timeline_presentation.rs:476
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:483
+#: src/protection_status/protection_timeline_presentation.rs:487
 msgid "Alerts"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:485
+#: src/protection_status/protection_timeline_presentation.rs:489
 msgid ""
 "ClamUI follows the system journal and notifies you when something is "
 "detected. It can only do that while it is running, so it should run in the "
 "background."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:492
+#: src/protection_status/protection_timeline_presentation.rs:496
 msgid ""
 "The system journal can't be read. Add your user to the systemd-journal group."
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:502
+#: src/protection_status/protection_timeline_presentation.rs:506
 msgid "Notifications are turned off in the preferences"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:507
+#: src/protection_status/protection_timeline_presentation.rs:511
 msgid ""
 "Alerts stop when you quit ClamUI, because it isn't set up to run in the "
 "background"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:513
+#: src/protection_status/protection_timeline_presentation.rs:517
 msgid "Running in the background and following the journal"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:537
+#: src/protection_status/protection_timeline_presentation.rs:541
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:539
+#: src/protection_status/protection_timeline_presentation.rs:543
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:550
+#: src/protection_status/protection_timeline_presentation.rs:554
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:552
+#: src/protection_status/protection_timeline_presentation.rs:556
 msgid "Scheduled scans set up in ClamUI"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:559
+#: src/protection_status/protection_timeline_presentation.rs:563
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_status/protection_timeline_presentation.rs:572
+#: src/protection_status/protection_timeline_presentation.rs:576
 msgid "Files are only checked when you scan them"
 msgstr ""
 
@@ -2027,18 +2200,18 @@ msgstr ""
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 
-#: src/signature_sources/signature_provider_catalogue.rs:125
+#: src/signature_sources/signature_provider_catalogue.rs:128
 msgid "Not in use"
 msgstr ""
 
-#: src/signature_sources/signature_provider_catalogue.rs:131
+#: src/signature_sources/signature_provider_catalogue.rs:134
 msgid ""
 "This source needs a credential, and fangfrisch reads it from its settings. "
 "On NixOS those settings end up in the world-readable Nix store, so don't put "
 "the credential there."
 msgstr ""
 
-#: src/signature_sources/signature_provider_catalogue.rs:163
+#: src/signature_sources/signature_provider_catalogue.rs:166
 msgid "In use"
 msgstr ""
 
@@ -2048,11 +2221,6 @@ msgstr ""
 
 #: src/system_audit/audit_check_row.rs:68
 msgid "Open in browser"
-msgstr ""
-
-#: src/system_audit/audit_check_row.rs:101
-#: src/system_audit/audit_report_model.rs:30
-msgid "Checking"
 msgstr ""
 
 #: src/system_audit/audit_report_model.rs:25
@@ -2071,25 +2239,30 @@ msgstr ""
 msgid "Unknown"
 msgstr ""
 
-#: src/system_audit/audit_report_model.rs:75
+#: src/system_audit/audit_report_model.rs:76
 msgid "Signature Sources"
 msgstr ""
 
-#: src/system_audit/audit_report_model.rs:76
+#: src/system_audit/audit_report_model.rs:77
 msgid "Firewall"
 msgstr ""
 
-#: src/system_audit/audit_report_model.rs:77
+#: src/system_audit/audit_report_model.rs:78
 msgid "Access Control"
 msgstr ""
 
-#: src/system_audit/audit_report_model.rs:78
+#: src/system_audit/audit_report_model.rs:79
 msgid "Intrusion Detection"
 msgstr ""
 
-#: src/system_audit/audit_report_model.rs:79
+#: src/system_audit/audit_report_model.rs:80
 #: src/system_audit/security_audit_checks.rs:311
 msgid "Rootkits"
+msgstr ""
+
+#: src/system_audit/audit_sections_page.rs:175
+#, rust-format
+msgid "Could not open documentation: {error}"
 msgstr ""
 
 #: src/system_audit/firewall_audit_checks.rs:32
@@ -2224,164 +2397,119 @@ msgstr ""
 msgid "Could not save the file: {error}"
 msgstr ""
 
-#: src/threat_intel_lookup/service_key_preferences_page.rs:22
-msgid ""
-"The key is stored in the system keyring. ClamUI first asks VirusTotal about "
-"a file's hash, and only uploads the file after you confirm."
+#: src/threat_intel_lookup/file_reputation_check.rs:34
+msgid "Not checked yet"
 msgstr ""
 
-#: src/threat_intel_lookup/service_key_preferences_page.rs:26
-msgid ""
-"Used to look up a detection on MalwareBazaar when you ask. The key is stored "
-"in the system keyring, and only the signature name is sent. Separate from "
-"any key your system uses to download signatures. abuse.ch's fair-use terms "
-"say for-profit users may need its commercial API."
+#: src/threat_intel_lookup/file_reputation_check.rs:36
+msgid "Add a key in Preferences to include this source"
 msgstr ""
 
-#: src/threat_intel_lookup/service_key_preferences_page.rs:37
-msgid ""
-"Free tier: 4 requests per minute, 500 per day. Files up to 650 MB can be "
-"scanned."
+#: src/threat_intel_lookup/file_reputation_check.rs:64
+msgid "Not in the known-files database"
 msgstr ""
 
-#: src/threat_intel_lookup/service_key_preferences_page.rs:40
-msgid "Free from the abuse.ch Authentication Portal."
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:72
-msgid "This doesn't look like a valid API key"
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:73
-msgid "Unable to read the stored API key"
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:74
-msgid "Keyring unavailable"
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:102
-#: src/threat_intel_lookup/service_key_preferences_page.rs:119
-msgid "API Key"
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:111
-msgid "Delete Key"
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:130
-msgid "Get a free API key"
-msgstr ""
-
-#: src/threat_intel_lookup/service_key_preferences_page.rs:199
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:185
-msgid "Not configured"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:68
-msgid "VirusTotal rejected the API key."
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:70
-msgid "The VirusTotal request limit was reached. Try again later."
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:72
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:427
-msgid "File too large"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:74
-msgid ""
-"VirusTotal has the file but did not finish analyzing it in time. Check back "
-"later."
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:77
-msgid "The file changed after you confirmed, so it was not uploaded."
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:85
-msgid "Path is not a regular file"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:87
+#: src/threat_intel_lookup/file_reputation_check.rs:68
 #, rust-format
-msgid "Cannot read file: {error}"
+msgid "Listed as malicious by {source} (as {name})"
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:150
+#: src/threat_intel_lookup/file_reputation_check.rs:74
 #, rust-format
-msgid ""
-"VirusTotal does not know this file yet.\n"
-"\n"
-"{path}\n"
-"{size}\n"
-"\n"
-"Uploading shares its contents with VirusTotal and its security partners, and "
-"other users may be able to download them. Only upload files you are "
-"authorized to share, and never files with personal or confidential data."
+msgid "Listed as a known file by {source}"
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:161
-msgid "Upload to VirusTotal?"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:163
-msgid "Upload File"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:184
-msgid "Checking the file's hash…"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:186
-msgid "Uploading and waiting for the analysis…"
-msgstr ""
-
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:189
+#: src/threat_intel_lookup/file_reputation_check.rs:79
 #, rust-format
-msgid "{count} engine detected a threat"
-msgid_plural "{count} engines detected a threat"
+msgid "Known file {name}, listed by {source}"
+msgstr ""
+
+#: src/threat_intel_lookup/file_reputation_check.rs:88
+msgid "Not a known malware sample"
+msgstr ""
+
+#: src/threat_intel_lookup/file_reputation_check.rs:90
+msgid "Known malware sample"
+msgstr ""
+
+#: src/threat_intel_lookup/file_reputation_check.rs:93
+msgid "unnamed family"
+msgstr ""
+
+#: src/threat_intel_lookup/file_reputation_check.rs:97
+#, rust-format
+msgid "Known malware: {family}, first seen {date}"
+msgstr ""
+
+#: src/threat_intel_lookup/file_reputation_check.rs:109
+msgid "Unknown to VirusTotal"
+msgstr ""
+
+#: src/threat_intel_lookup/file_reputation_check.rs:113
+#, rust-format
+msgid "{count} of {total} engine detects it"
+msgid_plural "{count} of {total} engines detect it"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:195
-msgid "No engines detected a threat"
+#: src/threat_intel_lookup/file_reputation_check.rs:126
+msgid "VirusTotal rejected the API key."
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:196
-msgid "The lookup failed"
+#: src/threat_intel_lookup/file_reputation_check.rs:128
+msgid "The VirusTotal request limit was reached. Try again later."
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:203
+#: src/threat_intel_lookup/service_key_preferences_page.rs:22
 msgid ""
-"Add an API key in Preferences, or open VirusTotal's upload page to send the "
-"file yourself."
+"Optional source for the reputation check on the Quarantine page. Only the "
+"file's SHA-256 hash is sent; files are never uploaded. The key is stored in "
+"the system keyring."
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:226
-msgid "Malicious"
+#: src/threat_intel_lookup/service_key_preferences_page.rs:27
+msgid ""
+"Used to look up a detection's signature name, and a quarantined file's "
+"SHA-256 hash, on MalwareBazaar when you ask. The key is stored in the system "
+"keyring. Separate from any key your system uses to download signatures. "
+"abuse.ch's fair-use terms say for-profit users may need its commercial API."
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:227
-msgid "Suspicious"
+#: src/threat_intel_lookup/service_key_preferences_page.rs:38
+msgid "Free tier: 4 requests per minute, 500 per day."
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:264
-msgid "VirusTotal Scan"
+#: src/threat_intel_lookup/service_key_preferences_page.rs:41
+msgid "Free from the abuse.ch Authentication Portal."
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:329
-msgid "View on VirusTotal"
+#: src/threat_intel_lookup/service_key_preferences_page.rs:73
+msgid "This doesn't look like a valid API key"
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:337
-msgid "Open VirusTotal website"
+#: src/threat_intel_lookup/service_key_preferences_page.rs:74
+msgid "Unable to read the stored API key"
 msgstr ""
 
-#: src/threat_intel_lookup/virustotal_lookup_dialog.rs:390
-msgid "VirusTotal does not know this file, and it was not uploaded."
+#: src/threat_intel_lookup/service_key_preferences_page.rs:75
+msgid "Keyring unavailable"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:103
+#: src/threat_intel_lookup/service_key_preferences_page.rs:120
+msgid "API Key"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:112
+msgid "Delete Key"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:131
+msgid "Get a free API key"
+msgstr ""
+
+#: src/threat_intel_lookup/service_key_preferences_page.rs:200
+msgid "Not configured"
 msgstr ""
 
 #: src/virus_database/database_update_page.rs:100
@@ -2533,8 +2661,8 @@ msgstr ""
 
 #: src/virus_database/database_update_page.rs:515
 msgid ""
-"Updates run through the freshclam system service when one exists, so your "
-"system may ask for authorization."
+"Updates run through the system's updater services, such as freshclam and "
+"fangfrisch, so your system may ask for authorization."
 msgstr ""
 
 #: src/virus_database/database_update_page.rs:523

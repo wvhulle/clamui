@@ -19,23 +19,24 @@ fn service_page_title(threat_intel_service: ThreatIntelService) -> &'static str 
 fn service_description(threat_intel_service: ThreatIntelService) -> String {
     match threat_intel_service {
         ThreatIntelService::VirusTotalService => gettext(
-            "The key is stored in the system keyring. ClamUI first asks VirusTotal about a file's \
-             hash, and only uploads the file after you confirm.",
+            "Optional source for the reputation check on the Quarantine page. Only the file's \
+             SHA-256 hash is sent; files are never uploaded. The key is stored in the system \
+             keyring.",
         ),
         ThreatIntelService::AbuseChService => gettext(
-            "Used to look up a detection on MalwareBazaar when you ask. The key is stored in the \
-             system keyring, and only the signature name is sent. Separate from any key your \
-             system uses to download signatures. abuse.ch's fair-use terms say for-profit users \
-             may need its commercial API.",
+            "Used to look up a detection's signature name, and a quarantined file's SHA-256 hash, \
+             on MalwareBazaar when you ask. The key is stored in the system keyring. Separate \
+             from any key your system uses to download signatures. abuse.ch's fair-use terms say \
+             for-profit users may need its commercial API.",
         ),
     }
 }
 
 fn service_key_hint(threat_intel_service: ThreatIntelService) -> String {
     match threat_intel_service {
-        ThreatIntelService::VirusTotalService => gettext(
-            "Free tier: 4 requests per minute, 500 per day. Files up to 650 MB can be scanned.",
-        ),
+        ThreatIntelService::VirusTotalService => {
+            gettext("Free tier: 4 requests per minute, 500 per day.")
+        }
         ThreatIntelService::AbuseChService => {
             gettext("Free from the abuse.ch Authentication Portal.")
         }

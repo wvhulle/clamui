@@ -234,8 +234,7 @@ impl ProtectionTimelinePage {
             | TimelineStepAction::DeleteIncidentFile
             | TimelineStepAction::CancelIncidentDeletion
             | TimelineStepAction::DismissIncident
-            | TimelineStepAction::LookUpIncidentSignature
-            | TimelineStepAction::CheckIncidentOnVirusTotal => {}
+            | TimelineStepAction::LookUpIncidentSignature => {}
         }
     }
 }

@@ -1,19 +1,11 @@
 use std::{collections::BTreeMap, time::Duration};
 
-use reqwest::{StatusCode, multipart};
+use reqwest::StatusCode;
 use serde::Deserialize;
-
-use crate::threat_intel_lookup::pinned_scan_file::PinnedScanFile;
 
 const API_BASE_URL: &str = "https://www.virustotal.com/api/v3";
 const REPORT_BASE_URL: &str = "https://www.virustotal.com/gui/file";
-pub const MAXIMUM_UPLOAD_BYTES: u64 = 650 * 1024 * 1024;
-const DIRECT_UPLOAD_LIMIT: u64 = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const UPLOAD_TIMEOUT: Duration = Duration::from_secs(300);
-const POLL_INTERVAL: Duration = Duration::from_secs(5);
-const MAXIMUM_POLL_ATTEMPTS: usize = 24;
-const UPLOADED_FILE_NAME: &str = "sample";
 
 #[derive(Debug, thiserror::Error)]
 pub enum VirusTotalFailure {
@@ -21,20 +13,12 @@ pub enum VirusTotalFailure {
     ApiKeyRejected,
     #[error("the VirusTotal request limit was reached")]
     RequestLimitReached,
-    #[error("the file is larger than VirusTotal accepts")]
-    FileTooLarge,
     #[error("VirusTotal answered with status {status_code}")]
     UnexpectedStatus { status_code: u16 },
     #[error("VirusTotal could not be reached: {0}")]
     RequestFailed(#[from] reqwest::Error),
     #[error("VirusTotal sent an answer ClamUI cannot read")]
     AnswerUnreadable,
-    #[error("the analysis did not finish in time")]
-    AnalysisTimedOut,
-    #[error("the file changed after you confirmed the upload")]
-    FileChangedAfterConfirmation,
-    #[error("the file could not be read: {0}")]
-    FileUnreadable(#[from] std::io::Error),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -91,21 +75,6 @@ struct EngineResult {
     result: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct UploadedAnalysis {
-    id: String,
-}
-
-#[derive(Deserialize)]
-struct AnalysisObject {
-    attributes: AnalysisAttributes,
-}
-
-#[derive(Deserialize)]
-struct AnalysisAttributes {
-    status: String,
-}
-
 fn detection_category_named(category_text: &str) -> Option<DetectionCategory> {
     match category_text {
         "malicious" => Some(DetectionCategory::Malicious),
@@ -153,7 +122,6 @@ fn failure_for_status(status_code: StatusCode) -> VirusTotalFailure {
     match status_code {
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => VirusTotalFailure::ApiKeyRejected,
         StatusCode::TOO_MANY_REQUESTS => VirusTotalFailure::RequestLimitReached,
-        StatusCode::PAYLOAD_TOO_LARGE => VirusTotalFailure::FileTooLarge,
         other_status => VirusTotalFailure::UnexpectedStatus {
             status_code: other_status.as_u16(),
         },
@@ -197,89 +165,6 @@ impl VirusTotalClient {
                 parse_file_report(&lookup_response.bytes().await?)?,
             )),
             status_code => Err(failure_for_status(status_code)),
-        }
-    }
-
-    async fn upload_destination(&self, file_size: u64) -> Result<String, VirusTotalFailure> {
-        if file_size <= DIRECT_UPLOAD_LIMIT {
-            return Ok(format!("{API_BASE_URL}/files"));
-        }
-        let destination_response = self
-            .get_bytes(&format!("{API_BASE_URL}/files/upload_url"))
-            .await?;
-        let status_code = destination_response.status();
-        if !status_code.is_success() {
-            return Err(failure_for_status(status_code));
-        }
-        Ok(
-            serde_json::from_slice::<ApiEnvelope<String>>(&destination_response.bytes().await?)
-                .map_err(|_unreadable_answer| VirusTotalFailure::AnswerUnreadable)?
-                .data,
-        )
-    }
-
-    async fn wait_for_analysis(&self, analysis_id: &str) -> Result<(), VirusTotalFailure> {
-        for _poll_attempt in 0..MAXIMUM_POLL_ATTEMPTS {
-            tokio::time::sleep(POLL_INTERVAL).await;
-            let analysis_response = self
-                .get_bytes(&format!("{API_BASE_URL}/analyses/{analysis_id}"))
-                .await?;
-            let status_code = analysis_response.status();
-            if !status_code.is_success() {
-                return Err(failure_for_status(status_code));
-            }
-            let analysis_object = serde_json::from_slice::<ApiEnvelope<AnalysisObject>>(
-                &analysis_response.bytes().await?,
-            )
-            .map_err(|_unreadable_answer| VirusTotalFailure::AnswerUnreadable)?;
-            if analysis_object.data.attributes.status == "completed" {
-                return Ok(());
-            }
-        }
-        Err(VirusTotalFailure::AnalysisTimedOut)
-    }
-
-    pub async fn upload_confirmed_file(
-        &self,
-        confirmed_file: &PinnedScanFile,
-    ) -> Result<VirusTotalReport, VirusTotalFailure> {
-        if confirmed_file.file_size > MAXIMUM_UPLOAD_BYTES {
-            return Err(VirusTotalFailure::FileTooLarge);
-        }
-        if !confirmed_file.content_is_unchanged()? {
-            return Err(VirusTotalFailure::FileChangedAfterConfirmation);
-        }
-        let upload_destination = self.upload_destination(confirmed_file.file_size).await?;
-        let upload_file = tokio::fs::File::from_std(confirmed_file.upload_handle()?);
-        let upload_form = multipart::Form::new().part(
-            "file",
-            multipart::Part::stream_with_length(upload_file, confirmed_file.file_size)
-                .file_name(UPLOADED_FILE_NAME),
-        );
-        let upload_response = self
-            .http_client
-            .post(&upload_destination)
-            .header("x-apikey", &self.api_key)
-            .timeout(UPLOAD_TIMEOUT)
-            .multipart(upload_form)
-            .send()
-            .await?;
-        let status_code = upload_response.status();
-        if !status_code.is_success() {
-            return Err(failure_for_status(status_code));
-        }
-        let uploaded_analysis = serde_json::from_slice::<ApiEnvelope<UploadedAnalysis>>(
-            &upload_response.bytes().await?,
-        )
-        .map_err(|_unreadable_answer| VirusTotalFailure::AnswerUnreadable)?
-        .data;
-        self.wait_for_analysis(&uploaded_analysis.id).await?;
-        match self
-            .look_up_file_report(&confirmed_file.content_hash)
-            .await?
-        {
-            FileReportLookup::ReportAvailable(file_report) => Ok(file_report),
-            FileReportLookup::FileUnknownToVirusTotal => Err(VirusTotalFailure::AnalysisTimedOut),
         }
     }
 }

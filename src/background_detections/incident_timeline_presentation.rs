@@ -15,7 +15,7 @@ use crate::{
         StepActionSlot, StepChoiceRow, StepEvidenceRow, StepNodeState, TimelineStep,
         TimelineStepAction,
     },
-    threat_intel_lookup::malware_bazaar_client::SignatureLookup,
+    threat_intel_lookup::malware_bazaar_client::KnownSampleLookup,
 };
 
 const TEST_SIGNATURE_MARKER: &str = "Eicar-Test-Signature";
@@ -31,7 +31,7 @@ pub enum SignatureLookupState {
     NotLookedUp,
     LookingUp,
     KeyMissing,
-    LookupFinished(SignatureLookup),
+    LookupFinished(KnownSampleLookup),
     LookupFailed { failure_text: String },
 }
 
@@ -240,10 +240,10 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
         SignatureLookupState::LookupFailed { failure_text } => {
             Some(sanitize_scanner_line(failure_text))
         }
-        SignatureLookupState::LookupFinished(SignatureLookup::SignatureUnknown) => {
+        SignatureLookupState::LookupFinished(KnownSampleLookup::NoKnownSamples) => {
             Some(gettext("No known samples match this signature."))
         }
-        SignatureLookupState::LookupFinished(SignatureLookup::SamplesFound { known_samples }) => {
+        SignatureLookupState::LookupFinished(KnownSampleLookup::SamplesFound { known_samples }) => {
             let families = known_samples
                 .iter()
                 .map(|known_sample| sanitize_scanner_line(&known_sample.malware_family))
@@ -269,7 +269,7 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
     }
 }
 
-fn lookup_choices(file_state: DetectedFileState) -> Vec<StepChoiceRow> {
+fn lookup_choices() -> Vec<StepChoiceRow> {
     let signature_lookup = StepChoiceRow {
         choice_description: gettext(
             "Ask MalwareBazaar about this signature. Only its name is sent.",
@@ -278,15 +278,7 @@ fn lookup_choices(file_state: DetectedFileState) -> Vec<StepChoiceRow> {
         chosen_action: TimelineStepAction::LookUpIncidentSignature,
         choice_destructive: false,
     };
-    let file_lookup = (file_state == DetectedFileState::ReadableInPlace).then(|| StepChoiceRow {
-        choice_description: gettext("Ask VirusTotal about this file's hash"),
-        choice_label: gettext("Check File"),
-        chosen_action: TimelineStepAction::CheckIncidentOnVirusTotal,
-        choice_destructive: false,
-    });
-    std::iter::once(signature_lookup)
-        .chain(file_lookup)
-        .collect()
+    vec![signature_lookup]
 }
 
 fn decision_choices(
@@ -372,7 +364,7 @@ fn review_step(
     TimelineStep {
         choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state)
             .into_iter()
-            .chain(lookup_choices(displayed_detection.file_state))
+            .chain(lookup_choices())
             .collect(),
         evidence_rows: lookup_summary_text(lookup_state)
             .map(|lookup_summary| evidence_row(gettext("MalwareBazaar"), lookup_summary))
@@ -485,11 +477,7 @@ mod incident_timeline_presentation_tests {
             .iter()
             .map(|choice_row| choice_row.chosen_action)
             .filter(|chosen_action| {
-                !matches!(
-                    chosen_action,
-                    TimelineStepAction::LookUpIncidentSignature
-                        | TimelineStepAction::CheckIncidentOnVirusTotal
-                )
+                !matches!(chosen_action, TimelineStepAction::LookUpIncidentSignature)
             })
             .collect()
     }
@@ -634,8 +622,8 @@ mod incident_timeline_presentation_tests {
     }
 
     #[test]
-    fn a_blocked_file_offers_a_signature_lookup_but_no_file_lookup() {
-        let lookup_actions = lookup_choices(DetectedFileState::BlockedInPlace)
+    fn the_only_lookup_sends_the_signature_name() {
+        let lookup_actions = lookup_choices()
             .into_iter()
             .map(|choice_row| choice_row.chosen_action)
             .collect::<Vec<_>>();
@@ -643,7 +631,6 @@ mod incident_timeline_presentation_tests {
             lookup_actions,
             vec![TimelineStepAction::LookUpIncidentSignature]
         );
-        assert_eq!(lookup_choices(DetectedFileState::ReadableInPlace).len(), 2);
     }
 
     #[test]
@@ -658,7 +645,7 @@ mod incident_timeline_presentation_tests {
         };
         assert_eq!(
             lookup_summary_text(&SignatureLookupState::LookupFinished(
-                SignatureLookup::SamplesFound {
+                KnownSampleLookup::SamplesFound {
                     known_samples: vec![
                         known_sample("AgentTesla", "2026-10-02"),
                         known_sample("AgentTesla", "2026-10-01"),
