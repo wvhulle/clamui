@@ -54,6 +54,14 @@ fn value_kind_of_setting(setting_key: &str) -> SettingValueKind {
             | "ScanArchive"
             | "AlertBrokenExecutables"
             | "AlertEncrypted"
+            | "AlertEncryptedArchive"
+            | "AlertEncryptedDoc"
+            | "AlertOLE2Macros"
+            | "AlertExceedsMax"
+            | "DetectPUA"
+            | "HeuristicAlerts"
+            | "Bytecode"
+            | "ExtendedDetectionInfo"
     ) {
         SettingValueKind::TrueOrFalse
     } else if setting_key.ends_with("Size") {
@@ -211,6 +219,8 @@ mod tunable_setting_rules_tests {
         };
         assert!(value_is_accepted("OnAccessPrevention", "true"));
         assert!(!value_is_accepted("OnAccessPrevention", "maybe"));
+        assert!(value_is_accepted("DetectPUA", "yes"));
+        assert!(!value_is_accepted("DetectPUA", "sometimes"));
         assert!(value_is_accepted("OnAccessMaxFileSize", "100M"));
         assert!(!value_is_accepted("OnAccessMaxFileSize", "lots"));
         assert!(value_is_accepted(
