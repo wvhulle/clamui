@@ -151,6 +151,7 @@ in
           ReadWritePaths = [
             "/var/lib/lazaret"
             "/run/lazaret"
+            "-/var/lib/clamav"
           ];
           NoNewPrivileges = true;
           PrivateTmp = true;

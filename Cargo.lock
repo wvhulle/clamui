@@ -2157,6 +2157,7 @@ dependencies = [
 name = "lazaret-settings-helper"
 version = "0.1.0"
 dependencies = [
+ "rustix 1.1.5",
  "tempfile",
  "thiserror",
  "tokio",

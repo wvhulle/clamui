@@ -6,9 +6,9 @@ license = "MIT"
 publish = false
 
 [dependencies]
+rustix = { version = "1", features = ["fs"] }
+tempfile = "3"
 thiserror = "2"
 tokio = { version = "1.54", features = ["rt"] }
 zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }
 
-[dev-dependencies]
-tempfile = "3"

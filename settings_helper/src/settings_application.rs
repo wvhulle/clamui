@@ -20,6 +20,8 @@ const HEALTH_DEADLINE: Duration = Duration::from_secs(180);
 const HEALTH_RECHECK_PAUSE: Duration = Duration::from_secs(2);
 const SOCKET_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 const PING_REQUEST: &[u8] = b"zPING\0";
+const RELOAD_REQUEST: &[u8] = b"zRELOAD\0";
+const RELOADING_ANSWER_PREFIX: &[u8] = b"RELOADING";
 const PONG_ANSWER_PREFIX: &[u8] = b"PONG";
 const RESTARTED_UNITS: [&str; 2] = ["clamav-daemon.service", "clamav-clamonacc.service"];
 
@@ -77,6 +79,18 @@ fn clamd_answers_on_socket(local_socket: &PathBuf) -> bool {
         Ok(answer_bytes[..answer_length].starts_with(PONG_ANSWER_PREFIX))
     };
     answered().unwrap_or(false)
+}
+
+pub fn clamd_reloads_signatures(local_socket: &PathBuf) -> bool {
+    let reloading = || -> io::Result<bool> {
+        let mut socket_stream = UnixStream::connect(local_socket)?;
+        socket_stream.set_read_timeout(Some(SOCKET_ANSWER_TIMEOUT))?;
+        socket_stream.write_all(RELOAD_REQUEST)?;
+        let mut answer_bytes = [0_u8; 16];
+        let answer_length = socket_stream.read(&mut answer_bytes)?;
+        Ok(answer_bytes[..answer_length].starts_with(RELOADING_ANSWER_PREFIX))
+    };
+    reloading().unwrap_or(false)
 }
 
 fn unit_is_failed(service_unit: &str) -> bool {
@@ -159,6 +173,19 @@ fn read_text_or_empty(file_path: &PathBuf) -> io::Result<String> {
         Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => Ok(String::new()),
         Err(read_failure) => Err(read_failure),
     }
+}
+
+pub fn config_values_in_effect(settings_paths: &SettingsPaths, setting_key: &str) -> Vec<String> {
+    let config_text = fs::read_to_string(&settings_paths.merged_config)
+        .or_else(|_merged_unreadable| fs::read_to_string(&settings_paths.base_config))
+        .unwrap_or_default();
+    config_text
+        .lines()
+        .filter_map(|config_line| {
+            let (line_key, line_value) = config_line.trim().split_once(char::is_whitespace)?;
+            (line_key == setting_key).then(|| line_value.trim().to_owned())
+        })
+        .collect()
 }
 
 pub fn read_tunable_settings(settings_paths: &SettingsPaths) -> io::Result<Vec<String>> {
