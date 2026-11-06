@@ -62,20 +62,21 @@ impl SettingsSubpage {
         }
     }
 
+    pub const fn needs_administrator(self) -> bool {
+        matches!(
+            self,
+            Self::ScannerEngine | Self::OnAccessScanning | Self::SignatureUpdates
+        )
+    }
+
     fn link_subtitle(self) -> String {
         match self {
             Self::ScanExclusions => gettext("Folders and patterns that ClamUI scans skip"),
             Self::ScanSchedule => gettext("Scan automatically with a systemd timer"),
             Self::DeviceAutoScan => gettext("Scan removable drives when they are connected"),
-            Self::ScannerEngine => {
-                gettext("clamd configuration; changes need administrator approval")
-            }
-            Self::OnAccessScanning => {
-                gettext("clamd on-access configuration; changes need administrator approval")
-            }
-            Self::SignatureUpdates => {
-                gettext("freshclam configuration; changes need administrator approval")
-            }
+            Self::ScannerEngine => gettext("clamd settings for every scan on this computer"),
+            Self::OnAccessScanning => gettext("Which folders clamonacc watches, and how it blocks"),
+            Self::SignatureUpdates => gettext("How freshclam downloads signatures"),
         }
     }
 }
@@ -88,14 +89,26 @@ pub fn settings_link_row(settings_subpage: SettingsSubpage) -> adw::ActionRow {
         .action_name(format!("win.{OPEN_SETTINGS_ACTION_NAME}"))
         .action_target(&settings_subpage.action_target().to_variant())
         .build();
+    if settings_subpage.needs_administrator() {
+        link_row.add_prefix(&gtk::Image::from_icon_name("changes-prevent-symbolic"));
+    }
     link_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
     link_row
 }
 
-pub fn settings_link_group(settings_subpages: &[SettingsSubpage]) -> adw::PreferencesGroup {
-    let link_group = adw::PreferencesGroup::builder()
-        .title(gettext("Settings"))
-        .build();
+pub fn system_settings_group(settings_subpages: &[SettingsSubpage]) -> adw::PreferencesGroup {
+    let system_group = settings_link_group(gettext("System"), settings_subpages);
+    system_group.set_description(Some(&gettext(
+        "ClamAV configuration shared by all users. Changes need administrator approval.",
+    )));
+    system_group
+}
+
+pub fn settings_link_group(
+    group_title: String,
+    settings_subpages: &[SettingsSubpage],
+) -> adw::PreferencesGroup {
+    let link_group = adw::PreferencesGroup::builder().title(group_title).build();
     settings_subpages
         .iter()
         .for_each(|settings_subpage| link_group.add(&settings_link_row(*settings_subpage)));

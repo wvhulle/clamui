@@ -10,7 +10,7 @@ use crate::{
     },
     loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
     malware_scan::scanner_output_parser::sanitize_scanner_line,
-    settings_navigation::{SettingsSubpage, settings_link_group},
+    settings_navigation::{SettingsSubpage, system_settings_group},
     system_audit::{
         audit_report_model::{AuditCategory, AuditSection},
         audit_section_group::{AuditGuidanceRequest, AuditSectionGroup, AuditSectionGroupInput},
@@ -157,7 +157,7 @@ impl Component for AuditSectionsPage {
                 model.section_groups.guard().push_back(audit_category);
             });
         if !page_init.settings_subpages.is_empty() {
-            sections_preferences_page.add(&settings_link_group(page_init.settings_subpages));
+            sections_preferences_page.add(&system_settings_group(page_init.settings_subpages));
         }
         model.start_section_audit(&sender);
         ComponentParts { model, widgets }

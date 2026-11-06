@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: clamui\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 11:38+0100\n"
+"POT-Creation-Date: 2026-11-06 11:46+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -962,6 +962,7 @@ msgstr ""
 
 #: src/file_quarantine/quarantine_entries_page.rs:224
 #: src/malware_scan/scan_progress_page.rs:882
+#: src/malware_scan/scan_settings.rs:89
 msgid "More"
 msgstr ""
 
@@ -1339,32 +1340,36 @@ msgstr ""
 msgid "Scan Targets"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:992
-msgid "Drop files here, or use the add buttons in the header bar"
+#: src/malware_scan/scan_progress_page.rs:1014
+msgid "Drop files or folders to scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1002
-msgid "No targets added"
+#: src/malware_scan/scan_progress_page.rs:1023
+msgid "Add Files…"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1125
+#: src/malware_scan/scan_progress_page.rs:1029
+msgid "Add Folder…"
+msgstr ""
+
+#: src/malware_scan/scan_progress_page.rs:1153
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1140
+#: src/malware_scan/scan_progress_page.rs:1168
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1188
-#: src/malware_scan/scan_settings.rs:95 src/settings_navigation.rs:58
+#: src/malware_scan/scan_progress_page.rs:1216
+#: src/malware_scan/scan_settings.rs:102 src/settings_navigation.rs:58
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1190
+#: src/malware_scan/scan_progress_page.rs:1218
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
-#: src/malware_scan/scan_progress_page.rs:1279
+#: src/malware_scan/scan_progress_page.rs:1307
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
@@ -1482,94 +1487,94 @@ msgstr ""
 msgid "Python bytecode cache"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:42 src/settings_navigation.rs:97
-msgid "Settings"
+#: src/malware_scan/scan_settings.rs:47
+msgid "Options"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:45
+#: src/malware_scan/scan_settings.rs:50
 msgid "Show Live Scan Progress"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:46
+#: src/malware_scan/scan_settings.rs:51
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:52
+#: src/malware_scan/scan_settings.rs:57
 msgid "Automatic"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:53
+#: src/malware_scan/scan_settings.rs:58
 msgid "clamd (daemon)"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:54
+#: src/malware_scan/scan_settings.rs:59
 msgid "clamscan (standalone)"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:57
+#: src/malware_scan/scan_settings.rs:62
 msgid "Scan Backend"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:59
+#: src/malware_scan/scan_settings.rs:64
 msgid "Automatic uses the daemon when it answers and clamscan otherwise."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:97
+#: src/malware_scan/scan_settings.rs:104
 msgid ""
 "Automatically scan removable and external drives when they are connected."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:101
+#: src/malware_scan/scan_settings.rs:108
 msgid "Enable Device Auto-Scan"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:108
+#: src/malware_scan/scan_settings.rs:115
 msgid "Max Device Size (GB)"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:109
+#: src/malware_scan/scan_settings.rs:116
 msgid "0 means no size limit."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:128
+#: src/malware_scan/scan_settings.rs:135
 #: src/scheduled_scans/schedule_preferences_page.rs:237
 msgid "Skip on Battery"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:177 src/malware_scan/scan_target_row.rs:46
+#: src/malware_scan/scan_settings.rs:184 src/malware_scan/scan_target_row.rs:46
 #: src/scan_profiles/profile_editor_dialog.rs:56
 msgid "Remove"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:210
+#: src/malware_scan/scan_settings.rs:217
 #: src/scan_profiles/profile_editor_dialog.rs:192 src/settings_navigation.rs:56
 msgid "Exclusions"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:223
+#: src/malware_scan/scan_settings.rs:230
 msgid ""
 "These apply to scans started from ClamUI. They don't change what on-access "
 "scanning or a system scan timer checks."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:226
+#: src/malware_scan/scan_settings.rs:233
 msgid "Preset Exclusions"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:228
+#: src/malware_scan/scan_settings.rs:235
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:233
+#: src/malware_scan/scan_settings.rs:240
 msgid "Custom Exclusions"
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:235
+#: src/malware_scan/scan_settings.rs:242
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/malware_scan/scan_settings.rs:239
+#: src/malware_scan/scan_settings.rs:246
 msgid "/path/to/exclude or *.tmp"
 msgstr ""
 
@@ -2205,28 +2210,38 @@ msgstr ""
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 
-#: src/settings_navigation.rs:67
+#: src/settings_navigation.rs:74
 msgid "Folders and patterns that ClamUI scans skip"
 msgstr ""
 
-#: src/settings_navigation.rs:68
+#: src/settings_navigation.rs:75
 msgid "Scan automatically with a systemd timer"
 msgstr ""
 
-#: src/settings_navigation.rs:69
+#: src/settings_navigation.rs:76
 msgid "Scan removable drives when they are connected"
 msgstr ""
 
-#: src/settings_navigation.rs:71
-msgid "clamd configuration; changes need administrator approval"
-msgstr ""
-
-#: src/settings_navigation.rs:74
-msgid "clamd on-access configuration; changes need administrator approval"
-msgstr ""
-
 #: src/settings_navigation.rs:77
-msgid "freshclam configuration; changes need administrator approval"
+msgid "clamd settings for every scan on this computer"
+msgstr ""
+
+#: src/settings_navigation.rs:78
+msgid "Which folders clamonacc watches, and how it blocks"
+msgstr ""
+
+#: src/settings_navigation.rs:79
+msgid "How freshclam downloads signatures"
+msgstr ""
+
+#: src/settings_navigation.rs:100
+msgid "System"
+msgstr ""
+
+#: src/settings_navigation.rs:102
+msgid ""
+"ClamAV configuration shared by all users. Changes need administrator "
+"approval."
 msgstr ""
 
 #: src/signature_sources/signature_provider_catalogue.rs:43

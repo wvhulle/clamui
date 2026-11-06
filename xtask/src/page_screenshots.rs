@@ -52,7 +52,7 @@ struct PageCapture {
 
 const LOG_ENTRY_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 170, "logs-entry-selected")];
 const PROFILE_MANAGER_CLICKS: [PointerClick; 1] = [PointerClick::at(814, 136, "profile-manager")];
-const SCAN_SETTINGS_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 494, "scan-exclusions")];
+const SCAN_SETTINGS_CLICKS: [PointerClick; 1] = [PointerClick::at(548, 684, "scan-exclusions")];
 const PREFERENCE_TAB_CLICKS: [PointerClick; 1] =
     [PointerClick::at(531, 42, "preferences-online-lookups")];
 const QUARANTINE_ALL_CLICKS: [PointerClick; 2] = [

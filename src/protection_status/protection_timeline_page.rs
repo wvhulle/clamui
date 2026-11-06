@@ -21,7 +21,7 @@ use crate::{
         },
         protection_timeline_presentation::{AlertReadiness, protection_timeline},
     },
-    settings_navigation::{OPEN_SETTINGS_ACTION_NAME, SettingsSubpage, settings_link_group},
+    settings_navigation::{OPEN_SETTINGS_ACTION_NAME, SettingsSubpage, system_settings_group},
     step_timeline::{
         timeline_step_model::{TimelineStepAction, TimelineStepRequest},
         timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
@@ -302,7 +302,7 @@ impl Component for ProtectionTimelinePage {
 
                 add: timeline_group,
 
-                add = &settings_link_group(&[SettingsSubpage::OnAccessScanning]),
+                add = &system_settings_group(&[SettingsSubpage::OnAccessScanning]),
             },
             #[watch]
             set_visible_child_name: model.first_load().shown_page_name(),
