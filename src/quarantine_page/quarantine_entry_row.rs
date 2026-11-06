@@ -14,7 +14,10 @@ use crate::{
             scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         },
         desktop::locale_formatting::{byte_size_text, exact_local_time_text},
-        quarantine_vault::quarantine_entry_database::{QuarantineEntryRecord, StoredDetectionDate},
+        quarantine_vault::{
+            quarantine_entry_database::{QuarantineEntryRecord, StoredDetectionDate},
+            quarantine_file_moves::RecordedPayloadHash,
+        },
         settings_helper::trust_requests::{FileFingerprint, TrustChoice},
         threat_intel::file_reputation_check::{
             ReputationAnswers, SourceAnswer, check_hash_reputation,
@@ -92,6 +95,23 @@ impl QuarantineEntryRow {
         }
     }
 
+    fn known_sha256_hex(&self) -> Option<&str> {
+        match &self.entry_record.payload_hash {
+            RecordedPayloadHash::KnownSha256 { sha256_hex } => Some(sha256_hex),
+            RecordedPayloadHash::IntegrityUnknown => None,
+        }
+    }
+
+    fn payload_hash_text(&self) -> String {
+        match &self.entry_record.payload_hash {
+            RecordedPayloadHash::KnownSha256 { sha256_hex } => sha256_hex.clone(),
+            RecordedPayloadHash::IntegrityUnknown => gettext(
+                "Unknown. This quarantine record has no usable hash, so the file cannot be \
+                 verified, checked online, trusted or restored. You can still delete it.",
+            ),
+        }
+    }
+
     fn reputation_check_running(&self) -> bool {
         self.reputation_answers.circl_answer == SourceAnswer::Checking
     }
@@ -149,9 +169,17 @@ impl FactoryComponent for QuarantineEntryRow {
                 set_css_classes: &["caption-heading", self.recheck_style()],
             },
 
+            add_suffix = &gtk::Label {
+                set_label: &gettext("Integrity Unknown"),
+                set_valign: gtk::Align::Center,
+                set_css_classes: &["caption-heading", "warning"],
+                set_visible: self.known_sha256_hex().is_none(),
+            },
+
             add_suffix = &gtk::Button {
                 set_label: &gettext("Restore"),
                 set_valign: gtk::Align::Center,
+                set_sensitive: self.known_sha256_hex().is_some(),
                 connect_clicked[sender, entry_id = self.entry_record.entry_id] => move |_clicked_button| {
                     let _parent_gone = sender.output(QuarantineEntryRowOutput::RestoreRequested { entry_id });
                 },
@@ -175,7 +203,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_label: &gettext("Check"),
                     set_valign: gtk::Align::Center,
                     #[watch]
-                    set_sensitive: !self.reputation_check_running(),
+                    set_sensitive: self.known_sha256_hex().is_some() && !self.reputation_check_running(),
                     connect_clicked => QuarantineEntryRowInput::ReputationCheckRequested,
                 },
             },
@@ -233,6 +261,7 @@ impl FactoryComponent for QuarantineEntryRow {
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Trust…"),
                     set_valign: gtk::Align::Center,
+                    set_sensitive: self.known_sha256_hex().is_some(),
                     connect_clicked => QuarantineEntryRowInput::TrustFileRequested,
                 },
             },
@@ -240,7 +269,8 @@ impl FactoryComponent for QuarantineEntryRow {
             add_row = &adw::ActionRow {
                 set_use_markup: false,
                 set_title: "SHA-256",
-                set_subtitle: &self.entry_record.file_hash,
+                set_subtitle: &self.payload_hash_text(),
+                set_subtitle_lines: 0,
                 set_subtitle_selectable: true,
                 add_css_class: "property",
 
@@ -248,6 +278,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_icon_name: "edit-copy-symbolic",
                     set_tooltip_text: Some(&gettext("Copy Hash")),
                     set_valign: gtk::Align::Center,
+                    set_visible: self.known_sha256_hex().is_some(),
                     add_css_class: "flat",
                     connect_clicked => QuarantineEntryRowInput::HashCopyRequested,
                 },
@@ -270,8 +301,10 @@ impl FactoryComponent for QuarantineEntryRow {
     fn update(&mut self, row_input: QuarantineEntryRowInput, sender: FactorySender<Self>) {
         match row_input {
             QuarantineEntryRowInput::ReputationCheckRequested => {
+                let Some(content_hash) = self.known_sha256_hex().map(str::to_owned) else {
+                    return;
+                };
                 self.reputation_answers = ReputationAnswers::all_set_to(&SourceAnswer::Checking);
-                let content_hash = self.entry_record.file_hash.clone();
                 sender.oneshot_command(async move {
                     QuarantineEntryRowCommand::ReputationChecked(
                         check_hash_reputation(content_hash).await,
@@ -279,18 +312,23 @@ impl FactoryComponent for QuarantineEntryRow {
                 });
             }
             QuarantineEntryRowInput::HashCopyRequested => {
-                let _page_closed = sender.output(QuarantineEntryRowOutput::HashCopyRequested(
-                    self.entry_record.file_hash.clone(),
-                ));
+                if let Some(sha256_hex) = self.known_sha256_hex() {
+                    let _page_closed = sender.output(QuarantineEntryRowOutput::HashCopyRequested(
+                        sha256_hex.to_owned(),
+                    ));
+                }
             }
             QuarantineEntryRowInput::OnlineLookupsRequested => {
                 let _page_closed = sender.output(QuarantineEntryRowOutput::OnlineLookupsRequested);
             }
             QuarantineEntryRowInput::TrustFileRequested => {
+                let Some(sha256_hex) = self.known_sha256_hex().map(str::to_owned) else {
+                    return;
+                };
                 let _page_closed = sender.output(QuarantineEntryRowOutput::TrustRequested(
                     TrustChoice::TrustFile {
                         file_fingerprint: FileFingerprint {
-                            sha256_hex: self.entry_record.file_hash.clone(),
+                            sha256_hex,
                             file_size: self.entry_record.file_size,
                         },
                         shown_path: sanitize_scanner_line(

@@ -49,6 +49,10 @@ pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> Stri
         QuarantineMoveFailure::FileHashMismatch => {
             gettext("File hash mismatch — file may be corrupted")
         }
+        QuarantineMoveFailure::RestoreRefusedIntegrityUnknown => gettext(
+            "This quarantine record has no usable hash, so the file cannot be verified and is not \
+             restored. You can still delete it.",
+        ),
         QuarantineMoveFailure::BlockedFileOnOtherFilesystem => gettext(
             "On-access scanning blocks this file and it is on another filesystem, so it cannot be \
              moved to quarantine. You can delete it instead.",
@@ -902,6 +906,7 @@ mod quarantine_entries_page_tests {
     use std::path::PathBuf;
 
     use super::*;
+    use crate::host_services::quarantine_vault::quarantine_file_moves::RecordedPayloadHash;
 
     fn entry_detected_on(detection_date: &str) -> QuarantineEntryRecord {
         QuarantineEntryRecord {
@@ -911,7 +916,7 @@ mod quarantine_entries_page_tests {
             threat_name: "Win.Trojan.Agent".to_owned(),
             detection_date: StoredDetectionDate::from(detection_date.to_owned()),
             file_size: bytesize::ByteSize::b(1),
-            file_hash: String::new(),
+            payload_hash: RecordedPayloadHash::IntegrityUnknown,
             original_permissions: 0o644,
         }
     }

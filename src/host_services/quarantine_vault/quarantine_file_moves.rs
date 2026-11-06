@@ -28,7 +28,7 @@ const COPY_BUFFER_SIZE: usize = 64 * 1024;
 const FREE_SPACE_RESERVE: ByteSize = ByteSize::mib(10);
 const MAXIMUM_FILE_NAME_LENGTH: usize = 255;
 const QUARANTINE_NAME_PREFIX_LENGTH: usize = 17;
-pub const UNKNOWN_PAYLOAD_HASH: &str = "";
+const SHA256_HEX_LENGTH: usize = 64;
 const PROTECTED_RESTORE_ROOTS: &[&str] = &[
     "/etc", "/var", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot", "/root", "/sys", "/proc",
 ];
@@ -69,6 +69,8 @@ pub enum QuarantineMoveFailure {
     FileReplacedDuringOperation,
     #[error("the file hash does not match its quarantine record")]
     FileHashMismatch,
+    #[error("the quarantine record has no usable hash, so the file cannot be verified")]
+    RestoreRefusedIntegrityUnknown,
     #[error("the path is not inside the quarantine directory")]
     PathOutsideQuarantine,
     #[error("the restore path is invalid")]
@@ -96,6 +98,28 @@ pub enum QuarantineMoveFailure {
     EntryRecordNotRemoved,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecordedPayloadHash {
+    KnownSha256 { sha256_hex: String },
+    IntegrityUnknown,
+}
+
+impl From<String> for RecordedPayloadHash {
+    fn from(stored_text: String) -> Self {
+        parsed_sha256_hex(&stored_text).map_or(Self::IntegrityUnknown, |sha256_hex| {
+            Self::KnownSha256 { sha256_hex }
+        })
+    }
+}
+
+pub fn parsed_sha256_hex(stored_text: &str) -> Option<String> {
+    (stored_text.len() == SHA256_HEX_LENGTH
+        && stored_text
+            .bytes()
+            .all(|hex_digit| hex_digit.is_ascii_hexdigit()))
+    .then(|| stored_text.to_ascii_lowercase())
+}
+
 pub struct PinnedParentDirectory {
     parent_directory: File,
     entry_name: CString,
@@ -105,7 +129,7 @@ pub struct CopiedQuarantinePayload {
     pub source_path: PathBuf,
     pub destination_path: PathBuf,
     pub file_size: ByteSize,
-    pub file_hash: String,
+    pub sha256_hex: String,
     pub original_permissions: u32,
     source_parent: PinnedParentDirectory,
     source_metadata: fs::Metadata,
@@ -371,13 +395,13 @@ pub fn copy_file_into_quarantine(
     let neutralized_encoding = PayloadEncoding::NeutralizedPayload {
         scrambling_key: fresh_scrambling_key()?,
     };
-    let file_hash = match copy_hash_and_sync(
+    let sha256_hex = match copy_hash_and_sync(
         &mut source_file,
         &mut destination_file,
         QUARANTINE_FILE_MODE,
         neutralized_encoding,
     ) {
-        Ok(file_hash) => file_hash,
+        Ok(sha256_hex) => sha256_hex,
         Err(copy_failure) => {
             let _nothing_to_clean = unlink_relative_entry(
                 &destination_parent.parent_directory,
@@ -392,7 +416,7 @@ pub fn copy_file_into_quarantine(
         source_path: source_path.to_path_buf(),
         destination_path,
         file_size,
-        file_hash,
+        sha256_hex,
         original_permissions: source_metadata.mode() & 0o777,
         source_parent,
         source_metadata,
@@ -495,13 +519,13 @@ pub fn rename_blocked_file_into_quarantine(
         &planned_rename.destination_parent,
     )?;
     match hash_and_secure_renamed_payload(planned_rename) {
-        Ok(file_hash) => {
+        Ok(sha256_hex) => {
             planned_rename
                 .destination_parent
                 .parent_directory
                 .sync_all()?;
             planned_rename.source_parent.parent_directory.sync_all()?;
-            Ok(file_hash)
+            Ok(sha256_hex)
         }
         Err(payload_failure) => {
             let _rollback_outcome = rename_without_replacing(
@@ -637,7 +661,7 @@ pub fn restore_payload_file(
     payload_path: &Path,
     destination_path: &Path,
     original_permissions: u32,
-    expected_hash: &str,
+    expected_sha256_hex: &str,
 ) -> Result<(), QuarantineMoveFailure> {
     validate_quarantine_path(quarantine_directory, payload_path)?;
     let destination_path = lexically_normalized_path(destination_path);
@@ -677,7 +701,7 @@ pub fn restore_payload_file(
         }
     };
     drop(restored_file);
-    if restored_hash != expected_hash {
+    if restored_hash != expected_sha256_hex {
         let _nothing_to_clean =
             unlink_relative_entry(&restore_parent.parent_directory, &restore_parent.entry_name);
         return Err(QuarantineMoveFailure::FileHashMismatch);
@@ -740,13 +764,14 @@ pub const NEUTRALIZING_NAME_PREFIX: &str = ".neutralizing-";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NeutralizingOutcome {
     AlreadyNeutralized,
-    NeutralizedNow,
+    NeutralizedAndVerified,
+    NeutralizedWithUnknownIntegrity,
 }
 
 pub fn neutralize_payload_in_place(
     quarantine_directory: &Path,
     payload_path: &Path,
-    expected_hash: &str,
+    recorded_hash: &RecordedPayloadHash,
 ) -> Result<NeutralizingOutcome, QuarantineMoveFailure> {
     validate_quarantine_path(quarantine_directory, payload_path)?;
     let payload_parent = pin_parent_directory(payload_path)?;
@@ -793,10 +818,18 @@ pub fn neutralize_payload_in_place(
         }
     };
     drop(staged_file);
-    if expected_hash != UNKNOWN_PAYLOAD_HASH && staged_hash != expected_hash {
-        discard_staged();
-        return Err(QuarantineMoveFailure::FileHashMismatch);
-    }
+    let neutralized_outcome = match recorded_hash {
+        RecordedPayloadHash::KnownSha256 { sha256_hex } if staged_hash == *sha256_hex => {
+            NeutralizingOutcome::NeutralizedAndVerified
+        }
+        RecordedPayloadHash::KnownSha256 { .. } => {
+            discard_staged();
+            return Err(QuarantineMoveFailure::FileHashMismatch);
+        }
+        RecordedPayloadHash::IntegrityUnknown => {
+            NeutralizingOutcome::NeutralizedWithUnknownIntegrity
+        }
+    };
     if let Err(replaced_failure) = ensure_entry_identity(&payload_parent, &payload_metadata) {
         discard_staged();
         return Err(replaced_failure);
@@ -808,7 +841,7 @@ pub fn neutralize_payload_in_place(
         payload_parent.entry_name.as_c_str(),
     )?;
     payload_parent.parent_directory.sync_all()?;
-    Ok(NeutralizingOutcome::NeutralizedNow)
+    Ok(neutralized_outcome)
 }
 
 pub fn remove_stale_neutralizing_copies(quarantine_directory: &Path) {
@@ -976,7 +1009,7 @@ mod quarantine_file_moves_tests {
         );
         assert_eq!(
             payload_content_hash(&copied_payload.destination_path).unwrap(),
-            copied_payload.file_hash
+            copied_payload.sha256_hex
         );
         remove_quarantined_source(&copied_payload).unwrap();
         restore_payload_file(
@@ -984,7 +1017,7 @@ mod quarantine_file_moves_tests {
             &copied_payload.destination_path,
             &source_path,
             0o644,
-            &copied_payload.file_hash,
+            &copied_payload.sha256_hex,
         )
         .unwrap();
         assert_eq!(fs::read(&source_path).unwrap(), eicar_pattern);
@@ -998,15 +1031,18 @@ mod quarantine_file_moves_tests {
         let payload_path = quarantine_directory.join("legacy-payload");
         fs::write(&payload_path, b"legacy raw payload").unwrap();
         let expected_hash = payload_content_hash(&payload_path).unwrap();
+        let recorded_hash = RecordedPayloadHash::KnownSha256 {
+            sha256_hex: expected_hash.clone(),
+        };
         assert_eq!(
-            neutralize_payload_in_place(&quarantine_directory, &payload_path, &expected_hash)
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, &recorded_hash)
                 .unwrap(),
-            NeutralizingOutcome::NeutralizedNow
+            NeutralizingOutcome::NeutralizedAndVerified
         );
         assert_ne!(fs::read(&payload_path).unwrap(), b"legacy raw payload");
         assert_eq!(payload_content_hash(&payload_path).unwrap(), expected_hash);
         assert_eq!(
-            neutralize_payload_in_place(&quarantine_directory, &payload_path, &expected_hash)
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, &recorded_hash)
                 .unwrap(),
             NeutralizingOutcome::AlreadyNeutralized
         );
@@ -1021,11 +1057,55 @@ mod quarantine_file_moves_tests {
         let payload_path = quarantine_directory.join("tampered-payload");
         fs::write(&payload_path, b"tampered").unwrap();
         assert!(matches!(
-            neutralize_payload_in_place(&quarantine_directory, &payload_path, "00"),
+            neutralize_payload_in_place(
+                &quarantine_directory,
+                &payload_path,
+                &RecordedPayloadHash::KnownSha256 {
+                    sha256_hex: "00".repeat(32),
+                },
+            ),
             Err(QuarantineMoveFailure::FileHashMismatch)
         ));
         assert_eq!(fs::read(&payload_path).unwrap(), b"tampered");
         assert_eq!(fs::read_dir(&quarantine_directory).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn neutralizing_a_payload_without_a_usable_hash_reports_unknown_integrity() {
+        let temporary_root = tempfile::tempdir().unwrap();
+        let quarantine_directory = temporary_root.path().join("quarantine");
+        ensure_quarantine_directory(&quarantine_directory).unwrap();
+        let payload_path = quarantine_directory.join("unhashed-payload");
+        fs::write(&payload_path, b"unhashed raw payload").unwrap();
+        assert_eq!(
+            neutralize_payload_in_place(
+                &quarantine_directory,
+                &payload_path,
+                &RecordedPayloadHash::IntegrityUnknown
+            )
+            .unwrap(),
+            NeutralizingOutcome::NeutralizedWithUnknownIntegrity
+        );
+        assert_eq!(stored_plaintext(&payload_path), b"unhashed raw payload");
+    }
+
+    #[test]
+    fn stored_hash_text_is_known_only_when_it_is_a_sha256_hex_digest() {
+        let digest_text = "AB".repeat(32);
+        assert_eq!(
+            RecordedPayloadHash::from(digest_text),
+            RecordedPayloadHash::KnownSha256 {
+                sha256_hex: "ab".repeat(32)
+            }
+        );
+        assert_eq!(
+            RecordedPayloadHash::from(String::new()),
+            RecordedPayloadHash::IntegrityUnknown
+        );
+        assert_eq!(
+            RecordedPayloadHash::from("not-a-valid-hash".to_owned()),
+            RecordedPayloadHash::IntegrityUnknown
+        );
     }
 
     #[test]

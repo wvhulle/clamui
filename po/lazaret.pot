@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 18:45+0100\n"
+"POT-Creation-Date: 2026-11-06 19:05+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -24,9 +24,9 @@ msgid "Protection"
 msgstr ""
 
 #: src/application_window/application_pages.rs:46
-#: src/detections_page/background_detections_page.rs:501
-#: src/detections_page/background_detections_page.rs:520
-#: src/detections_page/background_detections_page.rs:524
+#: src/detections_page/background_detections_page.rs:556
+#: src/detections_page/background_detections_page.rs:575
+#: src/detections_page/background_detections_page.rs:579
 msgid "Detections"
 msgstr ""
 
@@ -41,8 +41,8 @@ msgid "Logs"
 msgstr ""
 
 #: src/application_window/application_pages.rs:49
-#: src/detections_page/incident_timeline_presentation.rs:311
-#: src/quarantine_page/quarantine_entries_page.rs:489
+#: src/detections_page/incident_timeline_presentation.rs:336
+#: src/quarantine_page/quarantine_entries_page.rs:493
 #: src/scan_page/scan_results_section/detected_threat_row.rs:174
 #: src/scan_page/scan_results_section/scan_results_component.rs:165
 msgid "Quarantine"
@@ -124,7 +124,7 @@ msgid "Scanner Engine"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:69
-#: src/detections_page/background_detections_page.rs:536
+#: src/detections_page/background_detections_page.rs:591
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:68
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:519
 msgid "Detection"
@@ -214,12 +214,12 @@ msgid ""
 msgstr ""
 
 #: src/application_window/window_close_behavior.rs:49
-#: src/detections_page/incident_timeline_presentation.rs:303
+#: src/detections_page/incident_timeline_presentation.rs:328
 #: src/logs_page/activity_logs_page.rs:164
 #: src/protection_page/protection_timeline_presentation.rs:552
-#: src/quarantine_page/quarantine_entries_page.rs:298
-#: src/quarantine_page/quarantine_entries_page.rs:423
-#: src/quarantine_page/quarantine_entries_page.rs:447
+#: src/quarantine_page/quarantine_entries_page.rs:302
+#: src/quarantine_page/quarantine_entries_page.rs:427
+#: src/quarantine_page/quarantine_entries_page.rs:451
 #: src/scan_page/scan_page_component.rs:667
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:87
 #: src/scan_page/scan_results_section/scan_results_component.rs:164
@@ -233,44 +233,64 @@ msgstr ""
 msgid "Keep Running"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:254
-msgid "This file can't be deleted from here"
+#: src/detections_page/background_detections_page.rs:148
+msgid ""
+"This file belongs to another user, so it can't be moved or deleted from here"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:312
+#: src/detections_page/background_detections_page.rs:151
+msgid ""
+"This file couldn't be checked, so it can't be moved or deleted from here"
+msgstr ""
+
+#: src/detections_page/background_detections_page.rs:154
+#, rust-format
+msgid "The file could not be deleted: {error}"
+msgstr ""
+
+#: src/detections_page/background_detections_page.rs:158
+msgid "Checking the file stopped unexpectedly"
+msgstr ""
+
+#: src/detections_page/background_detections_page.rs:164
+#, rust-format
+msgid "Your decision could not be saved: {error}"
+msgstr ""
+
+#: src/detections_page/background_detections_page.rs:368
 msgid ""
 "Lazaret can't read the system journal, so new background detections won't "
 "appear here. This does not mean nothing was found. Add your user to the "
 "systemd-journal group."
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:317
+#: src/detections_page/background_detections_page.rs:373
 #: src/protection_page/protection_timeline_presentation.rs:991
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:321
+#: src/detections_page/background_detections_page.rs:377
 msgid "Loading detections…"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:324
+#: src/detections_page/background_detections_page.rs:380
 msgid "Nothing has been detected in the background."
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:327
+#: src/detections_page/background_detections_page.rs:383
 msgid "What on-access scanning and scheduled scans have found."
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:508
+#: src/detections_page/background_detections_page.rs:563
 msgid "Back to detections"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:619
+#: src/detections_page/background_detections_page.rs:674
 msgid "Copied to clipboard"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:666
+#: src/detections_page/background_detections_page.rs:721
 #, rust-format
 msgid "Detections could not be read: {error}"
 msgstr ""
@@ -308,227 +328,239 @@ msgstr ""
 msgid "Kept by you"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:76
-msgid "Blocked, needs a decision"
-msgstr ""
-
-#: src/detections_page/incident_timeline_presentation.rs:77
-msgid "Not blocked, needs a decision"
-msgstr ""
-
-#: src/detections_page/incident_timeline_presentation.rs:78
+#: src/detections_page/incident_timeline_presentation.rs:79
 msgid "Belongs to another user"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:79
+#: src/detections_page/incident_timeline_presentation.rs:83
+msgid "Blocked, needs a decision"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:87
+msgid "Not blocked, needs a decision"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:91
+msgid "Needs a decision"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:92
 msgid "No longer there"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:80
+#: src/detections_page/incident_timeline_presentation.rs:93
 msgid "File could not be checked"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:90
+#: src/detections_page/incident_timeline_presentation.rs:103
 #, rust-format
 msgid "{signature} (test file) · {state}"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:94
+#: src/detections_page/incident_timeline_presentation.rs:107
 #, rust-format
 msgid "{signature} · {state}"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:127
+#: src/detections_page/incident_timeline_presentation.rs:140
 msgid "On-access scanning and the scheduled scan"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:128
+#: src/detections_page/incident_timeline_presentation.rs:141
 msgid "On-access scanning"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:129
+#: src/detections_page/incident_timeline_presentation.rs:142
 msgid "The scheduled scan"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:137
+#: src/detections_page/incident_timeline_presentation.rs:150
 msgid "File"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:139
+#: src/detections_page/incident_timeline_presentation.rs:152
 msgid "Signature source"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:142
+#: src/detections_page/incident_timeline_presentation.rs:155
 msgid "Found by"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:144
+#: src/detections_page/incident_timeline_presentation.rs:157
 msgid "Last seen"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:148
+#: src/detections_page/incident_timeline_presentation.rs:161
 msgid "Times seen"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:153
+#: src/detections_page/incident_timeline_presentation.rs:166
 msgid "Detected"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:156
+#: src/detections_page/incident_timeline_presentation.rs:169
 msgid ""
 "This signature matches the harmless EICAR test pattern, which exists to "
 "check that detection works."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:161
+#: src/detections_page/incident_timeline_presentation.rs:174
 msgid ""
 "ClamAV matched this file against a signature. A match is strong evidence, "
 "but false positives happen, especially with packed or administrative tools."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:166
+#: src/detections_page/incident_timeline_presentation.rs:179
 #, rust-format
 msgid "{signature}, first seen {time}"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:181
+#: src/detections_page/incident_timeline_presentation.rs:197
 msgid "Opening this file is refused, which is why it won't open"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:185
+#: src/detections_page/incident_timeline_presentation.rs:204
+msgid "Not opened again after your decision"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:208
 msgid "The file is no longer there"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:192
+#: src/detections_page/incident_timeline_presentation.rs:215
 msgid "Not blocked: the scheduled scan found it, and it can still be opened"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:197
+#: src/detections_page/incident_timeline_presentation.rs:222
 msgid "Not blocked right now: it can still be opened"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:201
+#: src/detections_page/incident_timeline_presentation.rs:226
 msgid "Could not check whether the file is blocked"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:205
+#: src/detections_page/incident_timeline_presentation.rs:230
 msgid "Blocked"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:207
+#: src/detections_page/incident_timeline_presentation.rs:232
 msgid ""
 "With on-access prevention, the kernel refuses to open a detected file in a "
 "watched folder. The file stays where it is until you decide what to do with "
 "it."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:233
+#: src/detections_page/incident_timeline_presentation.rs:258
 msgid "Looking up…"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:235
+#: src/detections_page/incident_timeline_presentation.rs:260
 msgid "Add your abuse.ch key in Preferences to look up detections."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:241
+#: src/detections_page/incident_timeline_presentation.rs:266
 msgid "No known samples match this signature."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:260
+#: src/detections_page/incident_timeline_presentation.rs:285
 #, rust-format
 msgid "{count} known samples. Families: {families}. Earliest seen: {date}."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:272
+#: src/detections_page/incident_timeline_presentation.rs:297
 msgid "Ask MalwareBazaar about this signature. Only its name is sent."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:274
+#: src/detections_page/incident_timeline_presentation.rs:299
 msgid "Look Up"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:287
+#: src/detections_page/incident_timeline_presentation.rs:312
 msgid "Stop asking about this file"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:288
-#: src/detections_page/incident_timeline_presentation.rs:323
+#: src/detections_page/incident_timeline_presentation.rs:313
+#: src/detections_page/incident_timeline_presentation.rs:348
 msgid "Keep"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:296
+#: src/detections_page/incident_timeline_presentation.rs:321
 msgid "Delete this file permanently? This can't be undone."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:297
+#: src/detections_page/incident_timeline_presentation.rs:322
 msgid "Delete Permanently"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:302
+#: src/detections_page/incident_timeline_presentation.rs:327
 msgid "Go back without deleting"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:310
+#: src/detections_page/incident_timeline_presentation.rs:335
 msgid "Move it somewhere safe. You can restore it later."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:316
+#: src/detections_page/incident_timeline_presentation.rs:341
 msgid "Remove it for good"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:317
+#: src/detections_page/incident_timeline_presentation.rs:342
 msgid "Delete…"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:322
+#: src/detections_page/incident_timeline_presentation.rs:347
 msgid "You know this file is fine"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:338
+#: src/detections_page/incident_timeline_presentation.rs:363
 msgid "Your decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:340
+#: src/detections_page/incident_timeline_presentation.rs:365
 msgid ""
 "If it's unfamiliar, quarantine it. Keeping a file only stops Lazaret asking: "
 "on-access scanning keeps blocking it until the path is excluded in the "
 "ClamAV configuration, as shown here."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:348
+#: src/detections_page/incident_timeline_presentation.rs:373
 msgid ""
 "Quarantined files can be restored from the Quarantine page. A file you kept "
 "is still blocked by on-access scanning until its path is excluded in the "
 "ClamAV configuration."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:357
+#: src/detections_page/incident_timeline_presentation.rs:385
 msgid "This file belongs to another user, so Lazaret can't move or delete it"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:359
+#: src/detections_page/incident_timeline_presentation.rs:387
+msgid "Lazaret couldn't check this file, so it can't move or delete it"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:393
 msgid "Choose what happens to this file"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:367
+#: src/detections_page/incident_timeline_presentation.rs:401
 msgid "MalwareBazaar"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:385
+#: src/detections_page/incident_timeline_presentation.rs:419
 msgid "Resolved"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:387
+#: src/detections_page/incident_timeline_presentation.rs:421
 msgid ""
 "A resolved detection opens again if ClamAV finds the same file again later, "
 "for example after you download it a second time."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:395
+#: src/detections_page/incident_timeline_presentation.rs:429
 msgid "Waiting for your decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:401
+#: src/detections_page/incident_timeline_presentation.rs:435
 #, rust-format
 msgid "{state}, {time}"
 msgstr ""
@@ -780,7 +812,7 @@ msgstr ""
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:126
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:214
 #: src/protection_page/protection_timeline_page.rs:494
-#: src/quarantine_page/quarantine_entry_row.rs:73
+#: src/quarantine_page/quarantine_entry_row.rs:76
 #: src/scan_page/scan_page_component.rs:253
 #: src/scan_page/scan_schedule_page/scan_schedule_component.rs:313
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
@@ -1033,7 +1065,7 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:260
 #: src/logs_page/activity_logs_page.rs:415
 #: src/logs_page/activity_logs_page.rs:469
-#: src/quarantine_page/quarantine_entries_page.rs:528
+#: src/quarantine_page/quarantine_entries_page.rs:532
 msgid "Refresh"
 msgstr ""
 
@@ -1963,52 +1995,58 @@ msgstr ""
 
 #: src/quarantine_page/quarantine_entries_page.rs:53
 msgid ""
+"This quarantine record has no usable hash, so the file cannot be verified "
+"and is not restored. You can still delete it."
+msgstr ""
+
+#: src/quarantine_page/quarantine_entries_page.rs:57
+msgid ""
 "On-access scanning blocks this file and it is on another filesystem, so it "
 "cannot be moved to quarantine. You can delete it instead."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:57
+#: src/quarantine_page/quarantine_entries_page.rs:61
 #, rust-format
 msgid "Quarantine entry not found: {id}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:60
+#: src/quarantine_page/quarantine_entries_page.rs:64
 msgid ""
 "Failed to record quarantine entry in database. File has been restored to "
 "original location."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:68
+#: src/quarantine_page/quarantine_entries_page.rs:72
 #, rust-format
 msgid ""
 "Failed to record quarantine entry in database. Rollback also failed: "
 "{error}. File may be orphaned at: {path}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:77
+#: src/quarantine_page/quarantine_entries_page.rs:81
 msgid ""
 "The file was moved, but its quarantine record could not be removed. It may "
 "still appear in the list."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:189
+#: src/quarantine_page/quarantine_entries_page.rs:193
 msgid "Restore This File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:190
+#: src/quarantine_page/quarantine_entries_page.rs:194
 msgid "ClamAV no longer detects this file with today's signatures."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:191
-#: src/quarantine_page/quarantine_entry_row.rs:153
+#: src/quarantine_page/quarantine_entries_page.rs:195
+#: src/quarantine_page/quarantine_entry_row.rs:180
 msgid "Restore"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:195
+#: src/quarantine_page/quarantine_entries_page.rs:199
 msgid "Restore a File ClamAV Still Detects?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:197
+#: src/quarantine_page/quarantine_entries_page.rs:201
 #, rust-format
 msgid ""
 "ClamAV still detects this file as {detection} with today's signatures. Only "
@@ -2016,40 +2054,40 @@ msgid ""
 "first."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:202
-#: src/quarantine_page/quarantine_entries_page.rs:211
+#: src/quarantine_page/quarantine_entries_page.rs:206
+#: src/quarantine_page/quarantine_entries_page.rs:215
 msgid "Restore Anyway"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:206
+#: src/quarantine_page/quarantine_entries_page.rs:210
 msgid "Restore an Unchecked File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:208
+#: src/quarantine_page/quarantine_entries_page.rs:212
 #, rust-format
 msgid "The file could not be checked again before restoring it: {error}"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:222
+#: src/quarantine_page/quarantine_entries_page.rs:226
 msgid "This location is outside your home folder."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:273
+#: src/quarantine_page/quarantine_entries_page.rs:277
 msgid "The file goes back to:"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:385
+#: src/quarantine_page/quarantine_entries_page.rs:389
 #, rust-format
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:413
+#: src/quarantine_page/quarantine_entries_page.rs:417
 msgid "Clear Old Items?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:416
+#: src/quarantine_page/quarantine_entries_page.rs:420
 #, rust-format
 msgid ""
 "{count} quarantined file older than 30 days will be permanently deleted."
@@ -2058,87 +2096,87 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:424
-#: src/quarantine_page/quarantine_entries_page.rs:448
-#: src/quarantine_page/quarantine_entry_row.rs:161
+#: src/quarantine_page/quarantine_entries_page.rs:428
+#: src/quarantine_page/quarantine_entries_page.rs:452
+#: src/quarantine_page/quarantine_entry_row.rs:189
 #: src/scan_page/scan_profiles_dialog/profile_manager_dialog.rs:315
 #: src/scan_page/scan_profiles_dialog/scan_profile_row.rs:80
 msgid "Delete"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:444
+#: src/quarantine_page/quarantine_entries_page.rs:448
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:445
+#: src/quarantine_page/quarantine_entries_page.rs:449
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:496
+#: src/quarantine_page/quarantine_entries_page.rs:500
 #: src/scan_page/scan_options_section.rs:109
 #: src/scan_page/scan_page_component.rs:612
 msgid "More"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:500
+#: src/quarantine_page/quarantine_entries_page.rs:504
 msgid "Clear Old Items…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:518
+#: src/quarantine_page/quarantine_entries_page.rs:522
 msgid "Check Again"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:519
+#: src/quarantine_page/quarantine_entries_page.rs:523
 msgid "Scan every quarantined file with the current signatures"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:534
+#: src/quarantine_page/quarantine_entries_page.rs:538
 msgid "Search"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:555
+#: src/quarantine_page/quarantine_entries_page.rs:559
 msgid "Search by threat name or path"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:570
+#: src/quarantine_page/quarantine_entries_page.rs:574
 msgid "Quarantine Storage"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:571
+#: src/quarantine_page/quarantine_entries_page.rs:575
 msgid ""
 "Detected threats isolated from your system. Expand an entry to check its "
 "reputation."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:574
+#: src/quarantine_page/quarantine_entries_page.rs:578
 msgid "Total Size"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:653
+#: src/quarantine_page/quarantine_entries_page.rs:657
 msgid "Loading quarantine…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:657
+#: src/quarantine_page/quarantine_entries_page.rs:661
 msgid "Quarantine is empty"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:658
+#: src/quarantine_page/quarantine_entries_page.rs:662
 msgid "Threats you quarantine will appear here"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:676
+#: src/quarantine_page/quarantine_entries_page.rs:680
 msgid "Hash copied to clipboard"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:734
+#: src/quarantine_page/quarantine_entries_page.rs:738
 msgid "report it from the scan results"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:848
+#: src/quarantine_page/quarantine_entries_page.rs:852
 msgid "Every quarantined file is still detected or couldn't be checked"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entries_page.rs:851
+#: src/quarantine_page/quarantine_entries_page.rs:855
 #, rust-format
 msgid ""
 "{count} quarantined file is no longer detected. Check it before restoring it."
@@ -2148,56 +2186,66 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:75
+#: src/quarantine_page/quarantine_entry_row.rs:78
 msgid "No longer detected"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:78
+#: src/quarantine_page/quarantine_entry_row.rs:81
 msgid "Still detected"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:170
+#: src/quarantine_page/quarantine_entry_row.rs:109
+msgid ""
+"Unknown. This quarantine record has no usable hash, so the file cannot be "
+"verified, checked online, trusted or restored. You can still delete it."
+msgstr ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:173
+msgid "Integrity Unknown"
+msgstr ""
+
+#: src/quarantine_page/quarantine_entry_row.rs:198
 msgid "Reputation"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:171
+#: src/quarantine_page/quarantine_entry_row.rs:199
 msgid ""
 "Only the file's SHA-256 hash is sent. The file itself never leaves this "
 "computer."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:175
+#: src/quarantine_page/quarantine_entry_row.rs:203
 msgid "Check"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:193
-#: src/quarantine_page/quarantine_entry_row.rs:206
+#: src/quarantine_page/quarantine_entry_row.rs:221
+#: src/quarantine_page/quarantine_entry_row.rs:234
 msgid "Add Key"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:214
+#: src/quarantine_page/quarantine_entry_row.rs:242
 msgid "View Report"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:223
+#: src/quarantine_page/quarantine_entry_row.rs:251
 msgid "False Positive"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:224
+#: src/quarantine_page/quarantine_entry_row.rs:252
 msgid ""
 "Trust this exact file so ClamAV stops reporting it on this computer, then "
 "restore it. Report it so a signature update fixes the detection for everyone."
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:228
+#: src/quarantine_page/quarantine_entry_row.rs:256
 msgid "Report…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:234
+#: src/quarantine_page/quarantine_entry_row.rs:262
 msgid "Trust…"
 msgstr ""
 
-#: src/quarantine_page/quarantine_entry_row.rs:249
+#: src/quarantine_page/quarantine_entry_row.rs:279
 msgid "Copy Hash"
 msgstr ""
 

@@ -13,9 +13,9 @@ use turso::{Builder, Connection, Database, Row, Value};
 
 use crate::host_services::quarantine_vault::{
     quarantine_file_moves::{
-        QuarantineMoveFailure, UNKNOWN_PAYLOAD_HASH, copy_file_into_quarantine,
-        delete_payload_file, discard_copied_payload, ensure_quarantine_directory,
-        lexically_normalized_path, neutralize_payload_in_place, open_payload_plaintext,
+        QuarantineMoveFailure, RecordedPayloadHash, copy_file_into_quarantine, delete_payload_file,
+        discard_copied_payload, ensure_quarantine_directory, lexically_normalized_path,
+        neutralize_payload_in_place, open_payload_plaintext, parsed_sha256_hex,
         payload_content_hash, pin_database_file, plan_blocked_file_rename,
         remove_quarantined_source, remove_stale_neutralizing_copies,
         rename_blocked_file_into_quarantine, restore_payload_file, secure_database_files,
@@ -48,6 +48,7 @@ const QUARANTINE_SCHEMA: &str = "
         file_hash TEXT NOT NULL,
         original_permissions INTEGER NOT NULL
     );";
+const NOT_YET_HASHED_TEXT: &str = "";
 const ENTRY_COLUMNS: &str = "id, original_path, quarantine_path, threat_name, detection_date, \
                              file_size, file_hash, original_permissions";
 
@@ -74,8 +75,41 @@ pub struct QuarantineEntryRecord {
     pub threat_name: String,
     pub detection_date: StoredDetectionDate,
     pub file_size: ByteSize,
-    pub file_hash: String,
+    pub payload_hash: RecordedPayloadHash,
     pub original_permissions: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PendingPayloadHash {
+    NotYetHashed,
+    Hashed { sha256_hex: String },
+}
+
+impl PendingPayloadHash {
+    fn stored_text(&self) -> String {
+        match self {
+            Self::NotYetHashed => NOT_YET_HASHED_TEXT.to_owned(),
+            Self::Hashed { sha256_hex } => sha256_hex.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StoredPendingHash {
+    NotYetHashed,
+    Hashed { sha256_hex: String },
+    UnrecognisedText,
+}
+
+impl From<String> for StoredPendingHash {
+    fn from(stored_text: String) -> Self {
+        if stored_text == NOT_YET_HASHED_TEXT {
+            return Self::NotYetHashed;
+        }
+        parsed_sha256_hex(&stored_text).map_or(Self::UnrecognisedText, |sha256_hex| Self::Hashed {
+            sha256_hex,
+        })
+    }
 }
 
 struct PendingQuarantineRow {
@@ -83,8 +117,16 @@ struct PendingQuarantineRow {
     original_path: PathBuf,
     threat_name: String,
     file_size: ByteSize,
-    file_hash: String,
+    stored_hash: StoredPendingHash,
     original_permissions: i64,
+}
+
+struct PendingMove {
+    source_path: PathBuf,
+    destination_path: PathBuf,
+    file_size: ByteSize,
+    pending_hash: PendingPayloadHash,
+    original_permissions: u32,
 }
 
 #[derive(Clone)]
@@ -129,7 +171,7 @@ fn entry_record_from_row(
         threat_name: database_row.get(3)?,
         detection_date: StoredDetectionDate::from(database_row.get::<String>(4)?),
         file_size: ByteSize::b(database_row.get::<i64>(5)?.max(0) as u64),
-        file_hash: database_row.get(6)?,
+        payload_hash: RecordedPayloadHash::from(database_row.get::<String>(6)?),
         original_permissions: (database_row.get::<i64>(7)? as u32) & 0o777,
     })
 }
@@ -179,7 +221,7 @@ impl QuarantineVault {
                 let _payload_stays_raw = neutralize_payload_in_place(
                     &quarantine_directory,
                     &listed_entry.quarantine_path,
-                    &listed_entry.file_hash,
+                    &listed_entry.payload_hash,
                 );
             });
         })
@@ -189,9 +231,11 @@ impl QuarantineVault {
     async fn neutralize_committed_payload(&self, recorded_payload: &RecordedPayload) {
         let quarantine_directory = self.quarantine_directory.clone();
         let payload_path = recorded_payload.destination_path.clone();
-        let expected_hash = recorded_payload.file_hash.clone();
+        let recorded_hash = RecordedPayloadHash::KnownSha256 {
+            sha256_hex: recorded_payload.sha256_hex.clone(),
+        };
         let _payload_stays_raw = spawn_blocking(move || {
-            neutralize_payload_in_place(&quarantine_directory, &payload_path, &expected_hash)
+            neutralize_payload_in_place(&quarantine_directory, &payload_path, &recorded_hash)
         })
         .await;
     }
@@ -240,7 +284,7 @@ impl QuarantineVault {
                 original_path: stored_path_column(&pending_row, 1)?,
                 threat_name: pending_row.get(2)?,
                 file_size: ByteSize::b(pending_row.get::<i64>(3)?.max(0) as u64),
-                file_hash: pending_row.get(4)?,
+                stored_hash: StoredPendingHash::from(pending_row.get::<String>(4)?),
                 original_permissions: pending_row.get(5)?,
             });
         }
@@ -290,7 +334,7 @@ impl QuarantineVault {
 
     async fn record_pending_move(
         &self,
-        pending_payload: &RecordedPayload,
+        pending_move: &PendingMove,
         threat_name: &str,
     ) -> Result<(), QuarantineMoveFailure> {
         let database_connection = self.open_connection().await?;
@@ -299,12 +343,12 @@ impl QuarantineVault {
                 "INSERT INTO quarantine_pending (quarantine_path, original_path, threat_name, \
                  file_size, file_hash, original_permissions) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 vec![
-                    path_blob(&pending_payload.destination_path),
-                    path_blob(&pending_payload.source_path),
+                    path_blob(&pending_move.destination_path),
+                    path_blob(&pending_move.source_path),
                     Value::Text(threat_name.to_owned()),
-                    Value::Integer(pending_payload.file_size.as_u64() as i64),
-                    Value::Text(pending_payload.file_hash.clone()),
-                    Value::Integer(i64::from(pending_payload.original_permissions)),
+                    Value::Integer(pending_move.file_size.as_u64() as i64),
+                    Value::Text(pending_move.pending_hash.stored_text()),
+                    Value::Integer(i64::from(pending_move.original_permissions)),
                 ],
             )
             .await?;
@@ -333,27 +377,29 @@ impl QuarantineVault {
             plan_blocked_file_rename(&quarantine_directory, &normalized_source)
         })
         .await??;
-        let pending_payload = RecordedPayload {
+        let pending_move = PendingMove {
             source_path: planned_rename.source_path.clone(),
             destination_path: planned_rename.destination_path.clone(),
             file_size: planned_rename.file_size,
-            file_hash: UNKNOWN_PAYLOAD_HASH.to_owned(),
+            pending_hash: PendingPayloadHash::NotYetHashed,
             original_permissions: planned_rename.original_permissions,
         };
-        self.record_pending_move(&pending_payload, threat_name)
-            .await?;
+        self.record_pending_move(&pending_move, threat_name).await?;
         let rename_outcome =
             spawn_blocking(move || rename_blocked_file_into_quarantine(&planned_rename))
                 .await
                 .map_err(QuarantineMoveFailure::from)
                 .and_then(|rename_outcome| rename_outcome);
         match rename_outcome {
-            Ok(file_hash) => Ok(RecordedPayload {
-                file_hash,
-                ..pending_payload
+            Ok(sha256_hex) => Ok(RecordedPayload {
+                source_path: pending_move.source_path,
+                destination_path: pending_move.destination_path,
+                file_size: pending_move.file_size,
+                sha256_hex,
+                original_permissions: pending_move.original_permissions,
             }),
             Err(rename_failure) => {
-                self.forget_pending_move(&pending_payload.destination_path)
+                self.forget_pending_move(&pending_move.destination_path)
                     .await;
                 Err(rename_failure)
             }
@@ -378,7 +424,7 @@ impl QuarantineVault {
                     Value::Text(threat_name.to_owned()),
                     Value::Text(format!("{:.3}", Timestamp::now())),
                     Value::Integer(recorded_payload.file_size.as_u64() as i64),
-                    Value::Text(recorded_payload.file_hash.clone()),
+                    Value::Text(recorded_payload.sha256_hex.clone()),
                     Value::Integer(i64::from(recorded_payload.original_permissions & 0o777)),
                 ],
             )
@@ -403,14 +449,14 @@ impl QuarantineVault {
         let payload_path = recorded_payload.destination_path.clone();
         let source_path = recorded_payload.source_path.clone();
         let original_permissions = recorded_payload.original_permissions;
-        let file_hash = recorded_payload.file_hash.clone();
+        let sha256_hex = recorded_payload.sha256_hex.clone();
         let rollback_outcome = spawn_blocking(move || {
             restore_payload_file(
                 &quarantine_directory,
                 &payload_path,
                 &source_path,
                 original_permissions,
-                &file_hash,
+                &sha256_hex,
             )
         })
         .await
@@ -445,11 +491,13 @@ impl QuarantineVault {
         .await??;
         let pending_outcome = self
             .record_pending_move(
-                &RecordedPayload {
+                &PendingMove {
                     source_path: copied_payload.source_path.clone(),
                     destination_path: copied_payload.destination_path.clone(),
                     file_size: copied_payload.file_size,
-                    file_hash: copied_payload.file_hash.clone(),
+                    pending_hash: PendingPayloadHash::Hashed {
+                        sha256_hex: copied_payload.sha256_hex.clone(),
+                    },
                     original_permissions: copied_payload.original_permissions,
                 },
                 threat_name,
@@ -465,7 +513,7 @@ impl QuarantineVault {
                 source_path: copied_payload.source_path,
                 destination_path: copied_payload.destination_path,
                 file_size: copied_payload.file_size,
-                file_hash: copied_payload.file_hash,
+                sha256_hex: copied_payload.sha256_hex,
                 original_permissions: copied_payload.original_permissions,
             })
         })
@@ -524,6 +572,10 @@ impl QuarantineVault {
             .find_quarantine_entry(&database_connection, entry_id)
             .await?;
         drop(database_connection);
+        let RecordedPayloadHash::KnownSha256 { sha256_hex } = entry_record.payload_hash.clone()
+        else {
+            return Err(QuarantineMoveFailure::RestoreRefusedIntegrityUnknown);
+        };
         let quarantine_directory = self.quarantine_directory.clone();
         let restored_record = entry_record.clone();
         spawn_blocking(move || {
@@ -532,7 +584,7 @@ impl QuarantineVault {
                 &restored_record.quarantine_path,
                 &restored_record.original_path,
                 restored_record.original_permissions,
-                &restored_record.file_hash,
+                &sha256_hex,
             )
         })
         .await??;
@@ -565,12 +617,12 @@ pub(super) struct RecordedPayload {
     source_path: PathBuf,
     destination_path: PathBuf,
     file_size: ByteSize,
-    file_hash: String,
+    sha256_hex: String,
     original_permissions: u32,
 }
 
 enum PendingEntryAssessment {
-    RecoverEntry { verified_hash: String },
+    RecoverEntry { committed_sha256_hex: String },
     DiscardPendingRow,
     KeepForManualRecovery,
 }
@@ -578,7 +630,7 @@ enum PendingEntryAssessment {
 fn assess_pending_entry(
     original_path: &Path,
     payload_path: &Path,
-    stored_hash: &str,
+    stored_hash: &StoredPendingHash,
 ) -> PendingEntryAssessment {
     let original_confirmed_missing = matches!(
         std::fs::symlink_metadata(original_path),
@@ -588,19 +640,28 @@ fn assess_pending_entry(
         std::fs::symlink_metadata(payload_path),
         Err(metadata_failure) if metadata_failure.kind() == std::io::ErrorKind::NotFound
     );
-    if stored_hash == UNKNOWN_PAYLOAD_HASH && payload_confirmed_missing {
-        return PendingEntryAssessment::DiscardPendingRow;
-    }
-    if !original_confirmed_missing {
-        return PendingEntryAssessment::KeepForManualRecovery;
-    }
-    match payload_content_hash(payload_path) {
-        Ok(actual_hash) if stored_hash == UNKNOWN_PAYLOAD_HASH || actual_hash == stored_hash => {
-            PendingEntryAssessment::RecoverEntry {
-                verified_hash: actual_hash,
-            }
+    match stored_hash {
+        StoredPendingHash::NotYetHashed if payload_confirmed_missing => {
+            PendingEntryAssessment::DiscardPendingRow
         }
-        _unverified_payload => PendingEntryAssessment::KeepForManualRecovery,
+        _payload_may_exist if !original_confirmed_missing => {
+            PendingEntryAssessment::KeepForManualRecovery
+        }
+        StoredPendingHash::NotYetHashed => payload_content_hash(payload_path).map_or(
+            PendingEntryAssessment::KeepForManualRecovery,
+            |first_sha256_hex| PendingEntryAssessment::RecoverEntry {
+                committed_sha256_hex: first_sha256_hex,
+            },
+        ),
+        StoredPendingHash::Hashed { sha256_hex } => match payload_content_hash(payload_path) {
+            Ok(actual_sha256_hex) if actual_sha256_hex == *sha256_hex => {
+                PendingEntryAssessment::RecoverEntry {
+                    committed_sha256_hex: actual_sha256_hex,
+                }
+            }
+            _unverified_payload => PendingEntryAssessment::KeepForManualRecovery,
+        },
+        StoredPendingHash::UnrecognisedText => PendingEntryAssessment::KeepForManualRecovery,
     }
 }
 
@@ -610,11 +671,11 @@ async fn recover_verified_pending_entry(
 ) -> Result<(), QuarantineMoveFailure> {
     let original_path = pending_entry.original_path.clone();
     let payload_path = pending_entry.quarantine_path.clone();
-    let stored_hash = pending_entry.file_hash.clone();
+    let stored_hash = pending_entry.stored_hash.clone();
     let pending_assessment =
         spawn_blocking(move || assess_pending_entry(&original_path, &payload_path, &stored_hash))
             .await?;
-    let verified_hash = match pending_assessment {
+    let committed_sha256_hex = match pending_assessment {
         PendingEntryAssessment::KeepForManualRecovery => return Ok(()),
         PendingEntryAssessment::DiscardPendingRow => {
             database_connection
@@ -625,7 +686,9 @@ async fn recover_verified_pending_entry(
                 .await?;
             return Ok(());
         }
-        PendingEntryAssessment::RecoverEntry { verified_hash } => verified_hash,
+        PendingEntryAssessment::RecoverEntry {
+            committed_sha256_hex,
+        } => committed_sha256_hex,
     };
     let recovery_transaction = database_connection.unchecked_transaction().await?;
     recovery_transaction
@@ -639,7 +702,7 @@ async fn recover_verified_pending_entry(
                 Value::Text(pending_entry.threat_name),
                 Value::Text(format!("{:.3}", Timestamp::now())),
                 Value::Integer(pending_entry.file_size.as_u64() as i64),
-                Value::Text(verified_hash),
+                Value::Text(committed_sha256_hex),
                 Value::Integer(pending_entry.original_permissions),
             ],
         )
@@ -796,7 +859,12 @@ mod quarantine_entry_database_tests {
                 & 0o777,
             0o700
         );
-        assert_eq!(entry_record.file_hash, sha256_text(b"malicious bytes"));
+        assert_eq!(
+            entry_record.payload_hash,
+            RecordedPayloadHash::KnownSha256 {
+                sha256_hex: sha256_text(b"malicious bytes")
+            }
+        );
 
         vault_fixture
             .quarantine_vault
@@ -1109,7 +1177,7 @@ mod quarantine_entry_database_tests {
             .await
             .expect("renamed");
         assert!(!source_path.exists());
-        assert_eq!(recorded_payload.file_hash, sha256_text(b"blocked payload"));
+        assert_eq!(recorded_payload.sha256_hex, sha256_text(b"blocked payload"));
         assert_eq!(
             fs::metadata(&recorded_payload.destination_path)
                 .expect("payload metadata")
@@ -1155,7 +1223,7 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            UNKNOWN_PAYLOAD_HASH,
+            NOT_YET_HASHED_TEXT,
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
@@ -1164,8 +1232,83 @@ mod quarantine_entry_database_tests {
             .await
             .expect("listed");
         assert_eq!(listed_entries.len(), 1);
-        assert_eq!(listed_entries[0].file_hash, sha256_text(b"pending payload"));
+        assert_eq!(
+            listed_entries[0].payload_hash,
+            RecordedPayloadHash::KnownSha256 {
+                sha256_hex: sha256_text(b"pending payload")
+            }
+        );
         assert_eq!(pending_row_count(&temporary_root), 0);
+
+        quarantine_vault
+            .restore_quarantined_file(listed_entries[0].entry_id)
+            .await
+            .expect("restored");
+        assert_eq!(
+            fs::read(&original_path).expect("restored"),
+            b"pending payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_entry_without_a_usable_hash_stays_listed_and_is_never_restored() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        drop(open_fixture_vault(&temporary_root).await);
+        let original_path = temporary_root.path().join("legacy-unhashed.bin");
+        let payload_path =
+            VaultFixture::quarantine_directory(&temporary_root).join("legacy-unhashed-payload");
+        fs::write(&payload_path, b"legacy unhashed payload").expect("payload");
+        rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
+            .expect("sqlite connection")
+            .execute(
+                "INSERT INTO quarantine (original_path, quarantine_path, threat_name, \
+                 detection_date, file_size, file_hash, original_permissions) VALUES (?1, ?2, \
+                 'Legacy.Test', '2020-01-01T00:00:00Z', 23, '', 420)",
+                params![
+                    original_path.as_os_str().as_bytes(),
+                    payload_path.as_os_str().as_bytes(),
+                ],
+            )
+            .expect("legacy row");
+
+        let quarantine_vault = open_fixture_vault(&temporary_root).await;
+        let listed_entries = quarantine_vault
+            .list_quarantine_entries()
+            .await
+            .expect("listed");
+        assert_eq!(listed_entries.len(), 1);
+        assert_eq!(
+            listed_entries[0].payload_hash,
+            RecordedPayloadHash::IntegrityUnknown
+        );
+        assert_ne!(
+            fs::read(&payload_path).expect("payload"),
+            b"legacy unhashed payload"
+        );
+        assert_eq!(stored_plaintext(&payload_path), b"legacy unhashed payload");
+
+        let restore_outcome = quarantine_vault
+            .restore_quarantined_file(listed_entries[0].entry_id)
+            .await;
+        assert!(matches!(
+            restore_outcome,
+            Err(QuarantineMoveFailure::RestoreRefusedIntegrityUnknown)
+        ));
+        assert!(!original_path.exists());
+        assert!(payload_path.exists());
+        assert_eq!(
+            quarantine_vault
+                .list_quarantine_entries()
+                .await
+                .expect("listed"),
+            listed_entries
+        );
+
+        quarantine_vault
+            .delete_quarantined_file(listed_entries[0].entry_id)
+            .await
+            .expect("deleted");
+        assert!(!payload_path.exists());
     }
 
     #[tokio::test]
@@ -1180,7 +1323,7 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            UNKNOWN_PAYLOAD_HASH,
+            NOT_YET_HASHED_TEXT,
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
