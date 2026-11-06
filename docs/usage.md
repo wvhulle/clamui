@@ -86,6 +86,6 @@ The Logs page keeps a history of scans, updates and quarantine actions, and show
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/preferences.png" width="800" alt="The general preferences with window behavior and file manager integration">
 
-The Scanner Engine settings start with a **Detection** group: whether ClamAV reports potentially unwanted programs, heuristic findings, Office macros, encrypted archives and files too large to check, and whether it looks inside archives. Scans that run without the ClamAV daemon follow the same choices.
+The **Detection** settings, next to Scanner Engine, choose whether ClamAV reports potentially unwanted programs, heuristic findings, Office macros, encrypted archives and files too large to check, and whether it looks inside archives. Scans that run without the ClamAV daemon follow the same choices.
 
 The general preferences cover window behavior, starting in the background, desktop notifications and file-manager actions. ClamAV's own settings live on their own settings pages. Where your install allows it, you can change some of them there after entering your administrator password; see live tuning in your install guide.

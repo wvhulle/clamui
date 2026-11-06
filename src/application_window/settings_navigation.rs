@@ -11,16 +11,18 @@ pub enum SettingsSubpage {
     ScanSchedule,
     DeviceAutoScan,
     ScannerEngine,
+    DetectionChoices,
     OnAccessScanning,
     SignatureUpdates,
     TrustedDetections,
 }
 
-const ALL_SETTINGS_SUBPAGES: [SettingsSubpage; 7] = [
+const ALL_SETTINGS_SUBPAGES: [SettingsSubpage; 8] = [
     SettingsSubpage::ScanExclusions,
     SettingsSubpage::ScanSchedule,
     SettingsSubpage::DeviceAutoScan,
     SettingsSubpage::ScannerEngine,
+    SettingsSubpage::DetectionChoices,
     SettingsSubpage::OnAccessScanning,
     SettingsSubpage::SignatureUpdates,
     SettingsSubpage::TrustedDetections,
@@ -33,6 +35,7 @@ impl SettingsSubpage {
             Self::ScanSchedule => "scan-schedule",
             Self::DeviceAutoScan => "device-auto-scan",
             Self::ScannerEngine => "scanner-engine",
+            Self::DetectionChoices => "detection",
             Self::OnAccessScanning => "on-access-scanning",
             Self::SignatureUpdates => "signature-updates",
             Self::TrustedDetections => "trusted-detections",
@@ -50,7 +53,8 @@ impl SettingsSubpage {
             Self::ScanExclusions
             | Self::ScanSchedule
             | Self::DeviceAutoScan
-            | Self::ScannerEngine => ApplicationPage::Scan,
+            | Self::ScannerEngine
+            | Self::DetectionChoices => ApplicationPage::Scan,
             Self::OnAccessScanning | Self::TrustedDetections => ApplicationPage::Protection,
             Self::SignatureUpdates => ApplicationPage::Signatures,
         }
@@ -62,6 +66,7 @@ impl SettingsSubpage {
             Self::ScanSchedule => gettext("Scheduled Scans"),
             Self::DeviceAutoScan => gettext("Device Auto-Scan"),
             Self::ScannerEngine => gettext("Scanner Engine"),
+            Self::DetectionChoices => gettext("Detection"),
             Self::OnAccessScanning => gettext("On-Access Scanning"),
             Self::SignatureUpdates => gettext("Signature Updates"),
             Self::TrustedDetections => gettext("Trusted Detections"),
@@ -72,6 +77,7 @@ impl SettingsSubpage {
         matches!(
             self,
             Self::ScannerEngine
+                | Self::DetectionChoices
                 | Self::OnAccessScanning
                 | Self::SignatureUpdates
                 | Self::TrustedDetections
@@ -84,6 +90,9 @@ impl SettingsSubpage {
             Self::ScanSchedule => gettext("Scan automatically with a systemd timer"),
             Self::DeviceAutoScan => gettext("Scan removable drives when they are connected"),
             Self::ScannerEngine => gettext("clamd settings for every scan on this computer"),
+            Self::DetectionChoices => {
+                gettext("Unwanted programs, macros, encrypted files and archives")
+            }
             Self::OnAccessScanning => gettext("Which folders clamonacc watches, and how it blocks"),
             Self::SignatureUpdates => gettext("How freshclam downloads signatures"),
             Self::TrustedDetections => gettext("Files and detections that ClamAV never reports"),

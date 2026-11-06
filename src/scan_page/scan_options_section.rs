@@ -113,7 +113,10 @@ impl Component for ScanOptionsSection {
                     SettingsSubpage::DeviceAutoScan,
                 ],
             ),
-            append: &system_settings_group(&[SettingsSubpage::ScannerEngine]),
+            append: &system_settings_group(&[
+                SettingsSubpage::DetectionChoices,
+                SettingsSubpage::ScannerEngine,
+            ]),
         }
     }
 

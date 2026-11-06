@@ -129,7 +129,7 @@ sequenceDiagram
 
 The helper is started by D-Bus activation. It authorizes each request with polkit, so the GUI is never trusted. It only accepts settings listed in `/etc/lazaret/tunable-settings`. It always refuses settings from `data/protected-clamav-settings.txt`, the settings that run commands or change identity, even when they are on the allowlist. Changes are stored in `/var/lib/lazaret/clamd-overrides.conf` and merged with `/etc/clamav/clamd.conf` into `/run/lazaret/clamd.conf`, which clamd is configured to read. Without any overrides, the merged file equals the base file.
 
-The Detection group on the Scanner Engine page maps to `DetectPUA`, `HeuristicAlerts`, `AlertOLE2Macros`, `AlertEncrypted`, `ScanArchive` and `AlertExceedsMax`. A switch can only change when its key is in `/etc/lazaret/tunable-settings`. `clamscan` doesn't read `clamd.conf`, so every `clamscan` run gets the same values as `--detect-pua=…` and similar flags, read from the configuration clamd uses.
+The Detection settings page maps to `DetectPUA`, `HeuristicAlerts`, `AlertOLE2Macros`, `AlertEncrypted`, `ScanArchive` and `AlertExceedsMax`. A switch can only change when its key is in `/etc/lazaret/tunable-settings`. `clamscan` doesn't read `clamd.conf`, so every `clamscan` run gets the same values as `--detect-pua=…` and similar flags, read from the configuration clamd uses.
 
 ## Trusted detections
 

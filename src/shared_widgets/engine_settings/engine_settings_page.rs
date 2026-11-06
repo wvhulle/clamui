@@ -56,6 +56,7 @@ const UNLOCK_DURATION: Duration = Duration::from_secs(120);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EngineSettingsSection {
     ScannerEngine,
+    DetectionChoices,
     OnAccessScanning,
     SignatureUpdates,
 }
@@ -64,6 +65,7 @@ impl EngineSettingsSection {
     fn page_title(self) -> String {
         match self {
             Self::ScannerEngine => gettext("Scanner Engine"),
+            Self::DetectionChoices => gettext("Detection"),
             Self::OnAccessScanning => gettext("On-Access Scanning"),
             Self::SignatureUpdates => gettext("Signature Updates"),
         }
@@ -72,6 +74,7 @@ impl EngineSettingsSection {
     const fn page_icon(self) -> &'static str {
         match self {
             Self::ScannerEngine => "system-search-symbolic",
+            Self::DetectionChoices => "security-medium-symbolic",
             Self::OnAccessScanning => "security-high-symbolic",
             Self::SignatureUpdates => "drive-harddisk-symbolic",
         }
@@ -79,7 +82,7 @@ impl EngineSettingsSection {
 
     fn group_title(self) -> String {
         match self {
-            Self::ScannerEngine => gettext("clamd settings"),
+            Self::ScannerEngine | Self::DetectionChoices => gettext("clamd settings"),
             Self::OnAccessScanning => gettext("On-access scanning settings"),
             Self::SignatureUpdates => gettext("freshclam settings"),
         }
@@ -87,18 +90,25 @@ impl EngineSettingsSection {
 
     const fn config_kind(self) -> ClamavConfigKind {
         match self {
-            Self::ScannerEngine | Self::OnAccessScanning => ClamavConfigKind::ClamdDaemonConfig,
+            Self::ScannerEngine | Self::DetectionChoices | Self::OnAccessScanning => {
+                ClamavConfigKind::ClamdDaemonConfig
+            }
             Self::SignatureUpdates => ClamavConfigKind::FreshclamUpdaterConfig,
         }
     }
 
     const fn offers_live_tuning(self) -> bool {
-        matches!(self, Self::ScannerEngine | Self::OnAccessScanning)
+        matches!(
+            self,
+            Self::ScannerEngine | Self::DetectionChoices | Self::OnAccessScanning
+        )
     }
 
     fn read_host_config(self) -> HostConfigView {
         match self {
-            Self::ScannerEngine | Self::OnAccessScanning => read_clamd_config(),
+            Self::ScannerEngine | Self::DetectionChoices | Self::OnAccessScanning => {
+                read_clamd_config()
+            }
             Self::SignatureUpdates => read_freshclam_config(),
         }
     }
@@ -106,6 +116,7 @@ impl EngineSettingsSection {
     fn shows_setting(self, config_setting: &ConfigSetting) -> bool {
         match self {
             Self::ScannerEngine => !is_on_access_setting(config_setting),
+            Self::DetectionChoices => false,
             Self::OnAccessScanning => is_on_access_setting(config_setting),
             Self::SignatureUpdates => true,
         }
@@ -374,8 +385,17 @@ impl EngineSettingsPage {
     }
 
     const fn shows_detection_switches(&self) -> bool {
-        matches!(self.settings_section, EngineSettingsSection::ScannerEngine)
-            && matches!(self.config_load, ConfigLoad::ConfigShown { .. })
+        matches!(
+            self.settings_section,
+            EngineSettingsSection::DetectionChoices
+        ) && matches!(self.config_load, ConfigLoad::ConfigShown { .. })
+    }
+
+    const fn shows_config_rows(&self) -> bool {
+        !matches!(
+            self.settings_section,
+            EngineSettingsSection::DetectionChoices
+        )
     }
 
     fn detection_values(&self, detection_option: DetectionOption) -> Vec<String> {
@@ -508,6 +528,7 @@ impl Component for EngineSettingsPage {
                 #[local_ref]
                 setting_rows_group -> adw::PreferencesGroup {
                     set_title: &model.settings_section.group_title(),
+                    set_visible: model.shows_config_rows(),
                     #[watch]
                     set_description: Some(&glib::markup_escape_text(
                         &model.config_group_description(),

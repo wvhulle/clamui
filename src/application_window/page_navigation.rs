@@ -87,6 +87,11 @@ impl SettingsSubpageContent {
                     .launch(EngineSettingsSection::ScannerEngine)
                     .detach(),
             ),
+            SettingsSubpage::DetectionChoices => Self::EngineSettings(
+                EngineSettingsPage::builder()
+                    .launch(EngineSettingsSection::DetectionChoices)
+                    .detach(),
+            ),
             SettingsSubpage::OnAccessScanning => Self::EngineSettings(
                 EngineSettingsPage::builder()
                     .launch(EngineSettingsSection::OnAccessScanning)
