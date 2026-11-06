@@ -1,7 +1,7 @@
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, gtk::gio,
-    prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
+    gtk::gio, prelude::FactoryVecDeque,
 };
 
 use crate::{
@@ -25,6 +25,7 @@ use crate::{
 };
 
 pub struct AuditSectionsPage {
+    toaster: Toaster,
     section_groups: FactoryVecDeque<AuditCategorySection>,
     audited_categories: &'static [AuditCategory],
     distribution_family: DistributionFamily,
@@ -148,6 +149,7 @@ impl Component for AuditSectionsPage {
                 AuditSectionsPageInput::GuidanceRequested,
             );
         let mut model = Self {
+            toaster: Toaster::new(&root),
             section_groups,
             audited_categories: page_init.audited_categories,
             distribution_family: detect_distribution_family(),
@@ -181,13 +183,14 @@ impl Component for AuditSectionsPage {
                 AuditCategorySectionOutput::CopyCommandRequested(copied_command),
             ) => {
                 root.clipboard().set_text(&copied_command);
-                root.add_toast(adw::Toast::new(&gettext("Command copied to clipboard")));
+                self.toaster
+                    .add_toast(adw::Toast::new(&gettext("Command copied to clipboard")));
             }
             AuditSectionsPageInput::GuidanceRequested(
                 AuditCategorySectionOutput::OpenDocumentationRequested(documentation_url),
             ) => Self::open_documentation(documentation_url, &sender, root),
             AuditSectionsPageInput::DocumentationOpenFailed(failure_text) => {
-                root.add_toast(
+                self.toaster.add_toast(
                     adw::Toast::builder()
                         .title(
                             gettext("Could not open documentation: {error}")

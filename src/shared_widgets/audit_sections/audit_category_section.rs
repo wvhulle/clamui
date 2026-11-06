@@ -3,20 +3,19 @@ use relm4::{
     FactorySender, adw,
     adw::prelude::*,
     gtk,
-    prelude::{DynamicIndex, FactoryComponent},
+    prelude::{DynamicIndex, FactoryComponent, FactoryVecDeque},
 };
 
 use crate::shared_widgets::{
     audit_sections::{
         audit_check_results::{AuditCategory, AuditSection, AuditStatus},
-        audit_check_row::{audit_check_row, checking_placeholder_row},
+        audit_check_row::{AuditCheckRow, AuditCheckRowOutput},
     },
     loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
 };
 
 pub struct AuditCategorySection {
     audit_section: AuditSection,
-    displayed_rows: Vec<gtk::Widget>,
 }
 
 #[derive(Debug)]
@@ -30,62 +29,47 @@ pub enum AuditCategorySectionOutput {
     OpenDocumentationRequested(&'static str),
 }
 
+pub struct AuditCategorySectionWidgets {
+    status_stack: gtk::Stack,
+    status_image: gtk::Image,
+    check_rows: FactoryVecDeque<AuditCheckRow>,
+}
+
 impl AuditCategorySection {
-    fn replace_displayed_rows(
-        &mut self,
-        section_group: &adw::PreferencesGroup,
-        sender: &FactorySender<Self>,
-    ) {
-        self.displayed_rows
-            .drain(..)
-            .for_each(|displayed_row| section_group.remove(&displayed_row));
-        self.displayed_rows = if self.audit_section.section_checks.is_empty() {
-            vec![checking_placeholder_row()]
+    fn shown_check_rows(&self) -> Vec<AuditCheckRow> {
+        if self.audit_section.section_checks.is_empty() {
+            vec![AuditCheckRow::CheckingPlaceholder]
         } else {
             self.audit_section
                 .section_checks
                 .iter()
-                .map(|audit_check| audit_check_row(audit_check, sender))
+                .cloned()
+                .map(AuditCheckRow::CheckShown)
                 .collect()
-        };
-        self.displayed_rows
-            .iter()
-            .for_each(|displayed_row| section_group.add(displayed_row));
+        }
     }
 }
 
-#[relm4::factory(pub)]
-impl FactoryComponent for AuditCategorySection {
-    type Init = AuditCategory;
-    type Input = AuditCategorySectionInput;
-    type Output = AuditCategorySectionOutput;
-    type CommandOutput = ();
-    type ParentWidget = adw::PreferencesPage;
-
-    view! {
-        #[root]
-        #[name = "section_group"]
-        adw::PreferencesGroup {
-            set_title: &self.audit_section.audit_category.section_title(),
-            #[wrap(Some)]
-            set_header_suffix = &gtk::Stack {
-              set_valign: gtk::Align::Center,
-              add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
-                set_tooltip_text: Some(&gettext("Checking")),
-              },
-              add_named[Some(IDLE_PAGE_NAME)] = &gtk::Image {
-                #[watch]
-                set_icon_name: Some(self.audit_section.overall_status().status_icon_name()),
-                #[watch]
-                set_tooltip_text: Some(&self.audit_section.overall_status().status_label()),
-                #[watch]
-                set_css_classes: &[self.audit_section.overall_status().status_style_class()],
-              },
-              #[watch]
-              set_visible_child_name: busy_page_name(self.audit_section.overall_status() == AuditStatus::CheckInProgress),
-            },
+fn forwarded_check_output(check_output: AuditCheckRowOutput) -> AuditCategorySectionOutput {
+    match check_output {
+        AuditCheckRowOutput::CopyCommandRequested(copied_command) => {
+            AuditCategorySectionOutput::CopyCommandRequested(copied_command)
+        }
+        AuditCheckRowOutput::DocumentationRequested(documentation_url) => {
+            AuditCategorySectionOutput::OpenDocumentationRequested(documentation_url)
         }
     }
+}
+
+impl FactoryComponent for AuditCategorySection {
+    type ParentWidget = adw::PreferencesPage;
+    type CommandOutput = ();
+    type Input = AuditCategorySectionInput;
+    type Output = AuditCategorySectionOutput;
+    type Init = AuditCategory;
+    type Root = adw::PreferencesGroup;
+    type Widgets = AuditCategorySectionWidgets;
+    type Index = DynamicIndex;
 
     fn init_model(
         audit_category: AuditCategory,
@@ -94,8 +78,13 @@ impl FactoryComponent for AuditCategorySection {
     ) -> Self {
         Self {
             audit_section: AuditSection::awaiting_checks(audit_category),
-            displayed_rows: Vec::new(),
         }
+    }
+
+    fn init_root(&self) -> Self::Root {
+        adw::PreferencesGroup::builder()
+            .title(self.audit_section.audit_category.section_title())
+            .build()
     }
 
     fn init_widgets(
@@ -105,23 +94,53 @@ impl FactoryComponent for AuditCategorySection {
         _returned_widget: &<Self::ParentWidget as relm4::factory::FactoryView>::ReturnedWidget,
         sender: FactorySender<Self>,
     ) -> Self::Widgets {
-        let widgets = view_output!();
-        self.replace_displayed_rows(&widgets.section_group, &sender);
+        let status_image = gtk::Image::new();
+        let status_stack = gtk::Stack::builder().valign(gtk::Align::Center).build();
+        status_stack.add_named(
+            &adw::Spinner::builder()
+                .tooltip_text(gettext("Checking"))
+                .build(),
+            Some(BUSY_PAGE_NAME),
+        );
+        status_stack.add_named(&status_image, Some(IDLE_PAGE_NAME));
+        root.set_header_suffix(Some(&status_stack));
+        let mut widgets = AuditCategorySectionWidgets {
+            status_stack,
+            status_image,
+            check_rows: FactoryVecDeque::builder()
+                .launch(root)
+                .forward(sender.output_sender(), forwarded_check_output),
+        };
+        self.update_view(&mut widgets, sender);
         widgets
     }
 
-    fn update_with_view(
-        &mut self,
-        widgets: &mut Self::Widgets,
-        group_input: AuditCategorySectionInput,
-        sender: FactorySender<Self>,
-    ) {
+    fn update(&mut self, group_input: Self::Input, _sender: FactorySender<Self>) {
         match group_input {
             AuditCategorySectionInput::SectionChanged(audit_section) => {
                 self.audit_section = audit_section;
-                self.replace_displayed_rows(&widgets.section_group, &sender);
             }
         }
-        self.update_view(widgets, sender);
+    }
+
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: FactorySender<Self>) {
+        let overall_status = self.audit_section.overall_status();
+        widgets
+            .status_image
+            .set_icon_name(Some(overall_status.status_icon_name()));
+        widgets
+            .status_image
+            .set_tooltip_text(Some(&overall_status.status_label()));
+        widgets
+            .status_image
+            .set_css_classes(&[overall_status.status_style_class()]);
+        widgets.status_stack.set_visible_child_name(busy_page_name(
+            overall_status == AuditStatus::CheckInProgress,
+        ));
+        let mut row_guard = widgets.check_rows.guard();
+        row_guard.clear();
+        self.shown_check_rows().into_iter().for_each(|check_row| {
+            row_guard.push_back(check_row);
+        });
     }
 }

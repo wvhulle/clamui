@@ -137,7 +137,7 @@ pub fn detection_for_file<'detections>(
 
 #[cfg(test)]
 mod detections_view_state_tests {
-    use std::{cell::Cell, path::PathBuf};
+    use std::path::PathBuf;
 
     use super::*;
     use crate::host_services::detection_journal::detection_journal_records::DetectionSource;
@@ -161,17 +161,13 @@ mod detections_view_state_tests {
         detection: &StoredDetection,
         known_file_states: &HashMap<i64, DetectedFileState>,
     ) -> u32 {
-        let open_count = Cell::new(0);
-        let _file_state = file_state_for_detection(
+        let found_state = file_state_for_detection(
             detection,
             known_file_states,
-            |_file_path| {
-                open_count.set(open_count.get() + 1);
-                DetectedFileState::BlockedInPlace
-            },
+            |_file_path| DetectedFileState::StateUnknown,
             |_file_path| DetectedFileState::ReadableInPlace,
         );
-        open_count.get()
+        u32::from(found_state == DetectedFileState::StateUnknown)
     }
 
     #[test]

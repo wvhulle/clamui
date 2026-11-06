@@ -1,25 +1,17 @@
 use bytesize::ByteSize;
 use gettextrs::gettext;
 use relm4::{
-    FactorySender,
-    actions::ActionName,
-    adw,
+    FactorySender, adw,
     adw::prelude::*,
     gtk,
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::{
-    application_window::application_actions::PreferencesPageAction,
-    host_services::{
-        clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
-        quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
-        settings_helper::trust_requests::{FileFingerprint, TrustChoice},
-        threat_intel::file_reputation_check::{
-            ReputationAnswers, SourceAnswer, check_hash_reputation,
-        },
-    },
-    preferences_dialog::preferences_dialog_component::PreferencesPageName,
+use crate::host_services::{
+    clamav_scanner::scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
+    quarantine_vault::quarantine_entry_database::QuarantineEntryRecord,
+    settings_helper::trust_requests::{FileFingerprint, TrustChoice},
+    threat_intel::file_reputation_check::{ReputationAnswers, SourceAnswer, check_hash_reputation},
 };
 
 pub struct QuarantineEntryRow {
@@ -29,19 +21,21 @@ pub struct QuarantineEntryRow {
 
 #[derive(Debug)]
 pub enum QuarantineEntryRowInput {
-    CheckReputation,
-    CopyHash,
-    OpenVirusTotalReport,
-    OpenOnlineLookups,
-    TrustFile,
+    ReputationCheckRequested,
+    HashCopyRequested,
+    VirusTotalReportRequested,
+    OnlineLookupsRequested,
+    TrustFileRequested,
 }
 
 #[derive(Debug)]
 pub enum QuarantineEntryRowOutput {
-    RestoreEntry { entry_id: i64 },
-    DeleteEntry { entry_id: i64 },
-    TrustEntry(TrustChoice),
-    ShowToast(String),
+    RestoreRequested { entry_id: i64 },
+    DeletionRequested { entry_id: i64 },
+    TrustRequested(TrustChoice),
+    HashCopyRequested(String),
+    OnlineLookupsRequested,
+    ReportLinkRequested(String),
 }
 
 #[derive(Debug)]
@@ -97,7 +91,7 @@ impl FactoryComponent for QuarantineEntryRow {
                 set_label: &gettext("Restore"),
                 set_valign: gtk::Align::Center,
                 connect_clicked[sender, entry_id = self.entry_record.entry_id] => move |_clicked_button| {
-                    let _parent_gone = sender.output(QuarantineEntryRowOutput::RestoreEntry { entry_id });
+                    let _parent_gone = sender.output(QuarantineEntryRowOutput::RestoreRequested { entry_id });
                 },
             },
 
@@ -106,7 +100,7 @@ impl FactoryComponent for QuarantineEntryRow {
                 set_valign: gtk::Align::Center,
                 add_css_class: "destructive-action",
                 connect_clicked[sender, entry_id = self.entry_record.entry_id] => move |_clicked_button| {
-                    let _parent_gone = sender.output(QuarantineEntryRowOutput::DeleteEntry { entry_id });
+                    let _parent_gone = sender.output(QuarantineEntryRowOutput::DeletionRequested { entry_id });
                 },
             },
 
@@ -120,7 +114,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_valign: gtk::Align::Center,
                     #[watch]
                     set_sensitive: !self.reputation_check_running(),
-                    connect_clicked => QuarantineEntryRowInput::CheckReputation,
+                    connect_clicked => QuarantineEntryRowInput::ReputationCheckRequested,
                 },
             },
 
@@ -138,7 +132,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_valign: gtk::Align::Center,
                     #[watch]
                     set_visible: self.reputation_answers.bazaar_answer == SourceAnswer::NeedsKey,
-                    connect_clicked => QuarantineEntryRowInput::OpenOnlineLookups,
+                    connect_clicked => QuarantineEntryRowInput::OnlineLookupsRequested,
                 },
             },
 
@@ -151,7 +145,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_valign: gtk::Align::Center,
                     #[watch]
                     set_visible: self.reputation_answers.virustotal_answer == SourceAnswer::NeedsKey,
-                    connect_clicked => QuarantineEntryRowInput::OpenOnlineLookups,
+                    connect_clicked => QuarantineEntryRowInput::OnlineLookupsRequested,
                 },
 
                 add_suffix = &gtk::Button {
@@ -159,7 +153,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_valign: gtk::Align::Center,
                     #[watch]
                     set_visible: !self.virustotal_report_url().is_empty(),
-                    connect_clicked => QuarantineEntryRowInput::OpenVirusTotalReport,
+                    connect_clicked => QuarantineEntryRowInput::VirusTotalReportRequested,
                 },
             },
 
@@ -171,7 +165,7 @@ impl FactoryComponent for QuarantineEntryRow {
                 add_suffix = &gtk::Button {
                     set_label: &gettext("Trust…"),
                     set_valign: gtk::Align::Center,
-                    connect_clicked => QuarantineEntryRowInput::TrustFile,
+                    connect_clicked => QuarantineEntryRowInput::TrustFileRequested,
                 },
             },
 
@@ -187,7 +181,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_tooltip_text: Some(&gettext("Copy Hash")),
                     set_valign: gtk::Align::Center,
                     add_css_class: "flat",
-                    connect_clicked => QuarantineEntryRowInput::CopyHash,
+                    connect_clicked => QuarantineEntryRowInput::HashCopyRequested,
                 },
             },
         }
@@ -204,14 +198,9 @@ impl FactoryComponent for QuarantineEntryRow {
         }
     }
 
-    fn update_with_view(
-        &mut self,
-        widgets: &mut Self::Widgets,
-        row_input: QuarantineEntryRowInput,
-        sender: FactorySender<Self>,
-    ) {
+    fn update(&mut self, row_input: QuarantineEntryRowInput, sender: FactorySender<Self>) {
         match row_input {
-            QuarantineEntryRowInput::CheckReputation => {
+            QuarantineEntryRowInput::ReputationCheckRequested => {
                 self.reputation_answers = ReputationAnswers::all_set_to(&SourceAnswer::Checking);
                 let content_hash = self.entry_record.file_hash.clone();
                 sender.oneshot_command(async move {
@@ -220,23 +209,16 @@ impl FactoryComponent for QuarantineEntryRow {
                     )
                 });
             }
-            QuarantineEntryRowInput::CopyHash => {
-                widgets
-                    .entry_expander
-                    .clipboard()
-                    .set_text(&self.entry_record.file_hash);
-                let _parent_gone = sender.output(QuarantineEntryRowOutput::ShowToast(gettext(
-                    "Hash copied to clipboard",
-                )));
+            QuarantineEntryRowInput::HashCopyRequested => {
+                let _page_closed = sender.output(QuarantineEntryRowOutput::HashCopyRequested(
+                    self.entry_record.file_hash.clone(),
+                ));
             }
-            QuarantineEntryRowInput::OpenOnlineLookups => {
-                let _action_missing = widgets.entry_expander.activate_action(
-                    &PreferencesPageAction::action_name(),
-                    Some(&PreferencesPageName::OnlineLookups.page_name().to_variant()),
-                );
+            QuarantineEntryRowInput::OnlineLookupsRequested => {
+                let _page_closed = sender.output(QuarantineEntryRowOutput::OnlineLookupsRequested);
             }
-            QuarantineEntryRowInput::TrustFile => {
-                let _parent_gone = sender.output(QuarantineEntryRowOutput::TrustEntry(
+            QuarantineEntryRowInput::TrustFileRequested => {
+                let _page_closed = sender.output(QuarantineEntryRowOutput::TrustRequested(
                     TrustChoice::TrustFile {
                         file_fingerprint: FileFingerprint {
                             sha256_hex: self.entry_record.file_hash.clone(),
@@ -248,19 +230,12 @@ impl FactoryComponent for QuarantineEntryRow {
                     },
                 ));
             }
-            QuarantineEntryRowInput::OpenVirusTotalReport => {
-                gtk::UriLauncher::new(self.virustotal_report_url()).launch(
-                    widgets
-                        .entry_expander
-                        .root()
-                        .and_downcast::<gtk::Window>()
-                        .as_ref(),
-                    gtk::gio::Cancellable::NONE,
-                    |_launch_outcome| {},
-                );
+            QuarantineEntryRowInput::VirusTotalReportRequested => {
+                let _page_closed = sender.output(QuarantineEntryRowOutput::ReportLinkRequested(
+                    self.virustotal_report_url().to_owned(),
+                ));
             }
         }
-        self.update_view(widgets, sender);
     }
 
     fn update_cmd(&mut self, row_command: QuarantineEntryRowCommand, _sender: FactorySender<Self>) {

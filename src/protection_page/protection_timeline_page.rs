@@ -1,12 +1,14 @@
 use futures::StreamExt;
 use gettextrs::{gettext, ngettext};
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
+    adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 
 use crate::{
-    application_window::settings_navigation::{
-        OPEN_SETTINGS_ACTION_NAME, SettingsSubpage, system_settings_group,
+    application_window::{
+        application_actions::OpenSettingsAction,
+        settings_navigation::{SettingsSubpage, system_settings_group},
     },
     host_services::{
         clamav_programs::distribution_install_guides::{
@@ -49,6 +51,7 @@ enum EvidenceRefresh {
 }
 
 pub struct ProtectionTimelinePage {
+    toaster: Toaster,
     timeline_rows: FactoryVecDeque<TimelineStepRow>,
     distribution_family: DistributionFamily,
     evidence_refresh: EvidenceRefresh,
@@ -215,6 +218,7 @@ impl ProtectionTimelinePage {
     }
 
     fn run_step_action(
+        &self,
         chosen_action: TimelineStepAction,
         sender: &ComponentSender<Self>,
         root: &adw::ToastOverlay,
@@ -225,7 +229,8 @@ impl ProtectionTimelinePage {
                     sender.output(ProtectionTimelinePageOutput::UpdateSignaturesRequested);
             }
             TimelineStepAction::RunScheduledScan { service_unit } => {
-                root.add_toast(plain_text_toast(&gettext("Starting the scan…")));
+                self.toaster
+                    .add_toast(plain_text_toast(&gettext("Starting the scan…")));
                 sender.oneshot_command(async move {
                     let start_outcome = start_system_unit(service_unit).await;
                     ProtectionTimelinePageCommand::UnitRunFinished {
@@ -236,7 +241,7 @@ impl ProtectionTimelinePage {
             }
             TimelineStepAction::OpenSettingsSubpage(settings_subpage) => {
                 let _action_missing = root.activate_action(
-                    &format!("win.{OPEN_SETTINGS_ACTION_NAME}"),
+                    &OpenSettingsAction::action_name(),
                     Some(&settings_subpage.action_target().to_variant()),
                 );
             }
@@ -332,6 +337,7 @@ impl Component for ProtectionTimelinePage {
                 ProtectionTimelinePageInput::StepRequested,
             );
         let mut model = Self {
+            toaster: Toaster::new(&root),
             timeline_rows,
             distribution_family: detect_distribution_family(),
             evidence_refresh: EvidenceRefresh::NothingRunning,
@@ -377,12 +383,13 @@ impl Component for ProtectionTimelinePage {
             }
             ProtectionTimelinePageInput::StepRequested(TimelineStepRowOutput::ActionChosen(
                 chosen_action,
-            )) => Self::run_step_action(chosen_action, &sender, root),
+            )) => self.run_step_action(chosen_action, &sender, root),
             ProtectionTimelinePageInput::StepRequested(TimelineStepRowOutput::CopyRequested(
                 copied_command,
             )) => {
                 root.clipboard().set_text(&copied_command);
-                root.add_toast(adw::Toast::new(&gettext("Command copied to clipboard")));
+                self.toaster
+                    .add_toast(adw::Toast::new(&gettext("Command copied to clipboard")));
             }
         }
     }
@@ -391,7 +398,7 @@ impl Component for ProtectionTimelinePage {
         &mut self,
         page_command: ProtectionTimelinePageCommand,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match page_command {
             ProtectionTimelinePageCommand::EvidenceGathered(protection_evidence) => {
@@ -410,7 +417,8 @@ impl Component for ProtectionTimelinePage {
                 start_outcome,
                 last_result,
             } => {
-                root.add_toast(unit_run_toast(&start_outcome, &last_result));
+                self.toaster
+                    .add_toast(unit_run_toast(&start_outcome, &last_result));
                 self.start_evidence_refresh(&sender);
             }
         }

@@ -4,10 +4,12 @@ use bytesize::ByteSize;
 use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
+    adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 
 use crate::{
+    application_window::application_actions::PreferencesPageAction,
     host_services::{
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         quarantine_vault::{
@@ -18,11 +20,13 @@ use crate::{
             TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
         },
     },
+    preferences_dialog::preferences_dialog_component::PreferencesPageName,
     quarantine_page::quarantine_entry_row::{QuarantineEntryRow, QuarantineEntryRowOutput},
     shared_widgets::{
         loading_indicators::{FirstLoad, loading_placeholder_stack},
         page_widget_templates::ClampedPage,
         trust_confirmation_dialog::present_trust_confirmation,
+        uninterrupted_commands::run_command_to_completion,
     },
 };
 
@@ -97,6 +101,8 @@ pub struct QuarantineEntriesPage {
     entry_rows: FactoryVecDeque<QuarantineEntryRow>,
     status_message: String,
     first_load: FirstLoad,
+    search_mode_enabled: bool,
+    toaster: Toaster,
 }
 
 #[derive(Debug)]
@@ -106,9 +112,12 @@ pub enum QuarantineEntriesPageInput {
     DeleteEntryRequested { entry_id: i64 },
     DeleteEntryConfirmed { entry_id: i64 },
     SearchTextChanged(String),
+    SearchModeToggled(bool),
     ClearOldEntriesRequested,
     ClearOldEntriesConfirmed,
-    ToastRequested(String),
+    HashCopyRequested(String),
+    OnlineLookupsRequested,
+    ReportLinkRequested(String),
     TrustRequested(TrustChoice),
     TrustConfirmed(TrustChoice),
 }
@@ -121,14 +130,20 @@ pub enum QuarantineEntriesPageCommand {
     TrustChangeFinished(TrustOutcome),
 }
 
+fn plain_text_toast(toast_text: &str) -> adw::Toast {
+    adw::Toast::builder()
+        .title(toast_text)
+        .use_markup(false)
+        .build()
+}
+
 impl QuarantineEntriesPage {
     fn reload_entries(&self, sender: &ComponentSender<Self>) {
         let quarantine_vault = self.quarantine_vault.clone();
-        let command_sender = sender.command_sender().clone();
-        relm4::spawn(async move {
-            let _page_closed = command_sender.send(QuarantineEntriesPageCommand::EntriesLoaded(
+        sender.oneshot_command(async move {
+            QuarantineEntriesPageCommand::EntriesLoaded(
                 quarantine_vault.list_quarantine_entries().await,
-            ));
+            )
         });
     }
 
@@ -220,6 +235,20 @@ impl Component for QuarantineEntriesPage {
 
     view! {
         adw::ToastOverlay {
+            add_controller = gtk::ShortcutController {
+                set_scope: gtk::ShortcutScope::Managed,
+                add_shortcut: gtk::Shortcut::new(
+                    gtk::ShortcutTrigger::parse_string("<Control>f"),
+                    Some(gtk::CallbackAction::new({
+                        let shortcut_sender = sender.input_sender().clone();
+                        move |_shortcut_widget, _arguments| {
+                            shortcut_sender.emit(QuarantineEntriesPageInput::SearchModeToggled(true));
+                            gtk::glib::Propagation::Stop
+                        }
+                    })),
+                ),
+            },
+
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
                 add_top_bar = &adw::HeaderBar {
@@ -259,15 +288,27 @@ impl Component for QuarantineEntriesPage {
                         connect_clicked => QuarantineEntriesPageInput::ReloadEntriesRequested,
                     },
 
-                    #[name = "search_toggle"]
                     pack_end = &gtk::ToggleButton {
                         set_icon_name: "system-search-symbolic",
                         set_tooltip_text: Some(&gettext("Search")),
+                        #[watch]
+                        #[block_signal(search_toggle_handler)]
+                        set_active: model.search_mode_enabled,
+                        connect_toggled[sender] => move |search_toggle| {
+                            sender.input(QuarantineEntriesPageInput::SearchModeToggled(search_toggle.is_active()));
+                        } @search_toggle_handler,
                     },
                 },
 
-                #[name = "search_bar"]
                 add_top_bar = &gtk::SearchBar {
+                    set_key_capture_widget: Some(&root),
+                    #[watch]
+                    #[block_signal(search_bar_handler)]
+                    set_search_mode: model.search_mode_enabled,
+                    connect_search_mode_enabled_notify[sender] => move |search_bar| {
+                        sender.input(QuarantineEntriesPageInput::SearchModeToggled(search_bar.is_search_mode()));
+                    } @search_bar_handler,
+
                     #[wrap(Some)]
                     set_child = &gtk::SearchEntry {
                         set_placeholder_text: Some(&gettext("Search by threat name or path")),
@@ -331,16 +372,22 @@ impl Component for QuarantineEntriesPage {
         let entry_rows = FactoryVecDeque::builder()
             .launch(gtk::ListBox::default())
             .forward(sender.input_sender(), |row_output| match row_output {
-                QuarantineEntryRowOutput::RestoreEntry { entry_id } => {
+                QuarantineEntryRowOutput::RestoreRequested { entry_id } => {
                     QuarantineEntriesPageInput::RestoreEntryRequested { entry_id }
                 }
-                QuarantineEntryRowOutput::DeleteEntry { entry_id } => {
+                QuarantineEntryRowOutput::DeletionRequested { entry_id } => {
                     QuarantineEntriesPageInput::DeleteEntryRequested { entry_id }
                 }
-                QuarantineEntryRowOutput::ShowToast(toast_message) => {
-                    QuarantineEntriesPageInput::ToastRequested(toast_message)
+                QuarantineEntryRowOutput::HashCopyRequested(file_hash) => {
+                    QuarantineEntriesPageInput::HashCopyRequested(file_hash)
                 }
-                QuarantineEntryRowOutput::TrustEntry(trust_choice) => {
+                QuarantineEntryRowOutput::OnlineLookupsRequested => {
+                    QuarantineEntriesPageInput::OnlineLookupsRequested
+                }
+                QuarantineEntryRowOutput::ReportLinkRequested(report_url) => {
+                    QuarantineEntriesPageInput::ReportLinkRequested(report_url)
+                }
+                QuarantineEntryRowOutput::TrustRequested(trust_choice) => {
                     QuarantineEntriesPageInput::TrustRequested(trust_choice)
                 }
             });
@@ -351,6 +398,8 @@ impl Component for QuarantineEntriesPage {
             entry_rows,
             status_message: String::new(),
             first_load: FirstLoad::StillLoading,
+            search_mode_enabled: false,
+            toaster: Toaster::new(&root),
         };
         model.reload_entries(&sender);
         let entry_list = model.entry_rows.widget();
@@ -364,26 +413,6 @@ impl Component for QuarantineEntriesPage {
                 .build(),
         );
         let widgets = view_output!();
-        widgets
-            .search_toggle
-            .bind_property("active", &widgets.search_bar, "search-mode-enabled")
-            .bidirectional()
-            .sync_create()
-            .build();
-        widgets.search_bar.set_key_capture_widget(Some(&root));
-        let search_shortcuts = gtk::ShortcutController::new();
-        search_shortcuts.set_scope(gtk::ShortcutScope::Managed);
-        let shortcut_toggle = widgets.search_toggle.clone();
-        search_shortcuts.add_shortcut(gtk::Shortcut::new(
-            gtk::ShortcutTrigger::parse_string("<Control>f"),
-            Some(gtk::CallbackAction::new(
-                move |_shortcut_widget, _arguments| {
-                    shortcut_toggle.set_active(true);
-                    gtk::glib::Propagation::Stop
-                },
-            )),
-        ));
-        root.add_controller(search_shortcuts);
         ComponentParts { model, widgets }
     }
 
@@ -394,15 +423,27 @@ impl Component for QuarantineEntriesPage {
         root: &Self::Root,
     ) {
         let quarantine_vault = self.quarantine_vault.clone();
-        let command_sender = sender.command_sender().clone();
         match page_input {
-            QuarantineEntriesPageInput::ToastRequested(toast_message) => {
-                root.add_toast(
-                    adw::Toast::builder()
-                        .title(toast_message)
-                        .use_markup(false)
-                        .build(),
+            QuarantineEntriesPageInput::HashCopyRequested(file_hash) => {
+                root.clipboard().set_text(&file_hash);
+                self.toaster
+                    .add_toast(plain_text_toast(&gettext("Hash copied to clipboard")));
+            }
+            QuarantineEntriesPageInput::OnlineLookupsRequested => {
+                let _action_missing = root.activate_action(
+                    &PreferencesPageAction::action_name(),
+                    Some(&PreferencesPageName::OnlineLookups.page_name().to_variant()),
                 );
+            }
+            QuarantineEntriesPageInput::ReportLinkRequested(report_url) => {
+                gtk::UriLauncher::new(&report_url).launch(
+                    root.root().and_downcast::<gtk::Window>().as_ref(),
+                    gtk::gio::Cancellable::NONE,
+                    |_launch_outcome| {},
+                );
+            }
+            QuarantineEntriesPageInput::SearchModeToggled(search_mode_enabled) => {
+                self.search_mode_enabled = search_mode_enabled;
             }
             QuarantineEntriesPageInput::TrustRequested(trust_choice) => {
                 present_trust_confirmation(
@@ -421,11 +462,10 @@ impl Component for QuarantineEntriesPage {
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {
-                relm4::spawn(async move {
-                    let _page_closed =
-                        command_sender.send(QuarantineEntriesPageCommand::EntryOperationFinished(
-                            quarantine_vault.restore_quarantined_file(entry_id).await,
-                        ));
+                run_command_to_completion(&sender, async move {
+                    QuarantineEntriesPageCommand::EntryOperationFinished(
+                        quarantine_vault.restore_quarantined_file(entry_id).await,
+                    )
                 });
             }
             QuarantineEntriesPageInput::SearchTextChanged(search_text) => {
@@ -441,28 +481,28 @@ impl Component for QuarantineEntriesPage {
                     .into_iter()
                     .map(|entry_record| entry_record.entry_id)
                     .collect::<Vec<_>>();
-                relm4::spawn(async move {
-                    let deletion_outcomes = stream::iter(old_entry_ids)
-                        .then(|entry_id| {
-                            let quarantine_vault = quarantine_vault.clone();
-                            async move { quarantine_vault.delete_quarantined_file(entry_id).await }
-                        })
-                        .collect::<Vec<_>>()
-                        .await;
-                    let _page_closed = command_sender.send(
-                        QuarantineEntriesPageCommand::OldEntriesCleared(deletion_outcomes),
-                    );
+                run_command_to_completion(&sender, async move {
+                    QuarantineEntriesPageCommand::OldEntriesCleared(
+                        stream::iter(old_entry_ids)
+                            .then(|entry_id| {
+                                let quarantine_vault = quarantine_vault.clone();
+                                async move {
+                                    quarantine_vault.delete_quarantined_file(entry_id).await
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .await,
+                    )
                 });
             }
             QuarantineEntriesPageInput::DeleteEntryRequested { entry_id } => {
                 self.confirm_entry_deletion(entry_id, &sender);
             }
             QuarantineEntriesPageInput::DeleteEntryConfirmed { entry_id } => {
-                relm4::spawn(async move {
-                    let _page_closed =
-                        command_sender.send(QuarantineEntriesPageCommand::EntryOperationFinished(
-                            quarantine_vault.delete_quarantined_file(entry_id).await,
-                        ));
+                run_command_to_completion(&sender, async move {
+                    QuarantineEntriesPageCommand::EntryOperationFinished(
+                        quarantine_vault.delete_quarantined_file(entry_id).await,
+                    )
                 });
             }
         }
@@ -472,16 +512,12 @@ impl Component for QuarantineEntriesPage {
         &mut self,
         page_command: QuarantineEntriesPageCommand,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match page_command {
             QuarantineEntriesPageCommand::TrustChangeFinished(trust_outcome) => {
-                root.add_toast(
-                    adw::Toast::builder()
-                        .title(trust_outcome_text(&trust_outcome))
-                        .use_markup(false)
-                        .build(),
-                );
+                self.toaster
+                    .add_toast(plain_text_toast(&trust_outcome_text(&trust_outcome)));
             }
             QuarantineEntriesPageCommand::EntriesLoaded(Ok(listed_entries)) => {
                 self.first_load = FirstLoad::LoadFinished;

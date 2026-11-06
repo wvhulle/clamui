@@ -670,7 +670,7 @@ impl Component for PageNavigation {
             PageNavigationInput::SignatureUpdateRequested => {
                 self.signature_update_dialog.present(Some(root));
                 self.signature_update_page
-                    .emit(DatabaseUpdatePageInput::StartUpdate);
+                    .emit(DatabaseUpdatePageInput::UpdateRequested);
             }
             PageNavigationInput::SignatureUpdateDialogRequested => {
                 self.signature_update_dialog.present(Some(root));

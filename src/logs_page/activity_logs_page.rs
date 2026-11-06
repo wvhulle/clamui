@@ -7,7 +7,8 @@ use futures::{
 };
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
+    prelude::FactoryVecDeque,
 };
 
 use crate::{
@@ -24,6 +25,7 @@ use crate::{
             activity_detail_text, activity_entries_as_csv, activity_entries_as_json,
         },
         daemon_log_reader::{DaemonLogContents, read_daemon_log},
+        system_change_row::SystemChangeRow,
     },
     shared_widgets::{
         file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
@@ -50,13 +52,15 @@ pub struct ActivityLogsPage {
     listed_entries: Vec<ActivityEntryRecord>,
     entry_rows: FactoryVecDeque<ActivityEntryRow>,
     selected_entry: SelectedEntryView,
-    detail_buffer: gtk::TextBuffer,
-    daemon_buffer: gtk::TextBuffer,
+    detail_text_changed: bool,
+    daemon_log_text: String,
+    daemon_log_changed: bool,
     daemon_source_text: String,
     daemon_log_refresh: DaemonLogRefresh,
     history_notice: String,
     first_load: FirstLoad,
-    system_change_list: gtk::ListBox,
+    system_change_rows: FactoryVecDeque<SystemChangeRow>,
+    toaster: Toaster,
 }
 
 #[derive(Debug)]
@@ -83,44 +87,6 @@ pub enum ActivityLogsPageCommand {
     DaemonLogRead(DaemonLogContents),
     TextExportFinished(TextExportOutcome),
     SystemChangesLoaded(Result<Vec<HelperAuditEntry>, String>),
-}
-
-fn system_change_row(audit_entry: &HelperAuditEntry) -> adw::ActionRow {
-    let change_row = adw::ActionRow::builder()
-        .use_markup(false)
-        .title(&audit_entry.action_subject)
-        .title_lines(0)
-        .subtitle(
-            gettext("{time} · {outcome} · requested by user {uid}")
-                .replace(
-                    "{time}",
-                    &formatted_local_time(
-                        i64::try_from(audit_entry.recorded_unix_seconds).unwrap_or(i64::MAX),
-                    ),
-                )
-                .replace("{outcome}", &audit_entry.audited_outcome.described())
-                .replace("{uid}", &audit_entry.requester_uid),
-        )
-        .build();
-    if audit_entry.lowered_protection() {
-        change_row.add_prefix(
-            &gtk::Image::builder()
-                .icon_name("dialog-warning-symbolic")
-                .tooltip_text(gettext("This change lowered protection"))
-                .css_classes(["warning"])
-                .build(),
-        );
-    }
-    change_row
-}
-
-fn system_change_placeholder(placeholder_text: String) -> adw::ActionRow {
-    adw::ActionRow::builder()
-        .use_markup(false)
-        .title(placeholder_text)
-        .title_lines(0)
-        .css_classes(["dim-label"])
-        .build()
 }
 
 impl ActivityLogsPage {
@@ -201,7 +167,7 @@ impl ActivityLogsPage {
 
     fn select_entry(&mut self, selected_entry: SelectedEntryView) {
         self.selected_entry = selected_entry;
-        self.detail_buffer.set_text(&self.selected_detail_text());
+        self.detail_text_changed = true;
     }
 
     fn confirm_clear_all(&self, root: &adw::ToastOverlay, sender: &ComponentSender<Self>) {
@@ -223,24 +189,28 @@ impl ActivityLogsPage {
     }
 }
 
-fn log_text_view(text_buffer: &gtk::TextBuffer) -> gtk::ScrolledWindow {
-    gtk::ScrolledWindow::builder()
-        .vexpand(true)
-        .min_content_height(180)
-        .css_classes(["card"])
-        .child(
-            &gtk::TextView::builder()
-                .buffer(text_buffer)
-                .editable(false)
-                .monospace(true)
-                .wrap_mode(gtk::WrapMode::WordChar)
-                .top_margin(12)
-                .bottom_margin(12)
-                .left_margin(12)
-                .right_margin(12)
-                .build(),
-        )
-        .build()
+fn show_system_changes(
+    system_change_rows: &mut FactoryVecDeque<SystemChangeRow>,
+    loaded_changes: Result<Vec<HelperAuditEntry>, String>,
+) {
+    let mut row_guard = system_change_rows.guard();
+    row_guard.clear();
+    match loaded_changes {
+        Ok(audit_entries) if audit_entries.is_empty() => {
+            row_guard.push_back(SystemChangeRow::ListNotice(gettext(
+                "No ClamAV settings or trusted detections were changed through Lazaret",
+            )));
+        }
+        Ok(audit_entries) => audit_entries.into_iter().for_each(|audit_entry| {
+            row_guard.push_back(SystemChangeRow::ChangeRecorded(audit_entry));
+        }),
+        Err(journal_failure) => {
+            row_guard.push_back(SystemChangeRow::ListNotice(
+                gettext("The system journal can't be read: {error}")
+                    .replace("{error}", &journal_failure),
+            ));
+        }
+    }
 }
 
 #[relm4::component(pub)]
@@ -251,276 +221,314 @@ impl Component for ActivityLogsPage {
     type CommandOutput = ActivityLogsPageCommand;
 
     view! {
-        adw::ToastOverlay {
-            #[wrap(Some)]
-            set_child = &adw::ToolbarView {
-            add_top_bar = &adw::HeaderBar {
+            adw::ToastOverlay {
                 #[wrap(Some)]
-                set_title_widget = &adw::ViewSwitcher {
-                    set_policy: adw::ViewSwitcherPolicy::Wide,
-                    set_stack: Some(&log_stack),
+                set_child = &adw::ToolbarView {
+                add_top_bar = &adw::HeaderBar {
+                    #[wrap(Some)]
+                    set_title_widget = &adw::ViewSwitcher {
+                        set_policy: adw::ViewSwitcherPolicy::Wide,
+                        set_stack: Some(&log_stack),
+                    },
                 },
-            },
 
-            #[wrap(Some)]
-            set_content = &gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
-                set_margin_top: 12,
-                set_margin_bottom: 18,
-                set_margin_start: 18,
-                set_margin_end: 18,
-                set_spacing: 12,
+                #[wrap(Some)]
+                set_content = &gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_margin_top: 12,
+                    set_margin_bottom: 18,
+                    set_margin_start: 18,
+                    set_margin_end: 18,
+                    set_spacing: 12,
 
-                #[name = "log_stack"]
-                adw::ViewStack {
-                    set_vexpand: true,
+                    #[name = "log_stack"]
+                    adw::ViewStack {
+                        set_vexpand: true,
 
-                    add_titled_with_icon[Some("history"), &gettext("Historical Logs"), "document-open-recent-symbolic"] = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 12,
-
-                        gtk::Box {
-                            set_spacing: 6,
+                        add_titled_with_icon[Some("history"), &gettext("Historical Logs"), "document-open-recent-symbolic"] = &gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 12,
 
                             gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_hexpand: true,
+                                set_spacing: 6,
 
-                                gtk::Label {
-                                    set_xalign: 0.0,
-                                    add_css_class: "heading",
-                                    set_label: &gettext("Historical Logs"),
+                                gtk::Box {
+                                    set_orientation: gtk::Orientation::Vertical,
+                                    set_hexpand: true,
+
+                                    gtk::Label {
+                                        set_xalign: 0.0,
+                                        add_css_class: "heading",
+                                        set_label: &gettext("Historical Logs"),
+                                    },
+
+                                    gtk::Label {
+                                        set_xalign: 0.0,
+                                        add_css_class: "dim-label",
+                                        set_label: &gettext("Previous scan and update operations"),
+                                    },
                                 },
 
-                                gtk::Label {
-                                    set_xalign: 0.0,
-                                    add_css_class: "dim-label",
-                                    set_label: &gettext("Previous scan and update operations"),
+                                gtk::Button {
+                                    set_icon_name: "view-refresh-symbolic",
+                                    set_tooltip_text: Some(&gettext("Refresh")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => ActivityLogsPageInput::ReloadEntriesRequested,
+                                },
+
+                                gtk::MenuButton {
+                                    set_icon_name: "document-save-symbolic",
+                                    set_tooltip_text: Some(&gettext("Export All")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    #[watch]
+                                    set_sensitive: !model.listed_entries.is_empty(),
+                                    #[wrap(Some)]
+                                    set_popover = &gtk::Popover {
+                                        gtk::Box {
+                                            set_orientation: gtk::Orientation::Vertical,
+
+                                            gtk::Button {
+                                                set_label: &gettext("Export CSV"),
+                                                add_css_class: "flat",
+                                                connect_clicked => ActivityLogsPageInput::ExportAllCsvRequested,
+                                            },
+
+                                            gtk::Button {
+                                                set_label: &gettext("Export JSON"),
+                                                add_css_class: "flat",
+                                                connect_clicked => ActivityLogsPageInput::ExportAllJsonRequested,
+                                            },
+                                        },
+                                    },
+                                },
+
+                                gtk::Button {
+                                    set_label: &gettext("Clear All"),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    #[watch]
+                                    set_sensitive: !model.listed_entries.is_empty(),
+                                    connect_clicked => ActivityLogsPageInput::ClearAllRequested,
                                 },
                             },
 
-                            gtk::Button {
-                                set_icon_name: "view-refresh-symbolic",
-                                set_tooltip_text: Some(&gettext("Refresh")),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
-                                connect_clicked => ActivityLogsPageInput::ReloadEntriesRequested,
-                            },
-
-                            gtk::MenuButton {
-                                set_icon_name: "document-save-symbolic",
-                                set_tooltip_text: Some(&gettext("Export All")),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
+                            gtk::Label {
+                                set_xalign: 0.0,
+                                set_wrap: true,
+                                add_css_class: "error",
                                 #[watch]
-                                set_sensitive: !model.listed_entries.is_empty(),
-                                #[wrap(Some)]
-                                set_popover = &gtk::Popover {
-                                    gtk::Box {
-                                        set_orientation: gtk::Orientation::Vertical,
+                                set_visible: !model.history_notice.is_empty(),
+                                #[watch]
+                                set_label: &model.history_notice,
+                            },
 
-                                        gtk::Button {
-                                            set_label: &gettext("Export CSV"),
-                                            add_css_class: "flat",
-                                            connect_clicked => ActivityLogsPageInput::ExportAllCsvRequested,
-                                        },
+                            gtk::ScrolledWindow {
+                                set_min_content_height: 180,
+                                set_vexpand: true,
+                                set_hscrollbar_policy: gtk::PolicyType::Never,
 
-                                        gtk::Button {
-                                            set_label: &gettext("Export JSON"),
-                                            add_css_class: "flat",
-                                            connect_clicked => ActivityLogsPageInput::ExportAllJsonRequested,
-                                        },
+                                #[local_ref]
+                                entry_list -> gtk::ListBox {
+                                    add_css_class: "boxed-list",
+                                    set_valign: gtk::Align::Start,
+                                    set_selection_mode: gtk::SelectionMode::Single,
+                                    #[wrap(Some)]
+                                    #[local_ref]
+                                    set_placeholder = placeholder_stack -> gtk::Stack {
+                                        #[watch]
+                                        set_visible_child_name: model.first_load.shown_page_name(),
+                                    },
+                                    connect_row_activated[sender] => move |_entry_list, activated_row| {
+                                        sender.input(ActivityLogsPageInput::EntryActivated {
+                                            row_position: activated_row.index().max(0) as usize,
+                                        });
                                     },
                                 },
                             },
 
-                            gtk::Button {
-                                set_label: &gettext("Clear All"),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
-                                #[watch]
-                                set_sensitive: !model.listed_entries.is_empty(),
-                                connect_clicked => ActivityLogsPageInput::ClearAllRequested,
+                            gtk::Box {
+                                set_spacing: 6,
+
+                                gtk::Label {
+                                    set_xalign: 0.0,
+                                    set_hexpand: true,
+                                    add_css_class: "heading",
+                                    set_label: &gettext("Log Details"),
+                                },
+
+                                gtk::Button {
+                                    set_icon_name: "edit-copy-symbolic",
+                                    set_tooltip_text: Some(&gettext("Copy")),
+                                    add_css_class: "flat",
+                                    #[watch]
+                                    set_sensitive: model.has_selected_entry(),
+                                    connect_clicked => ActivityLogsPageInput::CopyDetailRequested,
+                                },
+
+                                gtk::Button {
+                                    set_icon_name: "document-save-symbolic",
+                                    set_tooltip_text: Some(&gettext("Export Text")),
+                                    add_css_class: "flat",
+                                    #[watch]
+                                    set_sensitive: model.has_selected_entry(),
+                                    connect_clicked => ActivityLogsPageInput::ExportDetailRequested,
+                                },
+                            },
+
+    gtk::ScrolledWindow {
+                                set_vexpand: true,
+                                set_min_content_height: 180,
+                                add_css_class: "card",
+
+                                gtk::TextView {
+                                    set_editable: false,
+                                    set_monospace: true,
+                                    set_wrap_mode: gtk::WrapMode::WordChar,
+                                    set_top_margin: 12,
+                                    set_bottom_margin: 12,
+                                    set_left_margin: 12,
+                                    set_right_margin: 12,
+                                    #[wrap(Some)]
+                                    set_buffer = &gtk::TextBuffer {
+                                        #[track(model.detail_text_changed)]
+                                        set_text: &model.selected_detail_text(),
+                                    },
+                                },
                             },
                         },
 
-                        gtk::Label {
-                            set_xalign: 0.0,
-                            set_wrap: true,
-                            add_css_class: "error",
-                            #[watch]
-                            set_visible: !model.history_notice.is_empty(),
-                            #[watch]
-                            set_label: &model.history_notice,
-                        },
+                        add_titled_with_icon[Some("system-changes"), &gettext("System Changes"), "changes-prevent-symbolic"] = &gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 12,
 
-                        gtk::ScrolledWindow {
-                            set_min_content_height: 180,
-                            set_vexpand: true,
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
+                            gtk::Box {
+                                set_spacing: 6,
 
-                            #[local_ref]
-                            entry_list -> gtk::ListBox {
-                                add_css_class: "boxed-list",
-                                set_valign: gtk::Align::Start,
-                                set_selection_mode: gtk::SelectionMode::Single,
-                                #[wrap(Some)]
+                                gtk::Box {
+                                    set_orientation: gtk::Orientation::Vertical,
+                                    set_hexpand: true,
+
+                                    gtk::Label {
+                                        set_xalign: 0.0,
+                                        add_css_class: "heading",
+                                        set_label: &gettext("System Changes"),
+                                    },
+
+                                    gtk::Label {
+                                        set_xalign: 0.0,
+                                        set_wrap: true,
+                                        add_css_class: "dim-label",
+                                        set_label: &gettext("ClamAV settings and trusted detections changed through Lazaret, as recorded by the system. Software running as you can't remove these records."),
+                                    },
+                                },
+
+                                gtk::Button {
+                                    set_icon_name: "view-refresh-symbolic",
+                                    set_tooltip_text: Some(&gettext("Refresh")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => ActivityLogsPageInput::RefreshSystemChangesRequested,
+                                },
+                            },
+
+                            gtk::ScrolledWindow {
+                                set_vexpand: true,
+                                set_hscrollbar_policy: gtk::PolicyType::Never,
+
                                 #[local_ref]
-                                set_placeholder = placeholder_stack -> gtk::Stack {
-                                    #[watch]
-                                    set_visible_child_name: model.first_load.shown_page_name(),
-                                },
-                                connect_row_activated[sender] => move |_entry_list, activated_row| {
-                                    sender.input(ActivityLogsPageInput::EntryActivated {
-                                        row_position: activated_row.index().max(0) as usize,
-                                    });
+                                system_change_list -> gtk::ListBox {
+                                    add_css_class: "boxed-list",
+                                    set_selection_mode: gtk::SelectionMode::None,
+                                    set_valign: gtk::Align::Start,
                                 },
                             },
                         },
 
-                        gtk::Box {
-                            set_spacing: 6,
-
-                            gtk::Label {
-                                set_xalign: 0.0,
-                                set_hexpand: true,
-                                add_css_class: "heading",
-                                set_label: &gettext("Log Details"),
-                            },
-
-                            gtk::Button {
-                                set_icon_name: "edit-copy-symbolic",
-                                set_tooltip_text: Some(&gettext("Copy")),
-                                add_css_class: "flat",
-                                #[watch]
-                                set_sensitive: model.has_selected_entry(),
-                                connect_clicked => ActivityLogsPageInput::CopyDetailRequested,
-                            },
-
-                            gtk::Button {
-                                set_icon_name: "document-save-symbolic",
-                                set_tooltip_text: Some(&gettext("Export Text")),
-                                add_css_class: "flat",
-                                #[watch]
-                                set_sensitive: model.has_selected_entry(),
-                                connect_clicked => ActivityLogsPageInput::ExportDetailRequested,
-                            },
-                        },
-
-                        append: &log_text_view(&model.detail_buffer),
-                    },
-
-                    add_titled_with_icon[Some("system-changes"), &gettext("System Changes"), "changes-prevent-symbolic"] = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 12,
-
-                        gtk::Box {
-                            set_spacing: 6,
+                        add_titled_with_icon[Some("daemon"), &gettext("ClamAV Daemon"), "utilities-terminal-symbolic"] = &gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 12,
 
                             gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_hexpand: true,
+                                set_spacing: 6,
 
-                                gtk::Label {
-                                    set_xalign: 0.0,
-                                    add_css_class: "heading",
-                                    set_label: &gettext("System Changes"),
+                                gtk::Box {
+                                    set_orientation: gtk::Orientation::Vertical,
+                                    set_hexpand: true,
+
+                                    gtk::Label {
+                                        set_xalign: 0.0,
+                                        add_css_class: "heading",
+                                        set_label: &gettext("ClamAV Daemon"),
+                                    },
+
+                                    gtk::Label {
+                                        set_xalign: 0.0,
+                                        set_ellipsize: gtk::pango::EllipsizeMode::Middle,
+                                        add_css_class: "dim-label",
+                                        #[watch]
+                                        set_label: &model.daemon_source_text,
+                                    },
                                 },
 
-                                gtk::Label {
-                                    set_xalign: 0.0,
-                                    set_wrap: true,
-                                    add_css_class: "dim-label",
-                                    set_label: &gettext("ClamAV settings and trusted detections changed through Lazaret, as recorded by the system. Software running as you can't remove these records."),
+                                gtk::ToggleButton {
+                                    set_label: &gettext("Live Updates"),
+                                    set_valign: gtk::Align::Center,
+                                    connect_clicked => ActivityLogsPageInput::LiveDaemonLogToggled,
+                                },
+
+                                gtk::Button {
+                                    set_icon_name: "view-refresh-symbolic",
+                                    set_tooltip_text: Some(&gettext("Refresh")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => ActivityLogsPageInput::RefreshDaemonLogRequested,
+                                },
+
+                                gtk::Button {
+                                    set_icon_name: "edit-copy-symbolic",
+                                    set_tooltip_text: Some(&gettext("Copy")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => ActivityLogsPageInput::CopyDaemonLogRequested,
+                                },
+
+                                gtk::Button {
+                                    set_icon_name: "document-save-symbolic",
+                                    set_tooltip_text: Some(&gettext("Export Text")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => ActivityLogsPageInput::ExportDaemonLogRequested,
                                 },
                             },
 
-                            gtk::Button {
-                                set_icon_name: "view-refresh-symbolic",
-                                set_tooltip_text: Some(&gettext("Refresh")),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
-                                connect_clicked => ActivityLogsPageInput::RefreshSystemChangesRequested,
+    gtk::ScrolledWindow {
+                                set_vexpand: true,
+                                set_min_content_height: 180,
+                                add_css_class: "card",
+
+                                gtk::TextView {
+                                    set_editable: false,
+                                    set_monospace: true,
+                                    set_wrap_mode: gtk::WrapMode::WordChar,
+                                    set_top_margin: 12,
+                                    set_bottom_margin: 12,
+                                    set_left_margin: 12,
+                                    set_right_margin: 12,
+                                    #[wrap(Some)]
+                                    set_buffer = &gtk::TextBuffer {
+                                        #[track(model.daemon_log_changed)]
+                                        set_text: &model.daemon_log_text,
+                                    },
+                                },
                             },
                         },
-
-                        gtk::ScrolledWindow {
-                            set_vexpand: true,
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-
-                            #[local_ref]
-                            system_change_list -> gtk::ListBox {
-                                add_css_class: "boxed-list",
-                                set_selection_mode: gtk::SelectionMode::None,
-                                set_valign: gtk::Align::Start,
-                            },
-                        },
-                    },
-
-                    add_titled_with_icon[Some("daemon"), &gettext("ClamAV Daemon"), "utilities-terminal-symbolic"] = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 12,
-
-                        gtk::Box {
-                            set_spacing: 6,
-
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_hexpand: true,
-
-                                gtk::Label {
-                                    set_xalign: 0.0,
-                                    add_css_class: "heading",
-                                    set_label: &gettext("ClamAV Daemon"),
-                                },
-
-                                gtk::Label {
-                                    set_xalign: 0.0,
-                                    set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                                    add_css_class: "dim-label",
-                                    #[watch]
-                                    set_label: &model.daemon_source_text,
-                                },
-                            },
-
-                            gtk::ToggleButton {
-                                set_label: &gettext("Live Updates"),
-                                set_valign: gtk::Align::Center,
-                                connect_clicked => ActivityLogsPageInput::LiveDaemonLogToggled,
-                            },
-
-                            gtk::Button {
-                                set_icon_name: "view-refresh-symbolic",
-                                set_tooltip_text: Some(&gettext("Refresh")),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
-                                connect_clicked => ActivityLogsPageInput::RefreshDaemonLogRequested,
-                            },
-
-                            gtk::Button {
-                                set_icon_name: "edit-copy-symbolic",
-                                set_tooltip_text: Some(&gettext("Copy")),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
-                                connect_clicked => ActivityLogsPageInput::CopyDaemonLogRequested,
-                            },
-
-                            gtk::Button {
-                                set_icon_name: "document-save-symbolic",
-                                set_tooltip_text: Some(&gettext("Export Text")),
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "flat",
-                                connect_clicked => ActivityLogsPageInput::ExportDaemonLogRequested,
-                            },
-                        },
-
-                        append: &log_text_view(&model.daemon_buffer),
                     },
                 },
-            },
-            },
+                },
+            }
         }
-    }
 
     fn init(
         activity_history: ActivityHistory,
@@ -530,25 +538,28 @@ impl Component for ActivityLogsPage {
         let entry_rows = FactoryVecDeque::builder()
             .launch(gtk::ListBox::default())
             .detach();
-        let mut model = Self {
+        let model = Self {
             activity_history,
             listed_entries: Vec::new(),
             entry_rows,
             selected_entry: SelectedEntryView::NoEntrySelected,
-            detail_buffer: gtk::TextBuffer::new(None),
-            daemon_buffer: gtk::TextBuffer::new(None),
+            detail_text_changed: true,
+            daemon_log_text: String::new(),
+            daemon_log_changed: true,
             daemon_source_text: gettext("Checking…"),
             daemon_log_refresh: DaemonLogRefresh::ManualRefresh,
             history_notice: String::new(),
             first_load: FirstLoad::StillLoading,
-            system_change_list: gtk::ListBox::new(),
+            system_change_rows: FactoryVecDeque::builder()
+                .launch(gtk::ListBox::default())
+                .detach(),
+            toaster: Toaster::new(&root),
         };
-        model.select_entry(SelectedEntryView::NoEntrySelected);
         model.reload_entries(&sender);
         model.refresh_daemon_log(&sender);
         Self::reload_system_changes(&sender);
         let entry_list = model.entry_rows.widget();
-        let system_change_list = &model.system_change_list;
+        let system_change_list = model.system_change_rows.widget();
         let placeholder_stack = &loading_placeholder_stack(
             &gettext("Loading history…"),
             &adw::StatusPage::builder()
@@ -567,6 +578,8 @@ impl Component for ActivityLogsPage {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
+        self.detail_text_changed = false;
+        self.daemon_log_changed = false;
         match page_input {
             ActivityLogsPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             ActivityLogsPageInput::EntryActivated { row_position } => {
@@ -596,13 +609,14 @@ impl Component for ActivityLogsPage {
                         self.export_text("lazaret-logs.json", exported_json, &sender);
                     }
                     Err(json_failure) => {
-                        root.add_toast(adw::Toast::new(&json_failure.to_string()));
+                        self.toaster.toast(&json_failure.to_string());
                     }
                 }
             }
             ActivityLogsPageInput::CopyDetailRequested => {
                 root.clipboard().set_text(&self.selected_detail_text());
-                root.add_toast(adw::Toast::new(&gettext("Log details copied to clipboard")));
+                self.toaster
+                    .toast(&gettext("Log details copied to clipboard"));
             }
             ActivityLogsPageInput::ExportDetailRequested => {
                 self.export_text("lazaret-log.txt", self.selected_detail_text(), &sender);
@@ -621,23 +635,12 @@ impl Component for ActivityLogsPage {
                 }
             },
             ActivityLogsPageInput::CopyDaemonLogRequested => {
-                let (buffer_start, buffer_end) = self.daemon_buffer.bounds();
-                root.clipboard().set_text(&self.daemon_buffer.text(
-                    &buffer_start,
-                    &buffer_end,
-                    false,
-                ));
-                root.add_toast(adw::Toast::new(&gettext("Daemon logs copied to clipboard")));
+                root.clipboard().set_text(&self.daemon_log_text);
+                self.toaster
+                    .toast(&gettext("Daemon logs copied to clipboard"));
             }
             ActivityLogsPageInput::ExportDaemonLogRequested => {
-                let (buffer_start, buffer_end) = self.daemon_buffer.bounds();
-                self.export_text(
-                    "clamd-logs.txt",
-                    self.daemon_buffer
-                        .text(&buffer_start, &buffer_end, false)
-                        .to_string(),
-                    &sender,
-                );
+                self.export_text("clamd-logs.txt", self.daemon_log_text.clone(), &sender);
             }
         }
     }
@@ -646,30 +649,13 @@ impl Component for ActivityLogsPage {
         &mut self,
         page_command: ActivityLogsPageCommand,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
+        self.detail_text_changed = false;
+        self.daemon_log_changed = false;
         match page_command {
             ActivityLogsPageCommand::SystemChangesLoaded(loaded_changes) => {
-                self.system_change_list.remove_all();
-                match loaded_changes {
-                    Ok(audit_entries) if audit_entries.is_empty() => {
-                        self.system_change_list
-                            .append(&system_change_placeholder(gettext(
-                                "No ClamAV settings or trusted detections were changed through \
-                                 Lazaret",
-                            )));
-                    }
-                    Ok(audit_entries) => audit_entries.iter().for_each(|audit_entry| {
-                        self.system_change_list
-                            .append(&system_change_row(audit_entry));
-                    }),
-                    Err(journal_failure) => {
-                        self.system_change_list.append(&system_change_placeholder(
-                            gettext("The system journal can't be read: {error}")
-                                .replace("{error}", &journal_failure),
-                        ));
-                    }
-                }
+                show_system_changes(&mut self.system_change_rows, loaded_changes);
             }
             ActivityLogsPageCommand::EntriesLoaded(Ok(listed_entries)) => {
                 self.first_load = FirstLoad::LoadFinished;
@@ -691,7 +677,7 @@ impl Component for ActivityLogsPage {
                 match clear_outcome {
                     Ok(()) => {
                         self.select_entry(SelectedEntryView::NoEntrySelected);
-                        root.add_toast(adw::Toast::new(&gettext("Historical logs cleared.")));
+                        self.toaster.toast(&gettext("Historical logs cleared."));
                     }
                     Err(clear_failure) => {
                         self.history_notice = gettext("Failed to clear logs: {error}")
@@ -703,25 +689,29 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageCommand::DaemonLogRead(daemon_log) => match daemon_log {
                 DaemonLogContents::FromLogFile { log_path, log_text } => {
                     self.daemon_source_text = sanitize_scanner_line(&log_path.to_string_lossy());
-                    self.daemon_buffer.set_text(&log_text);
+                    self.daemon_log_text = log_text;
+                    self.daemon_log_changed = true;
                 }
                 DaemonLogContents::FromSystemJournal { log_text } => {
                     self.daemon_source_text = gettext("System journal");
-                    self.daemon_buffer.set_text(&log_text);
+                    self.daemon_log_text = log_text;
+                    self.daemon_log_changed = true;
                 }
                 DaemonLogContents::NoReadableLog => {
                     self.daemon_source_text = gettext("Daemon log file not found.");
-                    self.daemon_buffer.set_text("");
+                    self.daemon_log_text.clear();
+                    self.daemon_log_changed = true;
                 }
             },
             ActivityLogsPageCommand::TextExportFinished(TextExportOutcome::TextSaved) => {
-                root.add_toast(adw::Toast::new(&gettext("Exported.")));
+                self.toaster.toast(&gettext("Exported."));
             }
             ActivityLogsPageCommand::TextExportFinished(TextExportOutcome::ExportCancelled) => {}
             ActivityLogsPageCommand::TextExportFinished(TextExportOutcome::ExportFailed(
                 export_failure,
             )) => {
-                root.add_toast(adw::Toast::new(&describe_export_failure(&export_failure)));
+                self.toaster
+                    .toast(&describe_export_failure(&export_failure));
             }
         }
     }

@@ -39,6 +39,8 @@ Debug builds use the application ID `page.codeberg.wvhulle.Lazaret.Devel` and th
 - The GUI never runs as root. `settings_helper/` is the only privileged code: it authorizes every request with polkit and enforces `data/protected-clamav-settings.txt` itself, so never rely on the UI for that.
 - Model scanner output as `impl Stream`. Split it on bytes and decode lossily, because file names can be arbitrary bytes. Sanitize scanner text before showing it, and keep `set_use_markup: false` on rows that show file names.
 - Keep quarantine file operations no-follow and integrity-checked, in this order: copy, pending row, remove source, commit. Never abort a move in progress.
+- Write each page, dialog, section and row as a Relm4 component whose model is plain data. Change it only in `update`, in answer to a message, and derive the view from it with `#[watch]`, `#[track]` and factories. Signal handlers only send messages. Run IO, D-Bus calls and timers as commands that answer with a message, and use `run_command_to_completion` for quarantine and file moves. Name input messages after what happened (`StartScanRequested`, `StoredSettingChanged`) and command outputs after the finished work (`ProfilesLoaded`).
+- Put a file where a user meets it in the window: a page's subpages and dialogs go inside its directory. Code without a screen goes in `host_services/`.
 
 [Architecture](architecture.md) explains the reasons behind these rules.
 

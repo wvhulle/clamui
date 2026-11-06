@@ -1,12 +1,27 @@
 use gettextrs::gettext;
-use relm4::{FactorySender, adw, adw::prelude::*, gtk};
-
-use crate::shared_widgets::audit_sections::{
-    audit_category_section::{AuditCategorySection, AuditCategorySectionOutput},
-    audit_check_results::{AuditCheck, AuditStatus, CheckGuidance},
+use relm4::{
+    FactorySender, adw,
+    adw::prelude::*,
+    gtk,
+    prelude::{DynamicIndex, FactoryComponent},
 };
 
-pub fn status_indicator_image(check_status: AuditStatus) -> gtk::Image {
+use crate::shared_widgets::audit_sections::audit_check_results::{
+    AuditCheck, AuditStatus, CheckGuidance,
+};
+
+pub enum AuditCheckRow {
+    CheckingPlaceholder,
+    CheckShown(AuditCheck),
+}
+
+#[derive(Debug)]
+pub enum AuditCheckRowOutput {
+    CopyCommandRequested(String),
+    DocumentationRequested(&'static str),
+}
+
+fn status_indicator_image(check_status: AuditStatus) -> gtk::Image {
     let status_label = check_status.status_label();
     let indicator_image = gtk::Image::builder()
         .icon_name(check_status.status_icon_name())
@@ -28,7 +43,7 @@ fn recommendation_row(recommendation_text: &str) -> adw::ActionRow {
 
 fn suggested_command_row(
     suggested_command: &'static str,
-    sender: &FactorySender<AuditCategorySection>,
+    sender: &FactorySender<AuditCheckRow>,
 ) -> adw::ActionRow {
     let command_label = gtk::Label::builder()
         .label(suggested_command)
@@ -48,7 +63,7 @@ fn suggested_command_row(
         .build();
     let row_sender = sender.clone();
     copy_button.connect_clicked(move |_clicked_button| {
-        let _parent_gone = row_sender.output(AuditCategorySectionOutput::CopyCommandRequested(
+        let _section_closed = row_sender.output(AuditCheckRowOutput::CopyCommandRequested(
             suggested_command.to_owned(),
         ));
     });
@@ -60,7 +75,7 @@ fn suggested_command_row(
 
 fn documentation_row(
     documentation_url: &'static str,
-    sender: &FactorySender<AuditCategorySection>,
+    sender: &FactorySender<AuditCheckRow>,
 ) -> adw::ActionRow {
     let documentation_row = adw::ActionRow::builder()
         .use_markup(false)
@@ -71,16 +86,16 @@ fn documentation_row(
     documentation_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
     let row_sender = sender.clone();
     documentation_row.connect_activated(move |_activated_row| {
-        let _parent_gone = row_sender.output(
-            AuditCategorySectionOutput::OpenDocumentationRequested(documentation_url),
-        );
+        let _section_closed = row_sender.output(AuditCheckRowOutput::DocumentationRequested(
+            documentation_url,
+        ));
     });
     documentation_row
 }
 
 fn guidance_row(
     check_guidance: &CheckGuidance,
-    sender: &FactorySender<AuditCategorySection>,
+    sender: &FactorySender<AuditCheckRow>,
 ) -> adw::ActionRow {
     match check_guidance {
         CheckGuidance::RecommendationText(recommendation_text) => {
@@ -95,7 +110,7 @@ fn guidance_row(
     }
 }
 
-pub fn checking_placeholder_row() -> gtk::Widget {
+fn checking_placeholder_row() -> adw::PreferencesRow {
     let checking_row = adw::ActionRow::builder()
         .use_markup(false)
         .title(gettext("Checking…"))
@@ -105,10 +120,7 @@ pub fn checking_placeholder_row() -> gtk::Widget {
     checking_row.upcast()
 }
 
-pub fn audit_check_row(
-    audit_check: &AuditCheck,
-    sender: &FactorySender<AuditCategorySection>,
-) -> gtk::Widget {
+fn shown_check_row(audit_check: &AuditCheck) -> adw::PreferencesRow {
     let status_image = status_indicator_image(audit_check.check_status);
     if audit_check.check_guidance.is_empty() {
         let plain_row = adw::ActionRow::builder()
@@ -128,11 +140,50 @@ pub fn audit_check_row(
         .expanded(audit_check.expanded_by_default())
         .build();
     expander_row.add_suffix(&status_image);
-    audit_check
-        .check_guidance
-        .iter()
-        .for_each(|check_guidance| {
-            expander_row.add_row(&guidance_row(check_guidance, sender));
-        });
     expander_row.upcast()
+}
+
+impl FactoryComponent for AuditCheckRow {
+    type ParentWidget = adw::PreferencesGroup;
+    type CommandOutput = ();
+    type Input = ();
+    type Output = AuditCheckRowOutput;
+    type Init = Self;
+    type Root = adw::PreferencesRow;
+    type Widgets = ();
+    type Index = DynamicIndex;
+
+    fn init_model(
+        check_row: Self::Init,
+        _row_index: &DynamicIndex,
+        _sender: FactorySender<Self>,
+    ) -> Self {
+        check_row
+    }
+
+    fn init_root(&self) -> Self::Root {
+        match self {
+            Self::CheckingPlaceholder => checking_placeholder_row(),
+            Self::CheckShown(audit_check) => shown_check_row(audit_check),
+        }
+    }
+
+    fn init_widgets(
+        &mut self,
+        _row_index: &DynamicIndex,
+        root: Self::Root,
+        _returned_widget: &gtk::Widget,
+        sender: FactorySender<Self>,
+    ) -> Self::Widgets {
+        if let (Self::CheckShown(audit_check), Some(expander_row)) =
+            (&*self, root.downcast_ref::<adw::ExpanderRow>())
+        {
+            audit_check
+                .check_guidance
+                .iter()
+                .for_each(|check_guidance| {
+                    expander_row.add_row(&guidance_row(check_guidance, &sender));
+                });
+        }
+    }
 }

@@ -82,9 +82,9 @@ pub enum DetectedThreatRowInput {
 
 #[derive(Debug)]
 pub enum DetectedThreatRowOutput {
-    MoveToQuarantine(DynamicIndex),
-    CopyPathToClipboard(DynamicIndex),
-    ExcludeFromScans(DynamicIndex),
+    QuarantineRequested(DynamicIndex),
+    PathCopyRequested(DynamicIndex),
+    ExclusionRequested(DynamicIndex),
     TrustFileRequested(DynamicIndex),
     IgnoreSignatureRequested(DynamicIndex),
 }
@@ -166,7 +166,7 @@ impl FactoryComponent for DetectedThreatRow {
                 #[watch]
                 set_sensitive: self.can_request_quarantine(),
                 connect_clicked[sender, index] => move |_clicked_button| {
-                    let _parent_gone = sender.output(DetectedThreatRowOutput::MoveToQuarantine(index.clone()));
+                    let _parent_gone = sender.output(DetectedThreatRowOutput::QuarantineRequested(index.clone()));
                 },
             },
 
@@ -216,12 +216,12 @@ impl FactoryComponent for DetectedThreatRow {
         row_actions.add_action(row_action::<ExcludeFromScansAction>(
             &sender,
             index,
-            DetectedThreatRowOutput::ExcludeFromScans,
+            DetectedThreatRowOutput::ExclusionRequested,
         ));
         row_actions.add_action(row_action::<CopyPathAction>(
             &sender,
             index,
-            DetectedThreatRowOutput::CopyPathToClipboard,
+            DetectedThreatRowOutput::PathCopyRequested,
         ));
         row_actions.register_for_widget(&widgets.threat_action_row);
         widgets

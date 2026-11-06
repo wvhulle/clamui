@@ -6,7 +6,9 @@ use futures::{
     stream,
 };
 use gettextrs::{gettext, ngettext};
-use relm4::{Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk};
+use relm4::{
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
+};
 
 use crate::{
     host_services::{
@@ -40,6 +42,7 @@ use crate::{
 
 const UPDATE_BATCH_SIZE: usize = 64;
 const TRANSCRIPT_LIMIT: usize = 4 * 1024 * 1024;
+const DISPLAYED_TRANSCRIPT_LIMIT: usize = 256 * 1024;
 
 #[derive(Debug)]
 pub struct DatabaseHostStatus {
@@ -64,6 +67,7 @@ enum DatabaseUpdateState {
 }
 
 pub struct DatabaseUpdatePage {
+    toaster: Toaster,
     activity_history: ActivityHistory,
     update_started_at: SystemTime,
     update_started_instant: Instant,
@@ -71,7 +75,7 @@ pub struct DatabaseUpdatePage {
     update_state: DatabaseUpdateState,
     observed_exit: ObservedUpdateExit,
     update_transcript: String,
-    transcript_buffer: gtk::TextBuffer,
+    transcript_changed: bool,
     update_summary: String,
 }
 
@@ -82,9 +86,9 @@ enum HostStatusView {
 
 #[derive(Debug)]
 pub enum DatabaseUpdatePageInput {
-    RefreshStatus,
-    StartUpdate,
-    CancelUpdate,
+    StatusRefreshRequested,
+    UpdateRequested,
+    UpdateCancelRequested,
 }
 
 #[derive(Debug)]
@@ -344,15 +348,23 @@ impl DatabaseUpdatePage {
         )
     }
 
+    fn displayed_transcript(&self) -> &str {
+        let shown_start = self
+            .update_transcript
+            .len()
+            .saturating_sub(DISPLAYED_TRANSCRIPT_LIMIT);
+        let boundary_start = (shown_start..=self.update_transcript.len())
+            .find(|byte_position| self.update_transcript.is_char_boundary(*byte_position))
+            .unwrap_or(self.update_transcript.len());
+        &self.update_transcript[boundary_start..]
+    }
+
     fn append_transcript_line(&mut self, output_line: &str) {
         let displayed_line = sanitize_scanner_line(output_line);
         if self.update_transcript.len() + displayed_line.len() < TRANSCRIPT_LIMIT {
             self.update_transcript.push_str(&displayed_line);
             self.update_transcript.push('\n');
-            self.transcript_buffer
-                .insert(&mut self.transcript_buffer.end_iter(), &displayed_line);
-            self.transcript_buffer
-                .insert(&mut self.transcript_buffer.end_iter(), "\n");
+            self.transcript_changed = true;
         }
     }
 
@@ -370,7 +382,7 @@ impl DatabaseUpdatePage {
         self.update_started_at = SystemTime::now();
         self.update_started_instant = Instant::now();
         self.update_transcript.clear();
-        self.transcript_buffer.set_text("");
+        self.transcript_changed = true;
         self.update_summary.clear();
         self.observed_exit = ObservedUpdateExit::ExitNotObserved;
         let (abortable_events, update_abort_handle) =
@@ -436,12 +448,10 @@ impl DatabaseUpdatePage {
             activity_output: self.update_transcript.clone(),
         };
         let activity_history = self.activity_history.clone();
-        let command_sender = sender.command_sender().clone();
-        relm4::spawn(async move {
-            let _page_closed =
-                command_sender.send(DatabaseUpdatePageCommand::ActivityRecordingFinished(
-                    activity_history.record_activity(new_entry).await,
-                ));
+        sender.oneshot_command(async move {
+            DatabaseUpdatePageCommand::ActivityRecordingFinished(
+                activity_history.record_activity(new_entry).await,
+            )
         });
     }
 
@@ -494,7 +504,7 @@ impl Component for DatabaseUpdatePage {
                         set_tooltip_text: Some(&gettext("Refresh status")),
                         set_valign: gtk::Align::Center,
                         add_css_class: "flat",
-                        connect_clicked => DatabaseUpdatePageInput::RefreshStatus,
+                        connect_clicked => DatabaseUpdatePageInput::StatusRefreshRequested,
                     },
 
                     adw::ActionRow {
@@ -538,7 +548,7 @@ impl Component for DatabaseUpdatePage {
                             set_label: &if model.update_is_active() { gettext("Updating…") } else { gettext("Update database") },
                             #[watch]
                             set_sensitive: model.can_request_update(),
-                            connect_clicked => DatabaseUpdatePageInput::StartUpdate,
+                            connect_clicked => DatabaseUpdatePageInput::UpdateRequested,
                         },
 
                         gtk::Button {
@@ -546,7 +556,7 @@ impl Component for DatabaseUpdatePage {
                             add_css_class: "destructive-action",
                             #[watch]
                             set_visible: model.can_cancel_update(),
-                            connect_clicked => DatabaseUpdatePageInput::CancelUpdate,
+                            connect_clicked => DatabaseUpdatePageInput::UpdateCancelRequested,
                         },
                     },
 
@@ -570,7 +580,11 @@ impl Component for DatabaseUpdatePage {
                         add_css_class: "card",
 
                         gtk::TextView {
-                            set_buffer: Some(&model.transcript_buffer),
+                            #[wrap(Some)]
+                            set_buffer = &gtk::TextBuffer {
+                                #[track(model.transcript_changed)]
+                                set_text: model.displayed_transcript(),
+                            },
                             set_editable: false,
                             set_cursor_visible: false,
                             set_monospace: true,
@@ -592,11 +606,12 @@ impl Component for DatabaseUpdatePage {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let mut model = Self {
+            toaster: Toaster::new(&root),
             host_status: HostStatusView::StatusLoading,
             update_state: DatabaseUpdateState::NoActiveUpdate,
             observed_exit: ObservedUpdateExit::ExitNotObserved,
             update_transcript: String::new(),
-            transcript_buffer: gtk::TextBuffer::new(None),
+            transcript_changed: false,
             update_summary: String::new(),
             activity_history,
             update_started_at: SystemTime::now(),
@@ -613,14 +628,15 @@ impl Component for DatabaseUpdatePage {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        self.transcript_changed = false;
         match page_input {
-            DatabaseUpdatePageInput::RefreshStatus => self.refresh_host_status(&sender),
-            DatabaseUpdatePageInput::StartUpdate => {
+            DatabaseUpdatePageInput::StatusRefreshRequested => self.refresh_host_status(&sender),
+            DatabaseUpdatePageInput::UpdateRequested => {
                 if self.can_request_update() {
                     self.start_update(&sender);
                 }
             }
-            DatabaseUpdatePageInput::CancelUpdate => {
+            DatabaseUpdatePageInput::UpdateCancelRequested => {
                 if let DatabaseUpdateState::UpdateRunning {
                     update_abort_handle,
                     ..
@@ -637,8 +653,9 @@ impl Component for DatabaseUpdatePage {
         &mut self,
         page_command: DatabaseUpdatePageCommand,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
+        self.transcript_changed = false;
         match page_command {
             DatabaseUpdatePageCommand::HostStatusLoaded(host_status) => {
                 self.host_status = HostStatusView::StatusLoaded(host_status);
@@ -667,7 +684,7 @@ impl Component for DatabaseUpdatePage {
                     self.update_summary.lines().next().unwrap_or_default(),
                 );
                 self.update_state = DatabaseUpdateState::NoActiveUpdate;
-                root.add_toast(adw::Toast::new(
+                self.toaster.add_toast(adw::Toast::new(
                     self.update_summary.lines().next().unwrap_or_default(),
                 ));
                 self.refresh_host_status(&sender);
@@ -676,7 +693,7 @@ impl Component for DatabaseUpdatePage {
                 let _shell_closed = sender.output(DatabaseUpdatePageOutput::ActivityRecorded);
             }
             DatabaseUpdatePageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
-                root.add_toast(adw::Toast::new(
+                self.toaster.add_toast(adw::Toast::new(
                     &gettext("The update could not be added to the history: {error}")
                         .replace("{error}", &recording_failure.to_string()),
                 ));

@@ -1,5 +1,8 @@
 use gettextrs::{gettext, ngettext};
-use relm4::{Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk};
+use relm4::{
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
+    prelude::FactoryVecDeque,
+};
 
 use crate::{
     host_services::{
@@ -10,8 +13,11 @@ use crate::{
         },
     },
     logs_page::activity_entry_row::formatted_local_time,
-    protection_page::trusted_detections_page::trust_list_contents::{
-        ForeignAllowlistFile, TrustListContents, TrustedFileEntry, read_trust_list_contents,
+    protection_page::trusted_detections_page::{
+        trust_list_contents::{
+            ForeignAllowlistFile, TrustListContents, TrustedFileEntry, read_trust_list_contents,
+        },
+        trust_list_row::{TrustListRow, TrustListRowOutput, TrustRemoval},
     },
     shared_widgets::trust_confirmation_dialog::present_trust_confirmation,
 };
@@ -62,9 +68,10 @@ fn added_text(
 
 pub struct TrustedDetectionsPage {
     snapshot: TrustedDetectionsSnapshot,
-    trusted_file_list: gtk::ListBox,
-    ignored_signature_list: gtk::ListBox,
-    foreign_allowlist_list: gtk::ListBox,
+    trusted_file_rows: FactoryVecDeque<TrustListRow>,
+    ignored_signature_rows: FactoryVecDeque<TrustListRow>,
+    foreign_allowlist_rows: FactoryVecDeque<TrustListRow>,
+    toaster: Toaster,
 }
 
 #[derive(Debug)]
@@ -79,151 +86,129 @@ pub enum TrustedDetectionsPageCommand {
     RemovalFinished(TrustOutcome),
 }
 
-fn plain_list() -> gtk::ListBox {
-    gtk::ListBox::builder()
-        .css_classes(["boxed-list"])
-        .selection_mode(gtk::SelectionMode::None)
-        .build()
-}
-
-fn removal_button(
-    removal_choice: TrustChoice,
+fn trust_list_rows(
     sender: &ComponentSender<TrustedDetectionsPage>,
-) -> gtk::Button {
-    let removal_button = gtk::Button::builder()
-        .icon_name("user-trash-symbolic")
-        .tooltip_text(gettext("Remove"))
-        .valign(gtk::Align::Center)
-        .css_classes(["flat"])
-        .build();
-    let input_sender = sender.input_sender().clone();
-    removal_button.connect_clicked(move |_clicked_button| {
-        input_sender.emit(TrustedDetectionsPageInput::RemovalRequested(
-            removal_choice.clone(),
-        ));
-    });
-    removal_button
+) -> FactoryVecDeque<TrustListRow> {
+    FactoryVecDeque::builder()
+        .launch(
+            gtk::ListBox::builder()
+                .css_classes(["boxed-list"])
+                .selection_mode(gtk::SelectionMode::None)
+                .build(),
+        )
+        .forward(sender.input_sender(), |row_output| match row_output {
+            TrustListRowOutput::RemovalRequested(removal_choice) => {
+                TrustedDetectionsPageInput::RemovalRequested(removal_choice)
+            }
+        })
 }
 
 fn trusted_file_row(
     trusted_file: &TrustedFileEntry,
     audit_entries: &[HelperAuditEntry],
-    sender: &ComponentSender<TrustedDetectionsPage>,
-) -> adw::ActionRow {
-    let file_row = adw::ActionRow::builder()
-        .use_markup(false)
-        .title(&trusted_file.sha256_hex)
-        .title_lines(0)
-        .subtitle(format!(
+) -> TrustListRow {
+    TrustListRow {
+        row_title: trusted_file.sha256_hex.clone(),
+        row_subtitle: format!(
             "{} · {}",
             bytesize::ByteSize::b(trusted_file.file_size),
             added_text(audit_entries, "trust-file", &trusted_file.sha256_hex)
-        ))
-        .css_classes(["property"])
-        .build();
-    file_row.add_suffix(&removal_button(
-        TrustChoice::ForgetTrustedFile {
+        ),
+        shows_hash: true,
+        needs_attention: false,
+        dimmed: false,
+        trust_removal: TrustRemoval::RemovableWith(TrustChoice::ForgetTrustedFile {
             sha256_hex: trusted_file.sha256_hex.clone(),
-        },
-        sender,
-    ));
-    file_row
+        }),
+    }
 }
 
-fn ignored_signature_row(
-    signature_name: &str,
-    audit_entries: &[HelperAuditEntry],
-    sender: &ComponentSender<TrustedDetectionsPage>,
-) -> adw::ActionRow {
-    let signature_row = adw::ActionRow::builder()
-        .use_markup(false)
-        .title(signature_name)
-        .subtitle(added_text(
+fn ignored_signature_row(signature_name: &str, audit_entries: &[HelperAuditEntry]) -> TrustListRow {
+    TrustListRow {
+        row_title: signature_name.to_owned(),
+        row_subtitle: added_text(
             audit_entries,
             "ignore-signature",
             &format!("named {signature_name}"),
-        ))
-        .build();
-    signature_row.add_suffix(&removal_button(
-        TrustChoice::StopIgnoringSignature {
+        ),
+        shows_hash: false,
+        needs_attention: false,
+        dimmed: false,
+        trust_removal: TrustRemoval::RemovableWith(TrustChoice::StopIgnoringSignature {
             signature_name: signature_name.to_owned(),
-        },
-        sender,
-    ));
-    signature_row
+        }),
+    }
 }
 
-fn foreign_allowlist_row(foreign_allowlist: &ForeignAllowlistFile) -> adw::ActionRow {
-    let allowlist_row = adw::ActionRow::builder()
-        .use_markup(false)
-        .title(&foreign_allowlist.file_name)
-        .subtitle(
-            ngettext(
-                "{count} entry, not added through Lazaret",
-                "{count} entries, not added through Lazaret",
-                u32::try_from(foreign_allowlist.entry_count).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &foreign_allowlist.entry_count.to_string()),
+fn foreign_allowlist_row(foreign_allowlist: &ForeignAllowlistFile) -> TrustListRow {
+    TrustListRow {
+        row_title: foreign_allowlist.file_name.clone(),
+        row_subtitle: ngettext(
+            "{count} entry, not added through Lazaret",
+            "{count} entries, not added through Lazaret",
+            u32::try_from(foreign_allowlist.entry_count).unwrap_or(u32::MAX),
         )
-        .build();
-    allowlist_row.add_prefix(
-        &gtk::Image::builder()
-            .icon_name("dialog-warning-symbolic")
-            .css_classes(["warning"])
-            .build(),
-    );
-    allowlist_row
+        .replace("{count}", &foreign_allowlist.entry_count.to_string()),
+        shows_hash: false,
+        needs_attention: true,
+        dimmed: false,
+        trust_removal: TrustRemoval::NotRemovableHere,
+    }
 }
 
-fn empty_row(empty_text: String) -> adw::ActionRow {
-    adw::ActionRow::builder()
-        .title(empty_text)
-        .css_classes(["dim-label"])
-        .build()
+fn rows_or_empty_notice(listed_rows: Vec<TrustListRow>, empty_text: String) -> Vec<TrustListRow> {
+    if listed_rows.is_empty() {
+        vec![TrustListRow::empty_list(empty_text)]
+    } else {
+        listed_rows
+    }
+}
+
+fn replace_rows(shown_rows: &mut FactoryVecDeque<TrustListRow>, listed_rows: Vec<TrustListRow>) {
+    let mut row_guard = shown_rows.guard();
+    row_guard.clear();
+    listed_rows.into_iter().for_each(|listed_row| {
+        row_guard.push_back(listed_row);
+    });
 }
 
 impl TrustedDetectionsPage {
-    fn refill_lists(&self, sender: &ComponentSender<Self>) {
+    fn show_snapshot(&mut self, snapshot: TrustedDetectionsSnapshot) {
         let TrustedDetectionsSnapshot {
             trust_list,
             audit_entries,
-        } = &self.snapshot;
-        [
-            &self.trusted_file_list,
-            &self.ignored_signature_list,
-            &self.foreign_allowlist_list,
-        ]
-        .into_iter()
-        .for_each(gtk::ListBox::remove_all);
-        trust_list.trusted_files.iter().for_each(|trusted_file| {
-            self.trusted_file_list
-                .append(&trusted_file_row(trusted_file, audit_entries, sender));
-        });
-        if trust_list.trusted_files.is_empty() {
-            self.trusted_file_list
-                .append(&empty_row(gettext("No trusted files")));
-        }
-        trust_list
-            .ignored_signatures
-            .iter()
-            .for_each(|signature_name| {
-                self.ignored_signature_list.append(&ignored_signature_row(
-                    signature_name,
-                    audit_entries,
-                    sender,
-                ));
-            });
-        if trust_list.ignored_signatures.is_empty() {
-            self.ignored_signature_list
-                .append(&empty_row(gettext("No ignored detections")));
-        }
-        trust_list
-            .foreign_allowlists
-            .iter()
-            .for_each(|foreign_allowlist| {
-                self.foreign_allowlist_list
-                    .append(&foreign_allowlist_row(foreign_allowlist));
-            });
+        } = &snapshot;
+        replace_rows(
+            &mut self.trusted_file_rows,
+            rows_or_empty_notice(
+                trust_list
+                    .trusted_files
+                    .iter()
+                    .map(|trusted_file| trusted_file_row(trusted_file, audit_entries))
+                    .collect(),
+                gettext("No trusted files"),
+            ),
+        );
+        replace_rows(
+            &mut self.ignored_signature_rows,
+            rows_or_empty_notice(
+                trust_list
+                    .ignored_signatures
+                    .iter()
+                    .map(|signature_name| ignored_signature_row(signature_name, audit_entries))
+                    .collect(),
+                gettext("No ignored detections"),
+            ),
+        );
+        replace_rows(
+            &mut self.foreign_allowlist_rows,
+            trust_list
+                .foreign_allowlists
+                .iter()
+                .map(foreign_allowlist_row)
+                .collect(),
+        );
+        self.snapshot = snapshot;
     }
 
     fn reload_snapshot(sender: &ComponentSender<Self>) {
@@ -291,13 +276,14 @@ impl Component for TrustedDetectionsPage {
     ) -> ComponentParts<Self> {
         let model = Self {
             snapshot: TrustedDetectionsSnapshot::default(),
-            trusted_file_list: plain_list(),
-            ignored_signature_list: plain_list(),
-            foreign_allowlist_list: plain_list(),
+            trusted_file_rows: trust_list_rows(&sender),
+            ignored_signature_rows: trust_list_rows(&sender),
+            foreign_allowlist_rows: trust_list_rows(&sender),
+            toaster: Toaster::new(&root),
         };
-        let trusted_file_list = &model.trusted_file_list;
-        let ignored_signature_list = &model.ignored_signature_list;
-        let foreign_allowlist_list = &model.foreign_allowlist_list;
+        let trusted_file_list = model.trusted_file_rows.widget();
+        let ignored_signature_list = model.ignored_signature_rows.widget();
+        let foreign_allowlist_list = model.foreign_allowlist_rows.widget();
         let widgets = view_output!();
         Self::reload_snapshot(&sender);
         ComponentParts { model, widgets }
@@ -332,15 +318,12 @@ impl Component for TrustedDetectionsPage {
         &mut self,
         page_command: TrustedDetectionsPageCommand,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match page_command {
-            TrustedDetectionsPageCommand::SnapshotLoaded(snapshot) => {
-                self.snapshot = snapshot;
-                self.refill_lists(&sender);
-            }
+            TrustedDetectionsPageCommand::SnapshotLoaded(snapshot) => self.show_snapshot(snapshot),
             TrustedDetectionsPageCommand::RemovalFinished(trust_outcome) => {
-                root.add_toast(
+                self.toaster.add_toast(
                     adw::Toast::builder()
                         .title(trust_outcome_text(&trust_outcome))
                         .use_markup(false)

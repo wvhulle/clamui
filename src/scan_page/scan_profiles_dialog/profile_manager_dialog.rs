@@ -60,7 +60,7 @@ pub enum ProfileManagerDialogInput {
 #[derive(Debug)]
 pub enum ProfileManagerDialogOutput {
     ProfilesChanged,
-    RunProfile(ScanProfile),
+    ProfileRunRequested(ScanProfile),
 }
 
 #[derive(Debug)]
@@ -292,7 +292,7 @@ impl Component for ProfileManagerDialog {
             ProfileManagerDialogInput::RunRequested(row_index) => {
                 if let Some(run_profile) = self.profile_at(&row_index) {
                     let _page_closed =
-                        sender.output(ProfileManagerDialogOutput::RunProfile(run_profile));
+                        sender.output(ProfileManagerDialogOutput::ProfileRunRequested(run_profile));
                     root.close();
                 }
             }

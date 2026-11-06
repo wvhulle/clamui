@@ -390,7 +390,7 @@ impl ScanPage {
                 sender.input_sender(),
                 |manager_output| match manager_output {
                     ProfileManagerDialogOutput::ProfilesChanged => ScanPageInput::ProfilesChanged,
-                    ProfileManagerDialogOutput::RunProfile(run_profile) => {
+                    ProfileManagerDialogOutput::ProfileRunRequested(run_profile) => {
                         ScanPageInput::RunProfileRequested(run_profile)
                     }
                 },

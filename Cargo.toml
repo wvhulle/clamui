@@ -12,6 +12,9 @@ publish = false
 name = "lazaret"
 path = "src/main.rs"
 
+[lints.clippy]
+enum_variant_names = "allow"
+
 [dependencies]
 bytesize = "2"
 futures = "0.3.34"
@@ -30,7 +33,6 @@ sha2 = "0.10"
 systemd = { version = "0.11.1", default-features = false, features = ["journal"] }
 tempfile = "3"
 thiserror = "2"
-tracker = "0.2"
 tokio = { version = "1.54", features = ["io-util", "process", "fs", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["io-util"] }
 turso = { version = "=0.8.3", default-features = false }

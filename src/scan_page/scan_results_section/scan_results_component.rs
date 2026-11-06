@@ -96,13 +96,13 @@ struct PendingThreatMove {
 
 fn forwarded_threat_output(row_output: DetectedThreatRowOutput) -> ScanResultsSectionInput {
     match row_output {
-        DetectedThreatRowOutput::MoveToQuarantine(row_index) => {
+        DetectedThreatRowOutput::QuarantineRequested(row_index) => {
             ScanResultsSectionInput::QuarantineThreatRequested(row_index)
         }
-        DetectedThreatRowOutput::CopyPathToClipboard(row_index) => {
+        DetectedThreatRowOutput::PathCopyRequested(row_index) => {
             ScanResultsSectionInput::CopyPathRequested(row_index)
         }
-        DetectedThreatRowOutput::ExcludeFromScans(row_index) => {
+        DetectedThreatRowOutput::ExclusionRequested(row_index) => {
             ScanResultsSectionInput::ExcludeThreatRequested(row_index)
         }
         DetectedThreatRowOutput::TrustFileRequested(row_index) => {
