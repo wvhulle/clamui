@@ -1,9 +1,14 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     detections_page::{
         detected_file_state::{DetectedFileState, OpeningCheck},
-        incident_timeline_presentation::{DisplayedDetection, detection_needs_attention},
+        incident_timeline_presentation::{
+            DeletionPrompt, DisplayedDetection, SignatureLookupState, detection_needs_attention,
+        },
     },
     host_services::detection_journal::{
         detection_history_store::StoredDetection,
@@ -12,16 +17,102 @@ use crate::{
     },
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OpenedIncident {
-    NoIncidentOpen,
-    IncidentOpen { detection_id: i64 },
+#[derive(Debug, Default)]
+pub enum IncidentView {
+    #[default]
+    DetectionList,
+    IncidentOpen {
+        detection_id: i64,
+        deletion_prompt: DeletionPrompt,
+        signature_lookup: SignatureLookupState,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AwaitedIncident {
-    NothingAwaited,
-    FileAwaited { file_path: std::path::PathBuf },
+pub enum IncidentRequest {
+    KeepShownIncident,
+    OpenIncidentForFile { file_path: PathBuf },
+}
+
+impl IncidentView {
+    pub const fn freshly_opened(detection_id: i64) -> Self {
+        Self::IncidentOpen {
+            detection_id,
+            deletion_prompt: DeletionPrompt::NotAsked,
+            signature_lookup: SignatureLookupState::NotLookedUp,
+        }
+    }
+
+    pub const fn opened_detection_id(&self) -> Option<i64> {
+        match self {
+            Self::DetectionList => None,
+            Self::IncidentOpen { detection_id, .. } => Some(*detection_id),
+        }
+    }
+
+    pub fn with_deletion_prompt(self, chosen_prompt: DeletionPrompt) -> Self {
+        match self {
+            Self::DetectionList => Self::DetectionList,
+            Self::IncidentOpen {
+                detection_id,
+                signature_lookup,
+                ..
+            } => Self::IncidentOpen {
+                detection_id,
+                deletion_prompt: chosen_prompt,
+                signature_lookup,
+            },
+        }
+    }
+
+    pub fn with_signature_lookup(
+        self,
+        lookup_detection_id: i64,
+        lookup_state: SignatureLookupState,
+    ) -> Self {
+        match self {
+            Self::IncidentOpen {
+                detection_id,
+                deletion_prompt,
+                ..
+            } if detection_id == lookup_detection_id => Self::IncidentOpen {
+                detection_id,
+                deletion_prompt,
+                signature_lookup: lookup_state,
+            },
+            Self::DetectionList | Self::IncidentOpen { .. } => self,
+        }
+    }
+
+    pub fn with_requested_incident(
+        self,
+        displayed_detections: &[DisplayedDetection],
+        incident_request: &IncidentRequest,
+    ) -> Self {
+        match incident_request {
+            IncidentRequest::KeepShownIncident => self,
+            IncidentRequest::OpenIncidentForFile { file_path } => detection_for_file(
+                displayed_detections,
+                file_path,
+            )
+            .map_or(self, |displayed_detection| {
+                Self::freshly_opened(displayed_detection.stored_detection.detection_id)
+            }),
+        }
+    }
+
+    pub fn still_listed_in(self, displayed_detections: &[DisplayedDetection]) -> Self {
+        let opened_detection_listed = self.opened_detection_id().is_some_and(|detection_id| {
+            displayed_detections.iter().any(|displayed_detection| {
+                displayed_detection.stored_detection.detection_id == detection_id
+            })
+        });
+        if opened_detection_listed {
+            self
+        } else {
+            Self::DetectionList
+        }
+    }
 }
 
 pub struct JournalBatch {
@@ -127,14 +218,15 @@ pub fn detection_for_file<'detections>(
 
 #[cfg(test)]
 mod detections_view_state_tests {
-    use std::path::PathBuf;
-
     use super::*;
     use crate::{
         detections_page::detected_file_state::{FileAccess, FileOwner},
-        host_services::detection_journal::{
-            detection_history_store::{DetectionSources, DetectionState, ResolutionKind},
-            detection_journal_records::DetectionSource,
+        host_services::{
+            detection_journal::{
+                detection_history_store::{DetectionSources, DetectionState, ResolutionKind},
+                detection_journal_records::DetectionSource,
+            },
+            threat_intel::malware_bazaar_client::KnownSampleLookup,
         },
     };
 
@@ -246,5 +338,129 @@ mod detections_view_state_tests {
             journal_batch.access_changes,
             vec![JournalAccess::JournalUnreadable]
         );
+    }
+
+    fn listed_detection(detection_id: i64, file_name: &str) -> DisplayedDetection {
+        DisplayedDetection {
+            stored_detection: StoredDetection {
+                file_path: PathBuf::from("/home/user/Downloads").join(file_name),
+                ..stored_detection(detection_id, DetectionState::Open)
+            },
+            file_state: DetectedFileState::NoLongerThere,
+        }
+    }
+
+    fn incident_with_prompt_and_lookup(detection_id: i64) -> IncidentView {
+        IncidentView::freshly_opened(detection_id)
+            .with_deletion_prompt(DeletionPrompt::AwaitingAnswer)
+            .with_signature_lookup(
+                detection_id,
+                SignatureLookupState::LookupFinished(KnownSampleLookup::NoKnownSamples),
+            )
+    }
+
+    fn is_fresh_incident(incident_view: &IncidentView, expected_detection_id: i64) -> bool {
+        matches!(
+            incident_view,
+            IncidentView::IncidentOpen {
+                detection_id,
+                deletion_prompt: DeletionPrompt::NotAsked,
+                signature_lookup: SignatureLookupState::NotLookedUp,
+            } if *detection_id == expected_detection_id
+        )
+    }
+
+    #[test]
+    fn a_lookup_result_for_another_incident_is_ignored() {
+        let incident_view = IncidentView::freshly_opened(2).with_signature_lookup(
+            1,
+            SignatureLookupState::LookupFinished(KnownSampleLookup::NoKnownSamples),
+        );
+        assert!(is_fresh_incident(&incident_view, 2));
+    }
+
+    #[test]
+    fn a_lookup_result_for_the_open_incident_is_shown() {
+        let incident_view = IncidentView::freshly_opened(1)
+            .with_signature_lookup(1, SignatureLookupState::LookingUp);
+        assert!(matches!(
+            incident_view,
+            IncidentView::IncidentOpen {
+                signature_lookup: SignatureLookupState::LookingUp,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_lookup_result_after_going_back_is_ignored() {
+        let incident_view = IncidentView::DetectionList
+            .with_signature_lookup(1, SignatureLookupState::LookingUp)
+            .with_deletion_prompt(DeletionPrompt::AwaitingAnswer);
+        assert!(matches!(incident_view, IncidentView::DetectionList));
+    }
+
+    #[test]
+    fn reopening_an_incident_resets_the_deletion_prompt_and_the_lookup() {
+        assert!(matches!(
+            incident_with_prompt_and_lookup(1),
+            IncidentView::IncidentOpen {
+                deletion_prompt: DeletionPrompt::AwaitingAnswer,
+                signature_lookup: SignatureLookupState::LookupFinished(_),
+                ..
+            }
+        ));
+        assert!(is_fresh_incident(&IncidentView::freshly_opened(1), 1));
+    }
+
+    #[test]
+    fn opening_from_a_notification_resets_the_deletion_prompt_and_the_lookup() {
+        let displayed_detections = [
+            listed_detection(1, "invoice.pdf.exe"),
+            listed_detection(2, "setup.exe"),
+        ];
+        let incident_request = IncidentRequest::OpenIncidentForFile {
+            file_path: PathBuf::from("/home/user/Downloads/invoice.pdf.exe"),
+        };
+        [1, 2].into_iter().for_each(|previously_open_id| {
+            let incident_view = incident_with_prompt_and_lookup(previously_open_id)
+                .with_requested_incident(&displayed_detections, &incident_request);
+            assert!(is_fresh_incident(&incident_view, 1));
+        });
+    }
+
+    #[test]
+    fn a_notification_for_an_unlisted_file_keeps_the_shown_view() {
+        let displayed_detections = [listed_detection(2, "setup.exe")];
+        let incident_view = incident_with_prompt_and_lookup(2).with_requested_incident(
+            &displayed_detections,
+            &IncidentRequest::OpenIncidentForFile {
+                file_path: PathBuf::from("/home/user/Downloads/invoice.pdf.exe"),
+            },
+        );
+        assert!(matches!(
+            incident_view,
+            IncidentView::IncidentOpen {
+                detection_id: 2,
+                deletion_prompt: DeletionPrompt::AwaitingAnswer,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn an_incident_no_longer_found_falls_back_to_the_list() {
+        let displayed_detections = [listed_detection(2, "setup.exe")];
+        assert!(matches!(
+            incident_with_prompt_and_lookup(1).still_listed_in(&displayed_detections),
+            IncidentView::DetectionList
+        ));
+        assert!(matches!(
+            incident_with_prompt_and_lookup(2).still_listed_in(&displayed_detections),
+            IncidentView::IncidentOpen {
+                deletion_prompt: DeletionPrompt::AwaitingAnswer,
+                ..
+            }
+        ));
     }
 }

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 21:45+0100\n"
+"POT-Creation-Date: 2026-11-06 21:55+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -24,9 +24,9 @@ msgid "Protection"
 msgstr ""
 
 #: src/application_window/application_pages.rs:46
-#: src/detections_page/background_detections_page.rs:580
-#: src/detections_page/background_detections_page.rs:599
-#: src/detections_page/background_detections_page.rs:603
+#: src/detections_page/background_detections_page.rs:605
+#: src/detections_page/background_detections_page.rs:624
+#: src/detections_page/background_detections_page.rs:628
 msgid "Detections"
 msgstr ""
 
@@ -41,7 +41,7 @@ msgid "Logs"
 msgstr ""
 
 #: src/application_window/application_pages.rs:49
-#: src/detections_page/incident_timeline_presentation.rs:353
+#: src/detections_page/incident_timeline_presentation.rs:376
 #: src/quarantine_page/quarantine_entries_page.rs:566
 #: src/scan_page/scan_results_section/detected_threat_row.rs:216
 #: src/scan_page/scan_results_section/scan_results_component.rs:165
@@ -124,7 +124,7 @@ msgid "Scanner Engine"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:69
-#: src/detections_page/background_detections_page.rs:615
+#: src/detections_page/background_detections_page.rs:640
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:68
 #: src/shared_widgets/engine_settings/engine_settings_page.rs:563
 msgid "Detection"
@@ -214,7 +214,7 @@ msgid ""
 msgstr ""
 
 #: src/application_window/window_close_behavior.rs:49
-#: src/detections_page/incident_timeline_presentation.rs:345
+#: src/detections_page/incident_timeline_presentation.rs:368
 #: src/logs_page/activity_logs_page.rs:227
 #: src/protection_page/protection_timeline_presentation.rs:716
 #: src/quarantine_page/quarantine_entries_page.rs:388
@@ -233,71 +233,71 @@ msgstr ""
 msgid "Keep Running"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:172
+#: src/detections_page/background_detections_page.rs:173
 msgid ""
 "This file belongs to another user, so it can't be moved or deleted from here"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:175
+#: src/detections_page/background_detections_page.rs:176
 msgid ""
 "This file couldn't be checked, so it can't be moved or deleted from here"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:178
+#: src/detections_page/background_detections_page.rs:179
 #, rust-format
 msgid "The file could not be deleted: {error}"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:182
+#: src/detections_page/background_detections_page.rs:183
 msgid "Checking the file stopped unexpectedly"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:188
+#: src/detections_page/background_detections_page.rs:189
 #, rust-format
 msgid "Your decision could not be saved: {error}"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:385
+#: src/detections_page/background_detections_page.rs:393
 msgid ""
 "Lazaret can't read the system journal, so new background detections won't "
 "appear here. This does not mean nothing was found. Add your user to the "
 "systemd-journal group."
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:390
+#: src/detections_page/background_detections_page.rs:398
 #: src/protection_page/protection_timeline_presentation.rs:1315
 #, rust-format
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:394
+#: src/detections_page/background_detections_page.rs:402
 msgid "Loading detections…"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:397
+#: src/detections_page/background_detections_page.rs:405
 msgid "Nothing has been detected in the background."
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:400
+#: src/detections_page/background_detections_page.rs:408
 msgid "What on-access scanning and scheduled scans have found."
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:587
+#: src/detections_page/background_detections_page.rs:612
 msgid "Back to detections"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:698
+#: src/detections_page/background_detections_page.rs:716
 msgid "Copied to clipboard"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:734
+#: src/detections_page/background_detections_page.rs:752
 #, rust-format
 msgid ""
 "Detections while Lazaret wasn't running can't be counted, because where it "
 "stopped reading the system journal could not be read: {error}"
 msgstr ""
 
-#: src/detections_page/background_detections_page.rs:755
+#: src/detections_page/background_detections_page.rs:776
 #, rust-format
 msgid "Detections could not be read: {error}"
 msgstr ""
@@ -330,259 +330,277 @@ msgid ""
 "journal for anything found while it was closed."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:76
+#: src/detections_page/incident_timeline_presentation.rs:80
 msgid "Restored from quarantine"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:81
+#: src/detections_page/incident_timeline_presentation.rs:85
 msgid "Moved to quarantine"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:85
+#: src/detections_page/incident_timeline_presentation.rs:89
 msgid "Deleted"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:89
+#: src/detections_page/incident_timeline_presentation.rs:93
 msgid "Kept by you"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:95
+#: src/detections_page/incident_timeline_presentation.rs:99
 msgid "Belongs to another user"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:99
+#: src/detections_page/incident_timeline_presentation.rs:103
 msgid "Blocked, needs a decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:103
+#: src/detections_page/incident_timeline_presentation.rs:107
 msgid "Not blocked, needs a decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:107
+#: src/detections_page/incident_timeline_presentation.rs:111
 msgid "Needs a decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:108
+#: src/detections_page/incident_timeline_presentation.rs:112
 msgid "No longer there"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:109
+#: src/detections_page/incident_timeline_presentation.rs:113
 msgid "File could not be checked"
-msgstr ""
-
-#: src/detections_page/incident_timeline_presentation.rs:120
-#, rust-format
-msgid "{signature} (test file) · {state}"
 msgstr ""
 
 #: src/detections_page/incident_timeline_presentation.rs:124
 #, rust-format
+msgid "{signature} (test file) · {state}"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:128
+#, rust-format
 msgid "{signature} · {state}"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:155
+#: src/detections_page/incident_timeline_presentation.rs:159
 msgid "On-access scanning and the scheduled scan"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:157
+#: src/detections_page/incident_timeline_presentation.rs:161
 msgid "On-access scanning"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:158
+#: src/detections_page/incident_timeline_presentation.rs:162
 msgid "The scheduled scan"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:159
+#: src/detections_page/incident_timeline_presentation.rs:163
 msgid "Not recorded"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:167
+#: src/detections_page/incident_timeline_presentation.rs:171
 msgid "File"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:169
+#: src/detections_page/incident_timeline_presentation.rs:173
 msgid "Signature source"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:172
+#: src/detections_page/incident_timeline_presentation.rs:176
 msgid "Found by"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:174
+#: src/detections_page/incident_timeline_presentation.rs:178
 msgid "Last seen"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:178
+#: src/detections_page/incident_timeline_presentation.rs:182
 msgid "Times seen"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:183
+#: src/detections_page/incident_timeline_presentation.rs:187
 msgid "Detected"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:186
+#: src/detections_page/incident_timeline_presentation.rs:190
 msgid ""
 "This signature matches the harmless EICAR test pattern, which exists to "
 "check that detection works."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:191
+#: src/detections_page/incident_timeline_presentation.rs:195
 msgid ""
 "ClamAV matched this file against a signature. A match is strong evidence, "
 "but false positives happen, especially with packed or administrative tools."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:196
+#: src/detections_page/incident_timeline_presentation.rs:200
 #, rust-format
 msgid "{signature}, first seen {time}"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:214
+#: src/detections_page/incident_timeline_presentation.rs:218
 msgid "Opening this file is refused, which is why it won't open"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:221
+#: src/detections_page/incident_timeline_presentation.rs:225
 msgid "Not opened again after your decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:225
+#: src/detections_page/incident_timeline_presentation.rs:229
 msgid "The file is no longer there"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:232
+#: src/detections_page/incident_timeline_presentation.rs:236
 msgid "Not blocked: the scheduled scan found it, and it can still be opened"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:239
+#: src/detections_page/incident_timeline_presentation.rs:243
 msgid "Not blocked right now: it can still be opened"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:243
+#: src/detections_page/incident_timeline_presentation.rs:247
 msgid "Could not check whether the file is blocked"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:247
+#: src/detections_page/incident_timeline_presentation.rs:251
 msgid "Blocked"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:249
+#: src/detections_page/incident_timeline_presentation.rs:253
 msgid ""
 "With on-access prevention, the kernel refuses to open a detected file in a "
 "watched folder. The file stays where it is until you decide what to do with "
 "it."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:275
-msgid "Looking up…"
-msgstr ""
-
-#: src/detections_page/incident_timeline_presentation.rs:277
-msgid "Add your abuse.ch key in Preferences to look up detections."
+#: src/detections_page/incident_timeline_presentation.rs:279
+#, rust-format
+msgid "MalwareBazaar could not be reached: {error}"
 msgstr ""
 
 #: src/detections_page/incident_timeline_presentation.rs:283
+msgid "MalwareBazaar sent an answer that could not be read"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:285
+msgid "MalwareBazaar refused the API key"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:287
+#, rust-format
+msgid "MalwareBazaar answered: {status}"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:295
+msgid "Looking up…"
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:297
+msgid "Add your abuse.ch key in Preferences to look up detections."
+msgstr ""
+
+#: src/detections_page/incident_timeline_presentation.rs:306
 msgid "No known samples match this signature."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:302
+#: src/detections_page/incident_timeline_presentation.rs:325
 #, rust-format
 msgid "{count} known samples. Families: {families}. Earliest seen: {date}."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:314
+#: src/detections_page/incident_timeline_presentation.rs:337
 msgid "Ask MalwareBazaar about this signature. Only its name is sent."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:316
+#: src/detections_page/incident_timeline_presentation.rs:339
 msgid "Look Up"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:329
+#: src/detections_page/incident_timeline_presentation.rs:352
 msgid "Stop asking about this file"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:330
-#: src/detections_page/incident_timeline_presentation.rs:365
+#: src/detections_page/incident_timeline_presentation.rs:353
+#: src/detections_page/incident_timeline_presentation.rs:388
 msgid "Keep"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:338
+#: src/detections_page/incident_timeline_presentation.rs:361
 msgid "Delete this file permanently? This can't be undone."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:339
+#: src/detections_page/incident_timeline_presentation.rs:362
 msgid "Delete Permanently"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:344
+#: src/detections_page/incident_timeline_presentation.rs:367
 msgid "Go back without deleting"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:352
+#: src/detections_page/incident_timeline_presentation.rs:375
 msgid "Move it somewhere safe. You can restore it later."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:358
+#: src/detections_page/incident_timeline_presentation.rs:381
 msgid "Remove it for good"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:359
+#: src/detections_page/incident_timeline_presentation.rs:382
 msgid "Delete…"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:364
+#: src/detections_page/incident_timeline_presentation.rs:387
 msgid "You know this file is fine"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:380
+#: src/detections_page/incident_timeline_presentation.rs:403
 msgid "Your decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:382
+#: src/detections_page/incident_timeline_presentation.rs:405
 msgid ""
 "If it's unfamiliar, quarantine it. Keeping a file only stops Lazaret asking: "
 "on-access scanning keeps blocking it until the path is excluded in the "
 "ClamAV configuration, as shown here."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:390
+#: src/detections_page/incident_timeline_presentation.rs:413
 msgid ""
 "Quarantined files can be restored from the Quarantine page. A file you kept "
 "is still blocked by on-access scanning until its path is excluded in the "
 "ClamAV configuration."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:402
+#: src/detections_page/incident_timeline_presentation.rs:425
 msgid "This file belongs to another user, so Lazaret can't move or delete it"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:404
+#: src/detections_page/incident_timeline_presentation.rs:427
 msgid "Lazaret couldn't check this file, so it can't move or delete it"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:410
+#: src/detections_page/incident_timeline_presentation.rs:433
 msgid "Choose what happens to this file"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:418
+#: src/detections_page/incident_timeline_presentation.rs:441
 msgid "MalwareBazaar"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:436
+#: src/detections_page/incident_timeline_presentation.rs:459
 msgid "Resolved"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:438
+#: src/detections_page/incident_timeline_presentation.rs:461
 msgid ""
 "A resolved detection opens again if ClamAV finds the same file again later, "
 "for example after you download it a second time."
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:446
+#: src/detections_page/incident_timeline_presentation.rs:469
 msgid "Waiting for your decision"
 msgstr ""
 
-#: src/detections_page/incident_timeline_presentation.rs:450
+#: src/detections_page/incident_timeline_presentation.rs:473
 #, rust-format
 msgid "{state}, {time}"
 msgstr ""

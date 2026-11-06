@@ -10,7 +10,7 @@ use futures::{StreamExt, future::ready, stream};
 
 use crate::{
     detections_page::{
-        background_detections_page::{BackgroundDetectionsPageCommand, load_displayed_detections},
+        background_detections_page::load_displayed_detections,
         detected_file_state::{
             DetectedFileState, FileAccess, FileOwner, OpeningCheck, inspect_detected_file,
         },
@@ -505,7 +505,7 @@ async fn host_refreshing_after_sightings_does_not_feed_back_into_the_journal() {
             .await
             .expect("recorded");
         let known_file_states = file_states_to_keep(&displayed_detections, &newly_opened);
-        if let BackgroundDetectionsPageCommand::DetectionsLoaded(loaded_detections) =
+        if let Ok(loaded_detections) =
             load_displayed_detections(activity_history.clone(), known_file_states).await
         {
             displayed_detections = loaded_detections;

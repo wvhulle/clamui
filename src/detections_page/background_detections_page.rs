@@ -18,9 +18,9 @@ use crate::{
         },
         detection_list_row::{DetectionListRow, DetectionListRowOutput},
         detections_view_state::{
-            AwaitedIncident, JournalBatch, OpenedIncident, detection_for_file,
-            detections_needing_attention_first, file_state_for_detection, file_states_to_keep,
-            split_journal_batch, unresolved_detection_count,
+            IncidentRequest, IncidentView, JournalBatch, detections_needing_attention_first,
+            file_state_for_detection, file_states_to_keep, split_journal_batch,
+            unresolved_detection_count,
         },
         incident_timeline_presentation::{
             DeletionPrompt, DisplayedDetection, SignatureLookupState, displayed_file_name,
@@ -44,9 +44,7 @@ use crate::{
         },
         threat_intel::{
             malware_bazaar_client::look_up_signature,
-            service_key_storage::{
-                ResolvedApiKey, ThreatIntelService, describe_key_failure, read_api_key,
-            },
+            service_key_storage::{ResolvedApiKey, ThreatIntelService, read_api_key},
         },
     },
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
@@ -54,7 +52,7 @@ use crate::{
         component_streams::{RunningStream, run_stream},
         loading_indicators::FirstLoad,
         step_timeline::{
-            timeline_step_contents::{TimelineStepAction, TimelineStepRowOutput},
+            timeline_step_contents::{TimelineStep, TimelineStepAction, TimelineStepRowOutput},
             timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
         },
     },
@@ -70,11 +68,8 @@ pub struct BackgroundDetectionsPage {
     distribution_family: DistributionFamily,
     displayed_detections: Vec<DisplayedDetection>,
     journal_access: JournalAccess,
-    opened_incident: OpenedIncident,
-    awaited_incident: AwaitedIncident,
+    incident_view: IncidentView,
     application_started: Timestamp,
-    deletion_prompt: DeletionPrompt,
-    lookup_state: SignatureLookupState,
     first_load: FirstLoad,
     detection_list_rows: FactoryVecDeque<DetectionListRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow>,
@@ -111,13 +106,19 @@ pub enum BackgroundDetectionsPageCommand {
     },
     JournalAccessChanged(JournalAccess),
     JournalCursorUnreadable(ActivityHistoryFailure),
-    DetectionsLoaded(Vec<DisplayedDetection>),
+    DetectionsLoaded {
+        displayed_detections: Vec<DisplayedDetection>,
+        incident_request: IncidentRequest,
+    },
     LoadingFailed(ActivityHistoryFailure),
     IncidentActionFinished {
         file_path: PathBuf,
         action_outcome: Result<IncidentActionEffect, IncidentActionFailure>,
     },
-    SignatureLookupFinished(SignatureLookupState),
+    SignatureLookupFinished {
+        detection_id: i64,
+        lookup_state: SignatureLookupState,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -263,13 +264,8 @@ fn recorded_detection_updates(
 pub async fn load_displayed_detections(
     activity_history: ActivityHistory,
     known_file_states: HashMap<i64, DetectedFileState>,
-) -> BackgroundDetectionsPageCommand {
-    let stored_detections = match activity_history.list_detections().await {
-        Ok(stored_detections) => stored_detections,
-        Err(listing_failure) => {
-            return BackgroundDetectionsPageCommand::LoadingFailed(listing_failure);
-        }
-    };
+) -> Result<Vec<DisplayedDetection>, ActivityHistoryFailure> {
+    let stored_detections = activity_history.list_detections().await?;
     let displayed_detections = spawn_blocking(move || {
         stored_detections
             .into_iter()
@@ -285,21 +281,31 @@ pub async fn load_displayed_detections(
     })
     .await
     .unwrap_or_default();
-    BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections)
+    Ok(displayed_detections)
+}
+
+async fn loaded_detections_command(
+    activity_history: ActivityHistory,
+    known_file_states: HashMap<i64, DetectedFileState>,
+    incident_request: IncidentRequest,
+) -> BackgroundDetectionsPageCommand {
+    match load_displayed_detections(activity_history, known_file_states).await {
+        Ok(displayed_detections) => BackgroundDetectionsPageCommand::DetectionsLoaded {
+            displayed_detections,
+            incident_request,
+        },
+        Err(listing_failure) => BackgroundDetectionsPageCommand::LoadingFailed(listing_failure),
+    }
 }
 
 async fn signature_lookup_state(signature_name: &str) -> SignatureLookupState {
     match read_api_key(ThreatIntelService::AbuseChService).await {
         Ok(ResolvedApiKey::NotConfigured) => SignatureLookupState::KeyMissing,
-        Err(key_failure) => SignatureLookupState::LookupFailed {
-            failure_text: describe_key_failure(&key_failure),
-        },
+        Err(key_failure) => SignatureLookupState::KeyUnreadable(key_failure),
         Ok(ResolvedApiKey::FromKeyFile(auth_key) | ResolvedApiKey::FromKeyring(auth_key)) => {
             match look_up_signature(&auth_key, signature_name).await {
                 Ok(signature_lookup) => SignatureLookupState::LookupFinished(signature_lookup),
-                Err(lookup_failure) => SignatureLookupState::LookupFailed {
-                    failure_text: lookup_failure.to_string(),
-                },
+                Err(lookup_failure) => SignatureLookupState::BazaarLookupFailed(lookup_failure),
             }
         }
     }
@@ -335,9 +341,13 @@ async fn delete_detected_file(file_path: PathBuf) -> Result<(), IncidentActionFa
 }
 
 impl BackgroundDetectionsPage {
-    fn start_reload(&self, sender: &ComponentSender<Self>) {
+    fn start_reload(&self, sender: &ComponentSender<Self>, incident_request: IncidentRequest) {
         let activity_history = self.activity_history.clone();
-        sender.oneshot_command(load_displayed_detections(activity_history, HashMap::new()));
+        sender.oneshot_command(loaded_detections_command(
+            activity_history,
+            HashMap::new(),
+            incident_request,
+        ));
     }
 
     fn refresh_after_sightings(
@@ -347,17 +357,17 @@ impl BackgroundDetectionsPage {
     ) {
         let activity_history = self.activity_history.clone();
         let known_file_states = file_states_to_keep(&self.displayed_detections, newly_opened);
-        sender.oneshot_command(load_displayed_detections(
+        sender.oneshot_command(loaded_detections_command(
             activity_history,
             known_file_states,
+            IncidentRequest::KeepShownIncident,
         ));
     }
 
-    fn shown_view_name(&self) -> &'static str {
-        if self.opened_detection().is_some() {
-            INCIDENT_VIEW_NAME
-        } else {
-            LIST_VIEW_NAME
+    const fn shown_view_name(&self) -> &'static str {
+        match self.incident_view {
+            IncidentView::DetectionList => LIST_VIEW_NAME,
+            IncidentView::IncidentOpen { .. } => INCIDENT_VIEW_NAME,
         }
     }
 
@@ -369,9 +379,7 @@ impl BackgroundDetectionsPage {
     }
 
     fn opened_detection(&self) -> Option<&DisplayedDetection> {
-        let OpenedIncident::IncidentOpen { detection_id } = self.opened_incident else {
-            return None;
-        };
+        let detection_id = self.incident_view.opened_detection_id()?;
         self.displayed_detections
             .iter()
             .find(|displayed_detection| {
@@ -412,18 +420,29 @@ impl BackgroundDetectionsPage {
             });
     }
 
-    fn show_opened_incident(&mut self) {
-        let Some(displayed_detection) = self.opened_detection().cloned() else {
-            self.opened_incident = OpenedIncident::NoIncidentOpen;
-            self.incident_rows.guard().clear();
-            return;
+    fn opened_incident_steps(&self) -> Vec<TimelineStep> {
+        let IncidentView::IncidentOpen {
+            deletion_prompt,
+            signature_lookup,
+            ..
+        } = &self.incident_view
+        else {
+            return Vec::new();
         };
-        let incident_steps = incident_timeline(
-            &displayed_detection,
-            self.deletion_prompt,
-            &self.lookup_state,
-            self.distribution_family,
-        );
+        self.opened_detection()
+            .map(|displayed_detection| {
+                incident_timeline(
+                    displayed_detection,
+                    *deletion_prompt,
+                    signature_lookup,
+                    self.distribution_family,
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    fn show_incident_view(&mut self) {
+        let incident_steps = self.opened_incident_steps();
         if self.incident_rows.len() == incident_steps.len() {
             incident_steps
                 .into_iter()
@@ -443,18 +462,13 @@ impl BackgroundDetectionsPage {
         }
     }
 
-    fn open_awaited_incident(&mut self) {
-        let AwaitedIncident::FileAwaited { file_path } = &self.awaited_incident else {
-            return;
-        };
-        if let Some(displayed_detection) = detection_for_file(&self.displayed_detections, file_path)
-        {
-            self.opened_incident = OpenedIncident::IncidentOpen {
-                detection_id: displayed_detection.stored_detection.detection_id,
-            };
-            self.deletion_prompt = DeletionPrompt::NotAsked;
-        }
-        self.awaited_incident = AwaitedIncident::NothingAwaited;
+    fn taken_incident_view(&mut self) -> IncidentView {
+        std::mem::take(&mut self.incident_view)
+    }
+
+    fn replace_incident_view(&mut self, next_view: IncidentView) {
+        self.incident_view = next_view.still_listed_in(&self.displayed_detections);
+        self.show_incident_view();
     }
 
     fn resolve_in_background(
@@ -507,25 +521,32 @@ impl BackgroundDetectionsPage {
         sender: &ComponentSender<Self>,
         resolving_action: ResolvingIncidentAction,
     ) {
-        self.deletion_prompt = DeletionPrompt::NotAsked;
+        let next_view = self
+            .taken_incident_view()
+            .with_deletion_prompt(DeletionPrompt::NotAsked);
+        self.replace_incident_view(next_view);
         if let Some(displayed_detection) = self.opened_detection().cloned() {
             self.resolve_in_background(sender, &displayed_detection, resolving_action);
         }
     }
 
     fn start_signature_lookup(&mut self, sender: &ComponentSender<Self>) {
-        let Some(signature_name) = self
+        let Some(stored_detection) = self
             .opened_detection()
-            .map(|displayed_detection| displayed_detection.stored_detection.signature_name.clone())
+            .map(|displayed_detection| displayed_detection.stored_detection.clone())
         else {
             return;
         };
-        self.lookup_state = SignatureLookupState::LookingUp;
-        self.show_opened_incident();
+        let detection_id = stored_detection.detection_id;
+        let next_view = self
+            .taken_incident_view()
+            .with_signature_lookup(detection_id, SignatureLookupState::LookingUp);
+        self.replace_incident_view(next_view);
         sender.oneshot_command(async move {
-            BackgroundDetectionsPageCommand::SignatureLookupFinished(
-                signature_lookup_state(&signature_name).await,
-            )
+            BackgroundDetectionsPageCommand::SignatureLookupFinished {
+                detection_id,
+                lookup_state: signature_lookup_state(&stored_detection.signature_name).await,
+            }
         });
     }
 
@@ -537,12 +558,16 @@ impl BackgroundDetectionsPage {
         match chosen_action {
             TimelineStepAction::LookUpIncidentSignature => self.start_signature_lookup(sender),
             TimelineStepAction::AskIncidentDeletion => {
-                self.deletion_prompt = DeletionPrompt::AwaitingAnswer;
-                self.show_opened_incident();
+                let next_view = self
+                    .taken_incident_view()
+                    .with_deletion_prompt(DeletionPrompt::AwaitingAnswer);
+                self.replace_incident_view(next_view);
             }
             TimelineStepAction::CancelIncidentDeletion => {
-                self.deletion_prompt = DeletionPrompt::NotAsked;
-                self.show_opened_incident();
+                let next_view = self
+                    .taken_incident_view()
+                    .with_deletion_prompt(DeletionPrompt::NotAsked);
+                self.replace_incident_view(next_view);
             }
             TimelineStepAction::QuarantineIncident => {
                 self.resolve_opened_incident(sender, ResolvingIncidentAction::QuarantineFile);
@@ -636,11 +661,8 @@ impl Component for BackgroundDetectionsPage {
             distribution_family: detect_distribution_family(),
             displayed_detections: Vec::new(),
             journal_access: JournalAccess::FollowingJournal,
-            opened_incident: OpenedIncident::NoIncidentOpen,
-            awaited_incident: AwaitedIncident::NothingAwaited,
+            incident_view: IncidentView::DetectionList,
             application_started: Timestamp::now(),
-            deletion_prompt: DeletionPrompt::NotAsked,
-            lookup_state: SignatureLookupState::NotLookedUp,
             first_load: FirstLoad::StillLoading,
             detection_list_rows: FactoryVecDeque::builder()
                 .launch(adw::PreferencesGroup::default())
@@ -664,7 +686,7 @@ impl Component for BackgroundDetectionsPage {
         let detection_list_group = model.detection_list_rows.widget();
         let incident_group = model.incident_rows.widget();
         let widgets = view_output!();
-        model.start_reload(&sender);
+        model.start_reload(&sender, IncidentRequest::KeepShownIncident);
         ComponentParts { model, widgets }
     }
 
@@ -675,21 +697,17 @@ impl Component for BackgroundDetectionsPage {
         root: &Self::Root,
     ) {
         match page_input {
-            BackgroundDetectionsPageInput::ReloadRequested => self.start_reload(&sender),
+            BackgroundDetectionsPageInput::ReloadRequested => {
+                self.start_reload(&sender, IncidentRequest::KeepShownIncident);
+            }
             BackgroundDetectionsPageInput::IncidentOpened(detection_id) => {
-                self.lookup_state = SignatureLookupState::NotLookedUp;
-                self.opened_incident = OpenedIncident::IncidentOpen { detection_id };
-                self.deletion_prompt = DeletionPrompt::NotAsked;
-                self.show_opened_incident();
+                self.replace_incident_view(IncidentView::freshly_opened(detection_id));
             }
             BackgroundDetectionsPageInput::IncidentRequestedForFile(file_path) => {
-                self.awaited_incident = AwaitedIncident::FileAwaited { file_path };
-                self.start_reload(&sender);
+                self.start_reload(&sender, IncidentRequest::OpenIncidentForFile { file_path });
             }
             BackgroundDetectionsPageInput::BackToListRequested => {
-                self.opened_incident = OpenedIncident::NoIncidentOpen;
-                self.deletion_prompt = DeletionPrompt::NotAsked;
-                self.incident_rows.guard().clear();
+                self.replace_incident_view(IncidentView::DetectionList);
             }
             BackgroundDetectionsPageInput::StepRequested(TimelineStepRowOutput::CopyRequested(
                 copied_text,
@@ -737,14 +755,17 @@ impl Component for BackgroundDetectionsPage {
                     .replace("{error}", &cursor_failure.to_string()),
                 ));
             }
-            BackgroundDetectionsPageCommand::DetectionsLoaded(displayed_detections) => {
+            BackgroundDetectionsPageCommand::DetectionsLoaded {
+                displayed_detections,
+                incident_request,
+            } => {
                 self.first_load = FirstLoad::LoadFinished;
                 self.displayed_detections = displayed_detections;
                 self.show_detection_list();
-                self.open_awaited_incident();
-                if self.opened_incident != OpenedIncident::NoIncidentOpen {
-                    self.show_opened_incident();
-                }
+                let next_view = self
+                    .taken_incident_view()
+                    .with_requested_incident(&self.displayed_detections, &incident_request);
+                self.replace_incident_view(next_view);
                 let _shell_closed =
                     sender.output(BackgroundDetectionsPageOutput::UnresolvedCountChanged(
                         unresolved_detection_count(&self.displayed_detections),
@@ -756,9 +777,14 @@ impl Component for BackgroundDetectionsPage {
                         .replace("{error}", &history_failure.to_string()),
                 ));
             }
-            BackgroundDetectionsPageCommand::SignatureLookupFinished(lookup_state) => {
-                self.lookup_state = lookup_state;
-                self.show_opened_incident();
+            BackgroundDetectionsPageCommand::SignatureLookupFinished {
+                detection_id,
+                lookup_state,
+            } => {
+                let next_view = self
+                    .taken_incident_view()
+                    .with_signature_lookup(detection_id, lookup_state);
+                self.replace_incident_view(next_view);
             }
             BackgroundDetectionsPageCommand::IncidentActionFinished {
                 file_path,
@@ -779,7 +805,7 @@ impl Component for BackgroundDetectionsPage {
                         ));
                     }
                 }
-                self.start_reload(&sender);
+                self.start_reload(&sender, IncidentRequest::KeepShownIncident);
             }
         }
     }

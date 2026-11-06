@@ -11,7 +11,10 @@ use crate::{
         detection_journal::detection_history_store::{
             DetectionSources, DetectionState, ResolutionKind, StoredDetection,
         },
-        threat_intel::malware_bazaar_client::KnownSampleLookup,
+        threat_intel::{
+            malware_bazaar_client::{KnownSampleLookup, MalwareBazaarFailure},
+            service_key_storage::{KeyStorageFailure, describe_key_failure},
+        },
     },
     shared_widgets::step_timeline::timeline_step_contents::{
         StepActionSlot, StepChoiceRow, StepEvidenceRow, StepNodeState, TimelineStep,
@@ -28,13 +31,14 @@ pub struct DisplayedDetection {
     pub file_state: DetectedFileState,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum SignatureLookupState {
     NotLookedUp,
     LookingUp,
     KeyMissing,
+    KeyUnreadable(KeyStorageFailure),
     LookupFinished(KnownSampleLookup),
-    LookupFailed { failure_text: String },
+    BazaarLookupFailed(MalwareBazaarFailure),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -269,6 +273,22 @@ fn false_positive_snippet(
     }
 }
 
+fn describe_bazaar_lookup_failure(bazaar_failure: &MalwareBazaarFailure) -> String {
+    match bazaar_failure {
+        MalwareBazaarFailure::RequestFailed(request_failure) => {
+            gettext("MalwareBazaar could not be reached: {error}")
+                .replace("{error}", &request_failure.to_string())
+        }
+        MalwareBazaarFailure::AnswerUnreadable => {
+            gettext("MalwareBazaar sent an answer that could not be read")
+        }
+        MalwareBazaarFailure::KeyRefused => gettext("MalwareBazaar refused the API key"),
+        MalwareBazaarFailure::QueryRefused { query_status } => {
+            gettext("MalwareBazaar answered: {status}").replace("{status}", query_status)
+        }
+    }
+}
+
 fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
     match lookup_state {
         SignatureLookupState::NotLookedUp => None,
@@ -276,9 +296,12 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
         SignatureLookupState::KeyMissing => Some(gettext(
             "Add your abuse.ch key in Preferences to look up detections.",
         )),
-        SignatureLookupState::LookupFailed { failure_text } => {
-            Some(sanitize_scanner_line(failure_text))
+        SignatureLookupState::KeyUnreadable(key_failure) => {
+            Some(sanitize_scanner_line(&describe_key_failure(key_failure)))
         }
+        SignatureLookupState::BazaarLookupFailed(bazaar_failure) => Some(sanitize_scanner_line(
+            &describe_bazaar_lookup_failure(bazaar_failure),
+        )),
         SignatureLookupState::LookupFinished(KnownSampleLookup::NoKnownSamples) => {
             Some(gettext("No known samples match this signature."))
         }
