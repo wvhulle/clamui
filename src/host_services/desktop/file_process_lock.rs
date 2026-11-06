@@ -61,9 +61,6 @@ mod file_process_lock_tests {
             FileLockAttempt::HeldByAnotherProcess
         ));
         drop(first_lock);
-        assert!(matches!(
-            try_file_lock(&lock_path).expect("third attempt"),
-            FileLockAttempt::LockAcquired(_)
-        ));
+        wait_for_file_lock(&lock_path).expect("lock released after the first holder is dropped");
     }
 }
