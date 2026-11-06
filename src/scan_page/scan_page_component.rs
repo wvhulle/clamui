@@ -3,11 +3,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use futures::{
-    StreamExt,
-    future::{AbortHandle, ready},
-    stream,
-};
+use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmWidgetExt,
@@ -72,7 +68,10 @@ use crate::{
         },
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
     },
-    shared_widgets::file_dialog_requests::{request_files_to_open, request_folder_to_open},
+    shared_widgets::{
+        component_streams::{RunningStream, run_stream_then},
+        file_dialog_requests::{request_files_to_open, request_folder_to_open},
+    },
 };
 
 const PROGRESS_BATCH_SIZE: usize = 256;
@@ -87,8 +86,8 @@ enum DisplayedScanPhase {
 
 enum ScanPageState {
     WaitingForTargets,
-    ScanInProgress { scan_abort_handle: AbortHandle },
-    ScanCancelling,
+    ScanInProgress { scan_stream: RunningStream },
+    ScanCancelling { _scan_stream: RunningStream },
     ScanCancelled,
     ScanCompleted,
 }
@@ -226,7 +225,7 @@ impl ScanPage {
     fn scan_is_running(&self) -> bool {
         matches!(
             self.scan_page_state,
-            ScanPageState::ScanInProgress { .. } | ScanPageState::ScanCancelling
+            ScanPageState::ScanInProgress { .. } | ScanPageState::ScanCancelling { .. }
         )
     }
 
@@ -288,7 +287,7 @@ impl ScanPage {
                     )
                 )
             }
-            ScanPageState::ScanInProgress { .. } | ScanPageState::ScanCancelling => {
+            ScanPageState::ScanInProgress { .. } | ScanPageState::ScanCancelling { .. } => {
                 self.scan_status_title()
             }
             ScanPageState::ScanCancelled | ScanPageState::ScanCompleted => String::new(),
@@ -309,7 +308,7 @@ impl ScanPage {
                 )
                 .replace("{count}", &several_targets.len().to_string()),
             },
-            ScanPageState::ScanCancelling => gettext("Cancelling…"),
+            ScanPageState::ScanCancelling { .. } => gettext("Cancelling…"),
             ScanPageState::ScanCancelled => gettext("Scan cancelled by user"),
             ScanPageState::ScanCompleted if self.scan_outcome.threats_were_found() => {
                 gettext("Threats found")
@@ -509,23 +508,15 @@ impl ScanPage {
             }
         })
         .flat_map(scan_progress_events);
-        let (abortable_events, scan_abort_handle) = stream::abortable(scan_events);
-        self.scan_page_state = ScanPageState::ScanInProgress { scan_abort_handle };
-        sender.command(move |command_output, shutdown| {
-            shutdown
-                .register(async move {
-                    abortable_events
-                        .ready_chunks(PROGRESS_BATCH_SIZE)
-                        .for_each(|progress_batch| {
-                            command_output
-                                .emit(ScanPageCommand::ProgressBatchArrived(progress_batch));
-                            ready(())
-                        })
-                        .await;
-                    command_output.emit(ScanPageCommand::ScanStreamFinished);
-                })
-                .drop_on_shutdown()
-        });
+        self.scan_page_state = ScanPageState::ScanInProgress {
+            scan_stream: run_stream_then(
+                sender,
+                scan_events
+                    .ready_chunks(PROGRESS_BATCH_SIZE)
+                    .map(ScanPageCommand::ProgressBatchArrived),
+                ScanPageCommand::ScanStreamFinished,
+            ),
+        };
     }
 
     fn absorb_progress_batch(&mut self, progress_batch: Vec<ScanProgressEvent>) {
@@ -1068,10 +1059,18 @@ impl Component for ScanPage {
                 }
             }
             ScanPageInput::CancelScanRequested => {
-                if let ScanPageState::ScanInProgress { scan_abort_handle } = &self.scan_page_state {
-                    scan_abort_handle.abort();
-                    self.scan_page_state = ScanPageState::ScanCancelling;
-                }
+                self.scan_page_state = match std::mem::replace(
+                    &mut self.scan_page_state,
+                    ScanPageState::WaitingForTargets,
+                ) {
+                    ScanPageState::ScanInProgress { scan_stream } => {
+                        scan_stream.stop();
+                        ScanPageState::ScanCancelling {
+                            _scan_stream: scan_stream,
+                        }
+                    }
+                    unchanged_state => unchanged_state,
+                };
             }
             ScanPageInput::NewScanRequested => {
                 if self.shows_results() {
@@ -1128,7 +1127,7 @@ impl Component for ScanPage {
             }
             ScanPageCommand::ScanStreamFinished => {
                 self.scan_page_state = match &self.scan_page_state {
-                    ScanPageState::ScanCancelling => ScanPageState::ScanCancelled,
+                    ScanPageState::ScanCancelling { .. } => ScanPageState::ScanCancelled,
                     _other_state => ScanPageState::ScanCompleted,
                 };
                 self.show_scan_results();

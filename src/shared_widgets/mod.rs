@@ -1,4 +1,5 @@
 pub mod audit_sections;
+pub mod component_streams;
 pub mod engine_settings;
 pub mod false_positive_report_dialog;
 pub mod file_dialog_requests;
@@ -6,4 +7,3 @@ pub mod loading_indicators;
 pub mod page_widget_templates;
 pub mod step_timeline;
 pub mod trust_confirmation_dialog;
-pub mod uninterrupted_commands;

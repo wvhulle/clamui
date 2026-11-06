@@ -1,10 +1,4 @@
-use std::time::Duration;
-
-use futures::{
-    StreamExt,
-    future::{AbortHandle, ready},
-    stream,
-};
+use futures::StreamExt;
 use gettextrs::gettext;
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
@@ -24,16 +18,15 @@ use crate::{
         activity_export_formats::{
             activity_detail_text, activity_entries_as_csv, activity_entries_as_json,
         },
-        daemon_log_reader::{DaemonLogContents, read_daemon_log},
+        daemon_log_reader::{DaemonLogContents, daemon_log_updates, read_daemon_log},
         system_change_row::SystemChangeRow,
     },
     shared_widgets::{
+        component_streams::{RunningStream, run_stream},
         file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
         loading_indicators::{FirstLoad, loading_placeholder_stack},
     },
 };
-
-const LIVE_REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
 enum SelectedEntryView {
     NoEntrySelected,
@@ -42,7 +35,7 @@ enum SelectedEntryView {
 
 enum DaemonLogRefresh {
     ManualRefresh,
-    LiveRefresh { refresh_abort_handle: AbortHandle },
+    LiveRefresh { _live_refresh: RunningStream },
 }
 
 const SYSTEM_CHANGE_LIMIT: usize = 200;
@@ -117,24 +110,12 @@ impl ActivityLogsPage {
     }
 
     fn start_live_refresh(&mut self, sender: &ComponentSender<Self>) {
-        let (periodic_reads, refresh_abort_handle) = stream::abortable(
-            stream::unfold((), |()| async {
-                tokio::time::sleep(LIVE_REFRESH_INTERVAL).await;
-                Some((read_daemon_log().await, ()))
-            })
-            .boxed(),
-        );
         self.daemon_log_refresh = DaemonLogRefresh::LiveRefresh {
-            refresh_abort_handle,
+            _live_refresh: run_stream(
+                sender,
+                daemon_log_updates().map(ActivityLogsPageCommand::DaemonLogRead),
+            ),
         };
-        sender.command(move |command_output, shutdown| {
-            shutdown
-                .register(periodic_reads.for_each(move |daemon_log| {
-                    command_output.emit(ActivityLogsPageCommand::DaemonLogRead(daemon_log));
-                    ready(())
-                }))
-                .drop_on_shutdown()
-        });
     }
 
     fn export_text(
@@ -627,10 +608,7 @@ impl Component for ActivityLogsPage {
             }
             ActivityLogsPageInput::LiveDaemonLogToggled => match &self.daemon_log_refresh {
                 DaemonLogRefresh::ManualRefresh => self.start_live_refresh(&sender),
-                DaemonLogRefresh::LiveRefresh {
-                    refresh_abort_handle,
-                } => {
-                    refresh_abort_handle.abort();
+                DaemonLogRefresh::LiveRefresh { .. } => {
                     self.daemon_log_refresh = DaemonLogRefresh::ManualRefresh;
                 }
             },

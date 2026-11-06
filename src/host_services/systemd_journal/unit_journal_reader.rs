@@ -95,6 +95,30 @@ pub fn unit_messages_since(
     Ok(unit_messages)
 }
 
+fn followed_unit_journal(service_units: &[&str]) -> systemd::Result<Journal> {
+    let mut journal = open_system_journal()?;
+    add_unit_matches(&mut journal, service_units)?;
+    journal.seek_tail()?;
+    journal.previous()?;
+    Ok(journal)
+}
+
+fn next_unit_append(journal: &mut Journal) -> systemd::Result<()> {
+    loop {
+        if journal.next()? > 0 {
+            while journal.next()? > 0 {}
+            return Ok(());
+        }
+        journal.wait(None)?;
+    }
+}
+
+pub fn appended_unit_entries(service_units: &[&str]) -> impl Iterator<Item = ()> + use<> {
+    followed_unit_journal(service_units)
+        .into_iter()
+        .flat_map(|mut journal| std::iter::from_fn(move || next_unit_append(&mut journal).ok()))
+}
+
 #[cfg(test)]
 mod unit_journal_reader_tests {
     use super::*;

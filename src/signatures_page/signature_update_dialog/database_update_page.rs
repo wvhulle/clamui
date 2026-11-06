@@ -1,10 +1,6 @@
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use futures::{
-    StreamExt,
-    future::{AbortHandle, ready},
-    stream,
-};
+use futures::StreamExt;
 use gettextrs::{gettext, ngettext};
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
@@ -29,6 +25,7 @@ use crate::{
         },
         desktop::desktop_notifications::notify_outside_the_window,
     },
+    shared_widgets::component_streams::{RunningStream, run_stream_then},
     signatures_page::signature_update_dialog::{
         database_update_events::{
             DatabaseUpdateEvent, DatabaseUpdatePlan, database_update_events, plan_database_update,
@@ -61,9 +58,11 @@ enum DatabaseUpdateState {
     NoActiveUpdate,
     UpdateRunning {
         update_plan: DatabaseUpdatePlan,
-        update_abort_handle: AbortHandle,
+        update_stream: RunningStream,
     },
-    CancellingUpdate,
+    CancellingUpdate {
+        _update_stream: RunningStream,
+    },
 }
 
 pub struct DatabaseUpdatePage {
@@ -386,32 +385,23 @@ impl DatabaseUpdatePage {
         self.transcript_changed = true;
         self.update_summary.clear();
         self.observed_exit = ObservedUpdateExit::ExitNotObserved;
-        let (abortable_events, update_abort_handle) =
-            stream::abortable(database_update_events(update_plan));
         self.update_state = DatabaseUpdateState::UpdateRunning {
             update_plan,
-            update_abort_handle,
+            update_stream: run_stream_then(
+                sender,
+                database_update_events(update_plan)
+                    .ready_chunks(UPDATE_BATCH_SIZE)
+                    .map(DatabaseUpdatePageCommand::UpdateBatchArrived),
+                DatabaseUpdatePageCommand::UpdateStreamFinished,
+            ),
         };
-        sender.command(move |command_output, shutdown| {
-            shutdown
-                .register(async move {
-                    abortable_events
-                        .ready_chunks(UPDATE_BATCH_SIZE)
-                        .for_each(|update_batch| {
-                            command_output
-                                .emit(DatabaseUpdatePageCommand::UpdateBatchArrived(update_batch));
-                            ready(())
-                        })
-                        .await;
-                    command_output.emit(DatabaseUpdatePageCommand::UpdateStreamFinished);
-                })
-                .drop_on_shutdown()
-        });
     }
 
     fn finished_update_status(&self) -> ActivityStatus {
         match (&self.update_state, &self.observed_exit) {
-            (DatabaseUpdateState::CancellingUpdate, _any_exit) => ActivityStatus::UpdateCancelled,
+            (DatabaseUpdateState::CancellingUpdate { .. }, _any_exit) => {
+                ActivityStatus::UpdateCancelled
+            }
             (
                 _any_state,
                 ObservedUpdateExit::NeverStarted(_) | ObservedUpdateExit::ExitNotObserved,
@@ -458,7 +448,7 @@ impl DatabaseUpdatePage {
 
     fn finished_update_summary(&self) -> String {
         match (&self.update_state, &self.observed_exit) {
-            (DatabaseUpdateState::CancellingUpdate, _any_exit) => {
+            (DatabaseUpdateState::CancellingUpdate { .. }, _any_exit) => {
                 gettext("Database update cancelled")
             }
             (_any_state, ObservedUpdateExit::NeverStarted(start_failure)) => {
@@ -638,14 +628,18 @@ impl Component for DatabaseUpdatePage {
                 }
             }
             DatabaseUpdatePageInput::UpdateCancelRequested => {
-                if let DatabaseUpdateState::UpdateRunning {
-                    update_abort_handle,
-                    ..
-                } = &self.update_state
-                {
-                    update_abort_handle.abort();
-                    self.update_state = DatabaseUpdateState::CancellingUpdate;
-                }
+                self.update_state = match std::mem::replace(
+                    &mut self.update_state,
+                    DatabaseUpdateState::NoActiveUpdate,
+                ) {
+                    DatabaseUpdateState::UpdateRunning { update_stream, .. } => {
+                        update_stream.stop();
+                        DatabaseUpdateState::CancellingUpdate {
+                            _update_stream: update_stream,
+                        }
+                    }
+                    unchanged_state => unchanged_state,
+                };
             }
         }
     }

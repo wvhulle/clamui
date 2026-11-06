@@ -4,15 +4,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use futures::{Stream, StreamExt};
+use inotify::{Inotify, WatchMask};
 use tokio::task::spawn_blocking;
 
 use crate::host_services::{
+    blocking_iterator_stream::blocking_iterator_stream,
     clamav_scanner::scanner_output_parser::sanitize_scanner_text,
     desktop::flatpak_sandbox::readable_host_path,
-    systemd_journal::unit_journal_reader::newest_unit_messages,
+    systemd_journal::unit_journal_reader::{appended_unit_entries, newest_unit_messages},
 };
 
 const SHOWN_LINE_COUNT: usize = 100;
+const DAEMON_LOG_WATCH_THREAD: &str = "daemon-log-watch";
+const CHANGE_BURST_SIZE: usize = 64;
+const INOTIFY_BUFFER_SIZE: usize = 4096;
 const LOG_TAIL_BYTES: u64 = 256 * 1024;
 const DEFAULT_LOG_PATHS: [&str; 2] = ["/var/log/clamav/clamd.log", "/var/log/clamd.log"];
 const CLAMD_CONFIG_PATHS: [&str; 3] = [
@@ -67,16 +73,71 @@ fn read_log_tail(log_path: &Path) -> Option<String> {
     )))
 }
 
-fn read_configured_log_file() -> Option<DaemonLogContents> {
+fn readable_log_file() -> Option<PathBuf> {
     let configured_paths = CLAMD_CONFIG_PATHS
         .iter()
         .filter_map(|config_path| fs::read_to_string(readable_host_path(config_path)).ok())
         .filter_map(|config_text| log_path_in_config(&config_text));
     let default_paths = DEFAULT_LOG_PATHS.iter().map(PathBuf::from);
-    configured_paths.chain(default_paths).find_map(|log_path| {
-        read_log_tail(&log_path)
-            .map(|log_text| DaemonLogContents::FromLogFile { log_path, log_text })
+    configured_paths
+        .chain(default_paths)
+        .find(|log_path| fs::File::open(log_path).is_ok())
+}
+
+fn read_configured_log_file() -> Option<DaemonLogContents> {
+    let log_path = readable_log_file()?;
+    read_log_tail(&log_path).map(|log_text| DaemonLogContents::FromLogFile { log_path, log_text })
+}
+
+fn log_file_changes(log_path: &Path) -> impl Iterator<Item = ()> + use<> {
+    let watched_name = log_path.file_name().map(ToOwned::to_owned);
+    let watching_inotify = log_path.parent().and_then(|log_directory| {
+        let inotify = Inotify::init().ok()?;
+        inotify
+            .watches()
+            .add(
+                log_directory,
+                WatchMask::MODIFY
+                    | WatchMask::CLOSE_WRITE
+                    | WatchMask::CREATE
+                    | WatchMask::MOVED_TO
+                    | WatchMask::DELETE,
+            )
+            .ok()?;
+        Some(inotify)
+    });
+    watching_inotify.into_iter().flat_map(move |mut inotify| {
+        let watched_name = watched_name.clone();
+        let mut event_buffer = vec![0; INOTIFY_BUFFER_SIZE];
+        std::iter::from_fn(move || {
+            loop {
+                let log_file_changed = inotify
+                    .read_events_blocking(&mut event_buffer)
+                    .ok()?
+                    .any(|directory_event| directory_event.name == watched_name.as_deref());
+                if log_file_changed {
+                    return Some(());
+                }
+            }
+        })
     })
+}
+
+fn daemon_log_changes() -> Box<dyn Iterator<Item = ()>> {
+    match readable_log_file() {
+        Some(log_path) => Box::new(log_file_changes(&log_path)),
+        None => Box::new(appended_unit_entries(&DAEMON_SERVICE_UNITS)),
+    }
+}
+
+pub fn daemon_log_updates() -> impl Stream<Item = DaemonLogContents> + Send + 'static {
+    blocking_iterator_stream(
+        DAEMON_LOG_WATCH_THREAD,
+        daemon_log_changes,
+        |_spawn_failure| (),
+    )
+    .ready_chunks(CHANGE_BURST_SIZE)
+    .then(|_change_burst| read_daemon_log())
 }
 
 async fn read_system_journal() -> Option<DaemonLogContents> {
@@ -109,6 +170,25 @@ pub async fn read_daemon_log() -> DaemonLogContents {
 #[cfg(test)]
 mod daemon_log_reader_tests {
     use super::*;
+
+    #[test]
+    fn appending_to_the_log_file_is_reported_and_other_files_are_not() {
+        let log_directory = tempfile::tempdir().expect("log directory");
+        let log_path = log_directory.path().join("clamd.log");
+        fs::write(&log_path, b"started\n").expect("log file");
+        let mut log_changes = log_file_changes(&log_path);
+        fs::write(log_directory.path().join("freshclam.log"), b"other\n").expect("other log");
+        let appended_log = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            fs::OpenOptions::new()
+                .append(true)
+                .open(&log_path)
+                .and_then(|mut log_file| std::io::Write::write_all(&mut log_file, b"found\n"))
+                .expect("appended line");
+        });
+        assert_eq!(log_changes.next(), Some(()));
+        appended_log.join().expect("appending thread");
+    }
 
     #[test]
     fn log_file_setting_is_found_and_commented_settings_are_ignored() {

@@ -40,6 +40,7 @@ use crate::{
         },
     },
     shared_widgets::{
+        component_streams::run_stream_to_completion,
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         file_dialog_requests::{TextExportOutcome, describe_export_failure, request_text_export},
         trust_confirmation_dialog::present_trust_confirmation,
@@ -199,27 +200,24 @@ impl ScanResultsSection {
             .collect::<Vec<_>>();
         let quarantine_vault = self.quarantine_vault.clone();
         let results_generation = self.results_generation;
-        sender.command(move |command_sender, _moves_are_never_aborted| async move {
-            stream::iter(pending_moves)
-                .for_each(|pending_move| {
-                    let quarantine_vault = quarantine_vault.clone();
-                    let command_sender = command_sender.clone();
-                    async move {
-                        let move_outcome = quarantine_vault
+        run_stream_to_completion(
+            sender,
+            stream::iter(pending_moves).then(move |pending_move| {
+                let quarantine_vault = quarantine_vault.clone();
+                async move {
+                    ScanResultsSectionCommand::ThreatQuarantineFinished {
+                        results_generation,
+                        move_outcome: quarantine_vault
                             .move_file_into_quarantine(
                                 &pending_move.detected_threat.file_path,
                                 &pending_move.detected_threat.threat_name,
                             )
-                            .await;
-                        command_sender.emit(ScanResultsSectionCommand::ThreatQuarantineFinished {
-                            results_generation,
-                            row_index: pending_move.row_index,
-                            move_outcome,
-                        });
+                            .await,
+                        row_index: pending_move.row_index,
                     }
-                })
-                .await;
-        });
+                }
+            }),
+        );
     }
 
     fn show_results(&mut self, results_view: ScanResultsView) {

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::PathBuf};
 
-use futures::StreamExt;
+use futures::{Stream, StreamExt, stream};
 use gettextrs::gettext;
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
@@ -18,9 +18,9 @@ use crate::{
         },
         detection_list_row::{DetectionListRow, DetectionListRowOutput},
         detections_view_state::{
-            AwaitedIncident, OpenedIncident, current_unix_seconds, detection_for_file,
-            detections_needing_attention_first, file_state_for_detection, file_states_to_keep,
-            split_journal_batch, unresolved_detection_count,
+            AwaitedIncident, JournalBatch, OpenedIncident, current_unix_seconds,
+            detection_for_file, detections_needing_attention_first, file_state_for_detection,
+            file_states_to_keep, split_journal_batch, unresolved_detection_count,
         },
         incident_timeline_presentation::{
             DeletionPrompt, DisplayedDetection, SignatureLookupState, displayed_file_name,
@@ -50,6 +50,7 @@ use crate::{
     },
     quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     shared_widgets::{
+        component_streams::{RunningStream, run_stream},
         loading_indicators::FirstLoad,
         step_timeline::{
             timeline_step_contents::{TimelineStepAction, TimelineStepRowOutput},
@@ -77,6 +78,7 @@ pub struct BackgroundDetectionsPage {
     detection_list_rows: FactoryVecDeque<DetectionListRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow>,
     toaster: Toaster,
+    _journal_follow: RunningStream,
 }
 
 pub struct BackgroundDetectionsPageInit {
@@ -129,11 +131,10 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .build()
 }
 
-async fn follow_detection_journal(
-    activity_history: ActivityHistory,
-    command_sender: relm4::Sender<BackgroundDetectionsPageCommand>,
-) {
-    let (start_position, journal_replay) = match activity_history.saved_journal_cursor().await {
+async fn journal_start_point(
+    activity_history: &ActivityHistory,
+) -> (JournalStartPosition, JournalReplay) {
+    match activity_history.saved_journal_cursor().await {
         Ok(Some(journal_cursor)) => (
             JournalStartPosition::AfterCursor { journal_cursor },
             JournalReplay::AfterSavedCursor,
@@ -142,39 +143,61 @@ async fn follow_detection_journal(
             JournalStartPosition::FromOldestEntry,
             JournalReplay::FirstImport,
         ),
-    };
-    let mut event_batches =
-        Box::pin(detection_journal_events(start_position).ready_chunks(JOURNAL_BATCH_SIZE));
-    while let Some(journal_events) = event_batches.next().await {
-        let journal_batch = split_journal_batch(journal_events);
-        journal_batch
-            .access_changes
-            .into_iter()
-            .for_each(|access_change| {
-                command_sender.emit(BackgroundDetectionsPageCommand::JournalAccessChanged(
-                    access_change,
-                ));
-            });
-        if journal_batch.detection_records.is_empty() {
-            continue;
-        }
-        match activity_history
-            .record_detection_batch(&journal_batch.detection_records, &journal_batch.last_cursor)
-            .await
-        {
-            Ok(newly_opened) => {
-                command_sender.emit(BackgroundDetectionsPageCommand::DetectionsRecorded {
+    }
+}
+
+async fn recorded_batch_commands(
+    activity_history: ActivityHistory,
+    journal_batch: JournalBatch,
+    journal_replay: JournalReplay,
+) -> Vec<BackgroundDetectionsPageCommand> {
+    let access_commands = journal_batch
+        .access_changes
+        .into_iter()
+        .map(BackgroundDetectionsPageCommand::JournalAccessChanged);
+    let recording_command = if journal_batch.detection_records.is_empty() {
+        None
+    } else {
+        Some(
+            match activity_history
+                .record_detection_batch(
+                    &journal_batch.detection_records,
+                    &journal_batch.last_cursor,
+                )
+                .await
+            {
+                Ok(newly_opened) => BackgroundDetectionsPageCommand::DetectionsRecorded {
                     newly_opened,
                     journal_replay,
-                });
-            }
-            Err(recording_failure) => {
-                command_sender.emit(BackgroundDetectionsPageCommand::LoadingFailed(
-                    recording_failure.to_string(),
-                ));
-            }
-        }
-    }
+                },
+                Err(recording_failure) => {
+                    BackgroundDetectionsPageCommand::LoadingFailed(recording_failure.to_string())
+                }
+            },
+        )
+    };
+    access_commands.chain(recording_command).collect()
+}
+
+fn recorded_detection_updates(
+    activity_history: ActivityHistory,
+) -> impl Stream<Item = BackgroundDetectionsPageCommand> + Send + 'static {
+    let start_history = activity_history.clone();
+    stream::once(async move { journal_start_point(&start_history).await }).flat_map(
+        move |(start_position, journal_replay)| {
+            let recording_history = activity_history.clone();
+            detection_journal_events(start_position)
+                .ready_chunks(JOURNAL_BATCH_SIZE)
+                .then(move |journal_events| {
+                    recorded_batch_commands(
+                        recording_history.clone(),
+                        split_journal_batch(journal_events),
+                        journal_replay,
+                    )
+                })
+                .flat_map(stream::iter)
+        },
+    )
 }
 
 pub async fn load_displayed_detections(
@@ -556,16 +579,14 @@ impl Component for BackgroundDetectionsPage {
                     BackgroundDetectionsPageInput::StepRequested,
                 ),
             toaster: Toaster::new(&root),
+            _journal_follow: run_stream(
+                &sender,
+                recorded_detection_updates(page_init.activity_history),
+            ),
         };
         let detection_list_group = model.detection_list_rows.widget();
         let incident_group = model.incident_rows.widget();
         let widgets = view_output!();
-        let followed_history = page_init.activity_history;
-        sender.command(|command_sender, shutdown_receiver| {
-            shutdown_receiver
-                .register(follow_detection_journal(followed_history, command_sender))
-                .drop_on_shutdown()
-        });
         model.start_reload(&sender);
         ComponentParts { model, widgets }
     }

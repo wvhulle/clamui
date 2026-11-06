@@ -29,6 +29,7 @@ use crate::{
         protection_timeline_presentation::{AlertReadiness, protection_timeline},
     },
     shared_widgets::{
+        component_streams::{RunningStream, run_stream},
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
             busy_page_name, loading_status_page,
@@ -59,6 +60,7 @@ pub struct ProtectionTimelinePage {
     unresolved_detections: usize,
     journal_access: JournalAccess,
     gathered_evidence: GatheredEvidence,
+    _unit_watch: RunningStream,
 }
 
 enum GatheredEvidence {
@@ -345,21 +347,16 @@ impl Component for ProtectionTimelinePage {
             unresolved_detections: 0,
             journal_access: JournalAccess::FollowingJournal,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
+            _unit_watch: run_stream(
+                &sender,
+                watched_unit_changes(&WATCHED_SERVICE_UNITS)
+                    .map(|()| ProtectionTimelinePageCommand::WatchedUnitChanged),
+            ),
         };
         let timeline_group = model.timeline_rows.widget().clone();
         let timeline_group = &timeline_group;
         let protection_loading_page = &loading_status_page(&gettext("Checking your protection…"));
         let widgets = view_output!();
-        sender.command(|command_sender, shutdown_receiver| {
-            shutdown_receiver
-                .register(async move {
-                    let mut unit_changes = Box::pin(watched_unit_changes(&WATCHED_SERVICE_UNITS));
-                    while unit_changes.next().await.is_some() {
-                        command_sender.emit(ProtectionTimelinePageCommand::WatchedUnitChanged);
-                    }
-                })
-                .drop_on_shutdown()
-        });
         model.start_evidence_refresh(&sender);
         ComponentParts { model, widgets }
     }
