@@ -1,0 +1,17 @@
+[Unit]
+Description=Lazaret settings helper
+Requires=lazaret-settings-merge.service
+After=lazaret-settings-merge.service
+
+[Service]
+Type=dbus
+BusName=page.codeberg.wvhulle.Lazaret.SettingsHelper
+ExecStart=@HELPER_PATH@ serve
+StateDirectory=lazaret
+RuntimeDirectory=lazaret
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/var/lib/lazaret /run/lazaret
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict

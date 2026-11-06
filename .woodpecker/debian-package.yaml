@@ -1,0 +1,72 @@
+when:
+  - repo: wvhulle/lazaret
+    event: release
+  - repo: wvhulle/lazaret
+    event: pull_request
+    path:
+      - .woodpecker/debian-package.yaml
+      - xtask/src/**
+      - nix/ci-tools.nix
+      - nix/system-outputs.nix
+      - flake.nix
+      - flake.lock
+      - Makefile
+      - data/**
+      - Cargo.lock
+      - rust-toolchain.toml
+
+labels:
+  host: ryzen
+
+variables:
+  - &nix_download_environment
+    XDG_CACHE_HOME: /woodpecker/nix-cache
+    NIX_CONFIG: |
+      experimental-features = nix-command flakes
+      extra-substituters = https://wvhulle.cachix.org
+      extra-trusted-public-keys = wvhulle.cachix.org-1:heXx8DZMiRsKUx6l1TxNoF+Nmtmz66QEdsonQzc1ir0=
+
+steps:
+  - name: prepare-ci-tools
+    image: nixos/nix:latest
+    environment: *nix_download_environment
+    commands:
+      - nix run --quiet .#prepare-ci-tools
+
+  - name: build-debian-package
+    image: debian:trixie
+    commands:
+      - .ci-tools/xtask ci-build-debian-package
+
+  - name: install-on-debian
+    image: debian:trixie
+    commands:
+      - .ci-tools/xtask check-debian-package-install
+
+  - name: install-on-ubuntu
+    image: ubuntu:26.04
+    commands:
+      - .ci-tools/xtask check-debian-package-install
+
+  - name: download-tools
+    image: nixos/nix:latest
+    when:
+      - event: release
+    environment: *nix_download_environment
+    commands:
+      - nix run --quiet .#download-tools -- file:///woodpecker/nix-binary-cache .#upload-release-assets
+
+  - name: attach-to-release
+    image: nixos/nix:latest
+    when:
+      - event: release
+    environment:
+      XDG_CACHE_HOME: /woodpecker/nix-cache
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+        substituters = file:///woodpecker/nix-binary-cache
+        require-sigs = false
+      CODEBERG_TOKEN:
+        from_secret: bot_token
+    commands:
+      - nix run --quiet .#upload-release-assets -- dist

@@ -93,6 +93,16 @@ mod merged_clamd_config_tests {
     }
 
     #[test]
+    fn without_overrides_the_merged_config_equals_the_base_config() {
+        let base_config = "LocalSocket /run/clamav/clamd.ctl\n# comment\n\nMaxThreads 12\n";
+        assert_eq!(merge_clamd_config(base_config, "", &[]), base_config);
+        assert_eq!(
+            merge_clamd_config(base_config, "MaxThreads 4\n", &[]),
+            base_config
+        );
+    }
+
+    #[test]
     fn overrides_replace_every_base_value_of_their_key() {
         let merged_config = merge_clamd_config(
             BASE_CONFIG,

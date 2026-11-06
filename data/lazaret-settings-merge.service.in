@@ -1,0 +1,11 @@
+[Unit]
+Description=Merge runtime changes into the clamd configuration
+Before=clamav-daemon.service clamav-clamonacc.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+StateDirectory=lazaret
+RuntimeDirectory=lazaret
+RuntimeDirectoryPreserve=yes
+ExecStart=@HELPER_PATH@ merge

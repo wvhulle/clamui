@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>page.codeberg.wvhulle.Lazaret</id>
+  <name>Lazaret</name>
+  <summary>Scan files and quarantine malware with the ClamAV on your system</summary>
+  <developer id="page.codeberg.wvhulle">
+    <name>Willem Vanhulle</name>
+  </developer>
+  <url type="homepage">https://codeberg.org/wvhulle/lazaret</url>
+  <url type="bugtracker">https://codeberg.org/wvhulle/lazaret/issues</url>
+  <url type="vcs-browser">https://codeberg.org/wvhulle/lazaret</url>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <content_rating type="oars-1.1" />
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <description>
+    <p>
+      Lazaret is a desktop front-end for the ClamAV that is already installed on your system. It does not bundle a virus scanner of its own.
+    </p>
+    <ul>
+      <li>Scan files and folders through clamd, or with clamscan when clamd is not running</li>
+      <li>Move detected files into a quarantine and restore them later</li>
+      <li>Look up the reputation of a quarantined file by its hash</li>
+      <li>See whether on-access scanning and signature updates are working</li>
+      <li>Get an alert when the ClamAV services in the background detect something</li>
+      <li>Schedule scans with systemd timers</li>
+    </ul>
+  </description>
+  <releases>
+    <release version="0.1.0" date="2026-11-06" type="stable">
+      <description>
+        <p>See the changelog of this release on Codeberg.</p>
+      </description>
+      <url>https://codeberg.org/wvhulle/lazaret/releases</url>
+    </release>
+  </releases>
+  <launchable type="desktop-id">page.codeberg.wvhulle.Lazaret.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan.png</image>
+      <caption>Scan results with a detected test file</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/protection.png</image>
+      <caption>Protection status of the ClamAV services</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/quarantine.png</image>
+      <caption>Quarantined files</caption>
+    </screenshot>
+  </screenshots>
+</component>
