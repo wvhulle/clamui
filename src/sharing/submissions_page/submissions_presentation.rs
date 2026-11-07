@@ -28,8 +28,8 @@ use crate::{
     },
     sharing::submissions_page::{
         submissions_state::{
-            CandidateListing, ProgressFilter, SendAvailability, ServiceFilter, SubmissionListing,
-            offered_target_activities, send_availability,
+            CandidateListing, ProgressFilter, SendAvailability, ServiceFilter, SubmissionFilters,
+            SubmissionListing, offered_target_activities, send_availability,
         },
         uploads_in_flight::UploadsInFlight,
     },
@@ -238,6 +238,22 @@ pub fn progress_filter_label(progress_filter: ProgressFilter) -> String {
         ProgressFilter::OnlyProgress(SubmissionProgress::AwaitingOutcome) => gettext("Waiting"),
         ProgressFilter::OnlyProgress(SubmissionProgress::OutcomeKnown) => gettext("Settled"),
         ProgressFilter::OnlyProgress(SubmissionProgress::RefusedByService) => gettext("Refused"),
+    }
+}
+
+pub fn filter_summary_text(submission_filters: &SubmissionFilters) -> String {
+    match (
+        submission_filters.service_filter,
+        submission_filters.progress_filter,
+    ) {
+        (ServiceFilter::AllServices, ProgressFilter::AllProgress) => gettext("All submissions"),
+        (ServiceFilter::AllServices, progress_filter) => progress_filter_label(progress_filter),
+        (service_filter, ProgressFilter::AllProgress) => service_filter_label(service_filter),
+        (service_filter, progress_filter) => format!(
+            "{} · {}",
+            service_filter_label(service_filter),
+            progress_filter_label(progress_filter)
+        ),
     }
 }
 

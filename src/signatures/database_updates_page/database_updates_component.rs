@@ -33,7 +33,8 @@ use crate::{
         },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME,
-            LOADING_PAGE_NAME, busy_page_name, loading_placeholder_stack, loading_status_page,
+            LOADING_PAGE_NAME, busy_page_name, empty_placeholder_row, loading_placeholder_stack,
+            loading_status_page,
         },
         step_timeline::{
             step_evidence_builders::MomentContext,
@@ -282,12 +283,13 @@ impl Component for DatabaseUpdatesPage {
                                 #[wrap(Some)]
                                 #[local_ref]
                                 set_placeholder = history_placeholder -> gtk::Stack {
-                                    add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
-                                        add_css_class: "compact",
-                                        set_icon_name: Some("dialog-error-symbolic"),
+                                    add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::ActionRow {
                                         set_title: &gettext("Historical logs can't be read"),
+                                        set_use_markup: false,
+                                        set_subtitle_lines: 0,
+                                        add_css_class: "dim-label",
                                         #[watch]
-                                        set_description: Some(&gtk::glib::markup_escape_text(&model.history_failure_text())),
+                                        set_subtitle: &model.history_failure_text(),
                                     },
                                     #[watch]
                                     set_visible_child_name: model.update_history.placeholder_page_name(),
@@ -344,11 +346,7 @@ impl Component for DatabaseUpdatesPage {
         let history_list = model.history_rows.widget();
         let history_placeholder = &loading_placeholder_stack(
             &gettext("Loading history…"),
-            &adw::StatusPage::builder()
-                .css_classes(["compact"])
-                .icon_name("software-update-available-symbolic")
-                .title(gettext("No updates were started from Lazaret yet"))
-                .build(),
+            &empty_placeholder_row(&gettext("No updates were started from Lazaret yet")),
         );
         let status_loading_page = &loading_status_page(&gettext("Checking the signatures…"));
         let widgets = view_output!();

@@ -4,7 +4,13 @@ use futures::stream;
 use gettextrs::gettext;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller,
-    abstractions::Toaster, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    abstractions::Toaster,
+    actions::{RelmAction, RelmActionGroup},
+    adw,
+    adw::prelude::*,
+    gtk,
+    gtk::{gio, glib::variant::ToVariant},
+    prelude::FactoryVecDeque,
 };
 
 use crate::{
@@ -40,7 +46,9 @@ use crate::{
     shared_widgets::{
         awaited_dialogs::{ChosenSubmissionFile, chosen_file_to_submit, deliver_local_outcome},
         component_streams::{RunningStream, run_stream},
-        loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
+        loading_indicators::{
+            BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name, empty_placeholder_row,
+        },
         submission_confirm_dialog::{
             ClamavReportProposal, SampleUploadProposal, UploadService,
             present_clamav_report_confirmation, present_sample_upload_confirmation,
@@ -54,7 +62,7 @@ use crate::{
         service_key_section::{ServiceKeySection, ServiceKeySectionOutput},
         submission_target_dialog::{ChosenTarget, TargetChoiceRequest, present_target_choice},
         submissions_presentation::{
-            candidate_row_view, empty_candidates_text, empty_submissions_text,
+            candidate_row_view, empty_candidates_text, empty_submissions_text, filter_summary_text,
             progress_filter_label, refresh_summary_text, service_filter_label, submitted_row_view,
         },
         submissions_state::{
@@ -147,8 +155,88 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .build()
 }
 
-fn choice_labels(choice_labels: Vec<String>) -> gtk::StringList {
-    gtk::StringList::new(&choice_labels.iter().map(String::as_str).collect::<Vec<_>>())
+relm4::new_action_group!(SubmissionFilterActionGroup, "submissions");
+relm4::new_stateful_action!(
+    ServiceFilterAction,
+    SubmissionFilterActionGroup,
+    "service-filter",
+    u32,
+    u32
+);
+relm4::new_stateful_action!(
+    ProgressFilterAction,
+    SubmissionFilterActionGroup,
+    "progress-filter",
+    u32,
+    u32
+);
+
+fn filter_choice_section(action_name: &str, choice_labels: Vec<String>) -> gio::Menu {
+    let choice_section = gio::Menu::new();
+    (0_u32..)
+        .zip(choice_labels)
+        .for_each(|(choice_position, choice_label)| {
+            let choice_item = gio::MenuItem::new(Some(&choice_label), None);
+            choice_item.set_action_and_target_value(
+                Some(action_name),
+                Some(&choice_position.to_variant()),
+            );
+            choice_section.append_item(&choice_item);
+        });
+    choice_section
+}
+
+fn submission_filter_menu() -> gio::Menu {
+    let filter_menu = gio::Menu::new();
+    filter_menu.append_section(
+        Some(&gettext("Service")),
+        &filter_choice_section(
+            "submissions.service-filter",
+            SERVICE_FILTER_CHOICES.map(service_filter_label).to_vec(),
+        ),
+    );
+    filter_menu.append_section(
+        Some(&gettext("Status")),
+        &filter_choice_section(
+            "submissions.progress-filter",
+            PROGRESS_FILTER_CHOICES.map(progress_filter_label).to_vec(),
+        ),
+    );
+    filter_menu
+}
+
+fn register_filter_actions(
+    page_root: &adw::ToastOverlay,
+    sender: &ComponentSender<SubmissionsPage>,
+) {
+    let mut filter_actions = RelmActionGroup::<SubmissionFilterActionGroup>::new();
+    let service_sender = sender.clone();
+    filter_actions.add_action(
+        RelmAction::<ServiceFilterAction>::new_stateful_with_target_value(
+            &choice_position(
+                &SERVICE_FILTER_CHOICES,
+                &SubmissionFilters::SHOW_EVERYTHING.service_filter,
+            ),
+            move |_action, chosen_state, chosen_position| {
+                *chosen_state = chosen_position;
+                service_sender.input(SubmissionsPageInput::ServiceFilterChosen(chosen_position));
+            },
+        ),
+    );
+    let progress_sender = sender.clone();
+    filter_actions.add_action(
+        RelmAction::<ProgressFilterAction>::new_stateful_with_target_value(
+            &choice_position(
+                &PROGRESS_FILTER_CHOICES,
+                &SubmissionFilters::SHOW_EVERYTHING.progress_filter,
+            ),
+            move |_action, chosen_state, chosen_position| {
+                *chosen_state = chosen_position;
+                progress_sender.input(SubmissionsPageInput::ProgressFilterChosen(chosen_position));
+            },
+        ),
+    );
+    filter_actions.register_for_widget(page_root);
 }
 
 fn shown_path(entry_record: &QuarantineEntryRecord) -> String {
@@ -199,14 +287,6 @@ impl SubmissionsPage {
                     &self.uploads_in_flight,
                 ));
             });
-    }
-
-    fn submitted_rows_shown(&self) -> bool {
-        !self.submitted_rows.is_empty()
-    }
-
-    fn candidate_rows_shown(&self) -> bool {
-        !self.candidate_rows.is_empty()
     }
 
     const fn remote_refresh_running(&self) -> bool {
@@ -474,106 +554,60 @@ impl Component for SubmissionsPage {
                 #[wrap(Some)]
                 set_content = &adw::PreferencesPage {
                     add = &adw::PreferencesGroup {
-                        set_title: &gettext("Submitted"),
+                        set_title: &gettext("Send a File"),
                         set_description: Some(&gettext(
-                            "Everything Lazaret sent to ClamAV, MalwareBazaar or VirusTotal, and \
-                             what became of it. ClamAV reports settle after signature updates; \
-                             refresh asks the other services on request.",
+                            "Nothing leaves this computer until you confirm what is sent.",
                         )),
-
-                        adw::ComboRow {
-                            set_title: &gettext("Service"),
-                            set_model: Some(&choice_labels(
-                                SERVICE_FILTER_CHOICES.map(service_filter_label).to_vec(),
+                        #[wrap(Some)]
+                        set_header_suffix = &gtk::Button {
+                            set_label: &gettext("Report Missed Malware…"),
+                            set_tooltip_text: Some(&gettext(
+                                "Send ClamAV a malicious file it doesn't detect",
                             )),
-                            #[watch]
-                            #[block_signal(service_filter_handler)]
-                            set_selected: choice_position(
-                                &SERVICE_FILTER_CHOICES,
-                                &model.submission_filters.service_filter,
-                            ),
-                            connect_selected_notify[sender] => move |changed_row| {
-                                sender.input(SubmissionsPageInput::ServiceFilterChosen(changed_row.selected()));
-                            } @service_filter_handler,
-                        },
-
-                        adw::ComboRow {
-                            set_title: &gettext("Status"),
-                            set_model: Some(&choice_labels(
-                                PROGRESS_FILTER_CHOICES.map(progress_filter_label).to_vec(),
-                            )),
-                            #[watch]
-                            #[block_signal(progress_filter_handler)]
-                            set_selected: choice_position(
-                                &PROGRESS_FILTER_CHOICES,
-                                &model.submission_filters.progress_filter,
-                            ),
-                            connect_selected_notify[sender] => move |changed_row| {
-                                sender.input(SubmissionsPageInput::ProgressFilterChosen(changed_row.selected()));
-                            } @progress_filter_handler,
-                        },
-                    },
-
-                    add = &adw::PreferencesGroup {
-                        adw::StatusPage {
-                            add_css_class: "compact",
-                            set_icon_name: Some("document-send-symbolic"),
-                            #[watch]
-                            set_visible: !model.submitted_rows_shown(),
-                            #[watch]
-                            set_title: &empty_submissions_text(&model.submission_listing),
-                        },
-
-                        #[local_ref]
-                        submitted_list -> gtk::ListBox {
-                            add_css_class: "boxed-list",
-                            set_selection_mode: gtk::SelectionMode::None,
-                            #[watch]
-                            set_visible: model.submitted_rows_shown(),
-                        },
-                    },
-
-                    add = &adw::PreferencesGroup {
-                        set_title: &gettext("New Submission"),
-                        set_description: Some(&gettext(
-                            "Send a quarantined file, or report a file ClamAV misses. Every \
-                             submission shows exactly what is sent before anything leaves this \
-                             computer.",
-                        )),
-
-                        adw::ActionRow {
-                            set_title: &gettext("Report Missed Malware"),
-                            set_subtitle: &gettext(
-                                "Pick a malicious file ClamAV doesn't detect. Lazaret reads it \
-                                 without following links and sends it to ClamAV with clamsubmit.",
-                            ),
-                            set_subtitle_lines: 0,
-                            add_suffix = &gtk::Button {
-                                set_label: &gettext("Choose File…"),
-                                set_valign: gtk::Align::Center,
-                                connect_clicked => SubmissionsPageInput::MissedMalwareReportRequested,
-                            },
-                        },
-                    },
-
-                    add = &adw::PreferencesGroup {
-                        set_title: &gettext("Quarantined Files"),
-
-                        adw::StatusPage {
-                            add_css_class: "compact",
-                            set_icon_name: Some("folder-symbolic"),
-                            #[watch]
-                            set_visible: !model.candidate_rows_shown(),
-                            #[watch]
-                            set_title: &empty_candidates_text(&model.candidate_listing),
+                            set_valign: gtk::Align::Center,
+                            add_css_class: "flat",
+                            connect_clicked => SubmissionsPageInput::MissedMalwareReportRequested,
                         },
 
                         #[local_ref]
                         candidate_list -> gtk::ListBox {
                             add_css_class: "boxed-list",
                             set_selection_mode: gtk::SelectionMode::None,
+                            #[wrap(Some)]
+                            #[local_ref]
+                            set_placeholder = candidate_placeholder -> adw::ActionRow {
+                                #[watch]
+                                set_title: &empty_candidates_text(&model.candidate_listing),
+                            },
+                        },
+                    },
+
+                    add = &adw::PreferencesGroup {
+                        set_title: &gettext("Submitted"),
+                        set_description: Some(&gettext("What Lazaret sent and what became of it.")),
+                        #[wrap(Some)]
+                        set_header_suffix = &gtk::MenuButton {
+                            set_menu_model: Some(&submission_filter_menu()),
+                            set_always_show_arrow: true,
+                            set_valign: gtk::Align::Center,
+                            set_tooltip_text: Some(&gettext("Filter Submissions")),
+                            add_css_class: "flat",
                             #[watch]
-                            set_visible: model.candidate_rows_shown(),
+                            set_label: &filter_summary_text(&model.submission_filters),
+                            #[watch]
+                            set_visible: model.submission_listing.has_submissions(),
+                        },
+
+                        #[local_ref]
+                        submitted_list -> gtk::ListBox {
+                            add_css_class: "boxed-list",
+                            set_selection_mode: gtk::SelectionMode::None,
+                            #[wrap(Some)]
+                            #[local_ref]
+                            set_placeholder = submitted_placeholder -> adw::ActionRow {
+                                #[watch]
+                                set_title: &empty_submissions_text(&model.submission_listing),
+                            },
                         },
                     },
 
@@ -651,6 +685,11 @@ impl Component for SubmissionsPage {
         model.reload_candidates(&sender);
         let submitted_list = model.submitted_rows.widget();
         let candidate_list = model.candidate_rows.widget();
+        let submitted_placeholder =
+            &empty_placeholder_row(&empty_submissions_text(&model.submission_listing));
+        let candidate_placeholder =
+            &empty_placeholder_row(&empty_candidates_text(&model.candidate_listing));
+        register_filter_actions(&root, &sender);
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }

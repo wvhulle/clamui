@@ -9,7 +9,9 @@ use crate::{
         settings_helper::helper_audit_records::HelperAuditEntry,
     },
     shared_widgets::{
-        loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
+        loading_indicators::{
+            LOAD_FAILED_PAGE_NAME, empty_placeholder_row, loading_placeholder_stack,
+        },
         system_changes::{
             system_change_row::SystemChangeRow,
             system_changes_state::{
@@ -97,14 +99,13 @@ impl Component for SystemChangesGroup {
                 #[wrap(Some)]
                 #[local_ref]
                 set_placeholder = system_change_placeholder -> gtk::Stack {
-                    add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
-                        add_css_class: "compact",
-                        set_icon_name: Some("dialog-error-symbolic"),
+                    add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::ActionRow {
                         set_title: &gettext("System changes can't be read"),
+                        set_use_markup: false,
+                        set_subtitle_lines: 0,
+                        add_css_class: "dim-label",
                         #[watch]
-                        set_description: Some(&gtk::glib::markup_escape_text(
-                            &system_changes_failure_text(&model.system_changes_view),
-                        )),
+                        set_subtitle: &system_changes_failure_text(&model.system_changes_view),
                     },
                     #[watch]
                     set_visible_child_name: model.system_changes_view.placeholder_page_name(),
@@ -128,11 +129,7 @@ impl Component for SystemChangesGroup {
         let system_change_list = model.system_change_rows.widget();
         let system_change_placeholder = &loading_placeholder_stack(
             &gettext("Loading system changes…"),
-            &adw::StatusPage::builder()
-                .css_classes(["compact"])
-                .icon_name("changes-prevent-symbolic")
-                .title(group_init.empty_title.as_str())
-                .build(),
+            &empty_placeholder_row(&group_init.empty_title),
         );
         let widgets = view_output!();
         Self::reload_system_changes(&sender);

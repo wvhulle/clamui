@@ -51,7 +51,9 @@ use crate::{
             deliver_local_outcome,
         },
         component_streams::{run_stream, run_stream_to_completion},
-        loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
+        loading_indicators::{
+            LOAD_FAILED_PAGE_NAME, empty_placeholder_row, loading_placeholder_stack,
+        },
         page_widget_templates::ClampedPage,
         quarantine_failure_text::describe_quarantine_failure,
         scanner_exit_text::abnormal_scanner_exit_text,
@@ -728,12 +730,13 @@ impl Component for QuarantineEntriesPage {
                             #[wrap(Some)]
                             #[local_ref]
                             set_placeholder = placeholder_stack -> gtk::Stack {
-                                add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
-                                    add_css_class: "compact",
-                                    set_icon_name: Some("dialog-error-symbolic"),
+                                add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::ActionRow {
                                     set_title: &gettext("Quarantine can't be read"),
+                                    set_use_markup: false,
+                                    set_subtitle_lines: 0,
+                                    add_css_class: "dim-label",
                                     #[watch]
-                                    set_description: Some(&gtk::glib::markup_escape_text(&model.listing_failure_text())),
+                                    set_subtitle: &model.listing_failure_text(),
                                 },
                                 #[watch]
                                 set_visible_child_name: model.page_state.listing().placeholder_page_name(),
@@ -801,12 +804,7 @@ impl Component for QuarantineEntriesPage {
         let entry_list = model.entry_rows.widget();
         let placeholder_stack = &loading_placeholder_stack(
             &gettext("Loading quarantine…"),
-            &adw::StatusPage::builder()
-                .css_classes(["compact"])
-                .icon_name("security-high-symbolic")
-                .title(gettext("Quarantine is empty"))
-                .description(gettext("Threats you quarantine will appear here"))
-                .build(),
+            &empty_placeholder_row(&gettext("Quarantine is empty")),
         );
         let widgets = view_output!();
         ComponentParts { model, widgets }

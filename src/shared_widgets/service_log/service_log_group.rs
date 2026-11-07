@@ -9,7 +9,9 @@ use crate::{
             TextExportOutcome, deliver_local_outcome, describe_export_failure, exported_text,
         },
         component_streams::{RunningStream, run_stream},
-        loading_indicators::{LOADED_PAGE_NAME, LOADING_PAGE_NAME, loading_status_page},
+        loading_indicators::{
+            LOADED_PAGE_NAME, LOADING_PAGE_NAME, empty_placeholder_row, loading_placeholder_row,
+        },
         service_log::service_log_state::{MISSING_LOG_PAGE_NAME, ServiceLogView},
     },
 };
@@ -88,12 +90,15 @@ impl Component for ServiceLogGroup {
             },
 
             gtk::Stack {
-                #[local_ref]
-                add_named[Some(LOADING_PAGE_NAME)] = log_loading_page -> adw::StatusPage {},
-                add_named[Some(MISSING_LOG_PAGE_NAME)] = &adw::StatusPage {
-                    add_css_class: "compact",
-                    set_icon_name: Some("document-open-recent-symbolic"),
-                    set_title: &missing_log_title,
+                add_named[Some(LOADING_PAGE_NAME)] = &gtk::ListBox {
+                    add_css_class: "boxed-list",
+                    set_selection_mode: gtk::SelectionMode::None,
+                    append: &loading_placeholder_row(&gettext("Reading the log…")),
+                },
+                add_named[Some(MISSING_LOG_PAGE_NAME)] = &gtk::ListBox {
+                    add_css_class: "boxed-list",
+                    set_selection_mode: gtk::SelectionMode::None,
+                    append: &empty_placeholder_row(&missing_log_title),
                 },
                 add_named[Some(LOADED_PAGE_NAME)] = &gtk::ScrolledWindow {
                     set_min_content_height: 240,
@@ -142,7 +147,6 @@ impl Component for ServiceLogGroup {
                 log_updates.map(ServiceLogGroupCommand::LogContentsRead),
             ),
         };
-        let log_loading_page = &loading_status_page(&gettext("Reading the log…"));
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }

@@ -50,6 +50,10 @@ impl SubmissionListing {
         }
     }
 
+    pub fn has_submissions(&self) -> bool {
+        !self.listed_submissions().is_empty()
+    }
+
     pub fn submission_tally(&self) -> SubmissionTally {
         match self {
             Self::ListingLoading => SubmissionTally::TallyLoading,
