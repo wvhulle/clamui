@@ -4,12 +4,18 @@ use crate::{
     host_services::{
         activity_history::{
             activity_history_database::ActivityHistoryFailure,
-            submission_history_store::SubmissionRecord,
+            submission_history_store::{BazaarSampleStatus, SubmissionRecord, SubmissionState},
         },
         clamav_programs::clamav_report_submission::clamsubmit_failure_text,
+        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{byte_size_text, exact_local_time_text},
         sample_submissions::{
-            clamav_report_flow::ClamavReportAttempt, submission_samples::SampleReadFailure,
+            bazaar_sample_upload::BazaarUploadAttempt, clamav_report_flow::ClamavReportAttempt,
+            submission_samples::SampleReadFailure,
+        },
+        threat_intel::{
+            file_reputation_check::describe_bazaar_failure,
+            service_key_storage::describe_key_failure,
         },
     },
     shared_widgets::quarantine_failure_text::describe_quarantine_failure,
@@ -69,6 +75,54 @@ pub fn clamav_report_attempt_text(report_attempt: &ClamavReportAttempt) -> Strin
         }
         ClamavReportAttempt::ReportSentWithoutRecord(history_failure) => {
             gettext("Report sent, but it could not be added to Submissions: {error}")
+                .replace("{error}", &history_failure.to_string())
+        }
+    }
+}
+
+fn upload_not_sent(failure_reason: &str) -> String {
+    gettext("Nothing was uploaded: {error}").replace("{error}", failure_reason)
+}
+
+pub fn bazaar_upload_attempt_text(upload_attempt: &BazaarUploadAttempt) -> String {
+    match upload_attempt {
+        BazaarUploadAttempt::SubmissionRecorded(SubmissionRecord {
+            submission_state:
+                SubmissionState::MalwareBazaarSample {
+                    bazaar_status: BazaarSampleStatus::SubmissionRefused { refusal_reason },
+                },
+            ..
+        }) => gettext("MalwareBazaar refused the sample: {reason}")
+            .replace("{reason}", &sanitize_scanner_line(refusal_reason)),
+        BazaarUploadAttempt::SubmissionRecorded(_recorded_submission) => {
+            gettext("MalwareBazaar has the sample. Submissions links to its public entry.")
+        }
+        BazaarUploadAttempt::AlreadySubmitted(earlier_submission) => {
+            earlier_submission_text(earlier_submission)
+        }
+        BazaarUploadAttempt::KeyMissing => upload_not_sent(&gettext(
+            "add an abuse.ch key on the Submissions page first",
+        )),
+        BazaarUploadAttempt::KeyUnreadable(key_failure) => {
+            upload_not_sent(&describe_key_failure(key_failure))
+        }
+        BazaarUploadAttempt::SampleUnreadable(read_failure) => {
+            upload_not_sent(&sample_read_failure_text(read_failure))
+        }
+        BazaarUploadAttempt::NotDetectedByClamav => upload_not_sent(&gettext(
+            "MalwareBazaar only takes files a ClamAV signature detected",
+        )),
+        BazaarUploadAttempt::UnwantedProgramOnly => upload_not_sent(&gettext(
+            "MalwareBazaar doesn't take potentially unwanted programs, only malware",
+        )),
+        BazaarUploadAttempt::BazaarUnavailable(bazaar_failure) => {
+            upload_not_sent(&describe_bazaar_failure(bazaar_failure))
+        }
+        BazaarUploadAttempt::HistoryUnavailable(history_failure) => {
+            upload_not_sent(&history_failure_text(history_failure))
+        }
+        BazaarUploadAttempt::SentWithoutRecord(history_failure) => {
+            gettext("Uploaded, but it could not be added to Submissions: {error}")
                 .replace("{error}", &history_failure.to_string())
         }
     }

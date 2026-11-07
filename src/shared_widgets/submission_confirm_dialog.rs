@@ -2,9 +2,12 @@ use gettextrs::gettext;
 use relm4::{Sender, adw, adw::prelude::*, gtk};
 
 use crate::{
-    host_services::clamav_programs::clamav_report_submission::{
-        ClamavReport, ClamavReportKind, ClamavReportRequest, ReporterContact, SubmittedContent,
-        contact_is_complete,
+    host_services::{
+        clamav_programs::clamav_report_submission::{
+            ClamavReport, ClamavReportKind, ClamavReportRequest, ReporterContact, SubmittedContent,
+            contact_is_complete,
+        },
+        threat_intel::malware_bazaar_client::bazaar_signature_tag,
     },
     shared_widgets::awaited_dialogs::{
         AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice, deliver_local_outcome,
@@ -37,8 +40,22 @@ pub struct ClamavReportProposal {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UploadService {
+    MalwareBazaarUpload { signature_name: String },
+    VirusTotalUpload,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SampleUploadProposal {
+    pub upload_service: UploadService,
+    pub entry_id: i64,
+    pub shown_path: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SubmissionProposal {
     ClamavReportProposed(ClamavReportProposal),
+    SampleUploadProposed(SampleUploadProposal),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -115,6 +132,51 @@ pub fn confirmation_text(submission_proposal: &SubmissionProposal) -> Confirmati
                 confirm_label: gettext("Send Report"),
             }
         }
+        SubmissionProposal::SampleUploadProposed(upload_proposal) => {
+            sample_upload_text(upload_proposal)
+        }
+    }
+}
+
+fn sample_upload_text(upload_proposal: &SampleUploadProposal) -> ConfirmationText {
+    let hashed_content = gettext("The file's content, named by its SHA-256 hash, not by its name");
+    match &upload_proposal.upload_service {
+        UploadService::MalwareBazaarUpload { signature_name } => ConfirmationText {
+            heading: gettext("Upload to MalwareBazaar?"),
+            body_text: assembled_body(
+                gettext("Lazaret uploads this file to MalwareBazaar, run by abuse.ch."),
+                &[
+                    hashed_content,
+                    gettext("The tag {tag}, from ClamAV's detection")
+                        .replace("{tag}", &bazaar_signature_tag(signature_name)),
+                    gettext("Your abuse.ch key; the sample is listed without your account name"),
+                ],
+                gettext(
+                    "MalwareBazaar is public: anyone can download the sample once it is uploaded, \
+                     and an upload can't be taken back. Only upload malware, never a document \
+                     that could hold personal data.",
+                ),
+                &upload_proposal.shown_path,
+            ),
+            confirm_label: gettext("Upload Publicly"),
+        },
+        UploadService::VirusTotalUpload => ConfirmationText {
+            heading: gettext("Upload to VirusTotal?"),
+            body_text: assembled_body(
+                gettext("Lazaret uploads this file to VirusTotal for analysis."),
+                &[
+                    hashed_content,
+                    gettext("Your VirusTotal key, which links the upload to your account"),
+                ],
+                gettext(
+                    "VirusTotal shares uploaded files with its paying customers, who can download \
+                     them, and anyone can look up the result by the file's hash. Never upload a \
+                     document that could hold personal data.",
+                ),
+                &upload_proposal.shown_path,
+            ),
+            confirm_label: gettext("Upload"),
+        },
     }
 }
 
@@ -193,6 +255,29 @@ pub fn present_clamav_report_confirmation<Message: 'static>(
     );
 }
 
+pub fn present_sample_upload_confirmation<Message: 'static>(
+    parent_widget: &impl IsA<gtk::Widget>,
+    upload_proposal: SampleUploadProposal,
+    message_sender: Sender<Message>,
+    confirmed_message: fn(SampleUploadProposal) -> Message,
+) {
+    let upload_dialog = confirmation_dialog(&confirmation_text(
+        &SubmissionProposal::SampleUploadProposed(upload_proposal.clone()),
+    ));
+    upload_dialog.set_response_appearance(
+        SubmissionDialogChoice::SendChosen.response_id(),
+        adw::ResponseAppearance::Destructive,
+    );
+    deliver_local_outcome(
+        message_sender,
+        alert_choice(upload_dialog, parent_widget.clone().upcast()),
+        move |upload_choice| match upload_choice {
+            SubmissionDialogChoice::SendChosen => Some(confirmed_message(upload_proposal)),
+            SubmissionDialogChoice::SendingCancelled => None,
+        },
+    );
+}
+
 #[cfg(test)]
 mod submission_confirm_dialog_tests {
     use std::path::PathBuf;
@@ -226,6 +311,40 @@ mod submission_confirm_dialog_tests {
         assert!(false_positive_text.body_text.contains("never made public"));
         assert!(false_positive_text.body_text.contains("at least 48 hours"));
         assert!(false_positive_text.body_text.contains("email address"));
+    }
+
+    fn upload_proposal(upload_service: UploadService) -> SubmissionProposal {
+        SubmissionProposal::SampleUploadProposed(SampleUploadProposal {
+            upload_service,
+            entry_id: 7,
+            shown_path: "/home/alex/Downloads/invoice.exe".to_owned(),
+        })
+    }
+
+    #[test]
+    fn a_malware_bazaar_upload_says_the_sample_becomes_public() {
+        let bazaar_text = confirmation_text(&upload_proposal(UploadService::MalwareBazaarUpload {
+            signature_name: "Win.Test.EICAR_HDB-1".to_owned(),
+        }));
+        assert!(bazaar_text.heading.contains("MalwareBazaar"));
+        assert!(
+            bazaar_text
+                .body_text
+                .contains("/home/alex/Downloads/invoice.exe")
+        );
+        assert!(bazaar_text.body_text.contains("public"));
+        assert!(bazaar_text.body_text.contains("anyone can download"));
+        assert!(bazaar_text.body_text.contains("Win.Test.EICAR-HDB-1"));
+        assert!(!bazaar_text.body_text.contains("Cisco Talos"));
+    }
+
+    #[test]
+    fn a_virustotal_upload_says_paying_customers_get_the_file() {
+        let virustotal_text = confirmation_text(&upload_proposal(UploadService::VirusTotalUpload));
+        assert!(virustotal_text.heading.contains("VirusTotal"));
+        assert!(virustotal_text.body_text.contains("invoice.exe"));
+        assert!(virustotal_text.body_text.contains("paying customers"));
+        assert!(!virustotal_text.body_text.contains("never made public"));
     }
 
     #[test]

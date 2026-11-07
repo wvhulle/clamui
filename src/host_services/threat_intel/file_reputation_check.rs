@@ -160,7 +160,7 @@ pub fn describe_virustotal_report(report_lookup: &FileReportLookup) -> SourceAns
     }
 }
 
-fn describe_virustotal_failure(virustotal_failure: &VirusTotalFailure) -> String {
+pub fn describe_virustotal_failure(virustotal_failure: &VirusTotalFailure) -> String {
     match virustotal_failure {
         VirusTotalFailure::ApiKeyRejected => gettext("VirusTotal rejected the API key."),
         VirusTotalFailure::RequestLimitReached => {
@@ -196,7 +196,7 @@ fn describe_circl_failure(circl_failure: &CirclLookupFailure) -> String {
     }
 }
 
-fn describe_bazaar_failure(bazaar_failure: &MalwareBazaarFailure) -> String {
+pub fn describe_bazaar_failure(bazaar_failure: &MalwareBazaarFailure) -> String {
     match bazaar_failure {
         MalwareBazaarFailure::RequestFailed(request_failure) => {
             gettext("MalwareBazaar could not be reached: {error}")
