@@ -43,8 +43,10 @@ with subtest("repeated scanner lines become one detection with the real signatur
     wait_for_stored_detection(BLOCKED_FILE)
     detection = stored_detection(BLOCKED_FILE).split("|")
     assert detection[0].startswith("Win.Fixture.Agent-1"), detection
-    assert detection[1] == "1", f"not recorded as on-access: {detection}"
-    assert detection[4] == "", f"should be unresolved: {detection}"
+    assert detection[1] in ("on_access", "on_access_and_scheduled_scan"), (
+        f"not recorded as on-access: {detection}"
+    )
+    assert detection[3] == "", f"should be unresolved: {detection}"
 
 with subtest("refreshing does not feed back into the journal"):
     assert_lines_stay_at(ON_ACCESS_UNIT, BLOCKED_FILE, settle_seconds=8)
@@ -65,7 +67,7 @@ with subtest("quarantining from the timeline clears the blocked file"):
     machine.screenshot("incident_after_quarantine")
     wait_as_user(
         f"sqlite3 -readonly {HISTORY_DATABASE} "
-        "\"select resolution from background_detections\" | grep -q quarantined"
+        "\"select resolution_kind from detection_resolutions\" | grep -q quarantined"
     )
     wait_for_tray_status("Active")
     quarantined = as_user(

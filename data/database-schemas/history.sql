@@ -46,19 +46,29 @@ CREATE TABLE IF NOT EXISTS scan_threat_counts (
         REFERENCES scan_inspections (entry_id, activity_status) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS background_detections (
-    detection_id INTEGER PRIMARY KEY,
     file_path BLOB NOT NULL,
     signature_name TEXT NOT NULL,
-    found_on_access INTEGER NOT NULL,
-    found_by_schedule INTEGER NOT NULL,
+    detection_id INTEGER NOT NULL UNIQUE,
+    detection_sources TEXT NOT NULL CHECK (detection_sources IN (
+        'on_access', 'scheduled_scan', 'on_access_and_scheduled_scan'
+    )),
     first_seen_unix INTEGER NOT NULL,
-    last_seen_unix INTEGER NOT NULL,
-    sighting_count INTEGER NOT NULL,
-    resolution TEXT NOT NULL,
-    resolved_at_unix INTEGER NOT NULL
+    last_seen_unix INTEGER NOT NULL CHECK (last_seen_unix >= first_seen_unix),
+    sighting_count INTEGER NOT NULL CHECK (sighting_count > 0),
+    PRIMARY KEY (file_path, signature_name)
+);
+CREATE TABLE IF NOT EXISTS detection_resolutions (
+    file_path BLOB NOT NULL,
+    signature_name TEXT NOT NULL,
+    resolution_kind TEXT NOT NULL
+        CHECK (resolution_kind IN ('quarantined', 'deleted', 'dismissed')),
+    resolved_at_unix INTEGER NOT NULL,
+    PRIMARY KEY (file_path, signature_name),
+    FOREIGN KEY (file_path, signature_name)
+        REFERENCES background_detections (file_path, signature_name) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS detection_journal_position (
-    position_row INTEGER PRIMARY KEY,
+    position_row INTEGER PRIMARY KEY CHECK (position_row = 1),
     journal_cursor TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS submissions (

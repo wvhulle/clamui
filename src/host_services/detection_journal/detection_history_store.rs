@@ -1,7 +1,7 @@
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf};
 
 use jiff::{SignedDuration, Timestamp};
-use turso::{Connection, Row, Value};
+use turso::{Connection, Row, transaction::TransactionBehavior};
 
 use crate::host_services::{
     activity_history::activity_history_database::{ActivityHistory, ActivityHistoryFailure},
@@ -9,12 +9,18 @@ use crate::host_services::{
 };
 
 const REOPEN_GRACE: SignedDuration = SignedDuration::from_secs(10);
-const DETECTION_COLUMNS: &str = "detection_id, file_path, signature_name, found_on_access,
-                                 found_by_schedule, first_seen_unix, last_seen_unix,
-                                 sighting_count, resolution, resolved_at_unix";
+const DETECTION_QUERY: &str = "
+    SELECT background_detections.detection_id, background_detections.file_path,
+        background_detections.signature_name, background_detections.detection_sources,
+        background_detections.first_seen_unix, background_detections.last_seen_unix,
+        background_detections.sighting_count, detection_resolutions.resolution_kind,
+        detection_resolutions.resolved_at_unix
+    FROM background_detections
+    LEFT JOIN detection_resolutions
+        ON detection_resolutions.file_path = background_detections.file_path
+        AND detection_resolutions.signature_name = background_detections.signature_name";
+const DETECTION_KEY_FILTER: &str = "file_path = ?1 AND signature_name = ?2";
 const JOURNAL_POSITION_ROW: i64 = 1;
-const UNRESOLVED_STORED_TEXT: &str = "";
-const UNRESOLVED_STORED_TIME: i64 = 0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResolutionKind {
@@ -22,6 +28,12 @@ pub enum ResolutionKind {
     DeletedByUser,
     DismissedByUser,
 }
+
+const ALL_RESOLUTION_KINDS: [ResolutionKind; 3] = [
+    ResolutionKind::MovedToQuarantine,
+    ResolutionKind::DeletedByUser,
+    ResolutionKind::DismissedByUser,
+];
 
 impl ResolutionKind {
     const fn stored_text(self) -> &'static str {
@@ -31,12 +43,13 @@ impl ResolutionKind {
             Self::DismissedByUser => "dismissed",
         }
     }
-}
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum StoredStateInconsistency {
-    ResolutionTextUnknown { stored_resolution_text: String },
-    ResolvedWithoutTime { resolution_kind: ResolutionKind },
+    fn from_stored_text(stored_text: &str) -> Result<Self, ActivityHistoryFailure> {
+        ALL_RESOLUTION_KINDS
+            .into_iter()
+            .find(|resolution_kind| resolution_kind.stored_text() == stored_text)
+            .ok_or(ActivityHistoryFailure::StoredDetectionUnreadable)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,45 +59,27 @@ pub enum DetectionState {
         resolution_kind: ResolutionKind,
         resolved_at: Timestamp,
     },
-    StoredStateUnreadable {
-        stored_inconsistency: StoredStateInconsistency,
-    },
 }
 
 impl DetectionState {
-    fn from_stored_columns(
-        stored_resolution_text: String,
-        resolved_at_unix: i64,
-    ) -> Result<Self, jiff::Error> {
-        let resolution_kind = match stored_resolution_text.as_str() {
-            UNRESOLVED_STORED_TEXT => return Ok(Self::Open),
-            "quarantined" => ResolutionKind::MovedToQuarantine,
-            "deleted" => ResolutionKind::DeletedByUser,
-            "dismissed" => ResolutionKind::DismissedByUser,
-            _unknown_text => {
-                return Ok(Self::StoredStateUnreadable {
-                    stored_inconsistency: StoredStateInconsistency::ResolutionTextUnknown {
-                        stored_resolution_text,
-                    },
-                });
+    fn from_resolution_row(detection_row: &Row) -> Result<Self, ActivityHistoryFailure> {
+        let resolution_kind: Option<String> = detection_row.get(7)?;
+        let resolved_at_unix: Option<i64> = detection_row.get(8)?;
+        match (resolution_kind, resolved_at_unix) {
+            (None, None) => Ok(Self::Open),
+            (Some(kind_text), Some(resolved_at_unix)) => Ok(Self::Resolved {
+                resolution_kind: ResolutionKind::from_stored_text(&kind_text)?,
+                resolved_at: Timestamp::from_second(resolved_at_unix)?,
+            }),
+            (Some(_), None) | (None, Some(_)) => {
+                Err(ActivityHistoryFailure::StoredDetectionUnreadable)
             }
-        };
-        if resolved_at_unix == UNRESOLVED_STORED_TIME {
-            return Ok(Self::StoredStateUnreadable {
-                stored_inconsistency: StoredStateInconsistency::ResolvedWithoutTime {
-                    resolution_kind,
-                },
-            });
         }
-        Ok(Self::Resolved {
-            resolution_kind,
-            resolved_at: Timestamp::from_second(resolved_at_unix)?,
-        })
     }
 
     pub const fn awaits_user_decision(&self) -> bool {
         match self {
-            Self::Open | Self::StoredStateUnreadable { .. } => true,
+            Self::Open => true,
             Self::Resolved { .. } => false,
         }
     }
@@ -95,17 +90,28 @@ pub enum DetectionSources {
     OnAccessOnly,
     ScheduleOnly,
     OnAccessAndSchedule,
-    NoSourceRecorded,
 }
 
+const ALL_DETECTION_SOURCES: [DetectionSources; 3] = [
+    DetectionSources::OnAccessOnly,
+    DetectionSources::ScheduleOnly,
+    DetectionSources::OnAccessAndSchedule,
+];
+
 impl DetectionSources {
-    const fn from_stored_flags(found_on_access: bool, found_by_schedule: bool) -> Self {
-        match (found_on_access, found_by_schedule) {
-            (true, true) => Self::OnAccessAndSchedule,
-            (true, false) => Self::OnAccessOnly,
-            (false, true) => Self::ScheduleOnly,
-            (false, false) => Self::NoSourceRecorded,
+    const fn stored_text(self) -> &'static str {
+        match self {
+            Self::OnAccessOnly => "on_access",
+            Self::ScheduleOnly => "scheduled_scan",
+            Self::OnAccessAndSchedule => "on_access_and_scheduled_scan",
         }
+    }
+
+    fn from_stored_text(stored_text: &str) -> Result<Self, ActivityHistoryFailure> {
+        ALL_DETECTION_SOURCES
+            .into_iter()
+            .find(|detection_sources| detection_sources.stored_text() == stored_text)
+            .ok_or(ActivityHistoryFailure::StoredDetectionUnreadable)
     }
 
     pub const fn from_single_source(detection_source: DetectionSource) -> Self {
@@ -125,21 +131,6 @@ impl DetectionSources {
             | (Self::ScheduleOnly, DetectionSource::OnAccessScanner) => Self::OnAccessAndSchedule,
             (Self::OnAccessOnly, DetectionSource::OnAccessScanner) => Self::OnAccessOnly,
             (Self::ScheduleOnly, DetectionSource::ScheduledScan) => Self::ScheduleOnly,
-            (Self::NoSourceRecorded, new_source) => Self::from_single_source(new_source),
-        }
-    }
-
-    pub const fn includes_on_access(self) -> bool {
-        match self {
-            Self::OnAccessOnly | Self::OnAccessAndSchedule => true,
-            Self::ScheduleOnly | Self::NoSourceRecorded => false,
-        }
-    }
-
-    const fn includes_schedule(self) -> bool {
-        match self {
-            Self::ScheduleOnly | Self::OnAccessAndSchedule => true,
-            Self::OnAccessOnly | Self::NoSourceRecorded => false,
         }
     }
 }
@@ -169,7 +160,6 @@ pub fn sighting_reopens_detection(
     match detection_state {
         DetectionState::Open => false,
         DetectionState::Resolved { resolved_at, .. } => observed_at > *resolved_at + REOPEN_GRACE,
-        DetectionState::StoredStateUnreadable { .. } => true,
     }
 }
 
@@ -177,24 +167,23 @@ fn stored_detection_from_row(
     detection_row: &Row,
 ) -> Result<StoredDetection, ActivityHistoryFailure> {
     let path_bytes: Vec<u8> = detection_row.get(1)?;
-    let found_on_access: i64 = detection_row.get(3)?;
-    let found_by_schedule: i64 = detection_row.get(4)?;
     Ok(StoredDetection {
         detection_id: detection_row.get(0)?,
         file_path: PathBuf::from(OsStr::from_bytes(&path_bytes)),
         signature_name: detection_row.get(2)?,
-        detection_sources: DetectionSources::from_stored_flags(
-            found_on_access != 0,
-            found_by_schedule != 0,
-        ),
-        first_seen: Timestamp::from_second(detection_row.get(5)?)?,
-        last_seen: Timestamp::from_second(detection_row.get(6)?)?,
-        sighting_count: detection_row.get(7)?,
-        detection_state: DetectionState::from_stored_columns(
-            detection_row.get(8)?,
-            detection_row.get(9)?,
-        )?,
+        detection_sources: DetectionSources::from_stored_text(&detection_row.get::<String>(3)?)?,
+        first_seen: Timestamp::from_second(detection_row.get(4)?)?,
+        last_seen: Timestamp::from_second(detection_row.get(5)?)?,
+        sighting_count: detection_row.get(6)?,
+        detection_state: DetectionState::from_resolution_row(detection_row)?,
     })
+}
+
+fn detection_key(detection_record: &JournalDetectionRecord) -> (Vec<u8>, String) {
+    (
+        detection_record.file_path.as_os_str().as_bytes().to_vec(),
+        detection_record.signature_name.clone(),
+    )
 }
 
 async fn find_matching_detection(
@@ -203,14 +192,11 @@ async fn find_matching_detection(
 ) -> Result<Option<StoredDetection>, ActivityHistoryFailure> {
     let mut matching_rows = database_connection
         .query(
-            &format!(
-                "SELECT {DETECTION_COLUMNS} FROM background_detections WHERE file_path = ?1 AND \
-                 signature_name = ?2"
+            format!(
+                "{DETECTION_QUERY} WHERE background_detections.file_path = ?1 AND \
+                 background_detections.signature_name = ?2"
             ),
-            vec![
-                Value::Blob(detection_record.file_path.as_os_str().as_bytes().to_vec()),
-                Value::Text(detection_record.signature_name.clone()),
-            ],
+            detection_key(detection_record),
         )
         .await?;
     match matching_rows.next().await? {
@@ -223,42 +209,43 @@ async fn apply_detection_record(
     database_connection: &Connection,
     detection_record: &JournalDetectionRecord,
 ) -> Result<DetectionSighting, ActivityHistoryFailure> {
+    let (file_path, signature_name) = detection_key(detection_record);
+    let observed_at_unix = detection_record.observed_at.as_second();
     let Some(existing_detection) =
         find_matching_detection(database_connection, detection_record).await?
     else {
-        let new_sources = DetectionSources::from_single_source(detection_record.detection_source);
         database_connection
             .execute(
-                "INSERT INTO background_detections (file_path, signature_name, found_on_access, \
-                 found_by_schedule, first_seen_unix, last_seen_unix, sighting_count, resolution, \
-                 resolved_at_unix) VALUES (?1, ?2, ?3, ?4, ?5, ?5, 1, ?6, ?7)",
-                vec![
-                    Value::Blob(detection_record.file_path.as_os_str().as_bytes().to_vec()),
-                    Value::Text(detection_record.signature_name.clone()),
-                    Value::Integer(i64::from(new_sources.includes_on_access())),
-                    Value::Integer(i64::from(new_sources.includes_schedule())),
-                    Value::Integer(detection_record.observed_at.as_second()),
-                    Value::Text(UNRESOLVED_STORED_TEXT.to_owned()),
-                    Value::Integer(UNRESOLVED_STORED_TIME),
-                ],
+                "INSERT INTO background_detections (file_path, signature_name, detection_id, \
+                 detection_sources, first_seen_unix, last_seen_unix, sighting_count) SELECT ?1, \
+                 ?2, COALESCE(MAX(detection_id), 0) + 1, ?3, ?4, ?4, 1 FROM background_detections",
+                (
+                    file_path,
+                    signature_name,
+                    DetectionSources::from_single_source(detection_record.detection_source)
+                        .stored_text(),
+                    observed_at_unix,
+                ),
             )
             .await?;
         return Ok(DetectionSighting::NewlyOpened);
     };
-    let merged_sources = existing_detection
-        .detection_sources
-        .including_source(detection_record.detection_source);
     database_connection
         .execute(
-            "UPDATE background_detections SET found_on_access = ?1, found_by_schedule = ?2, \
-             last_seen_unix = MAX(last_seen_unix, ?3), sighting_count = sighting_count + 1 WHERE \
-             detection_id = ?4",
-            vec![
-                Value::Integer(i64::from(merged_sources.includes_on_access())),
-                Value::Integer(i64::from(merged_sources.includes_schedule())),
-                Value::Integer(detection_record.observed_at.as_second()),
-                Value::Integer(existing_detection.detection_id),
-            ],
+            format!(
+                "UPDATE background_detections SET detection_sources = ?3, last_seen_unix = \
+                 MAX(last_seen_unix, ?4), sighting_count = sighting_count + 1 WHERE \
+                 {DETECTION_KEY_FILTER}"
+            ),
+            (
+                file_path.clone(),
+                signature_name.clone(),
+                existing_detection
+                    .detection_sources
+                    .including_source(detection_record.detection_source)
+                    .stored_text(),
+                observed_at_unix,
+            ),
         )
         .await?;
     if !sighting_reopens_detection(
@@ -269,13 +256,8 @@ async fn apply_detection_record(
     }
     database_connection
         .execute(
-            "UPDATE background_detections SET resolution = ?1, resolved_at_unix = ?2 WHERE \
-             detection_id = ?3",
-            vec![
-                Value::Text(UNRESOLVED_STORED_TEXT.to_owned()),
-                Value::Integer(UNRESOLVED_STORED_TIME),
-                Value::Integer(existing_detection.detection_id),
-            ],
+            format!("DELETE FROM detection_resolutions WHERE {DETECTION_KEY_FILTER}"),
+            (file_path, signature_name),
         )
         .await?;
     Ok(DetectionSighting::NewlyOpened)
@@ -288,27 +270,26 @@ impl ActivityHistory {
         journal_cursor: &str,
     ) -> Result<Vec<JournalDetectionRecord>, ActivityHistoryFailure> {
         let _history_lock = self.lock_history().await?;
-        let database_connection = self.open_connection().await?;
-        database_connection.execute("BEGIN IMMEDIATE", ()).await?;
+        let mut database_connection = self.open_connection().await?;
+        let batch_transaction = database_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .await?;
         let mut newly_opened = Vec::new();
         for detection_record in detection_records {
-            if apply_detection_record(&database_connection, detection_record).await?
+            if apply_detection_record(&batch_transaction, detection_record).await?
                 == DetectionSighting::NewlyOpened
             {
                 newly_opened.push(detection_record.clone());
             }
         }
-        database_connection
+        batch_transaction
             .execute(
                 "INSERT OR REPLACE INTO detection_journal_position (position_row, journal_cursor) \
                  VALUES (?1, ?2)",
-                vec![
-                    Value::Integer(JOURNAL_POSITION_ROW),
-                    Value::Text(journal_cursor.to_owned()),
-                ],
+                (JOURNAL_POSITION_ROW, journal_cursor),
             )
             .await?;
-        database_connection.execute("COMMIT", ()).await?;
+        batch_transaction.commit().await?;
         Ok(newly_opened)
     }
 
@@ -329,9 +310,9 @@ impl ActivityHistory {
         let database_connection = self.open_connection().await?;
         let mut detection_rows = database_connection
             .query(
-                &format!(
-                    "SELECT {DETECTION_COLUMNS} FROM background_detections ORDER BY \
-                     last_seen_unix DESC, detection_id DESC"
+                format!(
+                    "{DETECTION_QUERY} ORDER BY background_detections.last_seen_unix DESC, \
+                     background_detections.detection_id DESC"
                 ),
                 (),
             )
@@ -353,13 +334,14 @@ impl ActivityHistory {
         self.open_connection()
             .await?
             .execute(
-                "UPDATE background_detections SET resolution = ?1, resolved_at_unix = ?2 WHERE \
-                 detection_id = ?3",
-                vec![
-                    Value::Text(resolution_kind.stored_text().to_owned()),
-                    Value::Integer(resolved_at.as_second()),
-                    Value::Integer(detection_id),
-                ],
+                "INSERT OR REPLACE INTO detection_resolutions (file_path, signature_name, \
+                 resolution_kind, resolved_at_unix) SELECT file_path, signature_name, ?2, ?3 FROM \
+                 background_detections WHERE detection_id = ?1",
+                (
+                    detection_id,
+                    resolution_kind.stored_text(),
+                    resolved_at.as_second(),
+                ),
             )
             .await?;
         Ok(())
@@ -437,41 +419,6 @@ mod detection_history_store_tests {
             activity_history.saved_journal_cursor().await.expect("read"),
             Some("cursor-b".to_owned())
         );
-    }
-
-    async fn insert_raw_detection_row(
-        activity_history: &ActivityHistory,
-        found_on_access_flag: i64,
-        found_by_schedule_flag: i64,
-        stored_resolution_text: &str,
-        resolved_at_unix: i64,
-    ) {
-        activity_history
-            .open_connection()
-            .await
-            .expect("opened")
-            .execute(
-                "INSERT INTO background_detections (file_path, signature_name, found_on_access, \
-                 found_by_schedule, first_seen_unix, last_seen_unix, sighting_count, resolution, \
-                 resolved_at_unix) VALUES (?1, ?2, ?3, ?4, ?5, ?5, 1, ?6, ?7)",
-                vec![
-                    Value::Blob(
-                        detection_record(FIRST_SEEN)
-                            .file_path
-                            .as_os_str()
-                            .as_bytes()
-                            .to_vec(),
-                    ),
-                    Value::Text(detection_record(FIRST_SEEN).signature_name),
-                    Value::Integer(found_on_access_flag),
-                    Value::Integer(found_by_schedule_flag),
-                    Value::Integer(FIRST_SEEN.as_second()),
-                    Value::Text(stored_resolution_text.to_owned()),
-                    Value::Integer(resolved_at_unix),
-                ],
-            )
-            .await
-            .expect("inserted");
     }
 
     async fn only_detection_state(activity_history: &ActivityHistory) -> DetectionState {
@@ -612,11 +559,6 @@ mod detection_history_store_tests {
                 new_source: DetectionSource::ScheduledScan,
                 merged_sources: DetectionSources::OnAccessAndSchedule,
             },
-            SourceMergeCase {
-                existing_sources: DetectionSources::NoSourceRecorded,
-                new_source: DetectionSource::ScheduledScan,
-                merged_sources: DetectionSources::ScheduleOnly,
-            },
         ];
         merge_cases.into_iter().for_each(|merge_case| {
             assert_eq!(
@@ -648,57 +590,166 @@ mod detection_history_store_tests {
         );
     }
 
+    fn raw_count(activity_history_root: &tempfile::TempDir, count_query: &str) -> i64 {
+        rusqlite::Connection::open(activity_history_root.path().join("history.db"))
+            .expect("database")
+            .query_row(count_query, [], |count_row| count_row.get(0))
+            .expect("count")
+    }
+
     #[tokio::test]
-    async fn an_unrecognised_stored_resolution_stays_visible_as_needing_a_decision() {
-        let (_temporary_root, activity_history) = temporary_history();
-        insert_raw_detection_row(&activity_history, 1, 0, "archived", 1_793_869_300).await;
-        let unreadable_state = only_detection_state(&activity_history).await;
+    async fn an_open_detection_has_no_resolution_row_and_reopening_removes_it() {
+        let (temporary_root, activity_history) = temporary_history();
+        activity_history
+            .record_detection_batch(&[detection_record(FIRST_SEEN)], "cursor-a")
+            .await
+            .expect("recorded");
         assert_eq!(
-            unreadable_state,
-            DetectionState::StoredStateUnreadable {
-                stored_inconsistency: StoredStateInconsistency::ResolutionTextUnknown {
-                    stored_resolution_text: "archived".to_owned(),
-                },
-            }
+            raw_count(
+                &temporary_root,
+                "SELECT COUNT(*) FROM detection_resolutions"
+            ),
+            0
         );
-        assert!(unreadable_state.awaits_user_decision());
-        let next_sighting = activity_history
+        let detection_id =
+            activity_history.list_detections().await.expect("listed")[0].detection_id;
+        activity_history
+            .resolve_detection(detection_id, ResolutionKind::DeletedByUser, FIRST_SEEN)
+            .await
+            .expect("resolved");
+        assert_eq!(
+            raw_count(
+                &temporary_root,
+                "SELECT COUNT(*) FROM detection_resolutions"
+            ),
+            1
+        );
+        activity_history
             .record_detection_batch(
-                &[detection_record(FIRST_SEEN + SignedDuration::from_secs(1))],
+                &[detection_record(FIRST_SEEN + SignedDuration::from_secs(60))],
+                "cursor-b",
+            )
+            .await
+            .expect("recorded");
+        assert_eq!(
+            raw_count(
+                &temporary_root,
+                "SELECT COUNT(*) FROM detection_resolutions"
+            ),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn another_file_or_signature_is_another_detection_with_its_own_id() {
+        let (_temporary_root, activity_history) = temporary_history();
+        let other_signature = JournalDetectionRecord {
+            signature_name: "Win.Test-2".to_owned(),
+            ..detection_record(FIRST_SEEN)
+        };
+        let other_file = JournalDetectionRecord {
+            file_path: PathBuf::from("/home/user/Downloads/b.exe"),
+            ..detection_record(FIRST_SEEN)
+        };
+        activity_history
+            .record_detection_batch(
+                &[
+                    detection_record(FIRST_SEEN),
+                    other_signature,
+                    other_file,
+                    detection_record(FIRST_SEEN + SignedDuration::from_secs(1)),
+                ],
                 "cursor-a",
             )
             .await
             .expect("recorded");
-        assert_eq!(next_sighting.len(), 1);
+        let mut detection_ids = activity_history
+            .list_detections()
+            .await
+            .expect("listed")
+            .into_iter()
+            .map(|stored_detection| stored_detection.detection_id)
+            .collect::<Vec<_>>();
+        detection_ids.sort_unstable();
+        assert_eq!(detection_ids, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn the_screenshot_fixture_loads_as_typed_detections() {
+        let (temporary_root, activity_history) = temporary_history();
+        let fixture_connection =
+            rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("database");
+        fixture_connection
+            .execute_batch(include_str!("../../../data/database-schemas/history.sql"))
+            .expect("schema");
+        fixture_connection
+            .execute_batch(
+                &include_str!("../../../xtask/assets/detections-seed.sql")
+                    .replace(
+                        "@UNRESOLVED_PATH@",
+                        "'/home/alex/Downloads/invoice.pdf.exe'",
+                    )
+                    .replace(
+                        "@SCHEDULED_PATH@",
+                        "'/home/alex/Downloads/setup-helper.bin'",
+                    ),
+            )
+            .expect("fixture rows");
+        drop(fixture_connection);
+        let fixture_detections = activity_history.list_detections().await.expect("listed");
         assert_eq!(
-            only_detection_state(&activity_history).await,
-            DetectionState::Open
+            fixture_detections
+                .iter()
+                .map(|stored_detection| (
+                    stored_detection.detection_sources,
+                    stored_detection.detection_state.awaits_user_decision()
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                (DetectionSources::OnAccessOnly, true),
+                (DetectionSources::ScheduleOnly, true),
+                (DetectionSources::OnAccessOnly, false),
+            ]
         );
     }
 
     #[tokio::test]
-    async fn a_resolution_stored_without_a_time_is_not_treated_as_resolved() {
-        let (_temporary_root, activity_history) = temporary_history();
-        insert_raw_detection_row(&activity_history, 1, 0, "quarantined", 0).await;
-        let unreadable_state = only_detection_state(&activity_history).await;
-        assert_eq!(
-            unreadable_state,
-            DetectionState::StoredStateUnreadable {
-                stored_inconsistency: StoredStateInconsistency::ResolvedWithoutTime {
-                    resolution_kind: ResolutionKind::MovedToQuarantine,
-                },
-            }
-        );
-        assert!(unreadable_state.awaits_user_decision());
-    }
-
-    #[tokio::test]
-    async fn a_row_without_any_found_flag_reads_as_no_source_recorded() {
-        let (_temporary_root, activity_history) = temporary_history();
-        insert_raw_detection_row(&activity_history, 0, 0, "", 0).await;
-        assert_eq!(
-            activity_history.list_detections().await.expect("listed")[0].detection_sources,
-            DetectionSources::NoSourceRecorded
-        );
+    async fn the_detection_schema_refuses_rows_that_cannot_exist() {
+        let (temporary_root, activity_history) = temporary_history();
+        activity_history.list_detections().await.expect("created");
+        let checked_connection =
+            rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("database");
+        checked_connection
+            .execute_batch(
+                "PRAGMA foreign_keys = ON;
+                 INSERT INTO background_detections VALUES (CAST('/a' AS BLOB), 'Sig-1', 1, \
+                 'on_access', 10, 20, 2);",
+            )
+            .expect("valid row");
+        [
+            "INSERT INTO background_detections VALUES (CAST('/a' AS BLOB), 'Sig-1', 2, \
+             'on_access', 10, 20, 2)",
+            "INSERT INTO background_detections VALUES (CAST('/b' AS BLOB), 'Sig-1', 1, \
+             'on_access', 10, 20, 2)",
+            "INSERT INTO background_detections VALUES (CAST('/b' AS BLOB), 'Sig-1', 2, 'none', \
+             10, 20, 2)",
+            "INSERT INTO background_detections VALUES (CAST('/b' AS BLOB), 'Sig-1', 2, \
+             'on_access', 10, 20, 0)",
+            "INSERT INTO background_detections VALUES (CAST('/b' AS BLOB), 'Sig-1', 2, \
+             'on_access', 30, 20, 1)",
+            "INSERT INTO detection_resolutions VALUES (CAST('/a' AS BLOB), 'Sig-1', 'archived', \
+             30)",
+            "INSERT INTO detection_resolutions VALUES (CAST('/a' AS BLOB), 'Sig-1', \
+             'quarantined', NULL)",
+            "INSERT INTO detection_resolutions VALUES (CAST('/c' AS BLOB), 'Sig-1', 'deleted', 30)",
+            "INSERT INTO detection_journal_position VALUES (2, 'cursor')",
+        ]
+        .into_iter()
+        .for_each(|invalid_insert| {
+            assert!(
+                checked_connection.execute(invalid_insert, []).is_err(),
+                "accepted: {invalid_insert}"
+            );
+        });
     }
 }

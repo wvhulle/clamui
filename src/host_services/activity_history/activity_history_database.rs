@@ -50,6 +50,8 @@ pub enum ActivityHistoryFailure {
     StoredOriginUnknown,
     #[error("a stored scan entry lacks its scan details, or an update entry has them")]
     StoredScanDetailsInconsistent,
+    #[error("a stored detection has an unknown source or resolution")]
+    StoredDetectionUnreadable,
     #[error("a stored submission has an unknown service, kind or status")]
     StoredSubmissionUnreadable,
     #[error("a stored history entry has an impossible time: {0}")]

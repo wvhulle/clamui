@@ -41,7 +41,7 @@ with subtest("the scan's journal line becomes a detection that is not called blo
     wait_for_stored_detection(SCANNED_FILE)
     detection = stored_detection(SCANNED_FILE).split("|")
     assert detection[0].startswith("Win.Fixture.Agent-1"), detection
-    assert detection[1] == "0" and detection[2] == "1", f"wrong source: {detection}"
+    assert detection[1] == "scheduled_scan", f"wrong source: {detection}"
     matching = wait_for_notification("Malware found")
     assert not notifications_mentioning("Malware blocked"), matching
     time.sleep(2)

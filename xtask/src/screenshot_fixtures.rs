@@ -20,6 +20,8 @@ pub struct ScreenshotFixtures {
     pub search_path: std::ffi::OsString,
 }
 
+const HISTORY_SCHEMA: &str = include_str!("../../data/database-schemas/history.sql");
+
 fn sql_text_literal(literal_text: &str) -> String {
     format!("'{}'", literal_text.replace('\'', "''"))
 }
@@ -74,6 +76,7 @@ fn seed_detection_history(session_root: &Path) -> Result<(), TaskFailure> {
             start_failure,
         })?;
     if let Some(mut sqlite_input) = sqlite_process.stdin.take() {
+        sqlite_input.write_all(HISTORY_SCHEMA.as_bytes())?;
         sqlite_input.write_all(
             include_str!("../assets/detections-seed.sql")
                 .replace(

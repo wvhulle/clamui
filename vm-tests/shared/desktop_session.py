@@ -68,8 +68,10 @@ def assert_lines_stay_at(unit, file_path, settle_seconds):
 
 def stored_detection(file_path):
     query = (
-        "select signature_name, found_on_access, found_by_schedule, sighting_count, resolution "
-        f"from background_detections where cast(file_path as text) = '{file_path}'"
+        "select signature_name, detection_sources, sighting_count, resolution_kind "
+        "from background_detections left join detection_resolutions "
+        "using (file_path, signature_name) "
+        f"where cast(file_path as text) = '{file_path}'"
     )
     return as_user(f"sqlite3 -readonly {HISTORY_DATABASE} {shlex.quote(query)}").strip()
 

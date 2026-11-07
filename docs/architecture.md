@@ -164,6 +164,7 @@ erDiagram
     scan_activities ||--o{ scan_activity_targets : "targets in order"
     scan_activities ||--o| scan_inspections : "scan that ran"
     scan_inspections ||--o| scan_threat_counts : "infected, counted"
+    background_detections ||--o| detection_resolutions : "resolved"
 ```
 
 | Table | Key | References | Stores |
@@ -173,6 +174,9 @@ erDiagram
 | `scan_activity_targets` | `entry_id, target_position` | `scan_activities` | One scanned path per row, in the order given. |
 | `scan_inspections` | `entry_id` | `scan_activities (entry_id, activity_status)` | How many files a scan that ran inspected. Skipped scans have none. |
 | `scan_threat_counts` | `entry_id` | `scan_inspections (entry_id, activity_status)` | The threat count of an infected scan. An infected scan without this row found threats it couldn't count. |
+| `background_detections` | `file_path, signature_name`; `detection_id` is unique too | | One file that clamd or clamonacc reported for one signature: which scanners saw it, when, and how often. The journal follower matches new lines on the key. The pages and the incident view refer to a detection by `detection_id`. |
+| `detection_resolutions` | `file_path, signature_name` | `background_detections` | How and when you resolved a detection. An open detection has no row, and a later sighting deletes it. |
+| `detection_journal_position` | `position_row`, always 1 | | The journal cursor the follower continues from. |
 
 ## Deployments
 
