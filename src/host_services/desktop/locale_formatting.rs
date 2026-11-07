@@ -29,6 +29,7 @@ pub enum LocaleDataMissing {
 
 pub struct MomentFormatters {
     date_time_formatter: DateTimeFormatter<YMDT>,
+    log_time_formatter: DateTimeFormatter<YMDT>,
     date_formatter: DateTimeFormatter<YMD>,
     seconds_formatter: RelativeTimeFormatter,
     minutes_formatter: RelativeTimeFormatter,
@@ -74,6 +75,10 @@ impl MomentFormatters {
                 time_locale.clone().into(),
                 YMD::medium().with_time_hm(),
             )?,
+            log_time_formatter: DateTimeFormatter::try_new(
+                time_locale.clone().into(),
+                YMD::short().with_time_hms(),
+            )?,
             date_formatter: DateTimeFormatter::try_new(time_locale.clone().into(), YMD::medium())?,
             seconds_formatter: RelativeTimeFormatter::try_new_long_second(
                 relative_preferences,
@@ -104,6 +109,14 @@ impl MomentFormatters {
 
     pub fn exact_moment_text(&self, moment: Timestamp) -> String {
         self.format_wall_clock(&moment.to_zoned(TimeZone::system()).datetime())
+    }
+
+    pub fn log_moment_text(&self, moment: Timestamp) -> String {
+        written_text(
+            &self
+                .log_time_formatter
+                .format(&moment.to_zoned(TimeZone::system()).datetime()),
+        )
     }
 
     pub fn calendar_date_text(&self, moment: Timestamp) -> String {
@@ -150,6 +163,10 @@ pub fn host_moment_formatters() -> &'static MomentFormatters {
 
 pub fn exact_local_time_text(moment: Timestamp) -> String {
     host_moment_formatters().exact_moment_text(moment)
+}
+
+pub fn log_local_time_text(moment: Timestamp) -> String {
+    host_moment_formatters().log_moment_text(moment)
 }
 
 pub fn byte_size_text(byte_size: ByteSize) -> String {

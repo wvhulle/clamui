@@ -166,27 +166,12 @@ pub fn newest_manager_records_for_unit(
     Ok(manager_records)
 }
 
-fn add_unit_matches(journal: &mut Journal, service_units: &[&str]) -> systemd::Result<()> {
+pub fn add_unit_matches(journal: &mut Journal, service_units: &[&str]) -> systemd::Result<()> {
     service_units.iter().try_for_each(|service_unit| {
         journal
             .match_add(SYSTEMD_UNIT_FIELD, *service_unit)
             .map(drop)
     })
-}
-
-pub fn newest_unit_messages(
-    service_units: &[&str],
-    line_limit: usize,
-) -> systemd::Result<Vec<String>> {
-    let mut journal = open_system_journal()?;
-    add_unit_matches(&mut journal, service_units)?;
-    journal.seek_tail()?;
-    let mut newest_first = Vec::new();
-    while newest_first.len() < line_limit && journal.previous()? > 0 {
-        newest_first.extend(journal_field_value(&mut journal, MESSAGE_FIELD)?);
-    }
-    newest_first.reverse();
-    Ok(newest_first)
 }
 
 pub fn unit_messages_since(
@@ -299,14 +284,5 @@ mod unit_journal_reader_tests {
                 exit_status_field: "not-a-number".to_owned()
             })
         );
-    }
-
-    #[test]
-    #[ignore = "reads the real host journal"]
-    fn host_journal_returns_messages_in_chronological_order() {
-        let daemon_messages =
-            newest_unit_messages(&["clamav-daemon.service"], 5).expect("readable journal");
-        assert!(daemon_messages.len() <= 5);
-        println!("{daemon_messages:#?}");
     }
 }

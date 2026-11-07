@@ -4,40 +4,45 @@ use futures::{Stream, StreamExt, stream};
 
 use crate::host_services::{
     blocking_iterator_stream::blocking_iterator_stream,
-    clamav_scanner::scanner_output_parser::sanitize_scanner_text,
-    systemd_journal::unit_journal_reader::{
-        UnitJournalReadFailure, appended_unit_entries, newest_unit_messages,
-        read_journal_off_thread,
+    clamav_scanner::clamd_log_lines::ClamdLogLine,
+    systemd_journal::{
+        journal_log_entries::{JournalLogEntry, newest_unit_entries},
+        unit_journal_reader::{
+            UnitJournalReadFailure, appended_unit_entries, read_journal_off_thread,
+        },
     },
 };
 
-pub const SHOWN_LOG_LINE_COUNT: usize = 100;
+pub const SHOWN_LOG_LINE_COUNT: usize = 500;
 const UNIT_LOG_WATCH_THREAD: &str = "unit-log-watch";
 const CHANGE_BURST_SIZE: usize = 64;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServiceLogContents {
-    FromLogFile { log_path: PathBuf, log_text: String },
-    FromSystemJournal { log_text: String },
+    FromLogFile {
+        log_path: PathBuf,
+        log_lines: Vec<ClamdLogLine>,
+    },
+    FromSystemJournal {
+        log_entries: Vec<JournalLogEntry>,
+    },
     NoReadableLog,
     JournalUnreadable(UnitJournalReadFailure),
 }
 
 pub fn journal_log_contents(
-    journal_reading: Result<Vec<String>, UnitJournalReadFailure>,
+    journal_reading: Result<Vec<JournalLogEntry>, UnitJournalReadFailure>,
 ) -> ServiceLogContents {
     match journal_reading {
-        Ok(unit_messages) if unit_messages.is_empty() => ServiceLogContents::NoReadableLog,
-        Ok(unit_messages) => ServiceLogContents::FromSystemJournal {
-            log_text: sanitize_scanner_text(&unit_messages.join("\n")),
-        },
+        Ok(log_entries) if log_entries.is_empty() => ServiceLogContents::NoReadableLog,
+        Ok(log_entries) => ServiceLogContents::FromSystemJournal { log_entries },
         Err(read_failure) => ServiceLogContents::JournalUnreadable(read_failure),
     }
 }
 
 pub async fn read_unit_journal_log(service_units: &'static [&'static str]) -> ServiceLogContents {
     journal_log_contents(
-        read_journal_off_thread(move || newest_unit_messages(service_units, SHOWN_LOG_LINE_COUNT))
+        read_journal_off_thread(move || newest_unit_entries(service_units, SHOWN_LOG_LINE_COUNT))
             .await,
     )
 }
@@ -69,19 +74,6 @@ mod service_log_contents_tests {
         assert_eq!(
             journal_log_contents(Ok(Vec::new())),
             ServiceLogContents::NoReadableLog
-        );
-    }
-
-    #[test]
-    fn journal_lines_are_joined_and_sanitized() {
-        assert_eq!(
-            journal_log_contents(Ok(vec![
-                "clamonacc started".to_owned(),
-                "watching /home".to_owned()
-            ])),
-            ServiceLogContents::FromSystemJournal {
-                log_text: "clamonacc started\nwatching /home".to_owned()
-            }
         );
     }
 }

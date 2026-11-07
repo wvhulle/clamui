@@ -10,7 +10,7 @@ use tokio::task::spawn_blocking;
 
 use crate::host_services::{
     blocking_iterator_stream::blocking_iterator_stream,
-    clamav_scanner::scanner_output_parser::sanitize_scanner_text,
+    clamav_scanner::clamd_log_lines::{ClamdLogLine, parse_clamd_log_text},
     desktop::flatpak_sandbox::readable_host_path,
     systemd_journal::{
         service_log_contents::{SHOWN_LOG_LINE_COUNT, ServiceLogContents, read_unit_journal_log},
@@ -54,7 +54,7 @@ pub fn last_log_lines(log_text: &str, line_count: usize) -> String {
         .collect()
 }
 
-fn read_log_tail(log_path: &Path) -> Option<String> {
+fn read_log_tail(log_path: &Path) -> Option<Vec<ClamdLogLine>> {
     let mut log_file = fs::File::open(log_path).ok()?;
     let log_length = log_file.metadata().ok()?.len();
     log_file
@@ -62,7 +62,7 @@ fn read_log_tail(log_path: &Path) -> Option<String> {
         .ok()?;
     let mut tail_bytes = Vec::new();
     log_file.read_to_end(&mut tail_bytes).ok()?;
-    Some(sanitize_scanner_text(&last_log_lines(
+    Some(parse_clamd_log_text(&last_log_lines(
         &String::from_utf8_lossy(&tail_bytes),
         SHOWN_LOG_LINE_COUNT,
     )))
@@ -81,7 +81,10 @@ fn readable_log_file() -> Option<PathBuf> {
 
 fn read_configured_log_file() -> Option<ServiceLogContents> {
     let log_path = readable_log_file()?;
-    read_log_tail(&log_path).map(|log_text| ServiceLogContents::FromLogFile { log_path, log_text })
+    read_log_tail(&log_path).map(|log_lines| ServiceLogContents::FromLogFile {
+        log_path,
+        log_lines,
+    })
 }
 
 fn log_file_changes(log_path: &Path) -> impl Iterator<Item = ()> + use<> {
@@ -151,6 +154,7 @@ pub async fn read_daemon_log() -> ServiceLogContents {
 #[cfg(test)]
 mod daemon_log_reader_tests {
     use super::*;
+    use crate::host_services::systemd_journal::journal_log_entries::LogSeverityLevel;
 
     #[test]
     fn appending_to_the_log_file_is_reported_and_other_files_are_not() {
@@ -189,12 +193,18 @@ mod daemon_log_reader_tests {
     fn a_log_tail_starts_at_the_end_of_large_files() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let log_path = temporary_root.path().join("clamd.log");
-        let many_lines = (0..200)
+        let many_lines = (0..1000)
             .map(|line_number| format!("line {line_number}\n"))
             .collect::<String>();
         fs::write(&log_path, many_lines).expect("log file");
         let log_tail = read_log_tail(&log_path).expect("log tail");
-        assert_eq!(log_tail.lines().count(), SHOWN_LOG_LINE_COUNT);
-        assert_eq!(log_tail.lines().last(), Some("line 199"));
+        assert_eq!(log_tail.len(), SHOWN_LOG_LINE_COUNT);
+        assert_eq!(
+            log_tail.last(),
+            Some(&ClamdLogLine::Unstamped {
+                severity_level: LogSeverityLevel::Informational,
+                message_text: "line 999".to_owned(),
+            })
+        );
     }
 }
