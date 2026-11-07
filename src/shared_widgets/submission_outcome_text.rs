@@ -1,10 +1,12 @@
-use gettextrs::gettext;
+use gettextrs::{gettext, ngettext};
 
 use crate::{
     host_services::{
         activity_history::{
             activity_history_database::ActivityHistoryFailure,
-            submission_history_store::{BazaarSampleStatus, SubmissionRecord, SubmissionState},
+            submission_history_store::{
+                BazaarSampleStatus, SubmissionRecord, SubmissionState, VirusTotalSampleStatus,
+            },
         },
         clamav_programs::clamav_report_submission::clamsubmit_failure_text,
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
@@ -12,9 +14,10 @@ use crate::{
         sample_submissions::{
             bazaar_sample_upload::BazaarUploadAttempt, clamav_report_flow::ClamavReportAttempt,
             submission_samples::SampleReadFailure,
+            virustotal_sample_upload::VirusTotalUploadAttempt,
         },
         threat_intel::{
-            file_reputation_check::describe_bazaar_failure,
+            file_reputation_check::{describe_bazaar_failure, describe_virustotal_failure},
             service_key_storage::describe_key_failure,
         },
     },
@@ -122,6 +125,53 @@ pub fn bazaar_upload_attempt_text(upload_attempt: &BazaarUploadAttempt) -> Strin
             upload_not_sent(&history_failure_text(history_failure))
         }
         BazaarUploadAttempt::SentWithoutRecord(history_failure) => {
+            gettext("Uploaded, but it could not be added to Submissions: {error}")
+                .replace("{error}", &history_failure.to_string())
+        }
+    }
+}
+
+pub fn virustotal_upload_attempt_text(upload_attempt: &VirusTotalUploadAttempt) -> String {
+    match upload_attempt {
+        VirusTotalUploadAttempt::SubmissionRecorded(SubmissionRecord {
+            submission_state:
+                SubmissionState::VirusTotalSample {
+                    virustotal_status: VirusTotalSampleStatus::SubmissionRefused { refusal_reason },
+                },
+            ..
+        }) => gettext("VirusTotal refused the file: {reason}")
+            .replace("{reason}", &sanitize_scanner_line(refusal_reason)),
+        VirusTotalUploadAttempt::SubmissionRecorded(_recorded_submission) => gettext(
+            "VirusTotal is analysing the file. Refresh on the Submissions page shows its verdict.",
+        ),
+        VirusTotalUploadAttempt::AlreadySubmitted(earlier_submission) => {
+            earlier_submission_text(earlier_submission)
+        }
+        VirusTotalUploadAttempt::ReportAlreadyAvailable(file_report) => ngettext(
+            "VirusTotal already knows this file: {count} of {total} engine detects it. Nothing \
+             was uploaded.",
+            "VirusTotal already knows this file: {count} of {total} engines detect it. Nothing \
+             was uploaded.",
+            u32::try_from(file_report.total_engine_count).unwrap_or(u32::MAX),
+        )
+        .replace("{count}", &file_report.detecting_engine_count.to_string())
+        .replace("{total}", &file_report.total_engine_count.to_string()),
+        VirusTotalUploadAttempt::KeyMissing => upload_not_sent(&gettext(
+            "add a VirusTotal key on the Submissions page first",
+        )),
+        VirusTotalUploadAttempt::KeyUnreadable(key_failure) => {
+            upload_not_sent(&describe_key_failure(key_failure))
+        }
+        VirusTotalUploadAttempt::SampleUnreadable(read_failure) => {
+            upload_not_sent(&sample_read_failure_text(read_failure))
+        }
+        VirusTotalUploadAttempt::VirusTotalUnavailable(virustotal_failure) => {
+            upload_not_sent(&describe_virustotal_failure(virustotal_failure))
+        }
+        VirusTotalUploadAttempt::HistoryUnavailable(history_failure) => {
+            upload_not_sent(&history_failure_text(history_failure))
+        }
+        VirusTotalUploadAttempt::SentWithoutRecord(history_failure) => {
             gettext("Uploaded, but it could not be added to Submissions: {error}")
                 .replace("{error}", &history_failure.to_string())
         }
