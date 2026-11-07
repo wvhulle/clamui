@@ -169,6 +169,13 @@ pub fn unit_run_toast_text(
     }
 }
 
+fn show_application_page(root: &adw::ToastOverlay, application_page: ApplicationPage) {
+    let _action_missing = root.activate_action(
+        &ShowPageAction::action_name(),
+        Some(&application_page.page_name().to_variant()),
+    );
+}
+
 fn launched_step_group(
     step_group: adw::PreferencesGroup,
     sender: &ComponentSender<ProtectionTimelinePage>,
@@ -240,10 +247,10 @@ impl ProtectionTimelinePage {
     ) {
         match chosen_action {
             ProtectionStepAction::OpenDatabaseUpdates => {
-                let _action_missing = root.activate_action(
-                    &ShowPageAction::action_name(),
-                    Some(&ApplicationPage::DatabaseUpdates.page_name().to_variant()),
-                );
+                show_application_page(root, ApplicationPage::DatabaseUpdates);
+            }
+            ProtectionStepAction::OpenScanEngine => {
+                show_application_page(root, ApplicationPage::ScanEngine);
             }
             ProtectionStepAction::RunScheduledScan { service_unit } => {
                 self.scheduled_scan_starting = true;

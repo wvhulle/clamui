@@ -5,30 +5,28 @@ use crate::{
     application_window::settings_navigation::SettingsSubpage,
     hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
-        clamav_programs::{
-            component_availability::ProbeFailure,
-            distribution_install_guides::{DistributionFamily, engine_install_guides},
-        },
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        clamav_programs::distribution_install_guides::DistributionFamily,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::{
             host_protection_evidence::{
-                AccountSettingFinding, ClamdConfigReadFailure, DaemonEvidence, EngineInstallation,
-                LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessResponse,
-                OnAccessScanner, OnAccessSizeLimit, OverridesChangeTime, OverridesReadFailure,
-                ProtectionEvidence, ReducedSetting, RuntimeReductions, ScanServiceEvidence,
-                ScanUnitResult, ScheduledScanEvidence, SignatureEvidence, TimerState, WatchScope,
-                WatchedLocation,
+                AccountSettingFinding, ClamdConfigReadFailure, EngineInstallation, OnAccessConfig,
+                OnAccessEvidence, OnAccessResponse, OnAccessScanner, OnAccessSizeLimit,
+                ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence,
+                SignatureEvidence, TimerState, WatchScope, WatchedLocation,
             },
             service_run_journal::{ScanRunFindings, ScanRunHistory},
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
     },
+    scans::scan_engine_page::scan_engine_presentation::{
+        daemon_condition, daemon_is_answering, daemon_step, engine_condition, engine_step,
+    },
     shared_widgets::{
         journal_follow_failure_text::journal_follow_failure_text,
         step_timeline::{
             program_trust_steps::{TrustedProgramGroup, program_trust_step},
+            runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
             step_evidence_builders::{
                 CheckedCondition, MomentContext, evidence_row, no_guidance_step, plain_rows,
                 remedy_commands, timed_evidence_row, unknown_run_text,
@@ -55,6 +53,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtectionStepAction {
     OpenDatabaseUpdates,
+    OpenScanEngine,
     RunScheduledScan { service_unit: &'static str },
     ReviewSettingsSubpage(SettingsSubpage),
     SetUpSettingsSubpage(SettingsSubpage),
@@ -64,6 +63,7 @@ impl StepActionButton for ProtectionStepAction {
     fn button_label(&self) -> String {
         match self {
             Self::OpenDatabaseUpdates => gettext("Open Database Updates"),
+            Self::OpenScanEngine => gettext("Open Scan Engine"),
             Self::RunScheduledScan { .. } => gettext("Run Now"),
             Self::ReviewSettingsSubpage(_) => gettext("Review"),
             Self::SetUpSettingsSubpage(_) => gettext("Set Up"),
@@ -73,6 +73,7 @@ impl StepActionButton for ProtectionStepAction {
     fn action_consequence(&self) -> ActionConsequence {
         match self {
             Self::OpenDatabaseUpdates
+            | Self::OpenScanEngine
             | Self::RunScheduledScan { .. }
             | Self::ReviewSettingsSubpage(_)
             | Self::SetUpSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
@@ -82,24 +83,6 @@ impl StepActionButton for ProtectionStepAction {
 
 pub type ProtectionStep = TimelineStep<ProtectionStepAction>;
 type ProtectionEvidenceRow = ActionableEvidenceRow<ProtectionStepAction>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReducedSettingGroup {
-    AllSettings,
-    OnAccessSettings,
-    EngineSettings,
-}
-
-impl ReducedSettingGroup {
-    fn includes_setting(self, setting_key: &str) -> bool {
-        let on_access_setting = setting_key.starts_with("OnAccess");
-        match self {
-            Self::AllSettings => true,
-            Self::OnAccessSettings => on_access_setting,
-            Self::EngineSettings => !on_access_setting,
-        }
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AlertReadiness {
@@ -131,101 +114,12 @@ impl ProtectionActivity {
     }
 }
 
-fn probe_failure_text(probe_failure: &ProbeFailure) -> String {
-    match probe_failure {
-        ProbeFailure::ProgramPrintedFailure { program_stderr } => {
-            sanitize_scanner_line(program_stderr)
-        }
-        ProbeFailure::ProgramStartFailed { start_failure_kind } => {
-            gettext("clamscan could not be started: {error}")
-                .replace("{error}", &start_failure_kind.to_string())
-        }
-        ProbeFailure::ProbeTimedOut => gettext("clamscan did not answer in time"),
-    }
-}
-
-pub const fn engine_condition(engine_installation: &EngineInstallation) -> CheckedCondition {
-    match engine_installation {
-        EngineInstallation::VersionReported { .. } => CheckedCondition::ConditionMet,
-        EngineInstallation::ScannerRefused { .. } => CheckedCondition::ReviewSuggested,
-        EngineInstallation::VersionUnverified(_) => CheckedCondition::EvidenceUnknown,
-        EngineInstallation::EngineMissing => CheckedCondition::SetupSuggested,
-    }
-}
-
-fn engine_step(
-    engine_installation: &EngineInstallation,
-    distribution_family: DistributionFamily,
-) -> ProtectionStep {
-    let step_title = gettext("ClamAV installed");
-    let mechanism_details = gettext(
-        "ClamAV is the engine that recognizes malware. Lazaret uses the copy installed on this \
-         computer and never bundles its own.",
-    );
-    let node_state = engine_condition(engine_installation).node_state();
-    match engine_installation {
-        EngineInstallation::VersionReported { version_banner } => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            version_banner.clone(),
-        ),
-        EngineInstallation::ScannerRefused { refused_path } => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("refused {path}, because your account can replace it")
-                .replace("{path}", refused_path),
-        ),
-        EngineInstallation::VersionUnverified(probe_failure) => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            probe_failure_text(probe_failure),
-        ),
-        EngineInstallation::EngineMissing => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("ClamAV was not found on this computer"),
-        )
-        .with_guidance_commands(
-            engine_install_guides()
-                .iter()
-                .filter(|install_guide| install_guide.distribution_family == distribution_family)
-                .map(|install_guide| install_guide.install_command.to_owned())
-                .collect(),
-        ),
-    }
-}
-
-fn reduced_settings_status(
-    reduced_settings: &[ReducedSetting],
-    change_time: OverridesChangeTime,
-) -> String {
-    let setting_count = u32::try_from(reduced_settings.len()).unwrap_or(u32::MAX);
-    match change_time {
-        OverridesChangeTime::ChangedAt { changed_at } => ngettext(
-            "{count} setting checks less than configured since {time}",
-            "{count} settings check less than configured since {time}",
-            setting_count,
-        )
-        .replace("{time}", &exact_local_time_text(changed_at)),
-        OverridesChangeTime::ChangeTimeUnknown => ngettext(
-            "{count} setting checks less than configured, since a time that could not be read",
-            "{count} settings check less than configured, since a time that could not be read",
-            setting_count,
-        ),
-    }
-    .replace("{count}", &reduced_settings.len().to_string())
-}
-
-fn override_change_time_row(change_time: OverridesChangeTime) -> StepEvidenceRow {
-    evidence_row(
-        gettext("Changed"),
-        match change_time {
-            OverridesChangeTime::ChangedAt { changed_at } => exact_local_time_text(changed_at),
-            OverridesChangeTime::ChangeTimeUnknown => gettext("Unknown"),
+fn scan_engine_offer(checked_condition: CheckedCondition) -> StepActionSlot<ProtectionStepAction> {
+    StepActionSlot::ActionOffered(
+        if checked_condition.node_state() == SettledNodeState::Completed {
+            OfferedAction::plain(ProtectionStepAction::OpenScanEngine)
+        } else {
+            OfferedAction::suggested(ProtectionStepAction::OpenScanEngine)
         },
     )
 }
@@ -234,132 +128,6 @@ fn runtime_review_action() -> StepActionSlot<ProtectionStepAction> {
     StepActionSlot::ActionOffered(OfferedAction::plain(
         ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::ScannerEngine),
     ))
-}
-
-fn overrides_failure_text(read_failure: OverridesReadFailure) -> String {
-    match read_failure {
-        OverridesReadFailure::OverridesFileUnreadable { failure_kind } => gettext(
-            "Unknown whether settings were reduced, because the runtime changes could not be \
-             read: {error}",
-        )
-        .replace("{error}", &failure_kind.to_string()),
-        OverridesReadFailure::ReadingTaskInterrupted => gettext(
-            "Unknown whether settings were reduced, because reading the runtime changes stopped \
-             before it finished",
-        ),
-    }
-}
-
-pub fn runtime_reduction_condition(
-    runtime_reductions: &RuntimeReductions,
-    setting_group: ReducedSettingGroup,
-) -> CheckedCondition {
-    match runtime_reductions {
-        RuntimeReductions::NothingReduced => CheckedCondition::ConditionMet,
-        RuntimeReductions::OverridesUnreadable(_) => CheckedCondition::EvidenceUnknown,
-        RuntimeReductions::SettingsReduced {
-            reduced_settings, ..
-        } => {
-            if reduced_settings
-                .iter()
-                .any(|reduced_setting| setting_group.includes_setting(&reduced_setting.setting_key))
-            {
-                CheckedCondition::ReviewSuggested
-            } else {
-                CheckedCondition::ConditionMet
-            }
-        }
-        RuntimeReductions::BaseConfigUnreadable {
-            overridden_settings,
-            ..
-        } => {
-            if overridden_settings.iter().any(|overridden_setting| {
-                setting_group.includes_setting(&overridden_setting.setting_key)
-            }) {
-                CheckedCondition::EvidenceUnknown
-            } else {
-                CheckedCondition::ConditionMet
-            }
-        }
-    }
-}
-
-fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<ProtectionStep> {
-    let node_state =
-        runtime_reduction_condition(runtime_reductions, ReducedSettingGroup::AllSettings)
-            .node_state();
-    match runtime_reductions {
-        RuntimeReductions::NothingReduced => None,
-        RuntimeReductions::OverridesUnreadable(read_failure) => Some(TimelineStep::settled(
-            gettext("Settings changed at runtime"),
-            gettext(
-                "Someone with the administrator password can change ClamAV settings at runtime. \
-                 Lazaret could not read those changes, so it can't tell whether they check less \
-                 than your configuration does.",
-            ),
-            overrides_failure_text(*read_failure),
-            SettledStep {
-                header_action: runtime_review_action(),
-                ..SettledStep::without_offers(node_state)
-            },
-        )),
-        RuntimeReductions::SettingsReduced {
-            change_time,
-            reduced_settings,
-        } => Some(TimelineStep::settled(
-            gettext("Protection reduced on purpose"),
-            gettext(
-                "Someone with the administrator password changed ClamAV settings at runtime in a \
-                 way that checks less than your configuration does. The System Changes tab on the \
-                 Logs page shows who and when.",
-            ),
-            reduced_settings_status(reduced_settings, *change_time),
-            SettledStep {
-                evidence_rows: plain_rows(reduced_settings.iter().map(|reduced_setting| {
-                    evidence_row(
-                        reduced_setting.setting_key.clone(),
-                        gettext("{base} in your configuration, {changed} now")
-                            .replace("{base}", &reduced_setting.base_value)
-                            .replace("{changed}", &reduced_setting.changed_value),
-                    )
-                })),
-                header_action: runtime_review_action(),
-                ..SettledStep::without_offers(node_state)
-            },
-        )),
-        RuntimeReductions::BaseConfigUnreadable {
-            change_time,
-            overridden_settings,
-        } => Some(TimelineStep::settled(
-            gettext("Settings changed at runtime"),
-            gettext(
-                "Someone with the administrator password changed ClamAV settings at runtime. Your \
-                 clamd.conf could not be read, so Lazaret can't tell whether these changes check \
-                 less than your configuration does. The System Changes tab on the Logs page shows \
-                 who and when.",
-            ),
-            gettext(
-                "Settings were changed at runtime, but clamd.conf could not be read to compare \
-                 them",
-            ),
-            SettledStep {
-                evidence_rows: plain_rows(
-                    overridden_settings
-                        .iter()
-                        .map(|overridden_setting| {
-                            evidence_row(
-                                overridden_setting.setting_key.clone(),
-                                gettext("{changed} now")
-                                    .replace("{changed}", &overridden_setting.changed_value),
-                            )
-                        })
-                        .chain(std::iter::once(override_change_time_row(*change_time))),
-                ),
-                header_action: runtime_review_action(),
-                ..SettledStep::without_offers(node_state)
-            },
-        )),
-    }
 }
 
 fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<ProtectionStep> {
@@ -603,97 +371,6 @@ fn signature_overview_step(
             },
         ),
     )
-}
-
-pub const fn daemon_condition(daemon_evidence: &DaemonEvidence) -> CheckedCondition {
-    match daemon_evidence {
-        DaemonEvidence::ClamdAnswering {
-            loaded_signatures: LoadedSignatures::BehindDisk { .. },
-        } => CheckedCondition::ReviewSuggested,
-        DaemonEvidence::ClamdAnswering { .. } => CheckedCondition::ConditionMet,
-        DaemonEvidence::UnitActiveNotAnswering { .. } | DaemonEvidence::UnitStopped { .. } => {
-            CheckedCondition::ConditionFailed
-        }
-        DaemonEvidence::UnitStateUnknown => CheckedCondition::EvidenceUnknown,
-        DaemonEvidence::NeverSetUp => CheckedCondition::SetupSuggested,
-    }
-}
-
-fn daemon_step(
-    daemon_evidence: &DaemonEvidence,
-    distribution_family: DistributionFamily,
-) -> ProtectionStep {
-    let step_title = gettext("Daemon running");
-    let mechanism_details = gettext(
-        "clamd keeps the signatures loaded in memory. On-access blocking and scheduled scans both \
-         send their files to it.",
-    );
-    let node_state = daemon_condition(daemon_evidence).node_state();
-    match daemon_evidence {
-        DaemonEvidence::ClamdAnswering {
-            loaded_signatures:
-                LoadedSignatures::BehindDisk {
-                    loaded_version,
-                    disk_version,
-                },
-        } => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("clamd still uses signatures {loaded}, but {disk} is on disk")
-                .replace("{loaded}", loaded_version)
-                .replace("{disk}", disk_version),
-        ),
-        DaemonEvidence::ClamdAnswering { .. } => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("clamd is answering"),
-        ),
-        DaemonEvidence::UnitActiveNotAnswering { service_unit } => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext(
-                "{unit} is running, but clamd does not answer. It may still be loading signatures.",
-            )
-            .replace("{unit}", service_unit),
-        )
-        .with_guidance_commands(remedy_commands(
-            SuggestedRemedy::ClamavDaemonRestart,
-            distribution_family,
-        )),
-        DaemonEvidence::UnitStateUnknown => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("clamd does not answer, and systemd could not report its state"),
-        ),
-        DaemonEvidence::UnitStopped { service_unit } => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("{unit} is not running").replace("{unit}", service_unit),
-        )
-        .with_guidance_commands(remedy_commands(
-            SuggestedRemedy::ClamavDaemonStart,
-            distribution_family,
-        )),
-        DaemonEvidence::NeverSetUp => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("clamd is not set up, so scans fall back to the slower clamscan"),
-        )
-        .with_guidance_commands(remedy_commands(
-            SuggestedRemedy::ClamavDaemonStart,
-            distribution_family,
-        )),
-    }
-}
-
-pub const fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
-    matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
 }
 
 fn on_access_setting_row(evidence_name: String, evidence_value: String) -> ProtectionEvidenceRow {
@@ -1273,6 +950,7 @@ pub fn protection_timeline(
     let engine_problem = Some(engine_step(
         &protection_evidence.engine_installation,
         distribution_family,
+        scan_engine_offer(engine_condition(&protection_evidence.engine_installation)),
     ))
     .filter(|installation_step| installation_step.node_state() != StepNodeState::Completed);
     ProtectionTimeline {
@@ -1308,16 +986,24 @@ pub fn protection_timeline(
                     protection_activity.moment_context(),
                     distribution_family,
                 ),
-                daemon_step(&protection_evidence.daemon_evidence, distribution_family),
+                daemon_step(
+                    &protection_evidence.daemon_evidence,
+                    distribution_family,
+                    scan_engine_offer(daemon_condition(&protection_evidence.daemon_evidence)),
+                ),
             ])
             .collect(),
-        review_steps: runtime_reduction_step(&protection_evidence.runtime_reductions)
-            .into_iter()
-            .chain(account_settings_step(
-                &protection_evidence.account_setting_findings,
-            ))
-            .chain(trust_list_step(&protection_evidence.trust_list))
-            .collect(),
+        review_steps: runtime_reduction_step(
+            &protection_evidence.runtime_reductions,
+            ReducedSettingGroup::AllSettings,
+            runtime_review_action(),
+        )
+        .into_iter()
+        .chain(account_settings_step(
+            &protection_evidence.account_setting_findings,
+        ))
+        .chain(trust_list_step(&protection_evidence.trust_list))
+        .collect(),
     }
 }
 
@@ -1329,7 +1015,10 @@ mod protection_timeline_presentation_tests {
     use crate::{
         host_services::{
             protection_evidence::{
-                host_protection_evidence::{ProgramTrustFinding, ProgramTrustInspection},
+                host_protection_evidence::{
+                    DaemonEvidence, OverridesChangeTime, OverridesReadFailure, ProgramTrustFinding,
+                    ProgramTrustInspection, ReducedSetting, RuntimeReductions,
+                },
                 protection_evidence_fixtures::{
                     REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
                 },
@@ -2093,39 +1782,26 @@ mod protection_timeline_presentation_tests {
     }
 
     #[test]
-    fn an_active_daemon_that_does_not_answer_suggests_a_restart() {
+    fn an_active_daemon_that_does_not_answer_leaves_on_access_waiting() {
         let protection_evidence = ProtectionEvidence {
             daemon_evidence: DaemonEvidence::UnitActiveNotAnswering {
                 service_unit: "clamav-daemon.service",
             },
             ..healthy_evidence()
         };
-        let daemon_step = daemon_step(
-            &protection_evidence.daemon_evidence,
-            DistributionFamily::DebianFamily,
-        );
-        assert_eq!(daemon_step.node_state(), StepNodeState::HasFailed);
-        assert!(
-            daemon_step
-                .status_text
-                .starts_with("clamav-daemon.service is running, but clamd does not answer")
-        );
-        assert_eq!(
-            daemon_step.guidance_commands,
-            vec!["sudo systemctl restart clamav-daemon".to_owned()]
-        );
         assert_eq!(
             state_of(&protection_evidence, "On-access blocking"),
             StepNodeState::AwaitingPrerequisite
         );
+        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
+        let daemon_step = step_titled(&engine_steps, "Daemon running");
+        assert_eq!(daemon_step.node_state(), StepNodeState::HasFailed);
         assert_eq!(
-            daemon_step_state(DaemonEvidence::UnitStateUnknown),
-            StepNodeState::NeedsReview
+            daemon_step.header_offer(),
+            Some(OfferedAction::suggested(
+                ProtectionStepAction::OpenScanEngine
+            ))
         );
-    }
-
-    fn daemon_step_state(daemon_evidence: DaemonEvidence) -> StepNodeState {
-        daemon_step(&daemon_evidence, DistributionFamily::NixosFamily).node_state()
     }
 
     #[test]

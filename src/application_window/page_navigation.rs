@@ -71,6 +71,10 @@ use crate::{
             scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
             scan_profiles_dialog::scan_profile_store::ScanProfileStore,
         },
+        scan_engine_page::{
+            scan_engine_component::{ScanEnginePage, ScanEnginePageInput},
+            scan_engine_state::ScanEnginePageOutput,
+        },
         scheduled_scans_page::scan_schedule_component::ScanSchedulePage,
     },
     shared_widgets::{
@@ -192,6 +196,7 @@ pub struct PageNavigation {
     hardening_page: Controller<AuditSectionsPage>,
     protection_page: Controller<ProtectionTimelinePage>,
     database_updates_page: Controller<DatabaseUpdatesPage>,
+    scan_engine_page: Controller<ScanEnginePage>,
     detections_page: Controller<BackgroundDetectionsPage>,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
@@ -343,6 +348,16 @@ const fn forwarded_database_updates_output(
     }
 }
 
+const fn forwarded_scan_engine_output(
+    scan_engine_output: ScanEnginePageOutput,
+) -> PageNavigationInput {
+    match scan_engine_output {
+        ScanEnginePageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
+    }
+}
+
 fn register_page_actions(
     window_root: &adw::ApplicationWindow,
     sender: &ComponentSender<PageNavigation>,
@@ -406,7 +421,7 @@ fn register_page_actions(
         .for_each(|application_page| {
             relm4::main_application().set_accels_for_action(
                 &format!("win.show-page::{}", application_page.page_name()),
-                &[application_page.keyboard_accelerator()],
+                application_page.keyboard_accelerators(),
             );
         });
 }
@@ -465,6 +480,8 @@ impl PageNavigation {
             .emit(DatabaseUpdatesPageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
+        self.scan_engine_page
+            .emit(ScanEnginePageInput::EvidenceRefreshChanged(next_refresh));
         match gathering_start {
             GatheringStart::StartGathering => {
                 let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
@@ -499,8 +516,8 @@ impl PageNavigation {
     fn open_settings_subpage(&mut self, settings_subpage: SettingsSubpage) {
         let owning_page = match settings_subpage.subpage_placement() {
             SubpagePlacement::StackedOnPage(owning_page) => owning_page,
-            SubpagePlacement::EmbeddedInDatabaseUpdates => {
-                self.show_page(ApplicationPage::DatabaseUpdates);
+            SubpagePlacement::EmbeddedInPage(embedding_page) => {
+                self.show_page(embedding_page);
                 return;
             }
         };
@@ -611,6 +628,7 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::Quarantine),
                                     append: &navigation_row(ApplicationPage::Signatures),
                                     append: &navigation_row(ApplicationPage::DatabaseUpdates),
+                                    append: &navigation_row(ApplicationPage::ScanEngine),
                                     append: &navigation_row(ApplicationPage::Hardening),
                                 },
                             },
@@ -666,6 +684,9 @@ impl Component for PageNavigation {
                             },
                             add_titled[Some(ApplicationPage::DatabaseUpdates.page_name()), &ApplicationPage::DatabaseUpdates.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::DatabaseUpdates, model.database_updates_page.widget()),
+                            },
+                            add_titled[Some(ApplicationPage::ScanEngine.page_name()), &ApplicationPage::ScanEngine.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::ScanEngine, model.scan_engine_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Hardening.page_name()), &ApplicationPage::Hardening.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Hardening, model.hardening_page.widget()),
@@ -737,6 +758,9 @@ impl Component for PageNavigation {
         let database_updates_page = DatabaseUpdatesPage::builder()
             .launch(activity_history.clone())
             .forward(sender.input_sender(), forwarded_database_updates_output);
+        let scan_engine_page = ScanEnginePage::builder()
+            .launch(())
+            .forward(sender.input_sender(), forwarded_scan_engine_output);
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
                 activity_history,
@@ -776,6 +800,7 @@ impl Component for PageNavigation {
             hardening_page,
             protection_page,
             database_updates_page,
+            scan_engine_page,
             detections_page,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
@@ -925,6 +950,10 @@ impl Component for PageNavigation {
                     ));
                 self.database_updates_page
                     .emit(DatabaseUpdatesPageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
+                self.scan_engine_page
+                    .emit(ScanEnginePageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);

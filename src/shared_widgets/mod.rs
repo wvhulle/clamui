@@ -9,5 +9,7 @@ pub mod journal_follow_failure_text;
 pub mod loading_indicators;
 pub mod page_widget_templates;
 pub mod scanner_exit_text;
+pub mod service_log;
 pub mod step_timeline;
+pub mod system_changes;
 pub mod trust_confirmation_dialog;

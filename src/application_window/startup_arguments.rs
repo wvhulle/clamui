@@ -161,6 +161,18 @@ mod startup_arguments_tests {
     }
 
     #[test]
+    fn each_area_page_opens_by_its_name() {
+        [("--page=scan-engine", ApplicationPage::ScanEngine)]
+            .into_iter()
+            .for_each(|(page_argument, expected_page)| {
+                assert_eq!(
+                    parsed_arguments(&["lazaret", page_argument]).startup_page,
+                    StartupPageRequest::RecognizedPage(StartupPage::ApplicationPage(expected_page))
+                );
+            });
+    }
+
+    #[test]
     fn an_unknown_page_is_reported_and_shows_the_protection_page() {
         let startup_page = parsed_arguments(&["lazaret", "--page=quarantaine"]).startup_page;
         assert_eq!(

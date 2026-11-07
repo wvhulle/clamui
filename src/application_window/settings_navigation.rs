@@ -8,7 +8,7 @@ pub const OPEN_SETTINGS_ACTION_NAME: &str = "open-settings";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SubpagePlacement {
     StackedOnPage(ApplicationPage),
-    EmbeddedInDatabaseUpdates,
+    EmbeddedInPage(ApplicationPage),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -56,22 +56,25 @@ impl SettingsSubpage {
 
     pub const fn subpage_placement(self) -> SubpagePlacement {
         match self {
-            Self::ScanExclusions
-            | Self::ScanSchedule
-            | Self::DeviceAutoScan
-            | Self::ScannerEngine
-            | Self::DetectionChoices => SubpagePlacement::StackedOnPage(ApplicationPage::Scan),
+            Self::ScanExclusions | Self::ScanSchedule | Self::DeviceAutoScan => {
+                SubpagePlacement::StackedOnPage(ApplicationPage::Scan)
+            }
+            Self::ScannerEngine | Self::DetectionChoices => {
+                SubpagePlacement::EmbeddedInPage(ApplicationPage::ScanEngine)
+            }
             Self::OnAccessScanning | Self::TrustedDetections => {
                 SubpagePlacement::StackedOnPage(ApplicationPage::Protection)
             }
-            Self::SignatureUpdates => SubpagePlacement::EmbeddedInDatabaseUpdates,
+            Self::SignatureUpdates => {
+                SubpagePlacement::EmbeddedInPage(ApplicationPage::DatabaseUpdates)
+            }
         }
     }
 
     pub const fn owning_page(self) -> ApplicationPage {
         match self.subpage_placement() {
-            SubpagePlacement::StackedOnPage(owning_page) => owning_page,
-            SubpagePlacement::EmbeddedInDatabaseUpdates => ApplicationPage::DatabaseUpdates,
+            SubpagePlacement::StackedOnPage(owning_page)
+            | SubpagePlacement::EmbeddedInPage(owning_page) => owning_page,
         }
     }
 
@@ -188,7 +191,15 @@ mod settings_navigation_tests {
         );
         assert_eq!(
             SettingsSubpage::SignatureUpdates.subpage_placement(),
-            SubpagePlacement::EmbeddedInDatabaseUpdates
+            SubpagePlacement::EmbeddedInPage(ApplicationPage::DatabaseUpdates)
+        );
+        assert_eq!(
+            SettingsSubpage::ScannerEngine.subpage_placement(),
+            SubpagePlacement::EmbeddedInPage(ApplicationPage::ScanEngine)
+        );
+        assert_eq!(
+            SettingsSubpage::DetectionChoices.owning_page(),
+            ApplicationPage::ScanEngine
         );
         assert_eq!(
             SettingsSubpage::SignatureUpdates.owning_page(),

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 10:04+0100\n"
+"POT-Creation-Date: 2026-11-07 10:20+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,31 +18,31 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/application_window/application_pages.rs:48
-#: src/protection_page/protection_timeline_page.rs:286
+#: src/application_window/application_pages.rs:51
+#: src/protection_page/protection_timeline_page.rs:293
 msgid "Protection"
 msgstr ""
 
-#: src/application_window/application_pages.rs:49
-#: src/application_window/sidebar_area_status.rs:84
+#: src/application_window/application_pages.rs:52
+#: src/application_window/sidebar_area_status.rs:87
 #: src/findings/detections_page/background_detections_page.rs:604
 #: src/findings/detections_page/background_detections_page.rs:623
 #: src/findings/detections_page/background_detections_page.rs:627
 msgid "Detections"
 msgstr ""
 
-#: src/application_window/application_pages.rs:50
-#: src/scans/manual_scan_page/scan_page_component.rs:312
-#: src/scans/manual_scan_page/scan_page_component.rs:577
+#: src/application_window/application_pages.rs:53
+#: src/scans/manual_scan_page/scan_page_component.rs:311
+#: src/scans/manual_scan_page/scan_page_component.rs:576
 msgid "Scan"
 msgstr ""
 
-#: src/application_window/application_pages.rs:51
+#: src/application_window/application_pages.rs:54
 msgid "Logs"
 msgstr ""
 
-#: src/application_window/application_pages.rs:52
-#: src/application_window/sidebar_area_status.rs:85
+#: src/application_window/application_pages.rs:55
+#: src/application_window/sidebar_area_status.rs:88
 #: src/findings/detections_page/incident_timeline_presentation.rs:44
 #: src/findings/quarantine_page/quarantine_entries_page.rs:710
 #: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:220
@@ -50,18 +50,23 @@ msgstr ""
 msgid "Quarantine"
 msgstr ""
 
-#: src/application_window/application_pages.rs:53
-#: src/application_window/page_navigation.rs:748
+#: src/application_window/application_pages.rs:56
+#: src/application_window/page_navigation.rs:772
 msgid "Signatures"
 msgstr ""
 
-#: src/application_window/application_pages.rs:54
-#: src/application_window/sidebar_area_status.rs:79
+#: src/application_window/application_pages.rs:57
+#: src/application_window/sidebar_area_status.rs:82
 msgid "Database Updates"
 msgstr ""
 
-#: src/application_window/application_pages.rs:55
-#: src/application_window/page_navigation.rs:759
+#: src/application_window/application_pages.rs:58
+#: src/application_window/sidebar_area_status.rs:83
+msgid "Scan Engine"
+msgstr ""
+
+#: src/application_window/application_pages.rs:59
+#: src/application_window/page_navigation.rs:783
 msgid "Hardening"
 msgstr ""
 
@@ -89,378 +94,374 @@ msgstr ""
 msgid "translator-credits"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:295
+#: src/application_window/page_navigation.rs:300
 #: src/preferences_dialog/preferences_dialog_component.rs:107
 msgid "Preferences"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:296
+#: src/application_window/page_navigation.rs:301
 msgid "About Lazaret"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:297
+#: src/application_window/page_navigation.rs:302
 #: src/application_window/system_tray_menu.rs:75
 #: src/application_window/window_close_behavior.rs:111
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:555
+#: src/application_window/page_navigation.rs:572
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:750
+#: src/application_window/page_navigation.rs:774
 msgid ""
 "Where ClamAV's malware signatures come from, and which other sources you "
 "could add."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:761
+#: src/application_window/page_navigation.rs:785
 msgid ""
 "Protections outside ClamAV that make exploits harder. They are listed for "
 "reference and don't affect the Protection summary."
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:80
+#: src/application_window/settings_navigation.rs:83
 #: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:107
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:246
 msgid "Exclusions"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:81
-#: src/application_window/sidebar_area_status.rs:82
+#: src/application_window/settings_navigation.rs:84
+#: src/application_window/sidebar_area_status.rs:85
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:248
 msgid "Scheduled Scans"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:82
+#: src/application_window/settings_navigation.rs:85
 #: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:42
-#: src/scans/manual_scan_page/scan_page_component.rs:1002
+#: src/scans/manual_scan_page/scan_page_component.rs:1001
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:83
+#: src/application_window/settings_navigation.rs:86
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:68
 msgid "Scanner Engine"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:84
+#: src/application_window/settings_navigation.rs:87
 #: src/findings/detections_page/background_detections_page.rs:639
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:69
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:742
 msgid "Detection"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:85
-#: src/application_window/sidebar_area_status.rs:81
+#: src/application_window/settings_navigation.rs:88
+#: src/application_window/sidebar_area_status.rs:84
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:70
 msgid "On-Access Scanning"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:86
+#: src/application_window/settings_navigation.rs:89
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:71
 msgid "Signature Updates"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:87
+#: src/application_window/settings_navigation.rs:90
 msgid "Trusted Detections"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:104
+#: src/application_window/settings_navigation.rs:107
 msgid "Folders and patterns that Lazaret scans skip"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:105
+#: src/application_window/settings_navigation.rs:108
 msgid "Scan automatically with a systemd timer"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:106
+#: src/application_window/settings_navigation.rs:109
 msgid "Scan removable drives when they are connected"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:107
+#: src/application_window/settings_navigation.rs:110
 msgid "clamd settings for every scan on this computer"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:109
+#: src/application_window/settings_navigation.rs:112
 msgid "Unwanted programs, macros, encrypted files and archives"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:111
+#: src/application_window/settings_navigation.rs:114
 msgid "Which folders clamonacc watches, and how it blocks"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:112
+#: src/application_window/settings_navigation.rs:115
 msgid "How freshclam downloads signatures"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:113
+#: src/application_window/settings_navigation.rs:116
 msgid "Files and detections that ClamAV never reports"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:134
+#: src/application_window/settings_navigation.rs:137
 msgid "System"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:136
+#: src/application_window/settings_navigation.rs:139
 msgid ""
 "ClamAV configuration shared by all users. Changes need administrator "
 "approval."
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:78
+#: src/application_window/sidebar_area_status.rs:81
 #: src/shared_widgets/audit_sections/audit_check_results.rs:76
 msgid "Signature Sources"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:80
-msgid "Scan Engine"
-msgstr ""
-
-#: src/application_window/sidebar_area_status.rs:83
+#: src/application_window/sidebar_area_status.rs:86
 msgid "Manual Scan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:86
+#: src/application_window/sidebar_area_status.rs:89
 msgid "Analysis & False Positives"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:87
+#: src/application_window/sidebar_area_status.rs:90
 msgid "Submissions"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:257
+#: src/application_window/sidebar_area_status.rs:260
 msgid "Other sources unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:261
+#: src/application_window/sidebar_area_status.rs:264
 msgid "A source is out of date"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:264
+#: src/application_window/sidebar_area_status.rs:267
 msgid "Official signatures only"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:267
+#: src/application_window/sidebar_area_status.rs:270
 #, rust-format
 msgid "Official and {count} other source"
 msgid_plural "Official and {count} other sources"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:296
+#: src/application_window/sidebar_area_status.rs:299
 msgid "No virus definitions"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:298
+#: src/application_window/sidebar_area_status.rs:301
 msgid "Age of the definitions unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:306
+#: src/application_window/sidebar_area_status.rs:309
 msgid "Last update failed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:309
+#: src/application_window/sidebar_area_status.rs:312
 msgid "Definitions dated in the future"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:313
+#: src/application_window/sidebar_area_status.rs:316
 #, rust-format
 msgid "Updated {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:315
+#: src/application_window/sidebar_area_status.rs:318
 #, rust-format
 msgid "Definitions from {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:329
+#: src/application_window/sidebar_area_status.rs:332
 msgid "freshclam is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:330
+#: src/application_window/sidebar_area_status.rs:333
 msgid "Unknown whether freshclam is trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:334
+#: src/application_window/sidebar_area_status.rs:337
 msgid "A freshclam copy in your account is ignored"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:358
+#: src/application_window/sidebar_area_status.rs:361
 msgid "clamd uses older signatures"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:362
+#: src/application_window/sidebar_area_status.rs:365
 msgid "clamd answering"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:363
+#: src/application_window/sidebar_area_status.rs:366
 msgid "clamd not answering"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:364
+#: src/application_window/sidebar_area_status.rs:367
 msgid "clamd state unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:365
+#: src/application_window/sidebar_area_status.rs:368
 msgid "clamd not running"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:366
+#: src/application_window/sidebar_area_status.rs:369
 msgid "clamd not set up"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:375
-#: src/application_window/sidebar_area_status.rs:595
+#: src/application_window/sidebar_area_status.rs:378
+#: src/application_window/sidebar_area_status.rs:598
 msgid "ClamAV not installed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:379
+#: src/application_window/sidebar_area_status.rs:382
 msgid "clamscan is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:383
+#: src/application_window/sidebar_area_status.rs:386
 msgid "ClamAV version unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:395
+#: src/application_window/sidebar_area_status.rs:398
 msgid "A scanner program is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:397
+#: src/application_window/sidebar_area_status.rs:400
 msgid "Unknown whether the scanners are trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:402
+#: src/application_window/sidebar_area_status.rs:405
 msgid "A scanner copy in your account is ignored"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:416
+#: src/application_window/sidebar_area_status.rs:419
 msgid "Runtime changes unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:420
+#: src/application_window/sidebar_area_status.rs:423
 msgid "Settings reduced at runtime"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:441
+#: src/application_window/sidebar_area_status.rs:444
 msgid "Waiting for clamd"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:462
+#: src/application_window/sidebar_area_status.rs:465
 msgid "State unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:463
+#: src/application_window/sidebar_area_status.rs:466
 msgid "Not set up"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:469
+#: src/application_window/sidebar_area_status.rs:472
 msgid "clamonacc not running"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:471
+#: src/application_window/sidebar_area_status.rs:474
 msgid "clamd.conf unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:475
+#: src/application_window/sidebar_area_status.rs:478
 msgid "Nothing watched"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:480
+#: src/application_window/sidebar_area_status.rs:483
 msgid "Checks files, doesn't block"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:485
+#: src/application_window/sidebar_area_status.rs:488
 #, rust-format
 msgid "Blocking {paths}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:523
+#: src/application_window/sidebar_area_status.rs:526
 msgid "Timer not active"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:533
+#: src/application_window/sidebar_area_status.rs:536
 msgid "Last scan failed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:536
+#: src/application_window/sidebar_area_status.rs:539
 #, rust-format
 msgid "Next scan {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:538
+#: src/application_window/sidebar_area_status.rs:541
 msgid "No next scan planned"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:540
+#: src/application_window/sidebar_area_status.rs:543
 msgid "Scan service missing"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:541
+#: src/application_window/sidebar_area_status.rs:544
 msgid "Scan service unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:543
-#: src/protection_page/protection_timeline_presentation.rs:1117
+#: src/application_window/sidebar_area_status.rs:546
+#: src/protection_page/protection_timeline_presentation.rs:794
 msgid "Scheduled by Lazaret"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:544
+#: src/application_window/sidebar_area_status.rs:547
 msgid "No scan scheduled"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:587
+#: src/application_window/sidebar_area_status.rs:590
 msgid "Schedule changed outside Lazaret"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:602
+#: src/application_window/sidebar_area_status.rs:605
 msgid "Ready to scan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:607
+#: src/application_window/sidebar_area_status.rs:610
 msgid "Uses the slower clamscan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:615
+#: src/application_window/sidebar_area_status.rs:618
 msgid "An exclusion may skip malware"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:632
+#: src/application_window/sidebar_area_status.rs:635
 msgid "Journal unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:633
+#: src/application_window/sidebar_area_status.rs:636
 msgid "Following the journal stopped"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:635
+#: src/application_window/sidebar_area_status.rs:638
 msgid "Notifications off"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:637
+#: src/application_window/sidebar_area_status.rs:640
 msgid "Alerts stop when Lazaret quits"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:648
+#: src/application_window/sidebar_area_status.rs:651
 msgid "Nothing to decide"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:653
+#: src/application_window/sidebar_area_status.rs:656
 #, rust-format
 msgid "{count} needs a decision"
 msgid_plural "{count} need a decision"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:672
+#: src/application_window/sidebar_area_status.rs:675
 msgid "Loading…"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:675
+#: src/application_window/sidebar_area_status.rs:678
 msgid "Empty"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:679
+#: src/application_window/sidebar_area_status.rs:682
 #: src/findings/quarantine_page/quarantine_entries_page.rs:610
 #, rust-format
 msgid "{count} item"
@@ -468,38 +469,38 @@ msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:684
+#: src/application_window/sidebar_area_status.rs:687
 msgid "The quarantine can't be read"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:691
+#: src/application_window/sidebar_area_status.rs:694
 msgid "Nothing trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:694
+#: src/application_window/sidebar_area_status.rs:697
 #, rust-format
 msgid "{count} item trusted"
 msgid_plural "{count} items trusted"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:703
+#: src/application_window/sidebar_area_status.rs:706
 msgid "Signature folder unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:706
+#: src/application_window/sidebar_area_status.rs:709
 msgid "Another allowlist silences ClamAV"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:716
+#: src/application_window/sidebar_area_status.rs:719
 msgid "Lazaret's allowlist is unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:742
+#: src/application_window/sidebar_area_status.rs:745
 msgid "Nothing submitted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:788
+#: src/application_window/sidebar_area_status.rs:791
 #, rust-format
 msgid "{area}: {state}"
 msgstr ""
@@ -547,8 +548,8 @@ msgstr ""
 #: src/findings/detections_page/incident_timeline_presentation.rs:47
 #: src/findings/quarantine_page/quarantine_entries_page.rs:215
 #: src/findings/quarantine_page/quarantine_entries_page.rs:526
-#: src/logs_page/activity_logs_page.rs:252
-#: src/scans/manual_scan_page/scan_page_component.rs:655
+#: src/logs_page/activity_logs_page.rs:176
+#: src/scans/manual_scan_page/scan_page_component.rs:654
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
 #: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:205
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:396
@@ -1173,7 +1174,7 @@ msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entries_page.rs:717
 #: src/scans/manual_scan_page/scan_options_section.rs:108
-#: src/scans/manual_scan_page/scan_page_component.rs:600
+#: src/scans/manual_scan_page/scan_page_component.rs:599
 msgid "More"
 msgstr ""
 
@@ -1190,9 +1191,9 @@ msgid "Scan every quarantined file with the current signatures"
 msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entries_page.rs:749
-#: src/logs_page/activity_logs_page.rs:342
-#: src/logs_page/activity_logs_page.rs:510
-#: src/logs_page/activity_logs_page.rs:577
+#: src/logs_page/activity_logs_page.rs:266
+#: src/logs_page/activity_logs_page.rs:434
+#: src/shared_widgets/system_changes/system_changes_group.rs:85
 msgid "Refresh"
 msgstr ""
 
@@ -1258,13 +1259,13 @@ msgstr[1] ""
 
 #: src/findings/quarantine_page/quarantine_entry_row.rs:80
 #: src/findings/quarantine_page/quarantine_entry_row.rs:140
-#: src/logs_page/activity_logs_page.rs:215
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:118
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:206
-#: src/protection_page/protection_timeline_page.rs:372
-#: src/scans/manual_scan_page/scan_page_component.rs:263
+#: src/protection_page/protection_timeline_page.rs:379
+#: src/scans/manual_scan_page/scan_page_component.rs:262
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:103
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
+#: src/shared_widgets/service_log/service_log_state.rs:51
 msgid "Checking…"
 msgstr ""
 
@@ -1382,7 +1383,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:228
-#: src/scans/manual_scan_page/scan_page_component.rs:516
+#: src/scans/manual_scan_page/scan_page_component.rs:515
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:105
 msgid "Threats Detected"
 msgstr ""
@@ -1484,27 +1485,27 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
-#: src/host_services/settings_helper/helper_audit_records.rs:67
+#: src/host_services/settings_helper/helper_audit_records.rs:68
 msgid "Applied"
 msgstr ""
 
-#: src/host_services/settings_helper/helper_audit_records.rs:68
+#: src/host_services/settings_helper/helper_audit_records.rs:69
 msgid "Rolled back"
 msgstr ""
 
-#: src/host_services/settings_helper/helper_audit_records.rs:69
+#: src/host_services/settings_helper/helper_audit_records.rs:70
 msgid "Refused without a password"
 msgstr ""
 
-#: src/host_services/settings_helper/helper_audit_records.rs:70
+#: src/host_services/settings_helper/helper_audit_records.rs:71
 msgid "Failed"
 msgstr ""
 
-#: src/host_services/settings_helper/helper_audit_records.rs:71
+#: src/host_services/settings_helper/helper_audit_records.rs:72
 msgid "Outcome not recorded"
 msgstr ""
 
-#: src/host_services/settings_helper/helper_audit_records.rs:73
+#: src/host_services/settings_helper/helper_audit_records.rs:74
 #, rust-format
 msgid "Unrecognized outcome {outcome}"
 msgstr ""
@@ -1713,174 +1714,131 @@ msgstr ""
 msgid "The file doesn't hold a valid key for this service"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:163
+#: src/logs_page/activity_logs_page.rs:122
 msgid "Select a log entry to view details."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:176
+#: src/logs_page/activity_logs_page.rs:135
 #, rust-format
 msgid "Failed to clear logs: {error}"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:190
+#: src/logs_page/activity_logs_page.rs:149
 #: src/signatures/database_updates_page/database_updates_component.rs:130
 #, rust-format
 msgid "Failed to load historical logs: {error}"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:201
-#: src/logs_page/activity_logs_page.rs:205
-#, rust-format
-msgid "The system journal can't be read: {error}"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:220
-msgid "System journal"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:223
-msgid "Daemon log file not found."
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:226
-#, rust-format
-msgid "Daemon log file not found. {reason}"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:247
+#: src/logs_page/activity_logs_page.rs:171
 msgid "Clear All Logs?"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:249
+#: src/logs_page/activity_logs_page.rs:173
 msgid ""
 "This will permanently delete all historical logs. This action cannot be "
 "undone."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:256
-#: src/logs_page/activity_logs_page.rs:376
+#: src/logs_page/activity_logs_page.rs:180
+#: src/logs_page/activity_logs_page.rs:300
 msgid "Clear All"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:316
-#: src/logs_page/activity_logs_page.rs:330
+#: src/logs_page/activity_logs_page.rs:240
+#: src/logs_page/activity_logs_page.rs:254
 msgid "Historical Logs"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:336
+#: src/logs_page/activity_logs_page.rs:260
 msgid "Previous scan and update operations"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:350
+#: src/logs_page/activity_logs_page.rs:274
 msgid "Export All"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:361
+#: src/logs_page/activity_logs_page.rs:285
 msgid "Export CSV"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:367
+#: src/logs_page/activity_logs_page.rs:291
 msgid "Export JSON"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:417
+#: src/logs_page/activity_logs_page.rs:341
 #: src/signatures/database_updates_page/database_updates_component.rs:285
 msgid "Historical logs can't be read"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:439
+#: src/logs_page/activity_logs_page.rs:363
 msgid "Log Details"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:444
-#: src/logs_page/activity_logs_page.rs:585
+#: src/logs_page/activity_logs_page.rs:368
 #: src/shared_widgets/activity_entries/activity_transcript_dialog.rs:54
 #: src/shared_widgets/audit_sections/audit_check_row.rs:60
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:732
+#: src/shared_widgets/service_log/service_log_group.rs:73
 #: src/shared_widgets/step_timeline/timeline_detail_row.rs:183
 msgid "Copy"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:453
-#: src/logs_page/activity_logs_page.rs:595
+#: src/logs_page/activity_logs_page.rs:377
+#: src/shared_widgets/service_log/service_log_group.rs:82
 msgid "Export Text"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:483
-#: src/logs_page/activity_logs_page.rs:497
+#: src/logs_page/activity_logs_page.rs:407
+#: src/logs_page/activity_logs_page.rs:421
 msgid "System Changes"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:504
+#: src/logs_page/activity_logs_page.rs:428
 msgid ""
 "ClamAV settings and trusted detections changed through Lazaret, as recorded "
 "by the system. Software running as you can't remove these records."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:532
+#: src/logs_page/activity_logs_page.rs:456
+#: src/shared_widgets/system_changes/system_changes_group.rs:101
 msgid "System changes can't be read"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:543
-#: src/logs_page/activity_logs_page.rs:557
-msgid "ClamAV Daemon"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:570
-msgid "Live Updates"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:660
+#: src/logs_page/activity_logs_page.rs:498
 #: src/signatures/database_updates_page/database_updates_component.rs:341
 msgid "Loading history…"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:664
+#: src/logs_page/activity_logs_page.rs:502
 msgid "No historical logs yet."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:668
+#: src/logs_page/activity_logs_page.rs:506
+#: src/shared_widgets/system_changes/system_changes_group.rs:128
 msgid "Loading system changes…"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:673
+#: src/logs_page/activity_logs_page.rs:511
 msgid "No ClamAV settings or trusted detections were changed through Lazaret"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:722
+#: src/logs_page/activity_logs_page.rs:559
 #, rust-format
 msgid "Could not export the logs: {error}"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:731
+#: src/logs_page/activity_logs_page.rs:568
 #: src/shared_widgets/activity_entries/activity_transcript_dialog.rs:108
 msgid "Log details copied to clipboard"
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:750
-msgid "Daemon logs copied to clipboard"
-msgstr ""
-
-#: src/logs_page/activity_logs_page.rs:791
+#: src/logs_page/activity_logs_page.rs:608
 msgid "Historical logs cleared."
 msgstr ""
 
-#: src/logs_page/activity_logs_page.rs:806
+#: src/logs_page/activity_logs_page.rs:619
+#: src/shared_widgets/service_log/service_log_group.rs:191
 msgid "Exported."
-msgstr ""
-
-#: src/logs_page/system_change_row.rs:17
-#, rust-format
-msgid "{time} · {outcome} · requested by user {uid}"
-msgstr ""
-
-#: src/logs_page/system_change_row.rs:20
-#, rust-format
-msgid "{time} · {outcome} · requested by an unknown user"
-msgstr ""
-
-#: src/logs_page/system_change_row.rs:47
-msgid "This change lowered protection"
 msgstr ""
 
 #: src/main.rs:79
@@ -2021,7 +1979,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/protection_page/protection_timeline_page.rs:131
-#: src/protection_page/protection_timeline_page.rs:318
+#: src/protection_page/protection_timeline_page.rs:325
 #: src/protection_page/protection_timeline_presentation.rs:68
 msgid "Review"
 msgstr ""
@@ -2057,13 +2015,15 @@ msgstr ""
 msgid "The scan could not be started: {error}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:292
+#: src/protection_page/protection_timeline_page.rs:299
+#: src/scans/scan_engine_page/scan_engine_component.rs:150
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:118
 #: src/signatures/database_updates_page/database_updates_component.rs:252
 msgid "Check again"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:296
+#: src/protection_page/protection_timeline_page.rs:303
+#: src/scans/scan_engine_page/scan_engine_component.rs:154
 #: src/shared_widgets/audit_sections/audit_category_section.rs:101
 #: src/shared_widgets/audit_sections/audit_check_results.rs:30
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:122
@@ -2071,34 +2031,39 @@ msgstr ""
 msgid "Checking"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:358
+#: src/protection_page/protection_timeline_page.rs:365
 msgid "Checks on your files"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:363
+#: src/protection_page/protection_timeline_page.rs:370
 msgid "Engine"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:364
+#: src/protection_page/protection_timeline_page.rs:371
 msgid "What the checks above rely on"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:368
+#: src/protection_page/protection_timeline_page.rs:375
 msgid "Needs review"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:380
+#: src/protection_page/protection_timeline_page.rs:387
 msgid "Checking your protection…"
 msgstr ""
 
-#: src/protection_page/protection_timeline_page.rs:417
+#: src/protection_page/protection_timeline_page.rs:424
+#: src/scans/scan_engine_page/scan_engine_component.rs:272
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:187
 #: src/signatures/database_updates_page/database_updates_component.rs:397
 msgid "Command copied to clipboard"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:66
+#: src/protection_page/protection_timeline_presentation.rs:65
 msgid "Open Database Updates"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:66
+msgid "Open Scan Engine"
 msgstr ""
 
 #: src/protection_page/protection_timeline_presentation.rs:67
@@ -2109,141 +2074,25 @@ msgstr ""
 msgid "Set Up"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:140
-#, rust-format
-msgid "clamscan could not be started: {error}"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:143
-msgid "clamscan did not answer in time"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:160
-msgid "ClamAV installed"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:162
-msgid ""
-"ClamAV is the engine that recognizes malware. Lazaret uses the copy "
-"installed on this computer and never bundles its own."
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:177
-#, rust-format
-msgid "refused {path}, because your account can replace it"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:190
-msgid "ClamAV was not found on this computer"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:209
-#, rust-format
-msgid "{count} setting checks less than configured since {time}"
-msgid_plural "{count} settings check less than configured since {time}"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/protection_page/protection_timeline_presentation.rs:215
-#, rust-format
-msgid ""
-"{count} setting checks less than configured, since a time that could not be "
-"read"
-msgid_plural ""
-"{count} settings check less than configured, since a time that could not be "
-"read"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/protection_page/protection_timeline_presentation.rs:225
-msgid "Changed"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:228
-#: src/protection_page/protection_timeline_presentation.rs:963
-#: src/shared_widgets/audit_sections/audit_check_results.rs:28
-msgid "Unknown"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:242
-#, rust-format
-msgid ""
-"Unknown whether settings were reduced, because the runtime changes could not "
-"be read: {error}"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:247
-msgid ""
-"Unknown whether settings were reduced, because reading the runtime changes "
-"stopped before it finished"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:294
-#: src/protection_page/protection_timeline_presentation.rs:334
-msgid "Settings changed at runtime"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:296
-msgid ""
-"Someone with the administrator password can change ClamAV settings at "
-"runtime. Lazaret could not read those changes, so it can't tell whether they "
-"check less than your configuration does."
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:310
-msgid "Protection reduced on purpose"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:312
-msgid ""
-"Someone with the administrator password changed ClamAV settings at runtime "
-"in a way that checks less than your configuration does. The System Changes "
-"tab on the Logs page shows who and when."
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:321
-#, rust-format
-msgid "{base} in your configuration, {changed} now"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:336
-msgid ""
-"Someone with the administrator password changed ClamAV settings at runtime. "
-"Your clamd.conf could not be read, so Lazaret can't tell whether these "
-"changes check less than your configuration does. The System Changes tab on "
-"the Logs page shows who and when."
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:342
-msgid ""
-"Settings were changed at runtime, but clamd.conf could not be read to "
-"compare them"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:352
-#, rust-format
-msgid "{changed} now"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:384
+#: src/protection_page/protection_timeline_presentation.rs:152
 #, rust-format
 msgid "Exclusion {pattern}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:385
+#: src/protection_page/protection_timeline_presentation.rs:153
 #, rust-format
 msgid "Skips files such as {path}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:388
+#: src/protection_page/protection_timeline_presentation.rs:156
 msgid "Changed outside Lazaret"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:393
+#: src/protection_page/protection_timeline_presentation.rs:161
 msgid "Scan settings in your account"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:395
+#: src/protection_page/protection_timeline_presentation.rs:163
 msgid ""
 "Exclusions and the scan schedule are stored in your account, so any program "
 "running as you can change them. Lazaret warns when an exclusion skips places "
@@ -2252,315 +2101,287 @@ msgid ""
 "changed them. Applying the schedule again rewrites them."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:401
+#: src/protection_page/protection_timeline_presentation.rs:169
 msgid "Your scan settings may skip malware"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:438
-#: src/protection_page/protection_timeline_presentation.rs:442
+#: src/protection_page/protection_timeline_presentation.rs:206
+#: src/protection_page/protection_timeline_presentation.rs:210
 msgid "Other allowlist"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:443
+#: src/protection_page/protection_timeline_presentation.rs:211
 #, rust-format
 msgid "{file}: {reason}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:452
+#: src/protection_page/protection_timeline_presentation.rs:220
 msgid "Trusted files"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:454
+#: src/protection_page/protection_timeline_presentation.rs:222
 msgid "Ignored detections"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:471
+#: src/protection_page/protection_timeline_presentation.rs:239
 msgid "An allowlist that Lazaret didn't write tells ClamAV to stay silent"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:485
+#: src/protection_page/protection_timeline_presentation.rs:253
 #, rust-format
 msgid "{count} file or detection is never reported"
 msgid_plural "{count} files or detections are never reported"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/protection_page/protection_timeline_presentation.rs:498
+#: src/protection_page/protection_timeline_presentation.rs:266
 msgid ""
 "Lazaret can't read its own allowlist, so it can't tell what ClamAV stays "
 "silent about"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:514
+#: src/protection_page/protection_timeline_presentation.rs:282
 msgid ""
 "Lazaret can't read the signature folder, so it can't tell what ClamAV stays "
 "silent about"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:518
+#: src/protection_page/protection_timeline_presentation.rs:286
 msgid "Signature folder"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:542
+#: src/protection_page/protection_timeline_presentation.rs:310
 msgid "Trusted detections"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:544
+#: src/protection_page/protection_timeline_presentation.rs:312
 msgid ""
 "Files and detection names on ClamAV's allowlists are never reported, by any "
 "scan. Malware that gets administrator rights could hide itself this way, so "
 "check that every entry was added on purpose."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:626
-msgid "Daemon running"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:628
-msgid ""
-"clamd keeps the signatures loaded in memory. On-access blocking and "
-"scheduled scans both send their files to it."
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:643
-#, rust-format
-msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:651
-msgid "clamd is answering"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:658
-#, rust-format
-msgid ""
-"{unit} is running, but clamd does not answer. It may still be loading "
-"signatures."
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:670
-msgid "clamd does not answer, and systemd could not report its state"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:676
-#: src/protection_page/protection_timeline_presentation.rs:853
-#, rust-format
-msgid "{unit} is not running"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:686
-msgid "clamd is not set up, so scans fall back to the slower clamscan"
-msgstr ""
-
-#: src/protection_page/protection_timeline_presentation.rs:715
+#: src/protection_page/protection_timeline_presentation.rs:392
 msgid "No readable clamd.conf was found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:717
+#: src/protection_page/protection_timeline_presentation.rs:394
 msgid "Reading clamd.conf stopped before it finished"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:726
+#: src/protection_page/protection_timeline_presentation.rs:403
 #, rust-format
 msgid "{path} (whole mount)"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:733
+#: src/protection_page/protection_timeline_presentation.rs:410
 msgid "None configured"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:745
+#: src/protection_page/protection_timeline_presentation.rs:422
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:754
+#: src/protection_page/protection_timeline_presentation.rs:431
 msgid "Configuration"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:762
+#: src/protection_page/protection_timeline_presentation.rs:439
 msgid "Watched folders"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:763
+#: src/protection_page/protection_timeline_presentation.rs:440
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:779
+#: src/protection_page/protection_timeline_presentation.rs:456
 msgid ""
 "Running, but clamd.conf could not be read, so what is checked and whether "
 "detected files are blocked is unknown"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:790
+#: src/protection_page/protection_timeline_presentation.rs:467
 msgid "Running, but no folders or mounts are watched"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:800
+#: src/protection_page/protection_timeline_presentation.rs:477
 msgid ""
 "Running, but no folders or mounts are watched, and detected files would not "
 "be blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:814
+#: src/protection_page/protection_timeline_presentation.rs:491
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:823
+#: src/protection_page/protection_timeline_presentation.rs:500
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:837
+#: src/protection_page/protection_timeline_presentation.rs:514
 msgid ""
 "Unknown whether on-access scanning runs, because systemd could not report it"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:843
+#: src/protection_page/protection_timeline_presentation.rs:520
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:879
+#: src/protection_page/protection_timeline_presentation.rs:530
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:155
+#, rust-format
+msgid "{unit} is not running"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:556
 msgid "On-access blocking"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:881
+#: src/protection_page/protection_timeline_presentation.rs:558
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:905
+#: src/protection_page/protection_timeline_presentation.rs:582
 msgid "Needs the daemon, see Engine below"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:911
-#: src/protection_page/protection_timeline_presentation.rs:918
+#: src/protection_page/protection_timeline_presentation.rs:588
+#: src/protection_page/protection_timeline_presentation.rs:595
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:74
 msgid "Not scheduled"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:921
-#: src/protection_page/protection_timeline_presentation.rs:1024
+#: src/protection_page/protection_timeline_presentation.rs:598
+#: src/protection_page/protection_timeline_presentation.rs:701
 msgid "Next scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:936
+#: src/protection_page/protection_timeline_presentation.rs:613
 msgid "threats found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:940
+#: src/protection_page/protection_timeline_presentation.rs:617
 msgid "nothing found"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:941
+#: src/protection_page/protection_timeline_presentation.rs:618
 msgid "Not run yet"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:945
+#: src/protection_page/protection_timeline_presentation.rs:622
 msgid "Last scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1007
+#: src/protection_page/protection_timeline_presentation.rs:640
+#: src/shared_widgets/audit_sections/audit_check_results.rs:28
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:65
+msgid "Unknown"
+msgstr ""
+
+#: src/protection_page/protection_timeline_presentation.rs:684
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1009
+#: src/protection_page/protection_timeline_presentation.rs:686
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1025
+#: src/protection_page/protection_timeline_presentation.rs:702
 msgid "Not scheduled, because the timer is not active"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1031
+#: src/protection_page/protection_timeline_presentation.rs:708
 msgid "Folders scanned"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1069
+#: src/protection_page/protection_timeline_presentation.rs:746
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1075
+#: src/protection_page/protection_timeline_presentation.rs:752
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1091
+#: src/protection_page/protection_timeline_presentation.rs:768
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1097
+#: src/protection_page/protection_timeline_presentation.rs:774
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1102
+#: src/protection_page/protection_timeline_presentation.rs:779
 msgid "The timer starts a scan service that is not installed"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1107
+#: src/protection_page/protection_timeline_presentation.rs:784
 msgid "The scan service could not be read from systemd"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1122
+#: src/protection_page/protection_timeline_presentation.rs:799
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1160
+#: src/protection_page/protection_timeline_presentation.rs:837
 msgid "Alerts"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1162
+#: src/protection_page/protection_timeline_presentation.rs:839
 msgid ""
 "Lazaret follows the system journal and notifies you when something is "
 "detected. It can only do that while it is running, so it should run in the "
 "background."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1168
+#: src/protection_page/protection_timeline_presentation.rs:845
 msgid ""
 "The system journal can't be read. Add your user to the systemd-journal group."
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1174
+#: src/protection_page/protection_timeline_presentation.rs:851
 msgid "Notifications are turned off in the preferences"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1180
+#: src/protection_page/protection_timeline_presentation.rs:857
 msgid ""
 "Alerts stop when you quit Lazaret, because it isn't set up to run in the "
 "background"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1185
+#: src/protection_page/protection_timeline_presentation.rs:862
 msgid "Running in the background and following the journal"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1221
+#: src/protection_page/protection_timeline_presentation.rs:898
 #, rust-format
 msgid "{paths} blocked on access"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1224
+#: src/protection_page/protection_timeline_presentation.rs:901
 #, rust-format
 msgid "{paths} checked on access, not blocked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1236
+#: src/protection_page/protection_timeline_presentation.rs:913
 #, rust-format
 msgid "{paths} scanned on a schedule"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1239
+#: src/protection_page/protection_timeline_presentation.rs:916
 msgid "Scheduled scans set up in Lazaret"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1247
+#: src/protection_page/protection_timeline_presentation.rs:924
 msgid "ClamAV is not installed, so nothing is being checked"
 msgstr ""
 
-#: src/protection_page/protection_timeline_presentation.rs:1260
+#: src/protection_page/protection_timeline_presentation.rs:937
 msgid "Files are only checked when you scan them"
 msgstr ""
 
@@ -2670,155 +2491,155 @@ msgstr ""
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:123
+#: src/scans/manual_scan_page/scan_page_component.rs:124
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:222
+#: src/scans/manual_scan_page/scan_page_component.rs:221
 msgid "No Profile (Manual)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:265
+#: src/scans/manual_scan_page/scan_page_component.rs:264
 #, rust-format
 msgid "Backend: unknown, the scanner programs could not be looked up: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:269
+#: src/scans/manual_scan_page/scan_page_component.rs:268
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:272
+#: src/scans/manual_scan_page/scan_page_component.rs:271
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:313
+#: src/scans/manual_scan_page/scan_page_component.rs:312
 #: src/scans/manual_scan_page/scan_progress_view.rs:39
 msgid "Preparing…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:317
+#: src/scans/manual_scan_page/scan_page_component.rs:316
 msgid "Cancelling…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:324
+#: src/scans/manual_scan_page/scan_page_component.rs:323
 #, rust-format
 msgid "Scanning {name}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:327
+#: src/scans/manual_scan_page/scan_page_component.rs:326
 #, rust-format
 msgid "Scanning {count} location"
 msgid_plural "Scanning {count} locations"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:336
+#: src/scans/manual_scan_page/scan_page_component.rs:335
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:108
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:52
 msgid "Scan cancelled by user"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:340
+#: src/scans/manual_scan_page/scan_page_component.rs:339
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:160
 msgid "Threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:345
-#: src/scans/manual_scan_page/scan_page_component.rs:518
+#: src/scans/manual_scan_page/scan_page_component.rs:344
+#: src/scans/manual_scan_page/scan_page_component.rs:517
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:107
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:51
 msgid "The scan did not finish cleanly"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:347
-#: src/scans/manual_scan_page/scan_page_component.rs:517
+#: src/scans/manual_scan_page/scan_page_component.rs:346
+#: src/scans/manual_scan_page/scan_page_component.rs:516
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:106
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:50
 msgid "No threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:560
+#: src/scans/manual_scan_page/scan_page_component.rs:559
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:584
+#: src/scans/manual_scan_page/scan_page_component.rs:583
 msgid "Add Files"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:592
+#: src/scans/manual_scan_page/scan_page_component.rs:591
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:213
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:336
 msgid "Add Folder"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:609
+#: src/scans/manual_scan_page/scan_page_component.rs:608
 msgid "Run EICAR Test"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:620
+#: src/scans/manual_scan_page/scan_page_component.rs:619
 msgid "Copy Results"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:631
+#: src/scans/manual_scan_page/scan_page_component.rs:630
 msgid "Export Results…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:645
+#: src/scans/manual_scan_page/scan_page_component.rs:644
 msgid "Start Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:666
+#: src/scans/manual_scan_page/scan_page_component.rs:665
 msgid "Lazaret refuses a ClamAV program that your account could replace"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:667
+#: src/scans/manual_scan_page/scan_page_component.rs:666
 msgid "Details"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:711
+#: src/scans/manual_scan_page/scan_page_component.rs:710
 msgid "Scan Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:716
+#: src/scans/manual_scan_page/scan_page_component.rs:715
 msgid "Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:731
+#: src/scans/manual_scan_page/scan_page_component.rs:730
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:218
 msgid "Manage Profiles"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:740
+#: src/scans/manual_scan_page/scan_page_component.rs:739
 msgid "Scan Targets"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:763
+#: src/scans/manual_scan_page/scan_page_component.rs:762
 msgid "Drop files or folders to scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:772
+#: src/scans/manual_scan_page/scan_page_component.rs:771
 msgid "Add Files…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:778
+#: src/scans/manual_scan_page/scan_page_component.rs:777
 msgid "Add Folder…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:788
+#: src/scans/manual_scan_page/scan_page_component.rs:787
 msgid "Found so far"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:934
+#: src/scans/manual_scan_page/scan_page_component.rs:933
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:942
+#: src/scans/manual_scan_page/scan_page_component.rs:941
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1004
+#: src/scans/manual_scan_page/scan_page_component.rs:1003
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
@@ -3290,6 +3111,149 @@ msgstr ""
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
+#: src/scans/scan_engine_page/scan_engine_component.rs:189
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:167
+#: src/signatures/database_updates_page/database_updates_component.rs:317
+msgid "Status"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_component.rs:207
+msgid ""
+"Engine and detection settings changed through Lazaret, as recorded by the "
+"system. Software running as you can't remove these records."
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_component.rs:211
+msgid "No engine or detection settings were changed through Lazaret"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_component.rs:217
+msgid "clamd log"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_component.rs:218
+msgid "No clamd log was found"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_component.rs:225
+msgid "Checking the scan engine…"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:50
+#, rust-format
+msgid "clamscan could not be started: {error}"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:53
+msgid "clamscan did not answer in time"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:70
+#, rust-format
+msgid "refused {path}, because your account can replace it"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:74
+msgid "ClamAV was not found on this computer"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:100
+msgid "ClamAV installed"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:102
+msgid ""
+"ClamAV is the engine that recognizes malware. Lazaret uses the copy "
+"installed on this computer and never bundles its own."
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:143
+#, rust-format
+msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:146
+msgid "clamd is answering"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:148
+#, rust-format
+msgid ""
+"{unit} is running, but clamd does not answer. It may still be loading "
+"signatures."
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:152
+msgid "clamd does not answer, and systemd could not report its state"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:158
+msgid "clamd is not set up, so scans fall back to the slower clamscan"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:167
+msgid "The same version as on disk"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:174
+#, rust-format
+msgid "{loaded}, while {disk} is on disk"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:179
+msgid "Unknown, the loaded and stored versions could not be compared"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:185
+msgid "Loaded signatures"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:209
+msgid "Daemon running"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:211
+msgid ""
+"clamd keeps the signatures loaded in memory. On-access blocking and "
+"scheduled scans both send their files to it."
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:250
+#, rust-format
+msgid "Only the system can replace {path}"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:257
+#, rust-format
+msgid ""
+"Your account can replace {replaceable}, so a program running as you could "
+"put a fake clamd at {path} that reports every file as clean"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:263
+#, rust-format
+msgid "No clamd socket at {path}, so clamd isn't running or listens elsewhere"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:267
+msgid "The Flatpak sandbox can't see who owns the clamd socket"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:273
+msgid "clamd socket protected"
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:278
+msgid ""
+"Scans reach clamd through its socket. Let clamd create it in a directory "
+"that only root or the clamav user can write, such as /run/clamav, so no "
+"program running as you can put a fake clamd in its place."
+msgstr ""
+
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:289
+msgid "Checking who can replace the clamd socket…"
+msgstr ""
+
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:77
 #, rust-format
 msgid "Next run: {time}"
@@ -3530,11 +3494,6 @@ msgstr ""
 msgid "Timestamp"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:167
-#: src/signatures/database_updates_page/database_updates_component.rs:317
-msgid "Status"
-msgstr ""
-
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:172
 msgid "Duration"
 msgstr ""
@@ -3593,59 +3552,28 @@ msgstr ""
 msgid "Could not open documentation: {error}"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:47
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:33
 msgid "Process tampering"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:52
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:38
 msgid "Programs can't attach to other programs you run, such as Lazaret"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:58
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:44
 msgid ""
 "Any program you run can attach to Lazaret and change what it shows, "
 "including scan results"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:63
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:49
 msgid ""
 "Set kernel.yama.ptrace_scope to 1, so only a program's parent can attach to "
 "it."
 msgstr ""
 
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:75
+#: src/shared_widgets/audit_sections/process_isolation_checks.rs:61
 msgid "The kernel doesn't report whether programs may attach to each other"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:162
-msgid "clamd socket"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:167
-#, rust-format
-msgid "Only the system can replace {path}"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:177
-#, rust-format
-msgid ""
-"Your account can replace {replaceable}, so a program running as you could "
-"put a fake clamd at {path} that reports every file as clean"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:184
-msgid ""
-"Let clamd create its socket in a directory that only root or the clamav user "
-"can write, such as /run/clamav."
-msgstr ""
-
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:190
-#, rust-format
-msgid "No clamd socket at {path}, so clamd isn't running or listens elsewhere"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/process_isolation_checks.rs:196
-msgid "The Flatpak sandbox can't see who owns the clamd socket"
 msgstr ""
 
 #: src/shared_widgets/audit_sections/security_audit_checks.rs:95
@@ -4028,6 +3956,27 @@ msgstr ""
 msgid "Lazaret lost track of the scanner process: {error}."
 msgstr ""
 
+#: src/shared_widgets/service_log/service_log_group.rs:145
+msgid "Reading the log…"
+msgstr ""
+
+#: src/shared_widgets/service_log/service_log_group.rs:161
+msgid "Log copied to clipboard"
+msgstr ""
+
+#: src/shared_widgets/service_log/service_log_state.rs:56
+msgid "System journal"
+msgstr ""
+
+#: src/shared_widgets/service_log/service_log_state.rs:59
+msgid "Neither a log file nor journal lines were found."
+msgstr ""
+
+#: src/shared_widgets/service_log/service_log_state.rs:62
+#, rust-format
+msgid "No log file was found. {reason}"
+msgstr ""
+
 #: src/shared_widgets/step_timeline/program_trust_steps.rs:44
 #, rust-format
 msgid "{program} in use"
@@ -4084,6 +4033,88 @@ msgid ""
 "it, but check where it came from"
 msgstr ""
 
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:46
+#, rust-format
+msgid "{count} setting checks less than configured since {time}"
+msgid_plural "{count} settings check less than configured since {time}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:52
+#, rust-format
+msgid ""
+"{count} setting checks less than configured, since a time that could not be "
+"read"
+msgid_plural ""
+"{count} settings check less than configured, since a time that could not be "
+"read"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:62
+msgid "Changed"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:73
+#, rust-format
+msgid ""
+"Unknown whether settings were reduced, because the runtime changes could not "
+"be read: {error}"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:78
+msgid ""
+"Unknown whether settings were reduced, because reading the runtime changes "
+"stopped before it finished"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:144
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:192
+msgid "Settings changed at runtime"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:146
+msgid ""
+"Someone with the administrator password can change ClamAV settings at "
+"runtime. Lazaret could not read those changes, so it can't tell whether they "
+"check less than your configuration does."
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:163
+msgid "Protection reduced on purpose"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:165
+msgid ""
+"Someone with the administrator password changed ClamAV settings at runtime "
+"in a way that checks less than your configuration does. The system changes "
+"of the page that owns the setting show who and when."
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:174
+#, rust-format
+msgid "{base} in your configuration, {changed} now"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:194
+msgid ""
+"Someone with the administrator password changed ClamAV settings at runtime. "
+"Your clamd.conf could not be read, so Lazaret can't tell whether these "
+"changes check less than your configuration does. The system changes of the "
+"page that owns the setting show who and when."
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:200
+msgid ""
+"Settings were changed at runtime, but clamd.conf could not be read to "
+"compare them"
+msgstr ""
+
+#: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:210
+#, rust-format
+msgid "{changed} now"
+msgstr ""
+
 #: src/shared_widgets/step_timeline/step_evidence_builders.rs:103
 #: src/signatures/database_updates_page/database_updates_presentation.rs:266
 #: src/signatures/database_updates_page/signature_update_run/signature_update_session.rs:378
@@ -4103,6 +4134,29 @@ msgstr ""
 
 #: src/shared_widgets/step_timeline/timeline_step_row.rs:123
 msgid "Why this matters"
+msgstr ""
+
+#: src/shared_widgets/system_changes/system_change_row.rs:17
+#, rust-format
+msgid "{time} · {outcome} · requested by user {uid}"
+msgstr ""
+
+#: src/shared_widgets/system_changes/system_change_row.rs:20
+#, rust-format
+msgid "{time} · {outcome} · requested by an unknown user"
+msgstr ""
+
+#: src/shared_widgets/system_changes/system_change_row.rs:47
+msgid "This change lowered protection"
+msgstr ""
+
+#: src/shared_widgets/system_changes/system_changes_group.rs:46
+#, rust-format
+msgid "The system journal can't be read: {error}"
+msgstr ""
+
+#: src/shared_widgets/system_changes/system_changes_group.rs:80
+msgid "System changes"
 msgstr ""
 
 #: src/shared_widgets/trust_confirmation_dialog.rs:46

@@ -9,10 +9,11 @@ pub enum ApplicationPage {
     Quarantine,
     Signatures,
     DatabaseUpdates,
+    ScanEngine,
     Hardening,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 8] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 9] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
@@ -20,6 +21,7 @@ pub const ALL_APPLICATION_PAGES: [ApplicationPage; 8] = [
     ApplicationPage::Quarantine,
     ApplicationPage::Signatures,
     ApplicationPage::DatabaseUpdates,
+    ApplicationPage::ScanEngine,
     ApplicationPage::Hardening,
 ];
 
@@ -33,6 +35,7 @@ impl ApplicationPage {
             Self::Quarantine => "quarantine",
             Self::Signatures => "signatures",
             Self::DatabaseUpdates => "database-updates",
+            Self::ScanEngine => "scan-engine",
             Self::Hardening => "hardening",
         }
     }
@@ -52,6 +55,7 @@ impl ApplicationPage {
             Self::Quarantine => gettext("Quarantine"),
             Self::Signatures => gettext("Signatures"),
             Self::DatabaseUpdates => gettext("Database Updates"),
+            Self::ScanEngine => gettext("Scan Engine"),
             Self::Hardening => gettext("Hardening"),
         }
     }
@@ -65,20 +69,22 @@ impl ApplicationPage {
             Self::Quarantine => "folder-symbolic",
             Self::Signatures => "drive-harddisk-symbolic",
             Self::DatabaseUpdates => "software-update-available-symbolic",
+            Self::ScanEngine => "system-run-symbolic",
             Self::Hardening => "channel-secure-symbolic",
         }
     }
 
-    pub const fn keyboard_accelerator(self) -> &'static str {
+    pub const fn keyboard_accelerators(self) -> &'static [&'static str] {
         match self {
-            Self::Protection => "<Control>1",
-            Self::Detections => "<Control>2",
-            Self::Scan => "<Control>3",
-            Self::Logs => "<Control>4",
-            Self::Quarantine => "<Control>5",
-            Self::Signatures => "<Control>6",
-            Self::DatabaseUpdates => "<Control>7",
-            Self::Hardening => "<Control>8",
+            Self::Protection => &["<Control>1"],
+            Self::Detections => &["<Control>2"],
+            Self::Scan => &["<Control>3"],
+            Self::Logs => &["<Control>4"],
+            Self::Quarantine => &["<Control>5"],
+            Self::Signatures => &["<Control>6"],
+            Self::DatabaseUpdates => &["<Control>7"],
+            Self::ScanEngine => &["<Control>8"],
+            Self::Hardening => &[],
         }
     }
 
@@ -112,6 +118,7 @@ mod application_pages_tests {
     fn sidebar_positions_follow_the_page_order() {
         assert_eq!(ApplicationPage::Protection.sidebar_position(), 0);
         assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 6);
-        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 7);
+        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 7);
+        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 8);
     }
 }

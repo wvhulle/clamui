@@ -25,6 +25,7 @@ const OLD_FORGET_FILE_PREFIX: &str = "stop trusting the file with SHA-256 ";
 const OLD_STOP_IGNORING_PREFIX: &str = "report detections named ";
 const OLD_STOP_IGNORING_SUFFIX: &str = " again";
 const SHA256_HEX_LENGTH: usize = 64;
+const SETTING_CHANGE_SEPARATOR: &str = ", ";
 const RECORDED_PROTECTION_REDUCTIONS: [ProtectionReduction; 8] = [
     ProtectionReduction::BlockingTurnedOff,
     ProtectionReduction::CheckTurnedOff,
@@ -139,6 +140,26 @@ impl HelperAuditEntry {
     pub const fn lowered_protection(&self) -> bool {
         self.recorded_reduction.weakens_protection()
             && matches!(self.audited_outcome, AuditedOutcome::ActionApplied)
+    }
+
+    pub fn changed_setting_keys(&self) -> Vec<&str> {
+        match self.audited_action {
+            AuditedAction::ChangeSettings => self
+                .action_subject
+                .split(SETTING_CHANGE_SEPARATOR)
+                .filter_map(|setting_change| setting_change.split_whitespace().next())
+                .filter(|setting_key| {
+                    setting_key
+                        .chars()
+                        .all(|key_character| key_character.is_ascii_alphanumeric())
+                })
+                .collect(),
+            AuditedAction::TrustFile { .. }
+            | AuditedAction::IgnoreSignature { .. }
+            | AuditedAction::ForgetTrustedFile { .. }
+            | AuditedAction::StopIgnoringSignature { .. }
+            | AuditedAction::UnrecognizedAction { .. } => Vec::new(),
+        }
     }
 }
 
@@ -470,6 +491,26 @@ mod helper_audit_records_tests {
             RecordedReduction::ReductionRecorded(ProtectionReduction::NoReduction)
         );
         assert!(!old_harmless.lowered_protection());
+    }
+
+    #[test]
+    fn setting_keys_are_read_from_a_settings_change_only() {
+        assert_eq!(
+            entry_of(&applied_fields(
+                "change-settings",
+                "OnAccessIncludePath /home/user/Downloads, MaxThreads 4"
+            ))
+            .changed_setting_keys(),
+            vec!["OnAccessIncludePath", "MaxThreads"]
+        );
+        assert!(
+            entry_of(&applied_fields(
+                "ignore-signature",
+                "ignore every detection named Win.Test"
+            ))
+            .changed_setting_keys()
+            .is_empty()
+        );
     }
 
     #[test]

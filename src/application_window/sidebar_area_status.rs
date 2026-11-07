@@ -23,13 +23,16 @@ use crate::{
     protection_page::{
         protection_timeline_page::shown_coverage_text,
         protection_timeline_presentation::{
-            AlertReadiness, ReducedSettingGroup, alerts_condition, daemon_condition,
-            daemon_is_answering, engine_condition, on_access_condition,
-            runtime_reduction_condition, scheduled_scan_condition, trust_list_condition,
+            AlertReadiness, alerts_condition, on_access_condition, scheduled_scan_condition,
+            trust_list_condition,
         },
+    },
+    scans::scan_engine_page::scan_engine_presentation::{
+        daemon_condition, daemon_is_answering, engine_condition,
     },
     shared_widgets::step_timeline::{
         program_trust_steps::{TrustedProgramGroup, program_trust_condition},
+        runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_condition},
         step_evidence_builders::CheckedCondition,
     },
     sharing::analysis_page::trusted_detections_page::trust_list_contents::{

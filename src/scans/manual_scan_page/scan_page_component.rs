@@ -15,6 +15,7 @@ use relm4::{
 use tempfile::NamedTempFile;
 
 use crate::{
+    application_window::application_pages::ApplicationPage,
     host_services::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ActivityRecord, FoundThreatCount,
@@ -205,8 +206,6 @@ pub enum ScanPageCommand {
         passes_limits: bool,
     },
 }
-
-const PROTECTION_PAGE_NAME: &str = "protection";
 
 fn close_enclosing_popover(clicked_button: &gtk::Button) {
     if let Some(enclosing_popover) = clicked_button
@@ -666,7 +665,7 @@ impl Component for ScanPage {
                 set_title: &gettext("Lazaret refuses a ClamAV program that your account could replace"),
                 set_button_label: Some(&gettext("Details")),
                 set_action_name: Some("win.show-page"),
-                set_action_target_value: Some(&PROTECTION_PAGE_NAME.to_variant()),
+                set_action_target_value: Some(&ApplicationPage::ScanEngine.page_name().to_variant()),
                 #[watch]
                 set_revealed: model.scanner_program_trust == ScannerProgramTrust::ReplaceableProgramRefused,
             },

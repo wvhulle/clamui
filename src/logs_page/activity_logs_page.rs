@@ -1,4 +1,3 @@
-use futures::StreamExt;
 use gettextrs::gettext;
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
@@ -10,18 +9,10 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure,
         },
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::exact_local_time_text,
-        settings_helper::helper_audit_records::{HelperAuditEntry, newest_helper_audit_entries},
+        settings_helper::helper_audit_records::HelperAuditEntry,
     },
-    logs_page::{
-        activity_logs_state::{
-            DaemonLogView, HistoryActionOutcome, HistoryView, SystemChangesReadFailure,
-            SystemChangesView,
-        },
-        daemon_log_reader::{DaemonLogContents, daemon_log_updates, read_daemon_log},
-        system_change_row::SystemChangeRow,
-    },
+    logs_page::activity_logs_state::{HistoryActionOutcome, HistoryView},
     shared_widgets::{
         activity_entries::{
             activity_entry_row::ActivityEntryRow,
@@ -33,9 +24,14 @@ use crate::{
             AlertChoice, TextExportOutcome, add_alert_choice, add_dismissing_choice, alert_choice,
             deliver_local_outcome, describe_export_failure, exported_text as exported_text_file,
         },
-        component_streams::{RunningStream, run_stream},
-        host_read_failure_text::unit_journal_failure_text,
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
+        system_changes::{
+            system_change_row::SystemChangeRow,
+            system_changes_group::system_changes_failure_text,
+            system_changes_state::{
+                SystemChangesReadFailure, SystemChangesView, read_system_changes,
+            },
+        },
     },
 };
 
@@ -43,13 +39,6 @@ enum SelectedEntryView {
     NoEntrySelected,
     EntrySelected(ActivityEntryRecord),
 }
-
-enum DaemonLogRefresh {
-    ManualRefresh,
-    LiveRefresh { _live_refresh: RunningStream },
-}
-
-const SYSTEM_CHANGE_LIMIT: usize = 200;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ClearLogsChoice {
@@ -75,9 +64,6 @@ pub struct ActivityLogsPage {
     entry_rows: FactoryVecDeque<ActivityEntryRow>,
     selected_entry: SelectedEntryView,
     detail_text_changed: bool,
-    daemon_log_view: DaemonLogView,
-    daemon_log_changed: bool,
-    daemon_log_refresh: DaemonLogRefresh,
     system_changes_view: SystemChangesView,
     system_change_rows: FactoryVecDeque<SystemChangeRow>,
     toaster: Toaster,
@@ -93,18 +79,13 @@ pub enum ActivityLogsPageInput {
     ExportAllJsonRequested,
     CopyDetailRequested,
     ExportDetailRequested,
-    RefreshDaemonLogRequested,
     RefreshSystemChangesRequested,
-    LiveDaemonLogToggled,
-    CopyDaemonLogRequested,
-    ExportDaemonLogRequested,
 }
 
 #[derive(Debug)]
 pub enum ActivityLogsPageCommand {
     EntriesLoaded(Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure>),
     EntriesCleared(Result<(), ActivityHistoryFailure>),
-    DaemonLogRead(DaemonLogContents),
     TextExportFinished(TextExportOutcome),
     SystemChangesLoaded(Result<Vec<HelperAuditEntry>, SystemChangesReadFailure>),
 }
@@ -112,14 +93,7 @@ pub enum ActivityLogsPageCommand {
 impl ActivityLogsPage {
     fn reload_system_changes(sender: &ComponentSender<Self>) {
         sender.oneshot_command(async {
-            ActivityLogsPageCommand::SystemChangesLoaded(
-                tokio::task::spawn_blocking(|| newest_helper_audit_entries(SYSTEM_CHANGE_LIMIT))
-                    .await
-                    .map_err(SystemChangesReadFailure::from)
-                    .and_then(|journal_outcome| {
-                        journal_outcome.map_err(SystemChangesReadFailure::from)
-                    }),
-            )
+            ActivityLogsPageCommand::SystemChangesLoaded(read_system_changes().await)
         });
     }
 
@@ -128,21 +102,6 @@ impl ActivityLogsPage {
         sender.oneshot_command(async move {
             ActivityLogsPageCommand::EntriesLoaded(activity_history.list_recent_entries().await)
         });
-    }
-
-    fn refresh_daemon_log(&self, sender: &ComponentSender<Self>) {
-        sender.oneshot_command(async {
-            ActivityLogsPageCommand::DaemonLogRead(read_daemon_log().await)
-        });
-    }
-
-    fn start_live_refresh(&mut self, sender: &ComponentSender<Self>) {
-        self.daemon_log_refresh = DaemonLogRefresh::LiveRefresh {
-            _live_refresh: run_stream(
-                sender,
-                daemon_log_updates().map(ActivityLogsPageCommand::DaemonLogRead),
-            ),
-        };
     }
 
     fn export_text(
@@ -191,41 +150,6 @@ impl ActivityLogsPage {
                     .replace("{error}", &load_failure.to_string())
             }
             HistoryView::HistoryLoading | HistoryView::HistoryLoaded { .. } => String::new(),
-        }
-    }
-
-    fn system_changes_failure_text(&self) -> String {
-        match &self.system_changes_view {
-            SystemChangesView::SystemChangesFailed(
-                SystemChangesReadFailure::JournalUnreadable(journal_failure),
-            ) => gettext("The system journal can't be read: {error}")
-                .replace("{error}", &journal_failure.to_string()),
-            SystemChangesView::SystemChangesFailed(
-                SystemChangesReadFailure::JournalReadInterrupted(interrupted_read),
-            ) => gettext("The system journal can't be read: {error}")
-                .replace("{error}", &interrupted_read.to_string()),
-            SystemChangesView::SystemChangesLoading | SystemChangesView::SystemChangesLoaded => {
-                String::new()
-            }
-        }
-    }
-
-    fn daemon_source_text(&self) -> String {
-        match &self.daemon_log_view {
-            DaemonLogView::DaemonLogReading => gettext("Checking…"),
-            DaemonLogView::DaemonLogRead(DaemonLogContents::FromLogFile { log_path, .. }) => {
-                sanitize_scanner_line(&log_path.to_string_lossy())
-            }
-            DaemonLogView::DaemonLogRead(DaemonLogContents::FromSystemJournal { .. }) => {
-                gettext("System journal")
-            }
-            DaemonLogView::DaemonLogRead(DaemonLogContents::NoReadableLog) => {
-                gettext("Daemon log file not found.")
-            }
-            DaemonLogView::DaemonLogRead(DaemonLogContents::JournalUnreadable(read_failure)) => {
-                gettext("Daemon log file not found. {reason}")
-                    .replace("{reason}", &unit_journal_failure_text(*read_failure))
-            }
         }
     }
 
@@ -531,7 +455,7 @@ impl Component for ActivityLogsPage {
                                             set_icon_name: Some("dialog-error-symbolic"),
                                             set_title: &gettext("System changes can't be read"),
                                             #[watch]
-                                            set_description: Some(&gtk::glib::markup_escape_text(&model.system_changes_failure_text())),
+                                            set_description: Some(&gtk::glib::markup_escape_text(&system_changes_failure_text(&model.system_changes_view))),
                                         },
                                         #[watch]
                                         set_visible_child_name: model.system_changes_view.placeholder_page_name(),
@@ -540,88 +464,6 @@ impl Component for ActivityLogsPage {
                             },
                         },
 
-                        add_titled_with_icon[Some("daemon"), &gettext("ClamAV Daemon"), "utilities-terminal-symbolic"] = &gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 12,
-
-                            gtk::Box {
-                                set_spacing: 6,
-
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_hexpand: true,
-
-                                    gtk::Label {
-                                        set_xalign: 0.0,
-                                        add_css_class: "heading",
-                                        set_label: &gettext("ClamAV Daemon"),
-                                    },
-
-                                    gtk::Label {
-                                        set_xalign: 0.0,
-                                        set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                                        add_css_class: "dim-label",
-                                        #[watch]
-                                        set_label: &model.daemon_source_text(),
-                                    },
-                                },
-
-                                gtk::ToggleButton {
-                                    set_label: &gettext("Live Updates"),
-                                    set_valign: gtk::Align::Center,
-                                    connect_clicked => ActivityLogsPageInput::LiveDaemonLogToggled,
-                                },
-
-                                gtk::Button {
-                                    set_icon_name: "view-refresh-symbolic",
-                                    set_tooltip_text: Some(&gettext("Refresh")),
-                                    set_valign: gtk::Align::Center,
-                                    add_css_class: "flat",
-                                    connect_clicked => ActivityLogsPageInput::RefreshDaemonLogRequested,
-                                },
-
-                                gtk::Button {
-                                    set_icon_name: "edit-copy-symbolic",
-                                    set_tooltip_text: Some(&gettext("Copy")),
-                                    set_valign: gtk::Align::Center,
-                                    add_css_class: "flat",
-                                    #[watch]
-                                    set_sensitive: model.daemon_log_view.shown_log_text().is_some(),
-                                    connect_clicked => ActivityLogsPageInput::CopyDaemonLogRequested,
-                                },
-
-                                gtk::Button {
-                                    set_icon_name: "document-save-symbolic",
-                                    set_tooltip_text: Some(&gettext("Export Text")),
-                                    set_valign: gtk::Align::Center,
-                                    add_css_class: "flat",
-                                    #[watch]
-                                    set_sensitive: model.daemon_log_view.shown_log_text().is_some(),
-                                    connect_clicked => ActivityLogsPageInput::ExportDaemonLogRequested,
-                                },
-                            },
-
-    gtk::ScrolledWindow {
-                                set_vexpand: true,
-                                set_min_content_height: 180,
-                                add_css_class: "card",
-
-                                gtk::TextView {
-                                    set_editable: false,
-                                    set_monospace: true,
-                                    set_wrap_mode: gtk::WrapMode::WordChar,
-                                    set_top_margin: 12,
-                                    set_bottom_margin: 12,
-                                    set_left_margin: 12,
-                                    set_right_margin: 12,
-                                    #[wrap(Some)]
-                                    set_buffer = &gtk::TextBuffer {
-                                        #[track(model.daemon_log_changed)]
-                                        set_text: model.daemon_log_view.shown_log_text().unwrap_or_default(),
-                                    },
-                                },
-                            },
-                        },
                     },
                 },
                 },
@@ -642,9 +484,6 @@ impl Component for ActivityLogsPage {
             entry_rows,
             selected_entry: SelectedEntryView::NoEntrySelected,
             detail_text_changed: true,
-            daemon_log_view: DaemonLogView::DaemonLogReading,
-            daemon_log_changed: true,
-            daemon_log_refresh: DaemonLogRefresh::ManualRefresh,
             system_changes_view: SystemChangesView::SystemChangesLoading,
             system_change_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
@@ -652,7 +491,6 @@ impl Component for ActivityLogsPage {
             toaster: Toaster::new(&root),
         };
         model.reload_entries(&sender);
-        model.refresh_daemon_log(&sender);
         Self::reload_system_changes(&sender);
         let entry_list = model.entry_rows.widget();
         let system_change_list = model.system_change_rows.widget();
@@ -685,7 +523,6 @@ impl Component for ActivityLogsPage {
         root: &Self::Root,
     ) {
         self.detail_text_changed = false;
-        self.daemon_log_changed = false;
         match page_input {
             ActivityLogsPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             ActivityLogsPageInput::EntryActivated { row_position } => {
@@ -733,27 +570,8 @@ impl Component for ActivityLogsPage {
             ActivityLogsPageInput::ExportDetailRequested => {
                 self.export_text("lazaret-log.txt", self.selected_detail_text(), &sender);
             }
-            ActivityLogsPageInput::RefreshDaemonLogRequested => self.refresh_daemon_log(&sender),
             ActivityLogsPageInput::RefreshSystemChangesRequested => {
                 Self::reload_system_changes(&sender);
-            }
-            ActivityLogsPageInput::LiveDaemonLogToggled => match &self.daemon_log_refresh {
-                DaemonLogRefresh::ManualRefresh => self.start_live_refresh(&sender),
-                DaemonLogRefresh::LiveRefresh { .. } => {
-                    self.daemon_log_refresh = DaemonLogRefresh::ManualRefresh;
-                }
-            },
-            ActivityLogsPageInput::CopyDaemonLogRequested => {
-                if let Some(log_text) = self.daemon_log_view.shown_log_text() {
-                    root.clipboard().set_text(log_text);
-                    self.toaster
-                        .toast(&gettext("Daemon logs copied to clipboard"));
-                }
-            }
-            ActivityLogsPageInput::ExportDaemonLogRequested => {
-                if let Some(log_text) = self.daemon_log_view.shown_log_text() {
-                    self.export_text("clamd-logs.txt", log_text.to_owned(), &sender);
-                }
             }
         }
     }
@@ -765,7 +583,6 @@ impl Component for ActivityLogsPage {
         _root: &Self::Root,
     ) {
         self.detail_text_changed = false;
-        self.daemon_log_changed = false;
         match page_command {
             ActivityLogsPageCommand::SystemChangesLoaded(Ok(audit_entries)) => {
                 self.system_changes_view = SystemChangesView::SystemChangesLoaded;
@@ -797,10 +614,6 @@ impl Component for ActivityLogsPage {
                     }
                 }
                 self.reload_entries(&sender);
-            }
-            ActivityLogsPageCommand::DaemonLogRead(daemon_log) => {
-                self.daemon_log_view = DaemonLogView::DaemonLogRead(daemon_log);
-                self.daemon_log_changed = true;
             }
             ActivityLogsPageCommand::TextExportFinished(TextExportOutcome::TextSaved) => {
                 self.toaster.toast(&gettext("Exported."));

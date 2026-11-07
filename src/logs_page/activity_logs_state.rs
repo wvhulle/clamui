@@ -2,7 +2,6 @@ use crate::{
     host_services::activity_history::activity_history_database::{
         ActivityEntryRecord, ActivityHistoryFailure,
     },
-    logs_page::daemon_log_reader::DaemonLogContents,
     shared_widgets::loading_indicators::{
         LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
     },
@@ -79,56 +78,8 @@ impl HistoryView {
     }
 }
 
-#[derive(Debug)]
-pub enum DaemonLogView {
-    DaemonLogReading,
-    DaemonLogRead(DaemonLogContents),
-}
-
-impl DaemonLogView {
-    pub fn shown_log_text(&self) -> Option<&str> {
-        match self {
-            Self::DaemonLogRead(
-                DaemonLogContents::FromLogFile { log_text, .. }
-                | DaemonLogContents::FromSystemJournal { log_text },
-            ) => Some(log_text),
-            Self::DaemonLogRead(
-                DaemonLogContents::NoReadableLog | DaemonLogContents::JournalUnreadable(_),
-            )
-            | Self::DaemonLogReading => None,
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SystemChangesReadFailure {
-    #[error("the system journal can't be read: {0}")]
-    JournalUnreadable(#[from] systemd::Error),
-    #[error("the system journal read stopped unexpectedly: {0}")]
-    JournalReadInterrupted(#[from] tokio::task::JoinError),
-}
-
-#[derive(Debug)]
-pub enum SystemChangesView {
-    SystemChangesLoading,
-    SystemChangesLoaded,
-    SystemChangesFailed(SystemChangesReadFailure),
-}
-
-impl SystemChangesView {
-    pub const fn placeholder_page_name(&self) -> &'static str {
-        match self {
-            Self::SystemChangesLoading => LOADING_PAGE_NAME,
-            Self::SystemChangesLoaded => LOADED_PAGE_NAME,
-            Self::SystemChangesFailed(_) => LOAD_FAILED_PAGE_NAME,
-        }
-    }
-}
-
 #[cfg(test)]
 mod activity_logs_state_tests {
-    use std::path::PathBuf;
-
     use super::*;
 
     fn loaded_history() -> HistoryView {
@@ -178,22 +129,5 @@ mod activity_logs_state_tests {
             .with_loaded_entries(Err(ActivityHistoryFailure::DatabasePathNotUtf8))
             .with_loaded_entries(Ok(Vec::new()));
         assert_eq!(history_view.placeholder_page_name(), LOADED_PAGE_NAME);
-    }
-
-    #[test]
-    fn there_is_no_daemon_log_to_copy_while_it_is_read() {
-        assert_eq!(DaemonLogView::DaemonLogReading.shown_log_text(), None);
-        assert_eq!(
-            DaemonLogView::DaemonLogRead(DaemonLogContents::NoReadableLog).shown_log_text(),
-            None
-        );
-        assert_eq!(
-            DaemonLogView::DaemonLogRead(DaemonLogContents::FromLogFile {
-                log_path: PathBuf::from("/var/log/clamav/clamd.log"),
-                log_text: "clamd started\n".to_owned(),
-            })
-            .shown_log_text(),
-            Some("clamd started\n")
-        );
     }
 }
