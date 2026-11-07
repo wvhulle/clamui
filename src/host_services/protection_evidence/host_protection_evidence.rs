@@ -31,6 +31,11 @@ use crate::{
                 DatabaseEvidence, inspect_database_evidence_with_banner,
                 inspect_database_evidence_without_banner, newest_disk_signature_version,
             },
+            kernel_on_access_support::{
+                InotifyWatchLimit, KernelBlockingSupport, KernelConfigReadFailure,
+                WatchLimitReadFailure, inspect_inotify_watch_limit,
+                inspect_kernel_blocking_support,
+            },
             service_run_journal::{
                 ScanRunHistory, UpdaterRunHistory, newest_scan_run, newest_update_run,
             },
@@ -310,9 +315,53 @@ impl WatchScope {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OnAccessResponse {
-    BlockAccess,
-    ReportOnly,
+pub enum ConfiguredPrevention {
+    PreventionRequested,
+    PreventionOff,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OnAccessConflict {
+    PreventionWithMountPath,
+    IncludePathWithMountPath,
+    ExcludePathWithMountPath,
+    ExtraScanningWithMountPath,
+}
+
+impl OnAccessConflict {
+    const ALL_CONFLICTS: [Self; 4] = [
+        Self::PreventionWithMountPath,
+        Self::IncludePathWithMountPath,
+        Self::ExcludePathWithMountPath,
+        Self::ExtraScanningWithMountPath,
+    ];
+
+    pub const fn conflicting_option(self) -> &'static str {
+        match self {
+            Self::PreventionWithMountPath => "OnAccessPrevention",
+            Self::IncludePathWithMountPath => "OnAccessIncludePath",
+            Self::ExcludePathWithMountPath => "OnAccessExcludePath",
+            Self::ExtraScanningWithMountPath => "OnAccessExtraScanning",
+        }
+    }
+
+    fn is_configured_in(self, config_settings: &[ConfigSetting]) -> bool {
+        let mut option_values = config_values(config_settings, self.conflicting_option());
+        match self {
+            Self::PreventionWithMountPath | Self::ExtraScanningWithMountPath => {
+                option_values.any(setting_is_enabled)
+            }
+            Self::IncludePathWithMountPath | Self::ExcludePathWithMountPath => {
+                option_values.next().is_some()
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClamdUserExclusion {
+    ClamdUserExcluded,
+    ClamdUserNotExcluded,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -328,7 +377,9 @@ pub enum OnAccessConfig {
     ConfigUnreadable(ClamdConfigReadFailure),
     ConfigRead {
         watch_scope: WatchScope,
-        blocking_response: OnAccessResponse,
+        configured_prevention: ConfiguredPrevention,
+        setting_conflicts: Vec<OnAccessConflict>,
+        clamd_user_exclusion: ClamdUserExclusion,
         size_limit: OnAccessSizeLimit,
     },
 }
@@ -337,6 +388,8 @@ pub enum OnAccessConfig {
 pub struct OnAccessEvidence {
     pub on_access_scanner: OnAccessScanner,
     pub on_access_config: OnAccessConfig,
+    pub kernel_blocking_support: KernelBlockingSupport,
+    pub inotify_watch_limit: InotifyWatchLimit,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -678,14 +731,34 @@ pub fn on_access_config_from_settings(config_settings: &[ConfigSetting]) -> OnAc
                 folder_path: sanitize_scanner_line(folder_path),
             }
         });
+    let watched_locations = watched_mounts.chain(watched_folders).collect::<Vec<_>>();
+    let mount_watched = watched_locations
+        .iter()
+        .any(|watched_location| matches!(watched_location, WatchedLocation::WatchedMount { .. }));
     OnAccessConfig::ConfigRead {
-        watch_scope: WatchScope::from_locations(watched_mounts.chain(watched_folders).collect()),
-        blocking_response: if config_values(config_settings, "OnAccessPrevention")
+        watch_scope: WatchScope::from_locations(watched_locations),
+        configured_prevention: if config_values(config_settings, "OnAccessPrevention")
             .any(setting_is_enabled)
         {
-            OnAccessResponse::BlockAccess
+            ConfiguredPrevention::PreventionRequested
         } else {
-            OnAccessResponse::ReportOnly
+            ConfiguredPrevention::PreventionOff
+        },
+        setting_conflicts: if mount_watched {
+            OnAccessConflict::ALL_CONFLICTS
+                .into_iter()
+                .filter(|setting_conflict| setting_conflict.is_configured_in(config_settings))
+                .collect()
+        } else {
+            Vec::new()
+        },
+        clamd_user_exclusion: if config_values(config_settings, "OnAccessExcludeUname")
+            .chain(config_values(config_settings, "OnAccessExcludeUID"))
+            .any(|excluded_user| !excluded_user.trim().is_empty())
+        {
+            ClamdUserExclusion::ClamdUserExcluded
+        } else {
+            ClamdUserExclusion::ClamdUserNotExcluded
         },
         size_limit: config_values(config_settings, "OnAccessMaxFileSize")
             .next()
@@ -965,6 +1038,14 @@ async fn inspect_on_access_evidence() -> OnAccessEvidence {
     OnAccessEvidence {
         on_access_scanner,
         on_access_config,
+        kernel_blocking_support: spawn_blocking(inspect_kernel_blocking_support)
+            .await
+            .unwrap_or(KernelBlockingSupport::KernelConfigUnreadable(
+                KernelConfigReadFailure::ReadingTaskAborted,
+            )),
+        inotify_watch_limit: spawn_blocking(inspect_inotify_watch_limit).await.unwrap_or(
+            InotifyWatchLimit::LimitUnreadable(WatchLimitReadFailure::ReadingTaskAborted),
+        ),
     }
 }
 
@@ -1246,29 +1327,55 @@ mod protection_evidence_tests {
             on_access_config_from_settings(&[
                 config_setting("OnAccessIncludePath", "/home/user/Downloads"),
                 config_setting("OnAccessIncludePath", "/srv/inbox"),
-                config_setting("OnAccessMountPath", "/media"),
                 config_setting("OnAccessPrevention", "true"),
+                config_setting("OnAccessExcludeUname", "clamav"),
                 config_setting("OnAccessMaxFileSize", "100M"),
             ]),
             OnAccessConfig::ConfigRead {
                 watch_scope: WatchScope::WatchedLocations {
-                    first_location: WatchedLocation::WatchedMount {
-                        mount_path: "/media".to_owned()
+                    first_location: WatchedLocation::WatchedFolder {
+                        folder_path: "/home/user/Downloads".to_owned()
                     },
-                    other_locations: vec![
-                        WatchedLocation::WatchedFolder {
-                            folder_path: "/home/user/Downloads".to_owned()
-                        },
-                        WatchedLocation::WatchedFolder {
-                            folder_path: "/srv/inbox".to_owned()
-                        },
-                    ],
+                    other_locations: vec![WatchedLocation::WatchedFolder {
+                        folder_path: "/srv/inbox".to_owned()
+                    }],
                 },
-                blocking_response: OnAccessResponse::BlockAccess,
+                configured_prevention: ConfiguredPrevention::PreventionRequested,
+                setting_conflicts: Vec::new(),
+                clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
                 size_limit: OnAccessSizeLimit::ConfiguredLimit {
                     size_limit: ByteSize::mib(100)
                 },
             }
+        );
+    }
+
+    #[test]
+    fn a_watched_mount_with_prevention_records_the_conflicts_instead_of_blocking() {
+        let OnAccessConfig::ConfigRead {
+            watch_scope,
+            setting_conflicts,
+            ..
+        } = on_access_config_from_settings(&[
+            config_setting("OnAccessIncludePath", "/home/user/Downloads"),
+            config_setting("OnAccessMountPath", "/media"),
+            config_setting("OnAccessPrevention", "true"),
+        ])
+        else {
+            panic!("a read config was expected");
+        };
+        assert_eq!(
+            watch_scope.watched_locations()[0],
+            &WatchedLocation::WatchedMount {
+                mount_path: "/media".to_owned()
+            }
+        );
+        assert_eq!(
+            setting_conflicts,
+            vec![
+                OnAccessConflict::PreventionWithMountPath,
+                OnAccessConflict::IncludePathWithMountPath,
+            ]
         );
     }
 
@@ -1288,7 +1395,9 @@ mod protection_evidence_tests {
             on_access_config_from_settings(&[]),
             OnAccessConfig::ConfigRead {
                 watch_scope: WatchScope::NothingWatched,
-                blocking_response: OnAccessResponse::ReportOnly,
+                configured_prevention: ConfiguredPrevention::PreventionOff,
+                setting_conflicts: Vec::new(),
+                clamd_user_exclusion: ClamdUserExclusion::ClamdUserNotExcluded,
                 size_limit: OnAccessSizeLimit::DefaultLimit,
             }
         );

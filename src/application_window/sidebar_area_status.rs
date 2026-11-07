@@ -12,9 +12,13 @@ use crate::{
             clamav_engine_evidence::DatabaseEvidence,
             host_protection_evidence::{
                 AccountSettingFinding, DaemonEvidence, EngineInstallation, LoadedSignatures,
-                OnAccessConfig, OnAccessEvidence, OnAccessResponse, OnAccessScanner,
-                ProtectionEvidence, ScanServiceEvidence, ScheduledScanEvidence, SignatureEvidence,
+                OnAccessConfig, OnAccessEvidence, OnAccessScanner, ProtectionEvidence,
+                ScanServiceEvidence, ScheduledScanEvidence, SignatureEvidence,
                 ThirdPartySignatureListing, TimerState, WatchScope, WatchedLocation,
+            },
+            on_access_setup_review::{
+                OnAccessBlocking, OnAccessSetupFinding, on_access_blocking,
+                on_access_setup_findings,
             },
             service_run_journal::UpdaterRunHistory,
         },
@@ -480,18 +484,59 @@ fn on_access_text(
                 ..
             } => gettext("Nothing watched"),
             OnAccessConfig::ConfigRead {
-                watch_scope: WatchScope::WatchedLocations { .. },
-                blocking_response: OnAccessResponse::ReportOnly,
-                ..
-            } => gettext("Checks files, doesn't block"),
-            OnAccessConfig::ConfigRead {
                 watch_scope: watch_scope @ WatchScope::WatchedLocations { .. },
-                blocking_response: OnAccessResponse::BlockAccess,
+                configured_prevention,
+                setting_conflicts,
                 ..
-            } => gettext("Blocking {paths}")
-                .replace("{paths}", &watched_paths_text(watch_scope, home_directory)),
+            } => match on_access_blocking(
+                *configured_prevention,
+                setting_conflicts,
+                on_access_evidence.kernel_blocking_support,
+            ) {
+                OnAccessBlocking::PreventionOff
+                | OnAccessBlocking::PreventionConflictsWithMounts => {
+                    gettext("Checks files, doesn't block")
+                }
+                OnAccessBlocking::KernelCannotBlock => gettext("Checks files, kernel can't block"),
+                OnAccessBlocking::KernelSupportUnknown(_) => {
+                    gettext("Checks files, blocking unknown")
+                }
+                OnAccessBlocking::BlocksDetectedFiles => gettext("Blocking {paths}")
+                    .replace("{paths}", &watched_paths_text(watch_scope, home_directory)),
+            },
         },
     }
+}
+
+fn on_access_setup_summary(on_access_evidence: &OnAccessEvidence) -> Option<AreaSummary> {
+    let setup_findings = on_access_setup_findings(on_access_evidence);
+    let first_finding = setup_findings.first()?;
+    Some(
+        if setup_findings
+            .iter()
+            .all(OnAccessSetupFinding::evidence_is_missing)
+        {
+            condition_summary(
+                CheckedCondition::EvidenceUnknown,
+                gettext("Folder watch limit unknown"),
+            )
+        } else {
+            condition_summary(
+                CheckedCondition::ReviewSuggested,
+                match first_finding {
+                    OnAccessSetupFinding::MountWatchConflicts { .. } => {
+                        gettext("Mount watching conflicts")
+                    }
+                    OnAccessSetupFinding::ClamdUserNotExcluded => gettext("clamd not excluded"),
+                    OnAccessSetupFinding::WholeRootIncluded => gettext("Watches / directly"),
+                    OnAccessSetupFinding::WatchLimitLow { .. }
+                    | OnAccessSetupFinding::WatchLimitUnknown { .. } => {
+                        gettext("Folder watch limit low")
+                    }
+                },
+            )
+        },
+    )
 }
 
 fn on_access_summary(
@@ -509,10 +554,10 @@ fn on_access_summary(
                 &area_context.home_directory,
             ),
         ),
-        [reduction_summary(
-            protection_evidence,
-            ReducedSettingGroup::OnAccessSettings,
-        )],
+        [
+            on_access_setup_summary(on_access_evidence),
+            reduction_summary(protection_evidence, ReducedSettingGroup::OnAccessSettings),
+        ],
     )
 }
 
@@ -805,10 +850,11 @@ mod sidebar_area_status_tests {
             clamav_programs::database_directory_status::DatabaseFolderReadFailure,
             protection_evidence::{
                 host_protection_evidence::{
-                    ClamdConfigReadFailure, OverridesChangeTime, OverridesReadFailure,
-                    ProgramTrustInspection, ReducedSetting, RuntimeReductions, ScanUnitResult,
-                    UpdaterEvidence, UpdaterUnitResult,
+                    ClamdConfigReadFailure, ClamdUserExclusion, OverridesChangeTime,
+                    OverridesReadFailure, ProgramTrustInspection, ReducedSetting,
+                    RuntimeReductions, ScanUnitResult, UpdaterEvidence, UpdaterUnitResult,
                 },
+                kernel_on_access_support::{KernelBlockingSupport, KernelConfigReadFailure},
                 protection_evidence_fixtures::{
                     REFERENCE_MOMENT, english_formatters, healthy_evidence,
                 },
@@ -1221,5 +1267,63 @@ mod sidebar_area_status_tests {
             StatusIndicator::ErrorIndicator
         );
         assert!(!AreaStatus::AreaHealthy.status_indicator().is_shown());
+    }
+
+    #[test]
+    fn on_access_follows_the_kernel_and_the_setup_review() {
+        let with_on_access = |on_access_evidence| ProtectionEvidence {
+            on_access_evidence,
+            ..healthy_evidence()
+        };
+        let unknown_kernel = summary_for(
+            SidebarArea::OnAccessScanning,
+            &with_on_access(OnAccessEvidence {
+                kernel_blocking_support: KernelBlockingSupport::KernelConfigUnreadable(
+                    KernelConfigReadFailure::NoKernelConfigFound,
+                ),
+                ..healthy_evidence().on_access_evidence
+            }),
+        );
+        assert_eq!(unknown_kernel.area_status, AreaStatus::AreaUnknown);
+        assert_eq!(
+            unknown_kernel.live_state_text,
+            "Checks files, blocking unknown"
+        );
+        let notify_only = summary_for(
+            SidebarArea::OnAccessScanning,
+            &with_on_access(OnAccessEvidence {
+                kernel_blocking_support: KernelBlockingSupport::NotifyOnly,
+                ..healthy_evidence().on_access_evidence
+            }),
+        );
+        assert_eq!(notify_only.area_status, AreaStatus::AreaNeedsReview);
+        assert_eq!(
+            notify_only.live_state_text,
+            "Checks files, kernel can't block"
+        );
+        let OnAccessConfig::ConfigRead {
+            watch_scope,
+            configured_prevention,
+            size_limit,
+            ..
+        } = healthy_evidence().on_access_evidence.on_access_config
+        else {
+            panic!("the healthy fixture reads its config");
+        };
+        let not_excluded = summary_for(
+            SidebarArea::OnAccessScanning,
+            &with_on_access(OnAccessEvidence {
+                on_access_config: OnAccessConfig::ConfigRead {
+                    watch_scope,
+                    configured_prevention,
+                    setting_conflicts: Vec::new(),
+                    clamd_user_exclusion: ClamdUserExclusion::ClamdUserNotExcluded,
+                    size_limit,
+                },
+                ..healthy_evidence().on_access_evidence
+            }),
+        );
+        assert_eq!(not_excluded.area_status, AreaStatus::AreaNeedsReview);
+        assert_eq!(not_excluded.live_state_text, "clamd not excluded");
     }
 }

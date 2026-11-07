@@ -8,10 +8,13 @@ use crate::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         desktop::locale_formatting::MomentFormatters,
         detection_journal::detection_journal_follower::JournalAccess,
-        protection_evidence::host_protection_evidence::{
-            AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
-            OnAccessResponse, OnAccessScanner, ProtectionEvidence, ScanServiceEvidence,
-            ScheduledScanEvidence, SignatureEvidence, TimerState, WatchScope, WatchedLocation,
+        protection_evidence::{
+            host_protection_evidence::{
+                AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
+                OnAccessScanner, ProtectionEvidence, ScanServiceEvidence, ScheduledScanEvidence,
+                SignatureEvidence, TimerState, WatchScope, WatchedLocation,
+            },
+            on_access_setup_review::{OnAccessBlocking, on_access_blocking},
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState},
     },
@@ -446,9 +449,12 @@ fn on_access_coverage(on_access_evidence: &OnAccessEvidence) -> Option<String> {
         on_access_config:
             OnAccessConfig::ConfigRead {
                 watch_scope: watch_scope @ WatchScope::WatchedLocations { .. },
-                blocking_response,
+                configured_prevention,
+                setting_conflicts,
                 ..
             },
+        kernel_blocking_support,
+        ..
     } = on_access_evidence
     else {
         return None;
@@ -459,14 +465,26 @@ fn on_access_coverage(on_access_evidence: &OnAccessEvidence) -> Option<String> {
         .map(WatchedLocation::location_path)
         .collect::<Vec<_>>()
         .join(", ");
-    Some(match blocking_response {
-        OnAccessResponse::BlockAccess => {
-            gettext("{paths} blocked on access").replace("{paths}", &watched_paths)
-        }
-        OnAccessResponse::ReportOnly => {
-            gettext("{paths} checked on access, not blocked").replace("{paths}", &watched_paths)
-        }
-    })
+    Some(
+        match on_access_blocking(
+            *configured_prevention,
+            setting_conflicts,
+            *kernel_blocking_support,
+        ) {
+            OnAccessBlocking::BlocksDetectedFiles => {
+                gettext("{paths} blocked on access").replace("{paths}", &watched_paths)
+            }
+            OnAccessBlocking::KernelSupportUnknown(_) => {
+                gettext("{paths} checked on access, blocking unknown")
+                    .replace("{paths}", &watched_paths)
+            }
+            OnAccessBlocking::PreventionOff
+            | OnAccessBlocking::PreventionConflictsWithMounts
+            | OnAccessBlocking::KernelCannotBlock => {
+                gettext("{paths} checked on access, not blocked").replace("{paths}", &watched_paths)
+            }
+        },
+    )
 }
 
 fn scheduled_coverage(scheduled_scan_evidence: &ScheduledScanEvidence) -> Option<String> {
@@ -599,9 +617,10 @@ mod protection_timeline_presentation_tests {
         host_services::{
             protection_evidence::{
                 host_protection_evidence::{
-                    ClamdConfigReadFailure, DaemonEvidence, OnAccessSizeLimit, OverridesChangeTime,
-                    OverridesReadFailure, ProgramTrustFinding, ProgramTrustInspection,
-                    ReducedSetting, RuntimeReductions, ScanUnitResult,
+                    ClamdConfigReadFailure, ClamdUserExclusion, ConfiguredPrevention,
+                    DaemonEvidence, OnAccessSizeLimit, OverridesChangeTime, OverridesReadFailure,
+                    ProgramTrustFinding, ProgramTrustInspection, ReducedSetting, RuntimeReductions,
+                    ScanUnitResult,
                 },
                 protection_evidence_fixtures::{
                     REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
@@ -1105,7 +1124,9 @@ mod protection_timeline_presentation_tests {
                     },
                     other_locations: Vec::new(),
                 },
-                blocking_response: OnAccessResponse::ReportOnly,
+                configured_prevention: ConfiguredPrevention::PreventionOff,
+                setting_conflicts: Vec::new(),
+                clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
                 size_limit: OnAccessSizeLimit::DefaultLimit,
             })
             .contains("not blocked")
@@ -1119,7 +1140,9 @@ mod protection_timeline_presentation_tests {
         assert!(
             !coverage_with(OnAccessConfig::ConfigRead {
                 watch_scope: WatchScope::NothingWatched,
-                blocking_response: OnAccessResponse::BlockAccess,
+                configured_prevention: ConfiguredPrevention::PreventionRequested,
+                setting_conflicts: Vec::new(),
+                clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
                 size_limit: OnAccessSizeLimit::DefaultLimit,
             })
             .contains("on access")
@@ -1132,7 +1155,9 @@ mod protection_timeline_presentation_tests {
                     },
                     other_locations: Vec::new(),
                 },
-                blocking_response: OnAccessResponse::BlockAccess,
+                configured_prevention: ConfiguredPrevention::PreventionRequested,
+                setting_conflicts: Vec::new(),
+                clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
                 size_limit: OnAccessSizeLimit::DefaultLimit,
             })
             .starts_with("/ blocked on access")
@@ -1215,6 +1240,7 @@ mod protection_timeline_presentation_tests {
         OnAccessEvidence {
             on_access_scanner: OnAccessScanner::MonitorRunning,
             on_access_config,
+            ..healthy_evidence().on_access_evidence
         }
     }
 

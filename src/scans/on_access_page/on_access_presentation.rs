@@ -5,15 +5,25 @@ use crate::{
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         desktop::locale_formatting::byte_size_text,
-        protection_evidence::host_protection_evidence::{
-            ClamdConfigReadFailure, OnAccessConfig, OnAccessEvidence, OnAccessResponse,
-            OnAccessScanner, OnAccessSizeLimit, ProtectionEvidence, WatchScope, WatchedLocation,
+        protection_evidence::{
+            host_protection_evidence::{
+                ClamdConfigReadFailure, ConfiguredPrevention, OnAccessConfig, OnAccessConflict,
+                OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProtectionEvidence,
+                WatchScope, WatchedLocation,
+            },
+            kernel_on_access_support::{KernelBlockingSupport, KernelConfigReadFailure},
+            on_access_setup_review::{
+                OnAccessBlocking, OnAccessSetupFinding, on_access_blocking,
+                on_access_setup_findings,
+            },
         },
     },
     scans::scan_engine_page::scan_engine_presentation::{daemon_awaited_text, daemon_is_answering},
     shared_widgets::step_timeline::{
         runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
-        step_evidence_builders::{CheckedCondition, evidence_row, remedy_commands},
+        step_evidence_builders::{
+            CheckedCondition, evidence_row, no_guidance_step, remedy_commands,
+        },
         timeline_step_contents::{
             ActionConsequence, ActionableEvidenceRow, EvidenceMoment, EvidenceRowControl,
             SettledStep, StepActionButton, StepActionSlot, StepEvidenceRow, TimelineStep,
@@ -123,7 +133,70 @@ struct OnAccessVerdict {
     suggested_remedies: Vec<SuggestedRemedy>,
 }
 
-fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict {
+fn kernel_config_failure_text(read_failure: KernelConfigReadFailure) -> String {
+    match read_failure {
+        KernelConfigReadFailure::NoKernelConfigFound => {
+            gettext("neither /proc/config.gz nor the kernel's config file in /boot exists")
+        }
+        KernelConfigReadFailure::KernelConfigUnreadable { .. } => {
+            gettext("the kernel configuration could not be read")
+        }
+        KernelConfigReadFailure::CompressedConfigCorrupt => {
+            gettext("/proc/config.gz could not be decompressed")
+        }
+        KernelConfigReadFailure::KernelReleaseUnreadable { .. } => {
+            gettext("the running kernel release could not be read")
+        }
+        KernelConfigReadFailure::ReadingTaskAborted => {
+            gettext("reading the kernel configuration stopped before it finished")
+        }
+    }
+}
+
+fn watched_blocking_verdict(on_access_blocking: OnAccessBlocking) -> OnAccessVerdict {
+    match on_access_blocking {
+        OnAccessBlocking::BlocksDetectedFiles => OnAccessVerdict {
+            checked_condition: CheckedCondition::ConditionMet,
+            status_text: gettext("Detected files are blocked"),
+            suggested_remedies: Vec::new(),
+        },
+        OnAccessBlocking::PreventionOff => OnAccessVerdict {
+            checked_condition: CheckedCondition::ReviewSuggested,
+            status_text: gettext("Files are checked, but detected files are not blocked"),
+            suggested_remedies: vec![SuggestedRemedy::OnAccessPreventionEnable],
+        },
+        OnAccessBlocking::PreventionConflictsWithMounts => OnAccessVerdict {
+            checked_condition: CheckedCondition::ReviewSuggested,
+            status_text: gettext(
+                "Files are checked, but detected files are not blocked, because \
+                 OnAccessPrevention doesn't work with OnAccessMountPath",
+            ),
+            suggested_remedies: Vec::new(),
+        },
+        OnAccessBlocking::KernelCannotBlock => OnAccessVerdict {
+            checked_condition: CheckedCondition::ReviewSuggested,
+            status_text: gettext(
+                "Files are checked, but this kernel can't block detected files, because it was \
+                 built without CONFIG_FANOTIFY_ACCESS_PERMISSIONS",
+            ),
+            suggested_remedies: Vec::new(),
+        },
+        OnAccessBlocking::KernelSupportUnknown(read_failure) => OnAccessVerdict {
+            checked_condition: CheckedCondition::EvidenceUnknown,
+            status_text: gettext(
+                "Files are checked, but whether the kernel can block detected files is unknown, \
+                 because {reason}",
+            )
+            .replace("{reason}", &kernel_config_failure_text(read_failure)),
+            suggested_remedies: Vec::new(),
+        },
+    }
+}
+
+fn running_monitor_verdict(
+    on_access_config: &OnAccessConfig,
+    kernel_blocking_support: KernelBlockingSupport,
+) -> OnAccessVerdict {
     match on_access_config {
         OnAccessConfig::ConfigUnreadable(_) => OnAccessVerdict {
             checked_condition: CheckedCondition::EvidenceUnknown,
@@ -135,7 +208,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
         },
         OnAccessConfig::ConfigRead {
             watch_scope: WatchScope::NothingWatched,
-            blocking_response: OnAccessResponse::BlockAccess,
+            configured_prevention: ConfiguredPrevention::PreventionRequested,
             ..
         } => OnAccessVerdict {
             checked_condition: CheckedCondition::ReviewSuggested,
@@ -144,7 +217,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
         },
         OnAccessConfig::ConfigRead {
             watch_scope: WatchScope::NothingWatched,
-            blocking_response: OnAccessResponse::ReportOnly,
+            configured_prevention: ConfiguredPrevention::PreventionOff,
             ..
         } => OnAccessVerdict {
             checked_condition: CheckedCondition::ReviewSuggested,
@@ -159,22 +232,14 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
         },
         OnAccessConfig::ConfigRead {
             watch_scope: WatchScope::WatchedLocations { .. },
-            blocking_response: OnAccessResponse::ReportOnly,
+            configured_prevention,
+            setting_conflicts,
             ..
-        } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ReviewSuggested,
-            status_text: gettext("Files are checked, but detected files are not blocked"),
-            suggested_remedies: vec![SuggestedRemedy::OnAccessPreventionEnable],
-        },
-        OnAccessConfig::ConfigRead {
-            watch_scope: WatchScope::WatchedLocations { .. },
-            blocking_response: OnAccessResponse::BlockAccess,
-            ..
-        } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ConditionMet,
-            status_text: gettext("Detected files are blocked"),
-            suggested_remedies: Vec::new(),
-        },
+        } => watched_blocking_verdict(on_access_blocking(
+            *configured_prevention,
+            setting_conflicts,
+            kernel_blocking_support,
+        )),
     }
 }
 
@@ -210,9 +275,10 @@ fn on_access_verdict(
             status_text: daemon_awaited_text(),
             suggested_remedies: Vec::new(),
         },
-        OnAccessScanner::MonitorRunning => {
-            running_monitor_verdict(&on_access_evidence.on_access_config)
-        }
+        OnAccessScanner::MonitorRunning => running_monitor_verdict(
+            &on_access_evidence.on_access_config,
+            on_access_evidence.kernel_blocking_support,
+        ),
     }
 }
 
@@ -263,6 +329,101 @@ pub fn on_access_step<StepAction: StepActionButton>(
     )
 }
 
+fn conflicting_options_text(setting_conflicts: &[OnAccessConflict]) -> String {
+    setting_conflicts
+        .iter()
+        .map(|setting_conflict| setting_conflict.conflicting_option())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn setup_finding_step<StepAction: StepActionButton>(
+    setup_finding: &OnAccessSetupFinding,
+) -> TimelineStep<StepAction> {
+    let checked_condition = if setup_finding.evidence_is_missing() {
+        CheckedCondition::EvidenceUnknown
+    } else {
+        CheckedCondition::ReviewSuggested
+    };
+    let (step_title, mechanism_details, status_text) = match setup_finding {
+        OnAccessSetupFinding::MountWatchConflicts { setting_conflicts } => (
+            gettext("Mount watching"),
+            gettext(
+                "OnAccessMountPath watches a whole mount through fanotify. ClamAV documents it as \
+                 incompatible with OnAccessPrevention, OnAccessIncludePath, OnAccessExcludePath \
+                 and OnAccessExtraScanning, so detected files on a watched mount are never \
+                 blocked. Watch folders with OnAccessIncludePath to block.",
+            ),
+            gettext("OnAccessMountPath can't be combined with {options}")
+                .replace("{options}", &conflicting_options_text(setting_conflicts)),
+        ),
+        OnAccessSetupFinding::ClamdUserNotExcluded => (
+            gettext("Scan loop protection"),
+            gettext(
+                "clamd opens every file it is asked to scan. Unless OnAccessExcludeUname or \
+                 OnAccessExcludeUID names the user clamd runs as, clamonacc sees those reads and \
+                 asks clamd to scan the same files again.",
+            ),
+            gettext("clamd isn't excluded, so clamonacc can scan its own reads endlessly"),
+        ),
+        OnAccessSetupFinding::WholeRootIncluded => (
+            gettext("Watching the whole file system"),
+            gettext(
+                "clamonacc refuses OnAccessIncludePath /. Include the folders that receive files, \
+                 such as home directories, or watch a mount with OnAccessMountPath.",
+            ),
+            gettext("OnAccessIncludePath / is rejected by clamonacc"),
+        ),
+        OnAccessSetupFinding::WatchLimitLow {
+            max_user_watches,
+            large_tree_path,
+        } => (
+            gettext("Folder watch limit"),
+            watch_limit_details(),
+            gettext(
+                "{path} is watched, but fs.inotify.max_user_watches is only {limit}, so folders \
+                 past the limit go unchecked",
+            )
+            .replace("{path}", large_tree_path)
+            .replace("{limit}", &max_user_watches.to_string()),
+        ),
+        OnAccessSetupFinding::WatchLimitUnknown {
+            large_tree_path, ..
+        } => (
+            gettext("Folder watch limit"),
+            watch_limit_details(),
+            gettext(
+                "Unknown whether {path} fits the folder watch limit, because \
+                 fs.inotify.max_user_watches could not be read",
+            )
+            .replace("{path}", large_tree_path),
+        ),
+    };
+    no_guidance_step(
+        step_title,
+        mechanism_details,
+        checked_condition.node_state(),
+        status_text,
+    )
+}
+
+fn watch_limit_details() -> String {
+    gettext(
+        "clamonacc watches every folder below an included path with inotify, one watch per \
+         folder. A whole home directory or larger tree can need more watches than the old default \
+         limit of 8192 allows. Raise fs.inotify.max_user_watches with sysctl.",
+    )
+}
+
+pub fn on_access_setup_steps<StepAction: StepActionButton>(
+    on_access_evidence: &OnAccessEvidence,
+) -> Vec<TimelineStep<StepAction>> {
+    on_access_setup_findings(on_access_evidence)
+        .iter()
+        .map(setup_finding_step)
+        .collect()
+}
+
 pub fn on_access_page_steps(
     protection_evidence: &ProtectionEvidence,
     distribution_family: DistributionFamily,
@@ -275,6 +436,9 @@ pub fn on_access_page_steps(
             header_action: StepActionSlot::NoAction,
             setting_row_control: EvidenceRowControl::NoRowControl,
         },
+    ))
+    .chain(on_access_setup_steps(
+        &protection_evidence.on_access_evidence,
     ))
     .chain(runtime_reduction_step(
         &protection_evidence.runtime_reductions,
@@ -290,7 +454,8 @@ mod on_access_presentation_tests {
     use crate::{
         host_services::protection_evidence::{
             host_protection_evidence::{
-                DaemonEvidence, OverridesChangeTime, ReducedSetting, RuntimeReductions,
+                ClamdUserExclusion, DaemonEvidence, OverridesChangeTime, ReducedSetting,
+                RuntimeReductions,
             },
             protection_evidence_fixtures::healthy_evidence,
         },
@@ -301,6 +466,7 @@ mod on_access_presentation_tests {
         OnAccessEvidence {
             on_access_scanner: OnAccessScanner::MonitorRunning,
             on_access_config,
+            ..healthy_evidence().on_access_evidence
         }
     }
 
@@ -333,7 +499,9 @@ mod on_access_presentation_tests {
                 },
                 other_locations: Vec::new(),
             },
-            blocking_response: OnAccessResponse::ReportOnly,
+            configured_prevention: ConfiguredPrevention::PreventionOff,
+            setting_conflicts: Vec::new(),
+            clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
             size_limit: OnAccessSizeLimit::DefaultLimit,
         }));
         assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
@@ -377,7 +545,9 @@ mod on_access_presentation_tests {
     fn prevention_without_watched_locations_suggests_adding_a_watched_folder() {
         let on_access_step = page_step_of(on_access_with(OnAccessConfig::ConfigRead {
             watch_scope: WatchScope::NothingWatched,
-            blocking_response: OnAccessResponse::BlockAccess,
+            configured_prevention: ConfiguredPrevention::PreventionRequested,
+            setting_conflicts: Vec::new(),
+            clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
             size_limit: OnAccessSizeLimit::DefaultLimit,
         }));
         assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
@@ -403,7 +573,9 @@ mod on_access_presentation_tests {
                 },
                 other_locations: Vec::new(),
             },
-            blocking_response: OnAccessResponse::BlockAccess,
+            configured_prevention: ConfiguredPrevention::PreventionRequested,
+            setting_conflicts: Vec::new(),
+            clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
             size_limit: OnAccessSizeLimit::DefaultLimit,
         }));
         assert_eq!(on_access_step.node_state(), StepNodeState::Completed);
@@ -460,6 +632,98 @@ mod on_access_presentation_tests {
         assert_eq!(
             on_access_page_steps(&reductions_of("DetectPUA"), DistributionFamily::NixosFamily)
                 .len(),
+            1
+        );
+    }
+
+    fn watched_downloads() -> WatchScope {
+        WatchScope::WatchedLocations {
+            first_location: WatchedLocation::WatchedFolder {
+                folder_path: "/home/user/Downloads".to_owned(),
+            },
+            other_locations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn mount_watching_with_prevention_is_shown_as_not_blocking_with_its_conflict() {
+        let page_steps = on_access_page_steps(
+            &ProtectionEvidence {
+                on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
+                    watch_scope: WatchScope::WatchedLocations {
+                        first_location: WatchedLocation::WatchedMount {
+                            mount_path: "/media".to_owned(),
+                        },
+                        other_locations: Vec::new(),
+                    },
+                    configured_prevention: ConfiguredPrevention::PreventionRequested,
+                    setting_conflicts: vec![OnAccessConflict::PreventionWithMountPath],
+                    clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
+                    size_limit: OnAccessSizeLimit::DefaultLimit,
+                }),
+                ..healthy_evidence()
+            },
+            DistributionFamily::NixosFamily,
+        );
+        assert_eq!(page_steps[0].node_state(), StepNodeState::NeedsReview);
+        assert!(page_steps[0].status_text.contains("not blocked"));
+        assert_eq!(page_steps[1].node_state(), StepNodeState::NeedsReview);
+        assert_eq!(
+            page_steps[1].status_text,
+            "OnAccessMountPath can't be combined with OnAccessPrevention"
+        );
+    }
+
+    #[test]
+    fn an_unreadable_kernel_config_is_unknown_and_never_blocking() {
+        let on_access_step = page_step_of(OnAccessEvidence {
+            kernel_blocking_support: KernelBlockingSupport::KernelConfigUnreadable(
+                KernelConfigReadFailure::NoKernelConfigFound,
+            ),
+            ..healthy_evidence().on_access_evidence
+        });
+        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
+        assert!(on_access_step.status_text.contains("unknown"));
+        assert_ne!(on_access_step.status_text, "Detected files are blocked");
+    }
+
+    #[test]
+    fn a_notify_only_kernel_says_it_cannot_block() {
+        let on_access_step = page_step_of(OnAccessEvidence {
+            kernel_blocking_support: KernelBlockingSupport::NotifyOnly,
+            ..healthy_evidence().on_access_evidence
+        });
+        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
+        assert!(on_access_step.status_text.contains("kernel can't block"));
+    }
+
+    #[test]
+    fn a_missing_clamd_exclusion_gets_its_own_review_step() {
+        let page_steps = on_access_page_steps(
+            &ProtectionEvidence {
+                on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
+                    watch_scope: watched_downloads(),
+                    configured_prevention: ConfiguredPrevention::PreventionRequested,
+                    setting_conflicts: Vec::new(),
+                    clamd_user_exclusion: ClamdUserExclusion::ClamdUserNotExcluded,
+                    size_limit: OnAccessSizeLimit::DefaultLimit,
+                }),
+                ..healthy_evidence()
+            },
+            DistributionFamily::NixosFamily,
+        );
+        assert_eq!(page_steps[0].node_state(), StepNodeState::Completed);
+        assert_eq!(page_steps[1].node_state(), StepNodeState::NeedsReview);
+        assert_eq!(
+            page_steps[1].status_text,
+            "clamd isn't excluded, so clamonacc can scan its own reads endlessly"
+        );
+    }
+
+    #[test]
+    fn a_healthy_setup_adds_no_review_steps() {
+        assert_eq!(
+            on_access_page_steps(&healthy_evidence(), DistributionFamily::NixosFamily).len(),
             1
         );
     }

@@ -7,12 +7,13 @@ use crate::{
         protection_evidence::{
             clamav_engine_evidence::DatabaseEvidence,
             host_protection_evidence::{
-                DaemonEvidence, EngineInstallation, LoadedSignatures, OnAccessConfig,
-                OnAccessEvidence, OnAccessResponse, OnAccessScanner, OnAccessSizeLimit,
-                ProgramTrustInspection, ProtectionEvidence, RuntimeReductions, ScanServiceEvidence,
-                ScanUnitResult, ScheduledScanEvidence, SignatureEvidence,
+                ClamdUserExclusion, ConfiguredPrevention, DaemonEvidence, EngineInstallation,
+                LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessScanner,
+                OnAccessSizeLimit, ProgramTrustInspection, ProtectionEvidence, RuntimeReductions,
+                ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence, SignatureEvidence,
                 ThirdPartySignatureListing, TimerState, WatchScope, WatchedLocation,
             },
+            kernel_on_access_support::{InotifyWatchLimit, KernelBlockingSupport},
             service_run_journal::ScanRunHistory,
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
@@ -60,10 +61,16 @@ pub fn healthy_evidence() -> ProtectionEvidence {
                     },
                     other_locations: Vec::new(),
                 },
-                blocking_response: OnAccessResponse::BlockAccess,
+                configured_prevention: ConfiguredPrevention::PreventionRequested,
+                setting_conflicts: Vec::new(),
+                clamd_user_exclusion: ClamdUserExclusion::ClamdUserExcluded,
                 size_limit: OnAccessSizeLimit::ConfiguredLimit {
                     size_limit: ByteSize::mib(100),
                 },
+            },
+            kernel_blocking_support: KernelBlockingSupport::PermissionEventsSupported,
+            inotify_watch_limit: InotifyWatchLimit::LimitRead {
+                max_user_watches: 524_288,
             },
         },
         scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
