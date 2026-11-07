@@ -1,11 +1,20 @@
 use gettextrs::gettext;
 
 use crate::host_services::activity_history::activity_history_database::{
-    ActivityEntryRecord, ActivityRecord, FoundThreatCount, ScanActivityStatus,
+    ActivityEntryRecord, ActivityRecord, FoundThreatCount, ScanActivityStatus, ScanOrigin,
     StoredActivityColumns, UpdateActivityStatus,
 };
 
-const CSV_HEADER: &str = "entry_id,started_at,status,targets,files_scanned,threats,duration_millis";
+const CSV_HEADER: &str =
+    "entry_id,started_at,status,origin,targets,files_scanned,threats,duration_millis";
+
+fn exported_origin_text(activity_record: &ActivityRecord) -> &'static str {
+    match activity_record {
+        ActivityRecord::ScanActivity { scan_origin, .. } => scan_origin.stored_origin_text(),
+        ActivityRecord::SkippedScan { .. } => ScanOrigin::ScheduledScan.stored_origin_text(),
+        ActivityRecord::UpdateActivity { .. } => "",
+    }
+}
 
 pub fn activity_status_text(activity_record: &ActivityRecord) -> String {
     match activity_record {
@@ -72,6 +81,7 @@ struct ExportedActivityEntry<'entry> {
     entry_id: i64,
     started_at: jiff::Timestamp,
     activity_status: &'static str,
+    scan_origin: &'static str,
     activity_targets: String,
     inspected_file_count: u64,
     threat_count: u64,
@@ -84,6 +94,7 @@ impl<'entry> ExportedActivityEntry<'entry> {
         let StoredActivityColumns {
             activity_status,
             activity_targets,
+            scan_origin: _stored_origin,
             inspected_file_count,
             threat_count,
         } = activity_entry.activity_record.stored_columns();
@@ -91,6 +102,7 @@ impl<'entry> ExportedActivityEntry<'entry> {
             entry_id: activity_entry.entry_id,
             started_at: activity_entry.started_at,
             activity_status,
+            scan_origin: exported_origin_text(&activity_entry.activity_record),
             activity_targets,
             inspected_file_count,
             threat_count,
@@ -118,10 +130,11 @@ pub fn activity_entries_as_csv(activity_entries: &[ActivityEntryRecord]) -> Stri
         .chain(activity_entries.iter().map(|activity_entry| {
             let exported_entry = ExportedActivityEntry::from_entry(activity_entry);
             format!(
-                "{},{},{},{},{},{},{}",
+                "{},{},{},{},{},{},{},{}",
                 exported_entry.entry_id,
                 exported_entry.started_at,
                 csv_field(activity_status_text(&activity_entry.activity_record).as_str()),
+                exported_entry.scan_origin,
                 csv_field(&exported_entry.activity_targets),
                 exported_entry.inspected_file_count,
                 exported_entry.threat_count,
@@ -208,7 +221,6 @@ pub fn activity_detail_text(
 #[cfg(test)]
 mod activity_export_formats_tests {
     use super::*;
-    use crate::host_services::activity_history::activity_history_database::ScanOrigin;
 
     fn infected_entry() -> ActivityEntryRecord {
         ActivityEntryRecord {
@@ -239,15 +251,15 @@ mod activity_export_formats_tests {
         assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
         let csv_text = activity_entries_as_csv(&[infected_entry()]);
         assert!(csv_text.starts_with("entry_id,"));
-        assert!(csv_text.contains(
-            "7,1970-01-01T00:16:40Z,Infected,\"/scan/a,b\n=/scan/\"\"c\"\"\",3,1,2500\n"
-        ));
+        assert!(csv_text.contains("7,1970-01-01T00:16:40Z,Infected,manual_scan,"));
+        assert!(csv_text.contains("\"/scan/a,b\n=/scan/\"\"c\"\"\",3,1,2500\n"));
     }
 
     #[test]
     fn json_keeps_the_output_and_uses_stable_status_names() {
         let json_text = activity_entries_as_json(&[infected_entry()]).expect("json");
         assert!(json_text.contains("\"activity_status\": \"scan_infected\""));
+        assert!(json_text.contains("\"scan_origin\": \"manual_scan\""));
         assert!(json_text.contains("Bad FOUND"));
         assert!(json_text.contains("\"started_at\": \"1970-01-01T00:16:40Z\""));
     }
@@ -272,10 +284,31 @@ mod activity_export_formats_tests {
         };
         assert!(
             activity_entries_as_csv(std::slice::from_ref(&update_entry))
-                .contains("7,1970-01-01T00:16:40Z,Success,,0,0,2500\n")
+                .contains("7,1970-01-01T00:16:40Z,Success,,,0,0,2500\n")
         );
         let json_text = activity_entries_as_json(&[update_entry]).expect("json");
         assert!(json_text.contains("\"activity_status\": \"update_applied\""));
         assert!(json_text.contains("\"threat_count\": 0"));
+        assert!(json_text.contains("\"scan_origin\": \"\""));
+    }
+
+    #[test]
+    fn scheduled_scans_export_their_origin_beside_the_unchanged_status() {
+        let scheduled_entry = ActivityEntryRecord {
+            activity_record: ActivityRecord::ScanActivity {
+                scan_targets: vec![std::path::PathBuf::from("/home")],
+                inspected_file_count: 3,
+                scan_status: ScanActivityStatus::ScanClean,
+                scan_origin: ScanOrigin::ScheduledScan,
+            },
+            ..infected_entry()
+        };
+        assert!(
+            activity_entries_as_csv(std::slice::from_ref(&scheduled_entry))
+                .contains(",Clean,scheduled_scan,/home,")
+        );
+        let json_text = activity_entries_as_json(&[scheduled_entry]).expect("json");
+        assert!(json_text.contains("\"activity_status\": \"scan_clean\""));
+        assert!(json_text.contains("\"scan_origin\": \"scheduled_scan\""));
     }
 }

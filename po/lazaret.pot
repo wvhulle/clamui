@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 10:50+0100\n"
+"POT-Creation-Date: 2026-11-07 10:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2384,7 +2384,7 @@ msgstr[1] ""
 
 #: src/scans/manual_scan_page/scan_page_component.rs:387
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:108
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:52
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:61
 msgid "Scan cancelled by user"
 msgstr ""
 
@@ -2396,14 +2396,14 @@ msgstr ""
 #: src/scans/manual_scan_page/scan_page_component.rs:396
 #: src/scans/manual_scan_page/scan_page_component.rs:569
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:107
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:51
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:60
 msgid "The scan did not finish cleanly"
 msgstr ""
 
 #: src/scans/manual_scan_page/scan_page_component.rs:398
 #: src/scans/manual_scan_page/scan_page_component.rs:568
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:106
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:50
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:59
 msgid "No threats found"
 msgstr ""
 
@@ -2985,7 +2985,7 @@ msgid "ClamAV could not open these files."
 msgstr ""
 
 #: src/scans/manual_scan_page/scan_run_state.rs:310
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:39
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:48
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
@@ -3039,7 +3039,7 @@ msgstr ""
 #: src/scans/on_access_page/on_access_component.rs:171
 #: src/scans/scan_engine_page/scan_engine_component.rs:187
 #: src/scans/scheduled_scans_page/scheduled_scans_component.rs:141
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:167
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:180
 #: src/signatures/database_updates_page/database_updates_component.rs:317
 msgid "Status"
 msgstr ""
@@ -3642,106 +3642,106 @@ msgid ""
 "detectable after a signature update."
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:13
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:22
 msgid "Clean"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:14
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:23
 msgid "Infected"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:15
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:20
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:24
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:29
 msgid "Error"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:16
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:21
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:25
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:30
 msgid "Cancelled"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:18
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:27
 #: src/shared_widgets/audit_sections/audit_check_results.rs:29
 msgid "Skipped"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:22
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:31
 msgid "Success"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:23
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:32
 msgid "Up to date"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:24
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:33
 msgid "Requested"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:25
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:34
 msgid "Ran"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:33
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:42
 #, rust-format
 msgid "Found {count} threat"
 msgid_plural "Found {count} threats"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:54
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:63
 msgid "Scheduled scan skipped (on battery power)"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:56
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:65
 msgid "Virus definitions updated"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:58
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:67
 msgid "Virus definitions are up to date"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:60
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:69
 msgid "Update requested from the service"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:62
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:71
 msgid "The update service ran without reporting a result"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:64
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:73
 msgid "Database update failed"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:65
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:74
 #: src/signatures/database_updates_page/signature_update_run/signature_update_session.rs:523
 msgid "Database update cancelled"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:159
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:172
 msgid "SCAN LOG"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:161
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:174
 msgid "UPDATE LOG"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:164
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:177
 msgid "Timestamp"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:172
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:185
 msgid "Duration"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:177
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:190
 msgid "Summary"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:188
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:201
 msgid "Path"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:201
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:214
 msgid "Full Output"
 msgstr ""
 

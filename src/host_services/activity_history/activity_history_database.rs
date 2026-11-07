@@ -26,7 +26,8 @@ const HISTORY_SCHEMA: &str = "
         inspected_file_count INTEGER NOT NULL,
         threat_count INTEGER NOT NULL,
         duration_millis INTEGER NOT NULL,
-        activity_output TEXT NOT NULL
+        activity_output TEXT NOT NULL,
+        scan_origin TEXT
     );
     CREATE TABLE IF NOT EXISTS background_detections (
         detection_id INTEGER PRIMARY KEY,
@@ -46,7 +47,9 @@ const HISTORY_SCHEMA: &str = "
     );
 ";
 const ENTRY_COLUMNS: &str = "entry_id, started_at_unix, activity_status, activity_targets, \
-                             inspected_file_count, threat_count, duration_millis, activity_output";
+                             inspected_file_count, threat_count, duration_millis, \
+                             activity_output, scan_origin";
+const SCAN_ORIGIN_COLUMN: &str = "scan_origin";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ActivityHistoryFailure {
@@ -62,6 +65,8 @@ pub enum ActivityHistoryFailure {
     DatabasePathNotUtf8,
     #[error("a stored history entry has an unknown status")]
     StoredStatusUnknown,
+    #[error("a stored history entry has an unknown scan origin")]
+    StoredOriginUnknown,
     #[error("a stored history entry has an impossible time: {0}")]
     StoredTimeInvalid(#[from] jiff::Error),
     #[error("the history lock is unavailable: {0}")]
@@ -113,6 +118,53 @@ pub enum ScanOrigin {
     ScheduledScan,
 }
 
+impl ScanOrigin {
+    pub const fn stored_origin_text(self) -> &'static str {
+        match self {
+            Self::ManualScan => "manual_scan",
+            Self::ScheduledScan => "scheduled_scan",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StoredScanOrigin {
+    OriginRecorded(ScanOrigin),
+    OriginNotRecorded,
+}
+
+impl StoredScanOrigin {
+    fn column_value(self) -> Value {
+        match self {
+            Self::OriginRecorded(scan_origin) => {
+                Value::Text(scan_origin.stored_origin_text().to_owned())
+            }
+            Self::OriginNotRecorded => Value::Null,
+        }
+    }
+
+    fn from_column_value(column_value: Value) -> Result<Self, ActivityHistoryFailure> {
+        match column_value {
+            Value::Null => Ok(Self::OriginNotRecorded),
+            Value::Text(origin_text) => match origin_text.as_str() {
+                "manual_scan" => Ok(Self::OriginRecorded(ScanOrigin::ManualScan)),
+                "scheduled_scan" => Ok(Self::OriginRecorded(ScanOrigin::ScheduledScan)),
+                _unknown_origin => Err(ActivityHistoryFailure::StoredOriginUnknown),
+            },
+            Value::Integer(_) | Value::Real(_) | Value::Blob(_) => {
+                Err(ActivityHistoryFailure::StoredOriginUnknown)
+            }
+        }
+    }
+
+    const fn origin_of_base_status(self) -> ScanOrigin {
+        match self {
+            Self::OriginRecorded(scan_origin) => scan_origin,
+            Self::OriginNotRecorded => ScanOrigin::ManualScan,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UpdateActivityStatus {
     UpdateApplied,
@@ -159,6 +211,7 @@ fn scan_targets_from_stored_text(stored_targets: &str) -> Vec<PathBuf> {
 
 pub struct StoredActivityColumns {
     pub activity_status: &'static str,
+    pub scan_origin: StoredScanOrigin,
     pub activity_targets: String,
     pub inspected_file_count: u64,
     pub threat_count: u64,
@@ -167,25 +220,11 @@ pub struct StoredActivityColumns {
 impl ActivityRecord {
     pub const fn stored_status_text(&self) -> &'static str {
         match self {
-            Self::ScanActivity {
-                scan_status,
-                scan_origin: ScanOrigin::ManualScan,
-                ..
-            } => match scan_status {
+            Self::ScanActivity { scan_status, .. } => match scan_status {
                 ScanActivityStatus::ScanClean => "scan_clean",
                 ScanActivityStatus::ScanInfected { .. } => "scan_infected",
                 ScanActivityStatus::ScanFailed => "scan_failed",
                 ScanActivityStatus::ScanCancelled => "scan_cancelled",
-            },
-            Self::ScanActivity {
-                scan_status,
-                scan_origin: ScanOrigin::ScheduledScan,
-                ..
-            } => match scan_status {
-                ScanActivityStatus::ScanClean => "scheduled_scan_clean",
-                ScanActivityStatus::ScanInfected { .. } => "scheduled_scan_infected",
-                ScanActivityStatus::ScanFailed => "scheduled_scan_failed",
-                ScanActivityStatus::ScanCancelled => "scheduled_scan_cancelled",
             },
             Self::SkippedScan { .. } => "scan_skipped",
             Self::UpdateActivity { update_status } => match update_status {
@@ -196,6 +235,17 @@ impl ActivityRecord {
                 UpdateActivityStatus::UpdateFailed => "update_failed",
                 UpdateActivityStatus::UpdateCancelled => "update_cancelled",
             },
+        }
+    }
+
+    pub const fn stored_scan_origin(&self) -> StoredScanOrigin {
+        match self {
+            Self::ScanActivity { scan_origin, .. } => {
+                StoredScanOrigin::OriginRecorded(*scan_origin)
+            }
+            Self::SkippedScan { .. } | Self::UpdateActivity { .. } => {
+                StoredScanOrigin::OriginNotRecorded
+            }
         }
     }
 
@@ -231,6 +281,7 @@ impl ActivityRecord {
     pub fn stored_columns(&self) -> StoredActivityColumns {
         StoredActivityColumns {
             activity_status: self.stored_status_text(),
+            scan_origin: self.stored_scan_origin(),
             activity_targets: stored_scan_targets(self.scan_targets()),
             inspected_file_count: self.stored_inspected_file_count(),
             threat_count: self.stored_threat_count(),
@@ -239,6 +290,7 @@ impl ActivityRecord {
 
     fn from_stored_columns(
         stored_status: &str,
+        stored_origin: StoredScanOrigin,
         stored_targets: &str,
         inspected_file_count: u64,
         threat_count: u64,
@@ -253,13 +305,12 @@ impl ActivityRecord {
             found_threats: FoundThreatCount::from_stored_count(threat_count),
         };
         let update_activity = |update_status| Self::UpdateActivity { update_status };
+        let base_origin = stored_origin.origin_of_base_status();
         Ok(match stored_status {
-            "scan_clean" => scan_activity(ScanActivityStatus::ScanClean, ScanOrigin::ManualScan),
-            "scan_infected" => scan_activity(infected_status, ScanOrigin::ManualScan),
-            "scan_failed" => scan_activity(ScanActivityStatus::ScanFailed, ScanOrigin::ManualScan),
-            "scan_cancelled" => {
-                scan_activity(ScanActivityStatus::ScanCancelled, ScanOrigin::ManualScan)
-            }
+            "scan_clean" => scan_activity(ScanActivityStatus::ScanClean, base_origin),
+            "scan_infected" => scan_activity(infected_status, base_origin),
+            "scan_failed" => scan_activity(ScanActivityStatus::ScanFailed, base_origin),
+            "scan_cancelled" => scan_activity(ScanActivityStatus::ScanCancelled, base_origin),
             "scheduled_scan_clean" => {
                 scan_activity(ScanActivityStatus::ScanClean, ScanOrigin::ScheduledScan)
             }
@@ -316,6 +367,7 @@ fn activity_entry_from_row(entry_row: &Row) -> Result<ActivityEntryRecord, Activ
         started_at: Timestamp::from_second(entry_row.get(1)?)?,
         activity_record: ActivityRecord::from_stored_columns(
             &stored_status,
+            StoredScanOrigin::from_column_value(entry_row.get_value(8)?)?,
             &stored_targets,
             stored_count(inspected_file_count),
             stored_count(threat_count),
@@ -323,6 +375,44 @@ fn activity_entry_from_row(entry_row: &Row) -> Result<ActivityEntryRecord, Activ
         duration_millis: stored_count(duration_millis),
         activity_output: entry_row.get(7)?,
     })
+}
+
+async fn activity_entries_have_origin_column(
+    database_connection: &Connection,
+) -> Result<bool, ActivityHistoryFailure> {
+    let mut column_rows = database_connection
+        .query("PRAGMA table_info(activity_entries)", ())
+        .await?;
+    while let Some(column_row) = column_rows.next().await? {
+        let column_name: String = column_row.get(1)?;
+        if column_name == SCAN_ORIGIN_COLUMN {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+async fn add_scan_origin_column(
+    database_connection: &Connection,
+) -> Result<(), ActivityHistoryFailure> {
+    if activity_entries_have_origin_column(database_connection).await? {
+        return Ok(());
+    }
+    match database_connection
+        .execute(
+            "ALTER TABLE activity_entries ADD COLUMN scan_origin TEXT",
+            (),
+        )
+        .await
+    {
+        Ok(_changed_rows) => Ok(()),
+        Err(_concurrent_migration)
+            if activity_entries_have_origin_column(database_connection).await? =>
+        {
+            Ok(())
+        }
+        Err(alter_failure) => Err(alter_failure.into()),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -351,6 +441,7 @@ impl ActivityHistory {
         let database_connection = history_database.connect()?;
         database_connection.busy_timeout(DATABASE_BUSY_TIMEOUT)?;
         database_connection.execute_batch(HISTORY_SCHEMA).await?;
+        add_scan_origin_column(&database_connection).await?;
         secure_database_files(&self.database_path);
         Ok(database_connection)
     }
@@ -361,6 +452,7 @@ impl ActivityHistory {
     ) -> Result<(), ActivityHistoryFailure> {
         let StoredActivityColumns {
             activity_status,
+            scan_origin,
             activity_targets,
             inspected_file_count,
             threat_count,
@@ -371,7 +463,7 @@ impl ActivityHistory {
             .execute(
                 "INSERT INTO activity_entries (started_at_unix, activity_status, \
                  activity_targets, inspected_file_count, threat_count, duration_millis, \
-                 activity_output) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 activity_output, scan_origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 vec![
                     Value::Integer(new_entry.started_at.as_second()),
                     Value::Text(activity_status.to_owned()),
@@ -380,6 +472,7 @@ impl ActivityHistory {
                     Value::Integer(threat_count as i64),
                     Value::Integer(new_entry.duration_millis as i64),
                     Value::Text(new_entry.activity_output),
+                    scan_origin.column_value(),
                 ],
             )
             .await?;
@@ -631,13 +724,135 @@ mod activity_history_database_tests {
         .into_iter()
         .for_each(|stored_status| {
             assert!(matches!(
-                ActivityRecord::from_stored_columns(stored_status, "/tmp", 1, 0),
+                ActivityRecord::from_stored_columns(
+                    stored_status,
+                    StoredScanOrigin::OriginNotRecorded,
+                    "/tmp",
+                    1,
+                    0
+                ),
                 Ok(ActivityRecord::ScanActivity {
                     scan_origin: ScanOrigin::ManualScan,
                     ..
                 })
             ));
         });
+    }
+
+    #[test]
+    fn statuses_written_with_the_origin_inside_read_as_the_base_status_and_scheduled() {
+        [
+            ("scheduled_scan_clean", "scan_clean"),
+            ("scheduled_scan_infected", "scan_infected"),
+            ("scheduled_scan_failed", "scan_failed"),
+            ("scheduled_scan_cancelled", "scan_cancelled"),
+        ]
+        .into_iter()
+        .for_each(|(combined_status, base_status)| {
+            let read_record = ActivityRecord::from_stored_columns(
+                combined_status,
+                StoredScanOrigin::OriginNotRecorded,
+                "/tmp",
+                1,
+                0,
+            )
+            .expect("known status");
+            assert!(matches!(
+                read_record,
+                ActivityRecord::ScanActivity {
+                    scan_origin: ScanOrigin::ScheduledScan,
+                    ..
+                }
+            ));
+            assert_eq!(read_record.stored_status_text(), base_status);
+            assert_eq!(
+                read_record.stored_scan_origin(),
+                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan)
+            );
+        });
+    }
+
+    #[tokio::test]
+    async fn an_old_history_gains_the_origin_column_and_keeps_its_rows() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let database_path = temporary_root.path().join("history.db");
+        let old_connection = rusqlite::Connection::open(&database_path).expect("old database");
+        old_connection
+            .execute_batch(
+                "CREATE TABLE activity_entries (entry_id INTEGER PRIMARY KEY, started_at_unix \
+                 INTEGER NOT NULL, activity_status TEXT NOT NULL, activity_targets TEXT NOT NULL, \
+                 inspected_file_count INTEGER NOT NULL, threat_count INTEGER NOT NULL, \
+                 duration_millis INTEGER NOT NULL, activity_output TEXT NOT NULL);
+                 INSERT INTO activity_entries VALUES (1, 100, 'scan_clean', '/old', 4, 0, 0, '');
+                 INSERT INTO activity_entries VALUES (2, 200, 'scheduled_scan_failed', '/home', 0, \
+                 0, 0, '');",
+            )
+            .expect("old rows");
+        drop(old_connection);
+        let history = ActivityHistory::at_database_path(database_path.clone());
+        let origins_of = |listed_entries: Vec<ActivityEntryRecord>| {
+            listed_entries
+                .into_iter()
+                .map(|listed_entry| listed_entry.activity_record.stored_scan_origin())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            origins_of(history.list_recent_entries().await.expect("listed")),
+            vec![
+                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan),
+                StoredScanOrigin::OriginRecorded(ScanOrigin::ManualScan),
+            ]
+        );
+        history
+            .record_activity(NewActivityEntry {
+                started_at: Timestamp::constant(300, 0),
+                activity_record: ActivityRecord::ScanActivity {
+                    scan_targets: vec![PathBuf::from("/srv")],
+                    inspected_file_count: 1,
+                    scan_status: ScanActivityStatus::ScanClean,
+                    scan_origin: ScanOrigin::ScheduledScan,
+                },
+                duration_millis: 0,
+                activity_output: String::new(),
+            })
+            .await
+            .expect("recorded after migration");
+        let reopened_history = ActivityHistory::at_database_path(database_path.clone());
+        assert_eq!(
+            origins_of(
+                reopened_history
+                    .list_recent_entries()
+                    .await
+                    .expect("listed")
+            ),
+            vec![
+                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan),
+                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan),
+                StoredScanOrigin::OriginRecorded(ScanOrigin::ManualScan),
+            ]
+        );
+        let raw_rows = rusqlite::Connection::open(&database_path)
+            .expect("reopened")
+            .prepare("SELECT activity_status, scan_origin FROM activity_entries ORDER BY entry_id")
+            .expect("statement")
+            .query_map([], |raw_row| {
+                Ok(format!(
+                    "{}:{}",
+                    raw_row.get::<_, String>(0)?,
+                    raw_row.get::<_, Option<String>>(1)?.unwrap_or_default()
+                ))
+            })
+            .expect("rows")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("raw rows");
+        assert_eq!(
+            raw_rows,
+            vec![
+                "scan_clean:",
+                "scheduled_scan_failed:",
+                "scan_clean:scheduled_scan"
+            ]
+        );
     }
 
     #[tokio::test]
