@@ -1,7 +1,6 @@
 use gettextrs::gettext;
 
 use crate::{
-    hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         desktop::locale_formatting::exact_local_time_text,
@@ -19,6 +18,7 @@ use crate::{
             CheckedCondition, MomentContext, daemon_awaited_text, evidence_row, plain_rows,
             remedy_commands, timed_evidence_row, unknown_run_text,
         },
+        suggested_remedy_commands::SuggestedRemedy,
         timeline_step_contents::{
             ActionConsequence, EvidenceMoment, SettledStep, StepActionButton, StepActionSlot,
             StepEvidenceRow, TimelineStep,

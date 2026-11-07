@@ -2,7 +2,7 @@ use gettextrs::gettext;
 
 use crate::{
     application_window::protection_evidence_refresh::GatheredEvidence,
-    shared_widgets::audit_sections::audit_check_results::{
+    signatures::signature_sources_page::source_check_results::{
         AuditCheck, AuditStatus, overall_check_status,
     },
 };

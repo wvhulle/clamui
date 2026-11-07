@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 14:34+0100\n"
+"POT-Creation-Date: 2026-11-07 14:36+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,12 +18,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/application_window/application_pages.rs:69
+#: src/application_window/application_pages.rs:66
 #: src/protection_page/protection_timeline_page.rs:197
 msgid "Protection"
 msgstr ""
 
-#: src/application_window/application_pages.rs:70
+#: src/application_window/application_pages.rs:67
 #: src/application_window/sidebar_area_status.rs:114
 #: src/findings/detections_page/background_detections_page.rs:652
 #: src/findings/detections_page/background_detections_page.rs:671
@@ -32,23 +32,23 @@ msgstr ""
 msgid "Detections"
 msgstr ""
 
-#: src/application_window/application_pages.rs:71
+#: src/application_window/application_pages.rs:68
 #: src/scans/manual_scan_page/scan_page_component.rs:392
 #: src/scans/manual_scan_page/scan_page_component.rs:557
 msgid "Scan"
 msgstr ""
 
-#: src/application_window/application_pages.rs:72
+#: src/application_window/application_pages.rs:69
 #: src/application_window/sidebar_area_status.rs:113
 #: src/scans/removable_drives_page/removable_drives_component.rs:368
 msgid "Removable Drives"
 msgstr ""
 
-#: src/application_window/application_pages.rs:73
+#: src/application_window/application_pages.rs:70
 msgid "Logs"
 msgstr ""
 
-#: src/application_window/application_pages.rs:74
+#: src/application_window/application_pages.rs:71
 #: src/application_window/sidebar_area_status.rs:115
 #: src/findings/detections_page/incident_timeline_presentation.rs:45
 #: src/findings/quarantine_page/quarantine_entries_page.rs:606
@@ -58,49 +58,44 @@ msgstr ""
 msgid "Quarantine"
 msgstr ""
 
-#: src/application_window/application_pages.rs:75
+#: src/application_window/application_pages.rs:72
 #: src/application_window/sidebar_area_status.rs:116
 #: src/findings/trusted_detections_page/trusted_detections_section/trusted_detections_group.rs:340
 msgid "Trusted Detections"
 msgstr ""
 
-#: src/application_window/application_pages.rs:76
+#: src/application_window/application_pages.rs:73
 #: src/application_window/sidebar_area_status.rs:117
 msgid "Online Lookups"
 msgstr ""
 
-#: src/application_window/application_pages.rs:77
+#: src/application_window/application_pages.rs:74
 #: src/application_window/sidebar_area_status.rs:118
 msgid "Submissions"
 msgstr ""
 
-#: src/application_window/application_pages.rs:78
+#: src/application_window/application_pages.rs:75
 msgid "Signatures"
 msgstr ""
 
-#: src/application_window/application_pages.rs:79
+#: src/application_window/application_pages.rs:76
 #: src/application_window/sidebar_area_status.rs:108
 msgid "Database Updates"
 msgstr ""
 
-#: src/application_window/application_pages.rs:80
+#: src/application_window/application_pages.rs:77
 #: src/application_window/sidebar_area_status.rs:109
 msgid "Scan Engine"
 msgstr ""
 
-#: src/application_window/application_pages.rs:81
+#: src/application_window/application_pages.rs:78
 #: src/application_window/sidebar_area_status.rs:110
 msgid "On-Access Scanning"
 msgstr ""
 
-#: src/application_window/application_pages.rs:82
+#: src/application_window/application_pages.rs:79
 #: src/application_window/sidebar_area_status.rs:111
 msgid "Scheduled Scans"
-msgstr ""
-
-#: src/application_window/application_pages.rs:83
-#: src/application_window/page_navigation.rs:867
-msgid "Hardening"
 msgstr ""
 
 #: src/application_window/application_window_shell.rs:87
@@ -184,59 +179,49 @@ msgstr ""
 msgid "Scan automatically with a systemd timer"
 msgstr ""
 
-#: src/application_window/page_links.rs:40
-msgid "Protections outside ClamAV"
-msgstr ""
-
-#: src/application_window/page_links.rs:68
+#: src/application_window/page_links.rs:67
 msgid "System"
 msgstr ""
 
-#: src/application_window/page_links.rs:70
+#: src/application_window/page_links.rs:69
 msgid ""
 "ClamAV configuration shared by all users is on these pages. Changes need "
 "administrator approval."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:239
+#: src/application_window/page_navigation.rs:234
 #: src/preferences_dialog/preferences_dialog_component.rs:74
 msgid "Preferences"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:240
+#: src/application_window/page_navigation.rs:235
 msgid "About Lazaret"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:241
+#: src/application_window/page_navigation.rs:236
 #: src/application_window/system_tray_menu.rs:75
 #: src/application_window/window_close_behavior.rs:111
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:292
+#: src/application_window/page_navigation.rs:287
 #: src/application_window/sidebar_area_status.rs:698
 #: src/scans/removable_drives_page/removable_drives_presentation.rs:104
 #, rust-format
 msgid "Scanning {drive}"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:295
+#: src/application_window/page_navigation.rs:290
 #: src/scans/manual_scan_page/scan_page_component.rs:282
 msgid "Open Removable Drives"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:624
+#: src/application_window/page_navigation.rs:619
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:869
-msgid ""
-"Protections outside ClamAV that make exploits harder. They are listed for "
-"reference and don't affect the Protection summary."
-msgstr ""
-
 #: src/application_window/sidebar_area_status.rs:107
-#: src/signatures/signature_sources_page/signature_sources_component.rs:143
+#: src/signatures/signature_sources_page/signature_sources_component.rs:139
 msgid "Signature Sources"
 msgstr ""
 
@@ -834,10 +819,9 @@ msgstr ""
 #: src/scans/on_access_page/on_access_component.rs:133
 #: src/scans/scan_engine_page/scan_engine_component.rs:150
 #: src/scans/scheduled_scans_page/scheduled_scans_component.rs:104
-#: src/shared_widgets/audit_sections/audit_sections_page.rs:118
 #: src/sharing/online_lookups_page/online_lookups_component.rs:79
 #: src/signatures/database_updates_page/database_updates_component.rs:252
-#: src/signatures/signature_sources_page/signature_sources_component.rs:121
+#: src/signatures/signature_sources_page/signature_sources_component.rs:117
 msgid "Check again"
 msgstr ""
 
@@ -847,13 +831,11 @@ msgstr ""
 #: src/scans/on_access_page/on_access_component.rs:137
 #: src/scans/scan_engine_page/scan_engine_component.rs:154
 #: src/scans/scheduled_scans_page/scheduled_scans_component.rs:108
-#: src/shared_widgets/audit_sections/audit_category_section.rs:101
-#: src/shared_widgets/audit_sections/audit_check_results.rs:30
-#: src/shared_widgets/audit_sections/audit_sections_page.rs:122
 #: src/sharing/online_lookups_page/online_lookups_component.rs:83
 #: src/sharing/submissions_page/submissions_component.rs:467
 #: src/signatures/database_updates_page/database_updates_component.rs:256
-#: src/signatures/signature_sources_page/signature_sources_component.rs:125
+#: src/signatures/signature_sources_page/signature_sources_component.rs:121
+#: src/signatures/signature_sources_page/source_check_results.rs:30
 msgid "Checking"
 msgstr ""
 
@@ -872,9 +854,8 @@ msgstr ""
 #: src/scans/on_access_page/on_access_component.rs:245
 #: src/scans/scan_engine_page/scan_engine_component.rs:268
 #: src/scans/scheduled_scans_page/scheduled_scans_component.rs:204
-#: src/shared_widgets/audit_sections/audit_sections_page.rs:187
 #: src/signatures/database_updates_page/database_updates_component.rs:399
-#: src/signatures/signature_sources_page/signature_sources_component.rs:232
+#: src/signatures/signature_sources_page/signature_sources_component.rs:228
 msgid "Command copied to clipboard"
 msgstr ""
 
@@ -1425,10 +1406,10 @@ msgstr[1] ""
 #: src/protection_page/protection_timeline_page.rs:282
 #: src/scans/manual_scan_page/scan_page_component.rs:343
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:103
-#: src/shared_widgets/audit_sections/audit_check_row.rs:116
 #: src/shared_widgets/service_log/service_log_state.rs:51
 #: src/sharing/submissions_page/service_key_section.rs:126
 #: src/sharing/submissions_page/service_key_section.rs:214
+#: src/signatures/signature_sources_page/source_check_row.rs:116
 msgid "Checking…"
 msgstr ""
 
@@ -1681,32 +1662,6 @@ msgstr ""
 msgid ""
 "Allowlist files in the signature folder that Lazaret didn't write. Check "
 "that you or your administrator added them on purpose."
-msgstr ""
-
-#: src/hardening_page/firewall_audit_checks.rs:34
-msgid "Firewall Service"
-msgstr ""
-
-#: src/hardening_page/firewall_audit_checks.rs:42
-msgid "The NixOS firewall service is active; allowed ports were not evaluated."
-msgstr ""
-
-#: src/hardening_page/firewall_audit_checks.rs:48
-#, rust-format
-msgid "Service {name} is active; its rules were not inspected."
-msgstr ""
-
-#: src/hardening_page/firewall_audit_checks.rs:54
-msgid ""
-"No known firewall service is active; rules may still be loaded another way."
-msgstr ""
-
-#: src/hardening_page/firewall_audit_checks.rs:56
-msgid "Enable the firewall"
-msgstr ""
-
-#: src/hardening_page/firewall_audit_checks.rs:64
-msgid "Firewall services could not be listed without systemd."
 msgstr ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:149
@@ -2153,10 +2108,10 @@ msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:368
 #: src/shared_widgets/activity_entries/activity_transcript_dialog.rs:54
-#: src/shared_widgets/audit_sections/audit_check_row.rs:60
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:840
 #: src/shared_widgets/service_log/service_log_group.rs:73
 #: src/shared_widgets/step_timeline/timeline_detail_row.rs:166
+#: src/signatures/signature_sources_page/source_check_row.rs:60
 msgid "Copy"
 msgstr ""
 
@@ -2219,13 +2174,13 @@ msgstr ""
 msgid "Exported."
 msgstr ""
 
-#: src/main.rs:79
+#: src/main.rs:78
 msgid ""
 "The Lazaret settings schema is not installed. Run make install, or set "
 "GSETTINGS_SCHEMA_DIR."
 msgstr ""
 
-#: src/main.rs:95
+#: src/main.rs:94
 #, rust-format
 msgid ""
 "Lazaret has no page named {page}, so it opens Protection. Pages: {pages}"
@@ -2865,7 +2820,7 @@ msgid ""
 msgstr ""
 
 #: src/scans/manual_scan_page/system_scan_run.rs:153
-#: src/shared_widgets/step_timeline/step_evidence_builders.rs:49
+#: src/shared_widgets/step_timeline/step_evidence_builders.rs:51
 msgid "Needs the daemon, see Scan Engine"
 msgstr ""
 
@@ -3581,8 +3536,8 @@ msgid "Last scan"
 msgstr ""
 
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:122
-#: src/shared_widgets/audit_sections/audit_check_results.rs:28
 #: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:65
+#: src/signatures/signature_sources_page/source_check_results.rs:28
 msgid "Unknown"
 msgstr ""
 
@@ -3644,7 +3599,7 @@ msgid "Cancelled"
 msgstr ""
 
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:27
-#: src/shared_widgets/audit_sections/audit_check_results.rs:29
+#: src/signatures/signature_sources_page/source_check_results.rs:29
 msgid "Skipped"
 msgstr ""
 
@@ -3731,159 +3686,6 @@ msgstr ""
 
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:213
 msgid "Full Output"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:25
-msgid "Pass"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:26
-msgid "Warning"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:27
-msgid "Fail"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:73
-msgid "Firewall"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:74
-msgid "Access Control"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:75
-msgid "Intrusion Detection"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_results.rs:76
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:330
-msgid "Rootkits"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_row.rs:82
-msgid "Learn more"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_check_row.rs:83
-msgid "Open in browser"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/audit_sections_page.rs:196
-#: src/signatures/signature_sources_page/signature_sources_component.rs:241
-#, rust-format
-msgid "Could not open documentation: {error}"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:87
-msgid "AppArmor"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:95
-#, rust-format
-msgid "Unknown, because AppArmor's state could not be read: {error}"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:99
-msgid "Unknown, because reading AppArmor's state stopped before it finished"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:106
-msgid "AppArmor is enabled"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:112
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:118
-msgid "AppArmor module is loaded but not enabled"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:120
-msgid "Enable AppArmor for application sandboxing"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:126
-msgid "SELinux"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:132
-msgid "SELinux is enforcing"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:137
-msgid "SELinux is in permissive mode"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:140
-msgid "Consider switching to enforcing mode for stronger protection"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:146
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:152
-msgid "SELinux is disabled"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:154
-msgid "Enable SELinux for mandatory access control"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:158
-msgid "SELinux mode could not be determined"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:175
-msgid "MAC Framework"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:177
-msgid "No mandatory access control framework detected"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:179
-msgid "Consider enabling AppArmor or SELinux"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:230
-msgid "fail2ban is active and protecting services"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:231
-msgid "CrowdSec is active with community threat intelligence"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:237
-msgid "Start fail2ban to protect against brute force attacks"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:238
-msgid "Start CrowdSec for collaborative intrusion prevention"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:266
-#, rust-format
-msgid "{name} is installed but not running"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:298
-msgid "Intrusion Prevention"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:300
-msgid "No intrusion detection system found"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:303
-msgid "Install fail2ban or CrowdSec to protect against attacks"
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:332
-msgid "ClamAV does not cover rootkits, and Lazaret does not check for them."
-msgstr ""
-
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:335
-msgid ""
-"Run a check yourself. A rootkit can hide from checks made on the running "
-"system, so a clean result is only weak evidence."
 msgstr ""
 
 #: src/shared_widgets/awaited_dialogs.rs:26
@@ -4773,10 +4575,10 @@ msgstr ""
 msgid "{changed} now"
 msgstr ""
 
-#: src/shared_widgets/step_timeline/step_evidence_builders.rs:107
+#: src/shared_widgets/step_timeline/step_evidence_builders.rs:109
 #: src/signatures/database_updates_page/database_updates_presentation.rs:266
 #: src/signatures/database_updates_page/signature_update_run/signature_update_session.rs:378
-#: src/signatures/signature_sources_page/signature_source_checks.rs:152
+#: src/signatures/signature_sources_page/signature_source_checks.rs:150
 #, rust-format
 msgid "Unknown. {reason}"
 msgstr ""
@@ -5701,7 +5503,7 @@ msgstr ""
 msgid "Install freshclam before requesting database updates."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:35
+#: src/signatures/signature_sources_page/signature_source_checks.rs:33
 #, rust-format
 msgid ""
 "{provider} needs a {credential}, and fangfrisch only reads it from its "
@@ -5711,7 +5513,7 @@ msgid ""
 "file kept outside the Nix store, such as an agenix or sops-nix secret."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:49
+#: src/signatures/signature_sources_page/signature_source_checks.rs:47
 #, rust-format
 msgid ""
 "{provider} needs a {credential} from its website. fangfrisch reads it from "
@@ -5720,16 +5522,16 @@ msgid ""
 "so other users can't see it."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:73
+#: src/signatures/signature_sources_page/signature_source_checks.rs:71
 msgid "Not in use"
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:93
+#: src/signatures/signature_sources_page/signature_source_checks.rs:91
 #, rust-format
 msgid "Add these lines to fangfrisch's settings file, usually {path}."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:100
+#: src/signatures/signature_sources_page/signature_source_checks.rs:98
 #, rust-format
 msgid ""
 "{provider} needs a free abuse.ch Auth-Key. Add these lines to fangfrisch's "
@@ -5737,22 +5539,27 @@ msgid ""
 "make the file readable by root only, so other users can't see it."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:133
+#: src/signatures/signature_sources_page/signature_source_checks.rs:131
 msgid "In use"
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_sources_component.rs:136
+#: src/signatures/signature_sources_page/signature_sources_component.rs:132
 msgid ""
 "Where ClamAV's malware signatures come from, and which other sources you "
 "could add."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_sources_component.rs:157
+#: src/signatures/signature_sources_page/signature_sources_component.rs:153
 msgid "abuse.ch Key"
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_sources_component.rs:160
+#: src/signatures/signature_sources_page/signature_sources_component.rs:156
 msgid "abuse.ch Auth-Key"
+msgstr ""
+
+#: src/signatures/signature_sources_page/signature_sources_component.rs:237
+#, rust-format
+msgid "Could not open documentation: {error}"
 msgstr ""
 
 #: src/signatures/signature_sources_page/signature_sources_presentation.rs:34
@@ -5763,4 +5570,24 @@ msgstr ""
 
 #: src/signatures/signature_sources_page/signature_sources_presentation.rs:41
 msgid "Checking the API key…"
+msgstr ""
+
+#: src/signatures/signature_sources_page/source_check_results.rs:25
+msgid "Pass"
+msgstr ""
+
+#: src/signatures/signature_sources_page/source_check_results.rs:26
+msgid "Warning"
+msgstr ""
+
+#: src/signatures/signature_sources_page/source_check_results.rs:27
+msgid "Fail"
+msgstr ""
+
+#: src/signatures/signature_sources_page/source_check_row.rs:82
+msgid "Learn more"
+msgstr ""
+
+#: src/signatures/signature_sources_page/source_check_row.rs:83
+msgid "Open in browser"
 msgstr ""

@@ -1,7 +1,6 @@
 use gettextrs::gettext;
 
 use crate::{
-    hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::{
             component_availability::ProbeFailure,
@@ -20,6 +19,7 @@ use crate::{
         program_trust_steps::{TrustedProgramGroup, program_trust_step},
         runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
         step_evidence_builders::{CheckedCondition, evidence_row, plain_rows, remedy_commands},
+        suggested_remedy_commands::SuggestedRemedy,
         timeline_step_contents::{
             ActionConsequence, CancelSlot, RunningStep, SettledStep, StepActionButton,
             StepActionSlot, StepEvidenceRow, TimelineStep,

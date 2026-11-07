@@ -1,7 +1,6 @@
 use gettextrs::gettext;
 
 use crate::{
-    hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         detection_journal::detection_journal_follower::JournalAccess,
@@ -15,6 +14,7 @@ use crate::{
         journal_follow_failure_text::journal_follow_failure_text,
         step_timeline::{
             step_evidence_builders::{CheckedCondition, evidence_row, plain_rows, remedy_commands},
+            suggested_remedy_commands::SuggestedRemedy,
             timeline_step_contents::{
                 ActionConsequence, ActionableEvidenceRow, OfferedAction, SettledStep,
                 StepActionButton, StepActionSlot, TimelineStep,

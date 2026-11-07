@@ -37,7 +37,6 @@ fn page_link_subtitle(linked_page: ApplicationPage) -> String {
             gettext("Which folders clamonacc watches, and how it blocks")
         }
         ApplicationPage::ScheduledScans => gettext("Scan automatically with a systemd timer"),
-        ApplicationPage::Hardening => gettext("Protections outside ClamAV"),
     }
 }
 

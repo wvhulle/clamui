@@ -2,7 +2,6 @@ use gettextrs::{gettext, ngettext};
 use jiff::{SignedDuration, Timestamp};
 
 use crate::{
-    hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::{
             distribution_install_guides::DistributionFamily,
@@ -28,6 +27,7 @@ use crate::{
                 CheckedCondition, MomentContext, evidence_row, plain_rows, remedy_commands,
                 timed_evidence_row, unknown_run_text,
             },
+            suggested_remedy_commands::SuggestedRemedy,
             timeline_step_contents::{
                 ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
                 EvidenceRowControl, OfferedAction, RunningStep, SettledNodeState, SettledStep,

@@ -12,10 +12,8 @@ use crate::{
             SignatureProvider, provider_of_signature_file,
         },
     },
-    shared_widgets::{
-        audit_sections::audit_check_results::{AuditCheck, AuditStatus},
-        host_read_failure_text::database_folder_failure_text,
-    },
+    shared_widgets::host_read_failure_text::database_folder_failure_text,
+    signatures::signature_sources_page::source_check_results::{AuditCheck, AuditStatus},
 };
 
 const FANGFRISCH_CONFIG_PATH: &str = "/etc/fangfrisch/fangfrisch.conf";
@@ -190,7 +188,7 @@ mod signature_source_checks_tests {
             EnablingSnippets, FANGFRISCH_SANESECURITY_LINES, FANGFRISCH_SECURITEINFO_LINES,
             NIXOS_SANESECURITY_SNIPPET, ThirdPartyProvider,
         },
-        shared_widgets::audit_sections::audit_check_results::CheckGuidance,
+        signatures::signature_sources_page::source_check_results::CheckGuidance,
     };
 
     fn commands_of(audit_check: &AuditCheck) -> Vec<&'static str> {

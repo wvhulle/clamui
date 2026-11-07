@@ -6,7 +6,7 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::shared_widgets::audit_sections::audit_check_results::{
+use crate::signatures::signature_sources_page::source_check_results::{
     AuditCheck, AuditStatus, CheckGuidance,
 };
 

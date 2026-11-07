@@ -5,10 +5,6 @@ pub enum SuggestedRemedy {
     ClamavDaemonStart,
     ClamavDaemonRestart,
     FreshclamUpdatesEnable,
-    FirewallServiceEnable,
-    IntrusionPreventionInstall,
-    Fail2banServiceStart,
-    CrowdsecServiceStart,
     OnAccessScanningEnable,
     OnAccessPreventionEnable,
     OnAccessWatchedPathAdd,
@@ -25,17 +21,6 @@ fn non_nixos_or_option(
         Some(nixos_option)
     } else {
         Some(generic_command)
-    }
-}
-
-pub const fn rootkit_check_command(distribution_family: DistributionFamily) -> &'static str {
-    match distribution_family {
-        DistributionFamily::NixosFamily => "sudo nix-store --verify --check-contents",
-        DistributionFamily::DebianFamily
-        | DistributionFamily::FedoraWorkstation
-        | DistributionFamily::FedoraAtomic
-        | DistributionFamily::ArchFamily
-        | DistributionFamily::UnrecognizedFamily => "sudo chkrootkit -q",
     }
 }
 
@@ -65,34 +50,6 @@ pub fn suggested_command(
             NixosFamily => Some("services.clamav.updater.enable = true;"),
             UnrecognizedFamily => None,
         },
-        SuggestedRemedy::FirewallServiceEnable => match distribution_family {
-            DebianFamily => Some("sudo apt install ufw && sudo ufw enable"),
-            FedoraWorkstation => {
-                Some("sudo dnf install firewalld && sudo systemctl enable --now firewalld")
-            }
-            FedoraAtomic => Some("sudo systemctl enable --now firewalld"),
-            ArchFamily => Some("sudo pacman -S firewalld && sudo systemctl enable --now firewalld"),
-            NixosFamily => Some("networking.firewall.enable = true;"),
-            UnrecognizedFamily => None,
-        },
-        SuggestedRemedy::IntrusionPreventionInstall => match distribution_family {
-            DebianFamily => Some("sudo apt install fail2ban"),
-            FedoraWorkstation => Some("sudo dnf install fail2ban"),
-            FedoraAtomic => Some("sudo rpm-ostree install fail2ban\nsudo systemctl reboot"),
-            ArchFamily => Some("sudo pacman -S fail2ban"),
-            NixosFamily => Some("services.fail2ban.enable = true;"),
-            UnrecognizedFamily => None,
-        },
-        SuggestedRemedy::Fail2banServiceStart => non_nixos_or_option(
-            distribution_family,
-            "services.fail2ban.enable = true;",
-            "sudo systemctl start fail2ban",
-        ),
-        SuggestedRemedy::CrowdsecServiceStart => non_nixos_or_option(
-            distribution_family,
-            "services.crowdsec.enable = true;",
-            "sudo systemctl start crowdsec",
-        ),
         SuggestedRemedy::OnAccessScanningEnable => non_nixos_or_option(
             distribution_family,
             "services.clamav.clamonacc.enable = true;",
@@ -127,17 +84,13 @@ pub fn suggested_command(
 }
 
 #[cfg(test)]
-mod suggested_audit_commands_tests {
+mod suggested_remedy_commands_tests {
     use super::*;
 
-    const ALL_REMEDIES: [SuggestedRemedy; 12] = [
+    const ALL_REMEDIES: [SuggestedRemedy; 8] = [
         SuggestedRemedy::ClamavDaemonStart,
         SuggestedRemedy::ClamavDaemonRestart,
         SuggestedRemedy::FreshclamUpdatesEnable,
-        SuggestedRemedy::FirewallServiceEnable,
-        SuggestedRemedy::IntrusionPreventionInstall,
-        SuggestedRemedy::Fail2banServiceStart,
-        SuggestedRemedy::CrowdsecServiceStart,
         SuggestedRemedy::OnAccessScanningEnable,
         SuggestedRemedy::OnAccessPreventionEnable,
         SuggestedRemedy::OnAccessWatchedPathAdd,

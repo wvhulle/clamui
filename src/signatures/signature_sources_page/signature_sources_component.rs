@@ -16,18 +16,14 @@ use crate::{
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
     },
-    shared_widgets::{
-        audit_sections::{
-            audit_check_results::AuditCheck,
-            audit_check_row::{AuditCheckRow, AuditCheckRowOutput},
-        },
-        loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
-    },
+    shared_widgets::loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
     signatures::signature_sources_page::{
         signature_source_checks::gather_signature_source_checks,
         signature_sources_presentation::{
             SourceChecks, abuse_ch_key_needs_attention, abuse_ch_key_subtitle,
         },
+        source_check_results::AuditCheck,
+        source_check_row::{AuditCheckRow, AuditCheckRowOutput},
     },
 };
 

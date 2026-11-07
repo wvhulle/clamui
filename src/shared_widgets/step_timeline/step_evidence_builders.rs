@@ -2,7 +2,6 @@ use gettextrs::gettext;
 use jiff::Timestamp;
 
 use crate::{
-    hardening_page::suggested_audit_commands::{SuggestedRemedy, suggested_command},
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         desktop::locale_formatting::MomentFormatters,
@@ -10,9 +9,12 @@ use crate::{
     },
     shared_widgets::{
         host_read_failure_text::unit_journal_failure_text,
-        step_timeline::timeline_step_contents::{
-            ActionableEvidenceRow, EvidenceMoment, SettledNodeState, SettledStep, StepActionButton,
-            StepEvidenceRow, TimelineStep, moment_value_text,
+        step_timeline::{
+            suggested_remedy_commands::{SuggestedRemedy, suggested_command},
+            timeline_step_contents::{
+                ActionableEvidenceRow, EvidenceMoment, SettledNodeState, SettledStep,
+                StepActionButton, StepEvidenceRow, TimelineStep, moment_value_text,
+            },
         },
     },
 };

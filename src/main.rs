@@ -1,6 +1,5 @@
 mod application_window;
 mod findings;
-mod hardening_page;
 mod headless_modes;
 mod host_services;
 #[cfg(test)]

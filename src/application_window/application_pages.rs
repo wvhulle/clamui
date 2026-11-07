@@ -16,10 +16,9 @@ pub enum ApplicationPage {
     ScanEngine,
     OnAccessScanning,
     ScheduledScans,
-    Hardening,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 15] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 14] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
@@ -34,7 +33,6 @@ pub const ALL_APPLICATION_PAGES: [ApplicationPage; 15] = [
     ApplicationPage::ScanEngine,
     ApplicationPage::OnAccessScanning,
     ApplicationPage::ScheduledScans,
-    ApplicationPage::Hardening,
 ];
 
 impl ApplicationPage {
@@ -54,7 +52,6 @@ impl ApplicationPage {
             Self::ScanEngine => "scan-engine",
             Self::OnAccessScanning => "on-access",
             Self::ScheduledScans => "scheduled-scans",
-            Self::Hardening => "hardening",
         }
     }
 
@@ -80,7 +77,6 @@ impl ApplicationPage {
             Self::ScanEngine => gettext("Scan Engine"),
             Self::OnAccessScanning => gettext("On-Access Scanning"),
             Self::ScheduledScans => gettext("Scheduled Scans"),
-            Self::Hardening => gettext("Hardening"),
         }
     }
 
@@ -100,7 +96,6 @@ impl ApplicationPage {
             Self::ScanEngine => "system-run-symbolic",
             Self::OnAccessScanning => "folder-visiting-symbolic",
             Self::ScheduledScans => "alarm-symbolic",
-            Self::Hardening => "channel-secure-symbolic",
         }
     }
 
@@ -119,8 +114,7 @@ impl ApplicationPage {
             Self::RemovableDrives
             | Self::TrustedDetections
             | Self::OnlineLookups
-            | Self::Submissions
-            | Self::Hardening => &[],
+            | Self::Submissions => &[],
         }
     }
 
@@ -162,6 +156,5 @@ mod application_pages_tests {
         assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 11);
         assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 12);
         assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 13);
-        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 14);
     }
 }

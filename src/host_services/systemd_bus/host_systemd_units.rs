@@ -215,16 +215,6 @@ async fn read_unit_state_on(
     ))
 }
 
-pub async fn systemd_is_available() -> bool {
-    let Ok(system_connection) = system_bus().await else {
-        return false;
-    };
-    let Ok(manager_proxy) = SystemdManagerProxy::new(system_connection).await else {
-        return false;
-    };
-    manager_proxy.version().await.is_ok()
-}
-
 pub async fn probe_unit_state(unit_name: &str) -> UnitState {
     let Ok(unit_path) = unit_object_path(unit_name).await else {
         return UnitState::SystemdUnavailable;
@@ -232,22 +222,6 @@ pub async fn probe_unit_state(unit_name: &str) -> UnitState {
     read_unit_state(&unit_path)
         .await
         .unwrap_or(UnitState::SystemdUnavailable)
-}
-
-pub async fn first_active_unit(unit_names: &[&'static str]) -> Option<&'static str> {
-    let unit_states = join_all(
-        unit_names
-            .iter()
-            .map(|unit_name| probe_unit_state(unit_name)),
-    )
-    .await;
-    unit_names
-        .iter()
-        .zip(unit_states)
-        .find(|(_unit_name, unit_state)| {
-            *unit_state == UnitState::UnitLoaded(UnitActivity::UnitActive)
-        })
-        .map(|(unit_name, _unit_state)| *unit_name)
 }
 
 async fn read_loaded_service(
@@ -649,7 +623,6 @@ mod host_systemd_units_tests {
     #[tokio::test]
     #[ignore = "reads the real host"]
     async fn host_bus_reports_real_units() {
-        assert!(systemd_is_available().await);
         assert_eq!(
             probe_unit_state("no-such-lazaret-unit.service").await,
             UnitState::UnitNotFound

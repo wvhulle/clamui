@@ -52,32 +52,6 @@ impl AuditStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuditCategory {
-    FirewallProtection,
-    AccessControl,
-    IntrusionDetection,
-    RootkitCoverage,
-}
-
-pub const HARDENING_AUDIT_CATEGORIES: [AuditCategory; 4] = [
-    AuditCategory::FirewallProtection,
-    AuditCategory::AccessControl,
-    AuditCategory::IntrusionDetection,
-    AuditCategory::RootkitCoverage,
-];
-
-impl AuditCategory {
-    pub fn section_title(self) -> String {
-        match self {
-            Self::FirewallProtection => gettext("Firewall"),
-            Self::AccessControl => gettext("Access Control"),
-            Self::IntrusionDetection => gettext("Intrusion Detection"),
-            Self::RootkitCoverage => gettext("Rootkits"),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CheckGuidance {
     RecommendationText(String),
@@ -143,29 +117,6 @@ impl AuditCheck {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AuditSection {
-    pub audit_category: AuditCategory,
-    pub section_checks: Vec<AuditCheck>,
-}
-
-impl AuditSection {
-    pub fn awaiting_checks(audit_category: AuditCategory) -> Self {
-        Self {
-            audit_category,
-            section_checks: Vec::new(),
-        }
-    }
-
-    pub fn overall_status(&self) -> AuditStatus {
-        if self.section_checks.is_empty() {
-            AuditStatus::CheckInProgress
-        } else {
-            overall_check_status(&self.section_checks)
-        }
-    }
-}
-
 pub fn overall_check_status(audit_checks: &[AuditCheck]) -> AuditStatus {
     STATUS_SEVERITY_ORDER
         .into_iter()
@@ -178,7 +129,7 @@ pub fn overall_check_status(audit_checks: &[AuditCheck]) -> AuditStatus {
 }
 
 #[cfg(test)]
-mod audit_report_model_tests {
+mod source_check_results_tests {
     use super::*;
 
     fn check_with_status(check_status: AuditStatus) -> AuditCheck {
@@ -227,14 +178,6 @@ mod audit_report_model_tests {
             !check_with_status(AuditStatus::CheckPassed)
                 .with_recommendation("Review it".to_owned())
                 .expanded_by_default()
-        );
-    }
-
-    #[test]
-    fn a_section_without_results_is_still_in_progress() {
-        assert_eq!(
-            AuditSection::awaiting_checks(AuditCategory::AccessControl).overall_status(),
-            AuditStatus::CheckInProgress
         );
     }
 }

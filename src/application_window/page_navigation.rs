@@ -98,10 +98,6 @@ use crate::{
         },
     },
     shared_widgets::{
-        audit_sections::{
-            audit_check_results::HARDENING_AUDIT_CATEGORIES,
-            audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
-        },
         component_streams::{RunningStream, run_stream},
         scan_runs::scan_run_progress::PageScanActivity,
     },
@@ -150,7 +146,6 @@ pub struct PageNavigation {
     quarantine_page: Controller<QuarantineEntriesPage>,
     logs_page: Controller<ActivityLogsPage>,
     signature_sources_page: Controller<SignatureSourcesPage>,
-    hardening_page: Controller<AuditSectionsPage>,
     protection_page: Controller<ProtectionTimelinePage>,
     database_updates_page: Controller<DatabaseUpdatesPage>,
     scan_engine_page: Controller<ScanEnginePage>,
@@ -687,7 +682,6 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::ScanEngine),
                                     append: &navigation_row(ApplicationPage::OnAccessScanning),
                                     append: &navigation_row(ApplicationPage::ScheduledScans),
-                                    append: &navigation_row(ApplicationPage::Hardening),
                                 },
                             },
                         },
@@ -742,9 +736,6 @@ impl Component for PageNavigation {
                             },
                             add_titled[Some(ApplicationPage::ScheduledScans.page_name()), &ApplicationPage::ScheduledScans.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::ScheduledScans, model.scheduled_scans_page.widget()),
-                            },
-                            add_titled[Some(ApplicationPage::Hardening.page_name()), &ApplicationPage::Hardening.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Hardening, model.hardening_page.widget()),
                             },
 
                             #[watch]
@@ -862,17 +853,6 @@ impl Component for PageNavigation {
         let signature_sources_page = SignatureSourcesPage::builder()
             .launch(())
             .forward(sender.input_sender(), forwarded_signature_sources_output);
-        let hardening_page = AuditSectionsPage::builder()
-            .launch(AuditSectionsPageInit {
-                page_title: gettext("Hardening"),
-                page_description: gettext(
-                    "Protections outside ClamAV that make exploits harder. They are listed for \
-                     reference and don't affect the Protection summary.",
-                ),
-                audited_categories: &HARDENING_AUDIT_CATEGORIES,
-                linked_pages: &[],
-            })
-            .detach();
         let mut model = Self {
             visible_page: navigation_init.startup_page,
             shows_content_when_narrow: false,
@@ -887,7 +867,6 @@ impl Component for PageNavigation {
             quarantine_page,
             logs_page,
             signature_sources_page,
-            hardening_page,
             protection_page,
             database_updates_page,
             scan_engine_page,
