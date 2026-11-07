@@ -11,43 +11,32 @@ use crate::{
 pub enum ActivityHistoryFilter {
     ManualScans,
     ScheduledScans,
+    DeviceScans,
 }
 
 impl ActivityHistoryFilter {
-    pub const fn keeps_record(self, activity_record: &ActivityRecord) -> bool {
-        match (self, activity_record) {
-            (
-                Self::ManualScans,
-                ActivityRecord::ScanActivity {
-                    scan_origin: ScanOrigin::ManualScan,
-                    ..
-                },
-            )
-            | (
-                Self::ScheduledScans,
-                ActivityRecord::ScanActivity {
-                    scan_origin: ScanOrigin::ScheduledScan,
-                    ..
-                }
-                | ActivityRecord::SkippedScan { .. },
-            ) => true,
-            (
-                Self::ManualScans,
-                ActivityRecord::ScanActivity {
-                    scan_origin: ScanOrigin::ScheduledScan,
-                    ..
-                }
-                | ActivityRecord::SkippedScan { .. }
-                | ActivityRecord::UpdateActivity { .. },
-            )
-            | (
-                Self::ScheduledScans,
-                ActivityRecord::ScanActivity {
-                    scan_origin: ScanOrigin::ManualScan,
-                    ..
-                }
-                | ActivityRecord::UpdateActivity { .. },
-            ) => false,
+    const fn listed_scan_origin(self) -> ScanOrigin {
+        match self {
+            Self::ManualScans => ScanOrigin::ManualScan,
+            Self::ScheduledScans => ScanOrigin::ScheduledScan,
+            Self::DeviceScans => ScanOrigin::DeviceScan,
+        }
+    }
+
+    const fn lists_skipped_runs(self) -> bool {
+        match self {
+            Self::ScheduledScans => true,
+            Self::ManualScans | Self::DeviceScans => false,
+        }
+    }
+
+    pub fn keeps_record(self, activity_record: &ActivityRecord) -> bool {
+        match activity_record {
+            ActivityRecord::ScanActivity { scan_origin, .. } => {
+                *scan_origin == self.listed_scan_origin()
+            }
+            ActivityRecord::SkippedScan { .. } => self.lists_skipped_runs(),
+            ActivityRecord::UpdateActivity { .. } => false,
         }
     }
 }
@@ -156,6 +145,8 @@ mod activity_history_filter_tests {
                 },
             ),
             history_entry(5, 200, scan_with(ScanOrigin::ManualScan)),
+            history_entry(6, 600, scan_with(ScanOrigin::DeviceScan)),
+            history_entry(7, 50, scan_with(ScanOrigin::DeviceScan)),
         ]
     }
 
@@ -177,6 +168,11 @@ mod activity_history_filter_tests {
             listed_ids(ActivityHistoryFilter::ScheduledScans),
             vec![2, 3]
         );
+    }
+
+    #[test]
+    fn device_history_lists_only_device_scans_newest_first() {
+        assert_eq!(listed_ids(ActivityHistoryFilter::DeviceScans), vec![6, 7]);
     }
 
     #[test]

@@ -116,6 +116,7 @@ pub enum ScanActivityStatus {
 pub enum ScanOrigin {
     ManualScan,
     ScheduledScan,
+    DeviceScan,
 }
 
 impl ScanOrigin {
@@ -123,6 +124,7 @@ impl ScanOrigin {
         match self {
             Self::ManualScan => "manual_scan",
             Self::ScheduledScan => "scheduled_scan",
+            Self::DeviceScan => "device_scan",
         }
     }
 }
@@ -149,6 +151,7 @@ impl StoredScanOrigin {
             Value::Text(origin_text) => match origin_text.as_str() {
                 "manual_scan" => Ok(Self::OriginRecorded(ScanOrigin::ManualScan)),
                 "scheduled_scan" => Ok(Self::OriginRecorded(ScanOrigin::ScheduledScan)),
+                "device_scan" => Ok(Self::OriginRecorded(ScanOrigin::DeviceScan)),
                 _unknown_origin => Err(ActivityHistoryFailure::StoredOriginUnknown),
             },
             Value::Integer(_) | Value::Real(_) | Value::Blob(_) => {
@@ -711,6 +714,45 @@ mod activity_history_database_tests {
             recorded_and_listed(scheduled_record.clone()).await,
             scheduled_record
         );
+    }
+
+    #[tokio::test]
+    async fn every_scan_origin_round_trips_through_its_column() {
+        for scan_origin in [
+            ScanOrigin::ManualScan,
+            ScanOrigin::ScheduledScan,
+            ScanOrigin::DeviceScan,
+        ] {
+            let scanned_record = ActivityRecord::ScanActivity {
+                scan_targets: vec![PathBuf::from("/run/media/user/USB STICK")],
+                inspected_file_count: 12,
+                scan_status: ScanActivityStatus::ScanClean,
+                scan_origin,
+            };
+            assert_eq!(
+                recorded_and_listed(scanned_record.clone()).await,
+                scanned_record
+            );
+            assert_eq!(
+                StoredScanOrigin::from_column_value(
+                    StoredScanOrigin::OriginRecorded(scan_origin).column_value()
+                )
+                .expect("known origin"),
+                StoredScanOrigin::OriginRecorded(scan_origin)
+            );
+        }
+    }
+
+    #[test]
+    fn a_device_scan_is_stored_with_its_own_origin_text() {
+        assert_eq!(
+            StoredScanOrigin::OriginRecorded(ScanOrigin::DeviceScan).column_value(),
+            Value::Text("device_scan".to_owned())
+        );
+        assert!(matches!(
+            StoredScanOrigin::from_column_value(Value::Text("usb_scan".to_owned())),
+            Err(ActivityHistoryFailure::StoredOriginUnknown)
+        ));
     }
 
     #[test]
