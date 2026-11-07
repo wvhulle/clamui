@@ -8,12 +8,15 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::host_services::clamav_config::{
-    setting_provenance::SettingLock,
-    typed_setting_values::{
-        DraftApplyTiming, DraftEdit, SIZE_UNITS, SettingParseFailure, SizeUnit, SwitchPosition,
-        TypedSettingValue, parse_setting_value,
+use crate::host_services::{
+    clamav_config::{
+        setting_provenance::SettingLock,
+        typed_setting_values::{
+            DraftApplyTiming, DraftEdit, SIZE_UNITS, SettingParseFailure, SizeUnit, SwitchPosition,
+            TypedSettingValue, parse_setting_value,
+        },
     },
+    desktop::locale_formatting::byte_size_text,
 };
 
 const SIZE_COUNT_CEILING: f64 = i32::MAX as f64;
@@ -642,6 +645,18 @@ impl FactoryComponent for ConfigSettingRow {
                 );
                 switch_row.upcast()
             }
+            ConfigRowPresentation::LockedSettingRow {
+                editor_draft: TypedSettingValue::SizeValue(size_amount),
+                ..
+            }
+            | ConfigRowPresentation::ProtectedSettingRow(Ok(TypedSettingValue::SizeValue(
+                size_amount,
+            ))) => read_only_row(
+                &self.setting_key,
+                &size_amount
+                    .byte_size()
+                    .map_or_else(|| self.setting_value.clone(), byte_size_text),
+            ),
             ConfigRowPresentation::ProtectedSettingRow(_)
             | ConfigRowPresentation::UnknownOptionRow
             | ConfigRowPresentation::LockedSettingRow { .. } => {

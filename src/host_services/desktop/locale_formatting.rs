@@ -2,6 +2,7 @@ use std::sync::OnceLock;
 
 use bytesize::ByteSize;
 use fixed_decimal::Decimal;
+use gettextrs::ngettext;
 use icu::{
     datetime::{
         DateTimeFormatter,
@@ -170,15 +171,18 @@ pub fn log_local_time_text(moment: Timestamp) -> String {
 }
 
 pub fn byte_size_text(byte_size: ByteSize) -> String {
-    glib::format_size_full(byte_size.as_u64(), glib::FormatSizeFlags::IEC_UNITS).into()
+    byte_size.display().iec().to_string()
 }
 
 pub fn exact_byte_size_text(byte_size: ByteSize) -> String {
-    glib::format_size_full(
-        byte_size.as_u64(),
-        glib::FormatSizeFlags::IEC_UNITS | glib::FormatSizeFlags::LONG_FORMAT,
+    let byte_count = byte_size.as_u64();
+    ngettext(
+        "{size} ({count} byte)",
+        "{size} ({count} bytes)",
+        u32::try_from(byte_count).unwrap_or(u32::MAX),
     )
-    .into()
+    .replace("{count}", &byte_count.to_string())
+    .replace("{size}", &byte_size_text(byte_size))
 }
 
 #[cfg(test)]
@@ -286,12 +290,14 @@ mod locale_formatting_tests {
 
     #[test]
     fn byte_sizes_use_binary_units_and_keep_the_exact_count_when_asked() {
-        assert_eq!(byte_size_text(ByteSize::b(15)), "15 bytes");
-        assert_eq!(byte_size_text(ByteSize::b(27_474_124)), "26.2\u{a0}MiB");
+        assert_eq!(byte_size_text(ByteSize::b(15)), "15 B");
+        assert_eq!(byte_size_text(ByteSize::b(27_474_124)), "26.2 MiB");
+        assert_eq!(byte_size_text(ByteSize::mib(100)), "100.0 MiB");
         assert_eq!(
             exact_byte_size_text(ByteSize::b(27_474_124)),
-            "26.2\u{a0}MiB (27474124 bytes)"
+            "26.2 MiB (27474124 bytes)"
         );
+        assert_eq!(exact_byte_size_text(ByteSize::b(1)), "1 B (1 byte)");
     }
 
     #[test]

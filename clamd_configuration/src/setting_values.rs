@@ -3,10 +3,6 @@ use std::{cmp::Ordering, fmt};
 use bytesize::ByteSize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
-const KIBIBYTE: u64 = 1024;
-const MEBIBYTE: u64 = KIBIBYTE * 1024;
-const GIBIBYTE: u64 = MEBIBYTE * 1024;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SwitchState {
     SwitchedOn,
@@ -160,9 +156,9 @@ impl std::str::FromStr for ClamdSize {
     fn from_str(size_text: &str) -> Result<Self, Self::Err> {
         let trimmed_text = size_text.trim();
         let (digit_text, unit_multiplier) = match trimmed_text.chars().last() {
-            Some('k' | 'K') => (&trimmed_text[..trimmed_text.len() - 1], KIBIBYTE),
-            Some('m' | 'M') => (&trimmed_text[..trimmed_text.len() - 1], MEBIBYTE),
-            Some('g' | 'G') => (&trimmed_text[..trimmed_text.len() - 1], GIBIBYTE),
+            Some('k' | 'K') => (&trimmed_text[..trimmed_text.len() - 1], bytesize::KIB),
+            Some('m' | 'M') => (&trimmed_text[..trimmed_text.len() - 1], bytesize::MIB),
+            Some('g' | 'G') => (&trimmed_text[..trimmed_text.len() - 1], bytesize::GIB),
             Some(_digit) => (trimmed_text, 1),
             None => return Err(SettingValueRefusal::NotASize),
         };
@@ -194,9 +190,13 @@ impl fmt::Display for ClamdSize {
             return formatter.write_str("0");
         };
         let byte_count = byte_size.as_u64();
-        match [(GIBIBYTE, "G"), (MEBIBYTE, "M"), (KIBIBYTE, "K")]
-            .into_iter()
-            .find(|(unit_bytes, _unit_suffix)| byte_count.is_multiple_of(*unit_bytes))
+        match [
+            (bytesize::GIB, "G"),
+            (bytesize::MIB, "M"),
+            (bytesize::KIB, "K"),
+        ]
+        .into_iter()
+        .find(|(unit_bytes, _unit_suffix)| byte_count.is_multiple_of(*unit_bytes))
         {
             Some((unit_bytes, unit_suffix)) => {
                 write!(formatter, "{}{unit_suffix}", byte_count / unit_bytes)
@@ -348,7 +348,7 @@ pub struct SkippedPaths(pub Vec<ContainedPath>);
 pub struct SkippedPatterns(pub Vec<SafeText>);
 
 pub const fn mebibytes(mebibyte_count: u64) -> u64 {
-    mebibyte_count * MEBIBYTE
+    ByteSize::mib(mebibyte_count).as_u64()
 }
 
 pub const CLAMAV_DEFAULT_MAX_SCAN_TIME: i32 = 120_000;

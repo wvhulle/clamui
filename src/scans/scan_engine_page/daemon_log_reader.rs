@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bytesize::ByteSize;
 use futures::{Stream, StreamExt, stream};
 use inotify::{Inotify, WatchMask};
 use tokio::task::spawn_blocking;
@@ -21,7 +22,7 @@ use crate::host_services::{
 const DAEMON_LOG_WATCH_THREAD: &str = "daemon-log-watch";
 const CHANGE_BURST_SIZE: usize = 64;
 const INOTIFY_BUFFER_SIZE: usize = 4096;
-const LOG_TAIL_BYTES: u64 = 256 * 1024;
+const LOG_TAIL_SIZE: ByteSize = ByteSize::kib(256);
 const DEFAULT_LOG_PATHS: [&str; 2] = ["/var/log/clamav/clamd.log", "/var/log/clamd.log"];
 const CLAMD_CONFIG_PATHS: [&str; 3] = [
     "/etc/clamav/clamd.conf",
@@ -58,7 +59,9 @@ fn read_log_tail(log_path: &Path) -> Option<Vec<ClamdLogLine>> {
     let mut log_file = fs::File::open(log_path).ok()?;
     let log_length = log_file.metadata().ok()?.len();
     log_file
-        .seek(SeekFrom::Start(log_length.saturating_sub(LOG_TAIL_BYTES)))
+        .seek(SeekFrom::Start(
+            log_length.saturating_sub(LOG_TAIL_SIZE.as_u64()),
+        ))
         .ok()?;
     let mut tail_bytes = Vec::new();
     log_file.read_to_end(&mut tail_bytes).ok()?;

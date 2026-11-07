@@ -1,3 +1,4 @@
+use bytesize::ByteSize;
 use clamd_configuration::setting_kinds::{
     SettingValueKind, limit_in_units, path_is_absolute_and_contained, setting_value_kind,
     value_fits_setting_kind, value_has_only_safe_characters, whole_number_in_text,
@@ -52,6 +53,14 @@ impl SizeUnit {
         }
     }
 
+    pub const fn unit_byte_count(self) -> u64 {
+        match self {
+            Self::PlainBytes => 1,
+            Self::Kibibytes => bytesize::KIB,
+            Self::Mebibytes => bytesize::MIB,
+        }
+    }
+
     pub fn unit_position(self) -> u32 {
         match self {
             Self::PlainBytes => 0,
@@ -76,6 +85,12 @@ pub struct SizeAmount {
 impl SizeAmount {
     pub fn config_text(self) -> String {
         format!("{}{}", self.unit_count, self.size_unit.config_suffix())
+    }
+
+    pub fn byte_size(self) -> Option<ByteSize> {
+        self.unit_count
+            .checked_mul(self.size_unit.unit_byte_count())
+            .map(ByteSize::b)
     }
 }
 
@@ -385,6 +400,22 @@ mod typed_setting_values_tests {
             }
             .config_text(),
             "100M"
+        );
+        assert_eq!(
+            SizeAmount {
+                unit_count: 100,
+                size_unit: SizeUnit::Mebibytes
+            }
+            .byte_size(),
+            Some(ByteSize::mib(100))
+        );
+        assert_eq!(
+            SizeAmount {
+                unit_count: u64::MAX,
+                size_unit: SizeUnit::Kibibytes
+            }
+            .byte_size(),
+            None
         );
     }
 

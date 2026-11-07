@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 17:17+0100\n"
+"POT-Creation-Date: 2026-11-07 17:20+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1910,6 +1910,13 @@ msgstr ""
 msgid "Blocked by on-access scanning"
 msgstr ""
 
+#: src/host_services/desktop/locale_formatting.rs:180
+#, rust-format
+msgid "{size} ({count} byte)"
+msgid_plural "{size} ({count} bytes)"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/host_services/threat_intel/file_reputation_check.rs:57
 msgid "Needs a key"
 msgstr ""
@@ -3130,7 +3137,7 @@ msgid "Schedule"
 msgstr ""
 
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:260
-#: src/shared_widgets/engine_settings/config_setting_row.rs:269
+#: src/shared_widgets/engine_settings/config_setting_row.rs:272
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:464
 msgid "Apply"
 msgstr ""
@@ -3491,7 +3498,7 @@ msgid ""
 msgstr ""
 
 #: src/shared_widgets/engine_settings/config_line_copy_dialog.rs:210
-#: src/shared_widgets/engine_settings/config_setting_row.rs:488
+#: src/shared_widgets/engine_settings/config_setting_row.rs:491
 msgid "Unit"
 msgstr ""
 
@@ -3503,76 +3510,76 @@ msgstr ""
 msgid "Copy Line"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:54
+#: src/shared_widgets/engine_settings/config_setting_row.rs:57
 msgid ""
 "Unlock to change this setting. While locked, you can copy its line for your "
 "configuration."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:58
+#: src/shared_widgets/engine_settings/config_setting_row.rs:61
 msgid ""
 "Your administrator doesn't allow changing this setting from Lazaret. You can "
 "copy its line for your configuration."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:72
+#: src/shared_widgets/engine_settings/config_setting_row.rs:75
 msgid "bytes"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:73
+#: src/shared_widgets/engine_settings/config_setting_row.rs:76
 msgid "KiB"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:74
+#: src/shared_widgets/engine_settings/config_setting_row.rs:77
 msgid "MiB"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:86
+#: src/shared_widgets/engine_settings/config_setting_row.rs:89
 msgid "Lazaret doesn't know this option, so it only shows it."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:88
+#: src/shared_widgets/engine_settings/config_setting_row.rs:91
 msgid "Needs review: this value should be yes or no."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:90
+#: src/shared_widgets/engine_settings/config_setting_row.rs:93
 msgid "Needs review: this value should be a whole number."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:93
+#: src/shared_widgets/engine_settings/config_setting_row.rs:96
 #, rust-format
 msgid "Needs review: this value should be between {minimum} and {maximum}."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:98
+#: src/shared_widgets/engine_settings/config_setting_row.rs:101
 msgid ""
 "Needs review: this value should be a size in bytes, or a number followed by "
 "K or M."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:101
+#: src/shared_widgets/engine_settings/config_setting_row.rs:104
 msgid "Needs review: this value should be a full path that starts with /."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:103
+#: src/shared_widgets/engine_settings/config_setting_row.rs:106
 msgid "Needs review: this value is empty."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:543
+#: src/shared_widgets/engine_settings/config_setting_row.rs:546
 msgid ""
 "This setting runs commands or changes who ClamAV runs as, so Lazaret never "
 "offers to change it"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:559
+#: src/shared_widgets/engine_settings/config_setting_row.rs:562
 msgid "Check this value in the configuration file."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:571
+#: src/shared_widgets/engine_settings/config_setting_row.rs:574
 msgid "Copy configuration line…"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/config_setting_row.rs:661
+#: src/shared_widgets/engine_settings/config_setting_row.rs:676
 msgid "Applying, and restarting ClamAV"
 msgstr ""
 
