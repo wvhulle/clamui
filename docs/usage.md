@@ -57,9 +57,11 @@ The Protection page shows whether your system is actually protected: how old the
 
 The Signatures page lists where ClamAV's signatures come from and which other sources you could add, with the lines to add for each.
 
-To download new signatures right away, expand **Signatures current** on the Protection page and choose **Update Now**. The step shows the updater's output while it runs and the result when it is done:
+## Database updates
 
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/signature-update.webp" width="800" alt="Recording of the Protection page, expanding the signatures step with its last updates and the Update Now button">
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/signature-update.webp" width="800" alt="Recording of the Database Updates page, expanding the signatures step with its last updates and the Update Now button">
+
+The Database Updates page shows how old the signatures are, when freshclam and fangfrisch last ran, and whether the freshclam that Lazaret runs can be trusted. To download new signatures right away, expand **Signatures current** and choose **Update Now**. The step shows the updater's output while it runs and the result when it is done. Below it, the update history lists every update started from Lazaret, newest first; select one to read its full transcript. The **Settings** tab holds the freshclam settings. The Protection page links here from its signatures step.
 
 ## Hardening
 

@@ -213,3 +213,25 @@ impl<StepAction: StepActionButton> FactoryComponent for TimelineStepRow<StepActi
         }
     }
 }
+
+pub fn show_timeline_steps<StepAction: StepActionButton>(
+    step_rows: &mut FactoryVecDeque<TimelineStepRow<StepAction>>,
+    timeline_steps: Vec<TimelineStep<StepAction>>,
+) {
+    if step_rows.len() == timeline_steps.len() {
+        (0..)
+            .zip(timeline_steps)
+            .for_each(|(row_position, timeline_step)| {
+                step_rows.send(
+                    row_position,
+                    TimelineStepRowInput::StepChanged(Box::new(timeline_step)),
+                );
+            });
+    } else {
+        let mut row_guard = step_rows.guard();
+        row_guard.clear();
+        timeline_steps.into_iter().for_each(|timeline_step| {
+            row_guard.push_back(timeline_step);
+        });
+    }
+}

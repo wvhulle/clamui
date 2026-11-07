@@ -8,16 +8,18 @@ pub enum ApplicationPage {
     Logs,
     Quarantine,
     Signatures,
+    DatabaseUpdates,
     Hardening,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 7] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 8] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
     ApplicationPage::Logs,
     ApplicationPage::Quarantine,
     ApplicationPage::Signatures,
+    ApplicationPage::DatabaseUpdates,
     ApplicationPage::Hardening,
 ];
 
@@ -30,6 +32,7 @@ impl ApplicationPage {
             Self::Logs => "logs",
             Self::Quarantine => "quarantine",
             Self::Signatures => "signatures",
+            Self::DatabaseUpdates => "database-updates",
             Self::Hardening => "hardening",
         }
     }
@@ -48,6 +51,7 @@ impl ApplicationPage {
             Self::Logs => gettext("Logs"),
             Self::Quarantine => gettext("Quarantine"),
             Self::Signatures => gettext("Signatures"),
+            Self::DatabaseUpdates => gettext("Database Updates"),
             Self::Hardening => gettext("Hardening"),
         }
     }
@@ -60,6 +64,7 @@ impl ApplicationPage {
             Self::Logs => "document-open-recent-symbolic",
             Self::Quarantine => "folder-symbolic",
             Self::Signatures => "drive-harddisk-symbolic",
+            Self::DatabaseUpdates => "software-update-available-symbolic",
             Self::Hardening => "channel-secure-symbolic",
         }
     }
@@ -72,7 +77,8 @@ impl ApplicationPage {
             Self::Logs => "<Control>4",
             Self::Quarantine => "<Control>5",
             Self::Signatures => "<Control>6",
-            Self::Hardening => "<Control>7",
+            Self::DatabaseUpdates => "<Control>7",
+            Self::Hardening => "<Control>8",
         }
     }
 
@@ -105,6 +111,7 @@ mod application_pages_tests {
     #[test]
     fn sidebar_positions_follow_the_page_order() {
         assert_eq!(ApplicationPage::Protection.sidebar_position(), 0);
-        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 6);
+        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 6);
+        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 7);
     }
 }

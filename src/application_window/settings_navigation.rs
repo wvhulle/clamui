@@ -6,6 +6,12 @@ use crate::application_window::application_pages::ApplicationPage;
 pub const OPEN_SETTINGS_ACTION_NAME: &str = "open-settings";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SubpagePlacement {
+    StackedOnPage(ApplicationPage),
+    EmbeddedInDatabaseUpdates,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingsSubpage {
     ScanExclusions,
     ScanSchedule,
@@ -48,15 +54,24 @@ impl SettingsSubpage {
             .find(|settings_subpage| settings_subpage.action_target() == action_target)
     }
 
-    pub const fn owning_page(self) -> ApplicationPage {
+    pub const fn subpage_placement(self) -> SubpagePlacement {
         match self {
             Self::ScanExclusions
             | Self::ScanSchedule
             | Self::DeviceAutoScan
             | Self::ScannerEngine
-            | Self::DetectionChoices => ApplicationPage::Scan,
-            Self::OnAccessScanning | Self::TrustedDetections => ApplicationPage::Protection,
-            Self::SignatureUpdates => ApplicationPage::Signatures,
+            | Self::DetectionChoices => SubpagePlacement::StackedOnPage(ApplicationPage::Scan),
+            Self::OnAccessScanning | Self::TrustedDetections => {
+                SubpagePlacement::StackedOnPage(ApplicationPage::Protection)
+            }
+            Self::SignatureUpdates => SubpagePlacement::EmbeddedInDatabaseUpdates,
+        }
+    }
+
+    pub const fn owning_page(self) -> ApplicationPage {
+        match self.subpage_placement() {
+            SubpagePlacement::StackedOnPage(owning_page) => owning_page,
+            SubpagePlacement::EmbeddedInDatabaseUpdates => ApplicationPage::DatabaseUpdates,
         }
     }
 
@@ -172,8 +187,12 @@ mod settings_navigation_tests {
             ApplicationPage::Scan
         );
         assert_eq!(
+            SettingsSubpage::SignatureUpdates.subpage_placement(),
+            SubpagePlacement::EmbeddedInDatabaseUpdates
+        );
+        assert_eq!(
             SettingsSubpage::SignatureUpdates.owning_page(),
-            ApplicationPage::Signatures
+            ApplicationPage::DatabaseUpdates
         );
     }
 }

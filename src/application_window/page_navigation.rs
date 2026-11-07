@@ -25,7 +25,7 @@ use crate::{
             EvidenceRefresh, EvidenceRefreshTransition, EvidenceRefreshTrigger, GatheredEvidence,
             GatheringStart,
         },
-        settings_navigation::{SettingsSubpage, settings_subpage_frame},
+        settings_navigation::{SettingsSubpage, SubpagePlacement, settings_subpage_frame},
         sidebar_area_status::{
             AreaSummaryContext, SidebarAreaSummary, StatusIndicator, all_area_summaries,
             attention_summary_text, worst_area_status,
@@ -82,6 +82,10 @@ use crate::{
         engine_settings::engine_settings_page::{EngineSettingsPage, EngineSettingsSection},
     },
     sharing::analysis_page::trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
+    signatures::database_updates_page::{
+        database_updates_component::{DatabaseUpdatesPage, DatabaseUpdatesPageInput},
+        database_updates_state::DatabaseUpdatesPageOutput,
+    },
 };
 
 pub struct PageNavigationInit {
@@ -184,6 +188,7 @@ pub struct PageNavigation {
     signatures_page: Controller<AuditSectionsPage>,
     hardening_page: Controller<AuditSectionsPage>,
     protection_page: Controller<ProtectionTimelinePage>,
+    database_updates_page: Controller<DatabaseUpdatesPage>,
     detections_page: Controller<BackgroundDetectionsPage>,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
@@ -323,6 +328,18 @@ fn forwarded_detections_output(
     }
 }
 
+const fn forwarded_database_updates_output(
+    database_updates_output: DatabaseUpdatesPageOutput,
+) -> PageNavigationInput {
+    match database_updates_output {
+        DatabaseUpdatesPageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
+        DatabaseUpdatesPageOutput::SignaturesUpdated => PageNavigationInput::SignaturesUpdated,
+        DatabaseUpdatesPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+    }
+}
+
 fn register_page_actions(
     window_root: &adw::ApplicationWindow,
     sender: &ComponentSender<PageNavigation>,
@@ -441,6 +458,10 @@ impl PageNavigation {
             .emit(ProtectionTimelinePageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
+        self.database_updates_page
+            .emit(DatabaseUpdatesPageInput::EvidenceRefreshChanged(
+                next_refresh,
+            ));
         match gathering_start {
             GatheringStart::StartGathering => {
                 let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
@@ -473,7 +494,15 @@ impl PageNavigation {
     }
 
     fn open_settings_subpage(&mut self, settings_subpage: SettingsSubpage) {
-        let owning_page = settings_subpage.owning_page();
+        let owning_page = match settings_subpage.subpage_placement() {
+            SubpagePlacement::StackedOnPage(owning_page) => owning_page,
+            SubpagePlacement::EmbeddedInDatabaseUpdates => {
+                self.show_page(ApplicationPage::DatabaseUpdates);
+                self.database_updates_page
+                    .emit(DatabaseUpdatesPageInput::UpdateSettingsRequested);
+                return;
+            }
+        };
         self.show_page(owning_page);
         let newest_subpage_of_page = self
             .opened_settings_subpages
@@ -580,6 +609,7 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::Logs),
                                     append: &navigation_row(ApplicationPage::Quarantine),
                                     append: &navigation_row(ApplicationPage::Signatures),
+                                    append: &navigation_row(ApplicationPage::DatabaseUpdates),
                                     append: &navigation_row(ApplicationPage::Hardening),
                                 },
                             },
@@ -632,6 +662,9 @@ impl Component for PageNavigation {
                                         sender.input(PageNavigationInput::SettingsSubpagePopped(popped_tag.to_string()));
                                     }
                                 },
+                            },
+                            add_titled[Some(ApplicationPage::DatabaseUpdates.page_name()), &ApplicationPage::DatabaseUpdates.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::DatabaseUpdates, model.database_updates_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Hardening.page_name()), &ApplicationPage::Hardening.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Hardening, model.hardening_page.widget()),
@@ -692,22 +725,17 @@ impl Component for PageNavigation {
                 file_list_directory: data_directory,
             })
             .forward(sender.input_sender(), forwarded_scan_output);
-        let protection_page = ProtectionTimelinePage::builder()
+        let protection_page = ProtectionTimelinePage::builder().launch(()).forward(
+            sender.input_sender(),
+            |protection_output| match protection_output {
+                ProtectionTimelinePageOutput::EvidenceRefreshRequested => {
+                    PageNavigationInput::EvidenceRefreshRequested
+                }
+            },
+        );
+        let database_updates_page = DatabaseUpdatesPage::builder()
             .launch(activity_history.clone())
-            .forward(
-                sender.input_sender(),
-                |protection_output| match protection_output {
-                    ProtectionTimelinePageOutput::SignaturesUpdated => {
-                        PageNavigationInput::SignaturesUpdated
-                    }
-                    ProtectionTimelinePageOutput::ActivityRecorded => {
-                        PageNavigationInput::ActivityRecorded
-                    }
-                    ProtectionTimelinePageOutput::EvidenceRefreshRequested => {
-                        PageNavigationInput::EvidenceRefreshRequested
-                    }
-                },
-            );
+            .forward(sender.input_sender(), forwarded_database_updates_output);
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
                 activity_history,
@@ -746,6 +774,7 @@ impl Component for PageNavigation {
             signatures_page,
             hardening_page,
             protection_page,
+            database_updates_page,
             detections_page,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
@@ -806,9 +835,9 @@ impl Component for PageNavigation {
                 self.scan_page.emit(ScanPageInput::QuickScanRequested);
             }
             PageNavigationInput::SignatureUpdateRequested => {
-                self.show_page(ApplicationPage::Protection);
-                self.protection_page
-                    .emit(ProtectionTimelinePageInput::SignatureUpdateRequested);
+                self.show_page(ApplicationPage::DatabaseUpdates);
+                self.database_updates_page
+                    .emit(DatabaseUpdatesPageInput::SignatureUpdateRequested);
             }
             PageNavigationInput::ScanTargetsReceived(scan_targets) => {
                 self.show_page(ApplicationPage::Scan);
@@ -891,6 +920,10 @@ impl Component for PageNavigation {
                 self.refresh_area_summaries();
                 self.protection_page
                     .emit(ProtectionTimelinePageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
+                self.database_updates_page
+                    .emit(DatabaseUpdatesPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);

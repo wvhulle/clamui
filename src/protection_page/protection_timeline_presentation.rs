@@ -1,43 +1,43 @@
 use gettextrs::{gettext, ngettext};
-use jiff::{SignedDuration, Timestamp};
+use jiff::Timestamp;
 
 use crate::{
     application_window::settings_navigation::SettingsSubpage,
-    hardening_page::suggested_audit_commands::{SuggestedRemedy, suggested_command},
+    hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::{
             component_availability::ProbeFailure,
             distribution_install_guides::{DistributionFamily, engine_install_guides},
-            trusted_program_lookup::ClamavProgram,
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::{
-            clamav_engine_evidence::DatabaseEvidence,
             host_protection_evidence::{
                 AccountSettingFinding, ClamdConfigReadFailure, DaemonEvidence, EngineInstallation,
                 LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessResponse,
                 OnAccessScanner, OnAccessSizeLimit, OverridesChangeTime, OverridesReadFailure,
-                ProgramTrustFinding, ProgramTrustInspection, ProtectionEvidence, ReducedSetting,
-                RuntimeReductions, ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence,
-                SignatureEvidence, SignatureLineCount, ThirdPartySignatureFile,
-                ThirdPartySignatureListing, TimerState, UpdaterEvidence, UpdaterUnitResult,
-                WatchScope, WatchedLocation,
+                ProtectionEvidence, ReducedSetting, RuntimeReductions, ScanServiceEvidence,
+                ScanUnitResult, ScheduledScanEvidence, SignatureEvidence, TimerState, WatchScope,
+                WatchedLocation,
             },
-            service_run_journal::{ScanRunFindings, ScanRunHistory, UpdaterRunHistory},
+            service_run_journal::{ScanRunFindings, ScanRunHistory},
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
-        systemd_journal::unit_journal_reader::UnitJournalReadFailure,
     },
     shared_widgets::{
-        host_read_failure_text::{database_folder_failure_text, unit_journal_failure_text},
         journal_follow_failure_text::journal_follow_failure_text,
-        step_timeline::timeline_step_contents::{
-            ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
-            EvidenceRowControl, OfferedAction, RunningStep, SettledNodeState, SettledStep,
-            StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
-            moment_value_text,
+        step_timeline::{
+            program_trust_steps::{TrustedProgramGroup, program_trust_step},
+            step_evidence_builders::{
+                CheckedCondition, MomentContext, evidence_row, no_guidance_step, plain_rows,
+                remedy_commands, timed_evidence_row, unknown_run_text,
+            },
+            timeline_step_contents::{
+                ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
+                EvidenceRowControl, OfferedAction, RunningStep, SettledNodeState, SettledStep,
+                StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
+            },
         },
     },
     sharing::analysis_page::trusted_detections_page::{
@@ -47,24 +47,14 @@ use crate::{
         },
         trusted_detections_component::trust_list_failure_text,
     },
-    signatures::{
-        database_updates_page::signature_update_run::signature_update_session::{
-            LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
-        },
-        signature_sources_page::signature_provider_catalogue::{
-            provider_of_signature_file, signature_file_source_name,
-        },
+    signatures::database_updates_page::database_updates_presentation::{
+        signature_node_state, signature_status_step,
     },
 };
 
-const DATABASE_FRESH_LIMIT: SignedDuration = SignedDuration::from_hours(4 * 24);
-const DATABASE_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(8 * 24);
-const THIRD_PARTY_STALE_LIMIT: SignedDuration = SignedDuration::from_hours(48);
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtectionStepAction {
-    UpdateSignatures,
-    CancelSignatureUpdate,
+    OpenDatabaseUpdates,
     RunScheduledScan { service_unit: &'static str },
     ReviewSettingsSubpage(SettingsSubpage),
     SetUpSettingsSubpage(SettingsSubpage),
@@ -73,8 +63,7 @@ pub enum ProtectionStepAction {
 impl StepActionButton for ProtectionStepAction {
     fn button_label(&self) -> String {
         match self {
-            Self::UpdateSignatures => gettext("Update Now"),
-            Self::CancelSignatureUpdate => gettext("Cancel"),
+            Self::OpenDatabaseUpdates => gettext("Open Database Updates"),
             Self::RunScheduledScan { .. } => gettext("Run Now"),
             Self::ReviewSettingsSubpage(_) => gettext("Review"),
             Self::SetUpSettingsSubpage(_) => gettext("Set Up"),
@@ -83,8 +72,7 @@ impl StepActionButton for ProtectionStepAction {
 
     fn action_consequence(&self) -> ActionConsequence {
         match self {
-            Self::UpdateSignatures
-            | Self::CancelSignatureUpdate
+            Self::OpenDatabaseUpdates
             | Self::RunScheduledScan { .. }
             | Self::ReviewSettingsSubpage(_)
             | Self::SetUpSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
@@ -94,49 +82,6 @@ impl StepActionButton for ProtectionStepAction {
 
 pub type ProtectionStep = TimelineStep<ProtectionStepAction>;
 type ProtectionEvidenceRow = ActionableEvidenceRow<ProtectionStepAction>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CheckedCondition {
-    ConditionMet,
-    SetupSuggested,
-    ReviewSuggested,
-    EvidenceUnknown,
-    ConditionFailed,
-    PrerequisiteMissing,
-}
-
-impl CheckedCondition {
-    pub const fn node_state(self) -> SettledNodeState {
-        match self {
-            Self::ConditionMet => SettledNodeState::Completed,
-            Self::SetupSuggested => SettledNodeState::ActNext,
-            Self::ReviewSuggested | Self::EvidenceUnknown => SettledNodeState::NeedsReview,
-            Self::ConditionFailed => SettledNodeState::HasFailed,
-            Self::PrerequisiteMissing => SettledNodeState::AwaitingPrerequisite,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TrustedProgramGroup {
-    AllClamavPrograms,
-    ScannerPrograms,
-    UpdaterPrograms,
-}
-
-impl TrustedProgramGroup {
-    fn includes_program(self, program_name: &str) -> bool {
-        let scanner_names = [
-            ClamavProgram::ClamdClient.program_name(),
-            ClamavProgram::StandaloneScanner.program_name(),
-        ];
-        match self {
-            Self::AllClamavPrograms => true,
-            Self::ScannerPrograms => scanner_names.contains(&program_name),
-            Self::UpdaterPrograms => program_name == ClamavProgram::SignatureUpdater.program_name(),
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReducedSettingGroup {
@@ -172,7 +117,6 @@ pub struct ProtectionTimeline {
 
 #[derive(Clone)]
 pub struct ProtectionActivity {
-    pub signature_update: SignatureUpdateView,
     pub scheduled_scan_starting: bool,
     pub observed_at: Timestamp,
     pub moment_formatters: &'static MomentFormatters,
@@ -185,66 +129,6 @@ impl ProtectionActivity {
             reference_moment: self.observed_at,
         }
     }
-}
-
-fn evidence_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
-    StepEvidenceRow::current_fact(evidence_name, evidence_value)
-}
-
-#[derive(Clone, Copy)]
-struct MomentContext {
-    moment_formatters: &'static MomentFormatters,
-    reference_moment: Timestamp,
-}
-
-fn timed_evidence_row(
-    evidence_name: String,
-    evidence_moment: EvidenceMoment,
-    moment_details: String,
-    moment_context: MomentContext,
-) -> StepEvidenceRow {
-    StepEvidenceRow {
-        evidence_moment,
-        ..evidence_row(
-            evidence_name,
-            moment_value_text(
-                moment_context.moment_formatters,
-                evidence_moment,
-                moment_details,
-                moment_context.reference_moment,
-            ),
-        )
-    }
-}
-
-fn no_guidance_step(
-    step_title: String,
-    mechanism_details: String,
-    node_state: SettledNodeState,
-    status_text: String,
-) -> ProtectionStep {
-    TimelineStep::settled(
-        step_title,
-        mechanism_details,
-        status_text,
-        SettledStep::without_offers(node_state),
-    )
-}
-
-fn plain_rows(
-    evidence_rows: impl IntoIterator<Item = StepEvidenceRow>,
-) -> Vec<ProtectionEvidenceRow> {
-    evidence_rows.into_iter().map(Into::into).collect()
-}
-
-fn remedy_commands(
-    suggested_remedy: SuggestedRemedy,
-    distribution_family: DistributionFamily,
-) -> Vec<String> {
-    suggested_command(suggested_remedy, distribution_family)
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
 }
 
 fn probe_failure_text(probe_failure: &ProbeFailure) -> String {
@@ -313,139 +197,6 @@ fn engine_step(
                 .collect(),
         ),
     }
-}
-
-fn program_trust_rows(program_trust_finding: &ProgramTrustFinding) -> Vec<StepEvidenceRow> {
-    match program_trust_finding {
-        ProgramTrustFinding::ReplaceableProgramIgnored {
-            program_name,
-            trusted_path,
-            ignored_paths,
-        } => std::iter::once(evidence_row(
-            gettext("{program} in use").replace("{program}", program_name),
-            trusted_path.clone(),
-        ))
-        .chain(ignored_paths.iter().map(|ignored_path| {
-            evidence_row(
-                gettext("Ignored {program}").replace("{program}", program_name),
-                ignored_path.clone(),
-            )
-        }))
-        .collect(),
-        ProgramTrustFinding::OnlyReplaceableProgram {
-            program_name,
-            replaceable_paths,
-        } => replaceable_paths
-            .iter()
-            .map(|replaceable_path| {
-                evidence_row(
-                    gettext("Refused {program}").replace("{program}", program_name),
-                    replaceable_path.clone(),
-                )
-            })
-            .collect(),
-    }
-}
-
-const fn finding_program_name(program_trust_finding: &ProgramTrustFinding) -> &'static str {
-    match program_trust_finding {
-        ProgramTrustFinding::ReplaceableProgramIgnored { program_name, .. }
-        | ProgramTrustFinding::OnlyReplaceableProgram { program_name, .. } => program_name,
-    }
-}
-
-fn program_findings_condition<'finding>(
-    program_trust_findings: impl IntoIterator<Item = &'finding ProgramTrustFinding>,
-) -> CheckedCondition {
-    let found_conditions = program_trust_findings
-        .into_iter()
-        .map(|program_trust_finding| match program_trust_finding {
-            ProgramTrustFinding::OnlyReplaceableProgram { .. } => CheckedCondition::ConditionFailed,
-            ProgramTrustFinding::ReplaceableProgramIgnored { .. } => {
-                CheckedCondition::ReviewSuggested
-            }
-        })
-        .collect::<Vec<_>>();
-    if found_conditions.contains(&CheckedCondition::ConditionFailed) {
-        CheckedCondition::ConditionFailed
-    } else if found_conditions.is_empty() {
-        CheckedCondition::ConditionMet
-    } else {
-        CheckedCondition::ReviewSuggested
-    }
-}
-
-pub fn program_trust_condition(
-    program_trust: &ProgramTrustInspection,
-    program_group: TrustedProgramGroup,
-) -> CheckedCondition {
-    match program_trust {
-        ProgramTrustInspection::ProgramsChecked(program_trust_findings) => {
-            program_findings_condition(program_trust_findings.iter().filter(
-                |program_trust_finding| {
-                    program_group.includes_program(finding_program_name(program_trust_finding))
-                },
-            ))
-        }
-        ProgramTrustInspection::CheckInterrupted => CheckedCondition::EvidenceUnknown,
-    }
-}
-
-fn program_trust_title() -> String {
-    gettext("Scanner programs can be trusted")
-}
-
-fn program_trust_details() -> String {
-    gettext(
-        "Malware running as you could put a fake clamdscan earlier on your search path that \
-         reports every file as clean. Lazaret only runs ClamAV programs that your account can't \
-         replace, such as the ones installed for the whole system.",
-    )
-}
-
-fn program_trust_step(program_trust: &ProgramTrustInspection) -> Option<ProtectionStep> {
-    match program_trust {
-        ProgramTrustInspection::ProgramsChecked(program_trust_findings) => {
-            program_findings_step(program_trust_findings)
-        }
-        ProgramTrustInspection::CheckInterrupted => Some(no_guidance_step(
-            program_trust_title(),
-            program_trust_details(),
-            program_trust_condition(program_trust, TrustedProgramGroup::AllClamavPrograms)
-                .node_state(),
-            gettext("Unknown, because checking the ClamAV programs stopped before it finished"),
-        )),
-    }
-}
-
-fn program_findings_step(program_trust_findings: &[ProgramTrustFinding]) -> Option<ProtectionStep> {
-    if program_trust_findings.is_empty() {
-        return None;
-    }
-    let any_program_refused = program_trust_findings.iter().any(|program_trust_finding| {
-        matches!(
-            program_trust_finding,
-            ProgramTrustFinding::OnlyReplaceableProgram { .. }
-        )
-    });
-    let node_state = program_findings_condition(program_trust_findings).node_state();
-    let status_text = if any_program_refused {
-        gettext("A ClamAV program can be replaced by your account, so Lazaret refuses to run it")
-    } else {
-        gettext(
-            "A ClamAV program in your account shadows the system copy. Lazaret ignores it, but \
-             check where it came from",
-        )
-    };
-    Some(TimelineStep::settled(
-        program_trust_title(),
-        program_trust_details(),
-        status_text,
-        SettledStep {
-            evidence_rows: plain_rows(program_trust_findings.iter().flat_map(program_trust_rows)),
-            ..SettledStep::without_offers(node_state)
-        },
-    ))
 }
 
 fn reduced_settings_status(
@@ -809,123 +560,6 @@ fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<ProtectionSt
     ))
 }
 
-fn database_condition(
-    database_evidence: &DatabaseEvidence,
-    reference_moment: Timestamp,
-) -> CheckedCondition {
-    match database_evidence {
-        DatabaseEvidence::BuiltAt { built_at } if *built_at > reference_moment => {
-            CheckedCondition::ReviewSuggested
-        }
-        DatabaseEvidence::BuiltAt { built_at }
-            if reference_moment.duration_since(*built_at) < DATABASE_FRESH_LIMIT =>
-        {
-            CheckedCondition::ConditionMet
-        }
-        DatabaseEvidence::BuiltAt { built_at }
-            if reference_moment.duration_since(*built_at) < DATABASE_STALE_LIMIT =>
-        {
-            CheckedCondition::ReviewSuggested
-        }
-        DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::DatabaseMissing => {
-            CheckedCondition::ConditionFailed
-        }
-        DatabaseEvidence::AgeUndetermined | DatabaseEvidence::InspectionInterrupted => {
-            CheckedCondition::EvidenceUnknown
-        }
-    }
-}
-
-pub fn database_update_condition(
-    signature_evidence: &SignatureEvidence,
-    reference_moment: Timestamp,
-) -> CheckedCondition {
-    let database_state =
-        database_condition(&signature_evidence.database_evidence, reference_moment);
-    if database_state == CheckedCondition::ConditionMet
-        && signature_evidence
-            .updater_evidence
-            .iter()
-            .any(updater_failed)
-    {
-        CheckedCondition::ReviewSuggested
-    } else {
-        database_state
-    }
-}
-
-pub fn third_party_source_condition(
-    third_party_listing: &ThirdPartySignatureListing,
-    reference_moment: Timestamp,
-) -> CheckedCondition {
-    match third_party_listing {
-        ThirdPartySignatureListing::FolderUnreadable(_) => CheckedCondition::EvidenceUnknown,
-        ThirdPartySignatureListing::FilesListed(signature_files) => {
-            if signature_files.iter().any(|signature_file| {
-                reference_moment.duration_since(signature_file.modified_at)
-                    > THIRD_PARTY_STALE_LIMIT
-            }) {
-                CheckedCondition::ReviewSuggested
-            } else {
-                CheckedCondition::ConditionMet
-            }
-        }
-    }
-}
-
-fn signature_condition(
-    signature_evidence: &SignatureEvidence,
-    reference_moment: Timestamp,
-) -> CheckedCondition {
-    let update_state = database_update_condition(signature_evidence, reference_moment);
-    if update_state == CheckedCondition::ConditionMet
-        && third_party_source_condition(&signature_evidence.third_party_listing, reference_moment)
-            != CheckedCondition::ConditionMet
-    {
-        CheckedCondition::ReviewSuggested
-    } else {
-        update_state
-    }
-}
-
-fn database_status_text(
-    database_evidence: &DatabaseEvidence,
-    moment_context: MomentContext,
-) -> String {
-    match database_evidence {
-        DatabaseEvidence::BuiltAt { built_at } if *built_at <= moment_context.reference_moment => {
-            gettext("Definitions built {when} ({date})")
-                .replace(
-                    "{when}",
-                    &moment_context
-                        .moment_formatters
-                        .relative_moment_text(*built_at, moment_context.reference_moment),
-                )
-                .replace(
-                    "{date}",
-                    &moment_context
-                        .moment_formatters
-                        .calendar_date_text(*built_at),
-                )
-        }
-        DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::AgeUndetermined => {
-            gettext("Definitions exist, but their age could not be determined")
-        }
-        DatabaseEvidence::DatabaseMissing => gettext("No virus definitions were found"),
-        DatabaseEvidence::InspectionInterrupted => gettext(
-            "The age of the definitions is unknown, because checking them stopped before it \
-             finished",
-        ),
-    }
-}
-
-pub fn updater_failed(updater_evidence: &UpdaterEvidence) -> bool {
-    match updater_evidence.last_result {
-        UpdaterUnitResult::UpdateSucceeded | UpdaterUnitResult::UpdateAlreadyCurrent => false,
-        UpdaterUnitResult::UpdaterError { .. } | UpdaterUnitResult::ServiceFailed { .. } => true,
-    }
-}
-
 impl From<ScanRunHistory> for EvidenceMoment {
     fn from(run_history: ScanRunHistory) -> Self {
         match run_history {
@@ -934,18 +568,6 @@ impl From<ScanRunHistory> for EvidenceMoment {
             },
             ScanRunHistory::NoCompletedScan => Self::NeverHappened,
             ScanRunHistory::JournalUnreadable(_) => Self::CurrentFact,
-        }
-    }
-}
-
-impl From<UpdaterRunHistory> for EvidenceMoment {
-    fn from(run_history: UpdaterRunHistory) -> Self {
-        match run_history {
-            UpdaterRunHistory::CompletedUpdate { finished_at } => Self::PastEvent {
-                happened_at: finished_at,
-            },
-            UpdaterRunHistory::NoCompletedUpdate => Self::NeverHappened,
-            UpdaterRunHistory::JournalUnreadable(_) => Self::CurrentFact,
         }
     }
 }
@@ -961,234 +583,26 @@ impl From<UnitTimestamp> for EvidenceMoment {
     }
 }
 
-fn updater_row(
-    updater_evidence: &UpdaterEvidence,
-    moment_context: MomentContext,
-) -> StepEvidenceRow {
-    let evidence_moment = EvidenceMoment::from(updater_evidence.last_completed_run);
-    let evidence_value = if updater_failed(updater_evidence) {
-        gettext("Its last update failed")
-    } else {
-        match updater_evidence.last_completed_run {
-            UpdaterRunHistory::JournalUnreadable(read_failure) => unknown_run_text(read_failure),
-            UpdaterRunHistory::NoCompletedUpdate => gettext("No completed update recorded yet"),
-            UpdaterRunHistory::CompletedUpdate { .. } => String::new(),
-        }
-    };
-    timed_evidence_row(
-        gettext("{updater} updated")
-            .replace("{updater}", updater_evidence.updater_program.program_name()),
-        evidence_moment,
-        evidence_value,
-        moment_context,
-    )
-}
-
-fn third_party_file_row(
-    signature_file: &ThirdPartySignatureFile,
-    moment_context: MomentContext,
-) -> StepEvidenceRow {
-    timed_evidence_row(
-        gettext("{provider} fetched").replace(
-            "{provider}",
-            &signature_file_source_name(provider_of_signature_file(&signature_file.file_name)),
-        ),
-        EvidenceMoment::PastEvent {
-            happened_at: signature_file.modified_at,
-        },
-        match signature_file.signature_lines {
-            SignatureLineCount::LinesCounted { signature_count } => ngettext(
-                "{count} signature, {size} ({file})",
-                "{count} signatures, {size} ({file})",
-                u32::try_from(signature_count).unwrap_or(u32::MAX),
-            )
-            .replace("{count}", &signature_count.to_string()),
-            SignatureLineCount::FileUnreadable { failure_kind } => gettext(
-                "Unknown number of signatures, the file could not be read: {error}, {size} \
-                 ({file})",
-            )
-            .replace("{error}", &failure_kind.to_string()),
-        }
-        .replace("{size}", &byte_size_text(signature_file.file_size))
-        .replace("{file}", &signature_file.file_name),
-        moment_context,
-    )
-}
-
-fn third_party_rows(
-    third_party_listing: &ThirdPartySignatureListing,
-    moment_context: MomentContext,
-) -> Vec<StepEvidenceRow> {
-    match third_party_listing {
-        ThirdPartySignatureListing::FilesListed(signature_files) => signature_files
-            .iter()
-            .map(|signature_file| third_party_file_row(signature_file, moment_context))
-            .collect(),
-        ThirdPartySignatureListing::FolderUnreadable(read_failure) => vec![evidence_row(
-            gettext("Other signature sources"),
-            gettext("Unknown. {reason}")
-                .replace("{reason}", &database_folder_failure_text(*read_failure)),
-        )],
-    }
-}
-
-fn update_progress_of(signature_update: &SignatureUpdateView) -> SignatureUpdateProgress {
-    match signature_update {
-        SignatureUpdateView::HostStatusLoading => SignatureUpdateProgress::UpdateUnavailable,
-        SignatureUpdateView::HostStatusKnown(known_host) => known_host.update_progress.clone(),
-    }
-}
-
-fn manual_update_row(
-    signature_update: &SignatureUpdateView,
-    moment_context: MomentContext,
-) -> StepEvidenceRow {
-    let last_manual_update = match signature_update {
-        SignatureUpdateView::HostStatusLoading => &LastManualUpdate::NotRunThisSession,
-        SignatureUpdateView::HostStatusKnown(known_host) => &known_host.last_manual_update,
-    };
-    let (evidence_moment, evidence_value) = match last_manual_update {
-        LastManualUpdate::FinishedAt {
-            summary_line,
-            finished_at,
-        } => (
-            EvidenceMoment::PastEvent {
-                happened_at: *finished_at,
-            },
-            summary_line.clone(),
-        ),
-        LastManualUpdate::NotRunThisSession => (
-            EvidenceMoment::CurrentFact,
-            gettext("Fetch the newest signatures from every updater now"),
-        ),
-    };
-    timed_evidence_row(
-        gettext("Manual update"),
-        evidence_moment,
-        evidence_value,
-        moment_context,
-    )
-}
-
-fn update_host_rows(signature_update: &SignatureUpdateView) -> Vec<StepEvidenceRow> {
-    match signature_update {
-        SignatureUpdateView::HostStatusLoading => Vec::new(),
-        SignatureUpdateView::HostStatusKnown(known_host) => vec![
-            evidence_row(
-                gettext("Update service"),
-                known_host.update_service_text.clone(),
-            ),
-            evidence_row(
-                gettext("Database folder"),
-                known_host.database_folder_text.clone(),
-            ),
-        ],
-    }
-}
-
-fn updater_output_rows(update_progress: &SignatureUpdateProgress) -> Vec<StepEvidenceRow> {
-    match update_progress {
-        SignatureUpdateProgress::CancellableUpdateRunning { latest_output_line }
-        | SignatureUpdateProgress::UncancellableUpdateRunning { latest_output_line } => {
-            vec![StepEvidenceRow {
-                evidence_moment: EvidenceMoment::HappeningNow,
-                ..evidence_row(gettext("Updater output"), latest_output_line.clone())
-            }]
-        }
-        SignatureUpdateProgress::UpdateCancelling
-        | SignatureUpdateProgress::ReadyToUpdate
-        | SignatureUpdateProgress::UpdateUnavailable => Vec::new(),
-    }
-}
-
-fn signature_step(
+fn signature_overview_step(
     signature_evidence: &SignatureEvidence,
-    signature_update: &SignatureUpdateView,
     moment_context: MomentContext,
     distribution_family: DistributionFamily,
 ) -> ProtectionStep {
-    let evidence_state =
-        signature_condition(signature_evidence, moment_context.reference_moment).node_state();
-    let update_progress = update_progress_of(signature_update);
-    let manual_row = manual_update_row(signature_update, moment_context);
-    let other_rows = updater_output_rows(&update_progress)
-        .into_iter()
-        .chain(
-            signature_evidence
-                .updater_evidence
-                .iter()
-                .map(|updater_evidence| updater_row(updater_evidence, moment_context)),
-        )
-        .chain(third_party_rows(
-            &signature_evidence.third_party_listing,
-            moment_context,
-        ))
-        .chain(update_host_rows(signature_update))
-        .collect::<Vec<_>>();
-    let step_title = gettext("Signatures current");
-    let mechanism_details = gettext(
-        "Signatures describe known malware, and new ones are published constantly. Old signatures \
-         miss recent threats even when everything else is running.",
-    );
-    let running_signature_step = |status_text: String, cancel_slot| {
-        TimelineStep::running(
-            step_title.clone(),
-            mechanism_details.clone(),
-            status_text,
-            RunningStep {
-                evidence_rows: std::iter::once(manual_row.clone())
-                    .chain(other_rows.clone())
-                    .collect(),
-                cancel_slot,
-            },
-        )
-    };
-    let settled_signature_step = |manual_control| {
-        TimelineStep::settled(
-            step_title.clone(),
-            mechanism_details.clone(),
-            database_status_text(&signature_evidence.database_evidence, moment_context),
-            SettledStep {
-                evidence_rows: std::iter::once(ActionableEvidenceRow {
-                    shown_evidence: manual_row.clone(),
-                    row_control: manual_control,
-                })
-                .chain(plain_rows(other_rows.clone()))
-                .collect(),
-                ..SettledStep::without_offers(evidence_state)
-            },
-        )
-    };
-    let signature_step = match &update_progress {
-        SignatureUpdateProgress::CancellableUpdateRunning { .. } => running_signature_step(
-            gettext("Updating signatures…"),
-            CancelSlot::Cancellable {
-                cancel_action: ProtectionStepAction::CancelSignatureUpdate,
-            },
-        ),
-        SignatureUpdateProgress::UncancellableUpdateRunning { .. } => {
-            running_signature_step(gettext("Updating signatures…"), CancelSlot::NotCancellable)
-        }
-        SignatureUpdateProgress::UpdateCancelling => running_signature_step(
-            gettext("Cancelling the update…"),
-            CancelSlot::NotCancellable,
-        ),
-        SignatureUpdateProgress::ReadyToUpdate => settled_signature_step(
-            EvidenceRowControl::RowButton(if evidence_state == SettledNodeState::Completed {
-                OfferedAction::plain(ProtectionStepAction::UpdateSignatures)
+    let open_action = ProtectionStepAction::OpenDatabaseUpdates;
+    signature_status_step(
+        signature_evidence,
+        moment_context,
+        distribution_family,
+        StepActionSlot::ActionOffered(
+            if signature_node_state(signature_evidence, moment_context.reference_moment)
+                == SettledNodeState::Completed
+            {
+                OfferedAction::plain(open_action)
             } else {
-                OfferedAction::suggested(ProtectionStepAction::UpdateSignatures)
-            }),
+                OfferedAction::suggested(open_action)
+            },
         ),
-        SignatureUpdateProgress::UpdateUnavailable => {
-            settled_signature_step(EvidenceRowControl::NoRowControl)
-        }
-    };
-    signature_step.with_guidance_commands(if signature_evidence.updater_evidence.is_empty() {
-        remedy_commands(SuggestedRemedy::FreshclamUpdatesEnable, distribution_family)
-    } else {
-        Vec::new()
-    })
+    )
 }
 
 pub const fn daemon_condition(daemon_evidence: &DaemonEvidence) -> CheckedCondition {
@@ -1533,10 +947,6 @@ fn last_run_row(
         evidence_value,
         moment_context,
     )
-}
-
-fn unknown_run_text(read_failure: UnitJournalReadFailure) -> String {
-    gettext("Unknown. {reason}").replace("{reason}", &unit_journal_failure_text(read_failure))
 }
 
 const fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
@@ -1888,11 +1298,13 @@ pub fn protection_timeline(
         ],
         engine_steps: engine_problem
             .into_iter()
-            .chain(program_trust_step(&protection_evidence.program_trust))
+            .chain(program_trust_step(
+                &protection_evidence.program_trust,
+                TrustedProgramGroup::AllClamavPrograms,
+            ))
             .chain([
-                signature_step(
+                signature_overview_step(
                     &protection_evidence.signature_evidence,
-                    &protection_activity.signature_update,
                     protection_activity.moment_context(),
                     distribution_family,
                 ),
@@ -1911,34 +1323,26 @@ pub fn protection_timeline(
 
 #[cfg(test)]
 mod protection_timeline_presentation_tests {
+    use jiff::SignedDuration;
+
     use super::*;
     use crate::{
         host_services::{
-            clamav_programs::database_directory_status::DatabaseFolderReadFailure,
-            protection_evidence::protection_evidence_fixtures::{
-                REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
+            protection_evidence::{
+                host_protection_evidence::{ProgramTrustFinding, ProgramTrustInspection},
+                protection_evidence_fixtures::{
+                    REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
+                },
             },
             systemd_bus::host_systemd_units::ServiceFailureKind,
+            systemd_journal::unit_journal_reader::UnitJournalReadFailure,
         },
         shared_widgets::step_timeline::timeline_step_contents::StepPhase,
         sharing::analysis_page::trusted_detections_page::trust_list_contents::TrustListReadFailure,
-        signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
     };
-
-    fn known_update_host(update_progress: SignatureUpdateProgress) -> SignatureUpdateView {
-        SignatureUpdateView::HostStatusKnown(
-            crate::signatures::database_updates_page::signature_update_run::signature_update_session::KnownUpdateHost {
-                update_progress,
-                last_manual_update: LastManualUpdate::NotRunThisSession,
-                update_service_text: "Active".to_owned(),
-                database_folder_text: "/var/lib/clamav".to_owned(),
-            },
-        )
-    }
 
     fn idle_activity() -> ProtectionActivity {
         ProtectionActivity {
-            signature_update: known_update_host(SignatureUpdateProgress::ReadyToUpdate),
             scheduled_scan_starting: false,
             observed_at: REFERENCE_MOMENT,
             moment_formatters: english_formatters(),
@@ -2160,42 +1564,22 @@ mod protection_timeline_presentation_tests {
             }
         );
         let signature_step = step_titled(&healthy_steps, "Signatures current");
-        assert_eq!(signature_step.header_offer(), None);
-        assert!(matches!(
-            row_control_named(signature_step, "Manual update"),
-            EvidenceRowControl::RowButton(OfferedAction {
-                offered_action: ProtectionStepAction::UpdateSignatures,
-                ..
-            })
-        ));
+        assert_eq!(
+            signature_step.header_offer(),
+            Some(OfferedAction::plain(
+                ProtectionStepAction::OpenDatabaseUpdates
+            ))
+        );
+        assert!(
+            signature_step
+                .shown_evidence_rows()
+                .iter()
+                .all(|step_evidence| step_evidence.evidence_name != "Manual update")
+        );
         assert!(
             signature_step
                 .status_text
                 .starts_with("Definitions built 5 hours ago (")
-        );
-    }
-
-    #[test]
-    fn a_running_update_shows_its_progress_and_can_be_cancelled() {
-        let running_activity = ProtectionActivity {
-            signature_update: known_update_host(
-                SignatureUpdateProgress::CancellableUpdateRunning {
-                    latest_output_line: "daily.cld updated".to_owned(),
-                },
-            ),
-            ..idle_activity()
-        };
-        let running_timeline = timeline_with(&healthy_evidence(), &running_activity);
-        let signature_step = step_titled(&running_timeline.engine_steps, "Signatures current");
-        assert_eq!(signature_step.node_state(), StepNodeState::InProgress);
-        let output_row = row_named(signature_step, "Updater output");
-        assert_eq!(output_row.evidence_moment, EvidenceMoment::HappeningNow);
-        assert_eq!(output_row.evidence_value, "daily.cld updated");
-        assert_eq!(
-            signature_step.offered_actions(),
-            vec![OfferedAction::plain(
-                ProtectionStepAction::CancelSignatureUpdate
-            )]
         );
     }
 
@@ -2479,26 +1863,6 @@ mod protection_timeline_presentation_tests {
         }));
     }
 
-    #[test]
-    fn a_failed_updater_or_stale_source_warns_even_with_fresh_definitions() {
-        let failed_updater = ProtectionEvidence {
-            signature_evidence: SignatureEvidence {
-                updater_evidence: vec![UpdaterEvidence {
-                    updater_program: SignatureUpdaterProgram::Fangfrisch,
-                    service_unit: "clamav-fangfrisch.service",
-                    last_result: UpdaterUnitResult::UpdaterError { exit_status: 1 },
-                    last_completed_run: UpdaterRunHistory::NoCompletedUpdate,
-                }],
-                ..healthy_evidence().signature_evidence
-            },
-            ..healthy_evidence()
-        };
-        assert_eq!(
-            state_of(&failed_updater, "Signatures current"),
-            StepNodeState::NeedsReview
-        );
-    }
-
     fn alert_step_state(
         alert_readiness: &AlertReadiness,
         background_service_state: UnitState,
@@ -2618,42 +1982,6 @@ mod protection_timeline_presentation_tests {
         let trust_step = step_titled(&engine_steps, "Scanner programs can be trusted");
         assert_eq!(trust_step.node_state(), StepNodeState::NeedsReview);
         assert!(trust_step.status_text.starts_with("Unknown"));
-    }
-
-    #[test]
-    fn an_unreadable_signature_folder_is_unknown_rather_than_no_other_sources() {
-        let protection_evidence = ProtectionEvidence {
-            signature_evidence: SignatureEvidence {
-                third_party_listing: ThirdPartySignatureListing::FolderUnreadable(
-                    DatabaseFolderReadFailure::ReadingTaskInterrupted,
-                ),
-                ..healthy_evidence().signature_evidence
-            },
-            ..healthy_evidence()
-        };
-        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
-        let signature_step = step_titled(&engine_steps, "Signatures current");
-        assert_eq!(signature_step.node_state(), StepNodeState::NeedsReview);
-        assert_eq!(
-            row_named(signature_step, "Other signature sources").evidence_value,
-            "Unknown. Reading the signature folder stopped before it finished"
-        );
-    }
-
-    #[test]
-    fn an_interrupted_database_check_is_unknown_rather_than_missing() {
-        let protection_evidence = ProtectionEvidence {
-            signature_evidence: SignatureEvidence {
-                database_evidence: DatabaseEvidence::InspectionInterrupted,
-                ..healthy_evidence().signature_evidence
-            },
-            ..healthy_evidence()
-        };
-        let engine_steps = idle_timeline(&protection_evidence).engine_steps;
-        let signature_step = step_titled(&engine_steps, "Signatures current");
-        assert_eq!(signature_step.node_state(), StepNodeState::NeedsReview);
-        assert!(signature_step.status_text.contains("unknown"));
-        assert!(!signature_step.status_text.contains("No virus definitions"));
     }
 
     #[test]

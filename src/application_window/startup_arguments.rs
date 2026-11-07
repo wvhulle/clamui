@@ -31,7 +31,9 @@ impl StartupPageRequest {
     fn from_page_name(requested_page_name: &str) -> Self {
         match requested_page_name {
             PREFERENCES_PAGE_NAME => Self::RecognizedPage(StartupPage::PreferencesDialog),
-            DATABASE_PAGE_NAME => Self::RecognizedPage(DEFAULT_STARTUP_PAGE),
+            DATABASE_PAGE_NAME => Self::RecognizedPage(StartupPage::ApplicationPage(
+                ApplicationPage::DatabaseUpdates,
+            )),
             application_page_name => ApplicationPage::from_page_name(application_page_name)
                 .map_or_else(
                     || Self::UnrecognizedPage {
@@ -145,11 +147,17 @@ mod startup_arguments_tests {
     }
 
     #[test]
-    fn the_database_page_opens_the_protection_page() {
-        assert_eq!(
-            parsed_arguments(&["lazaret", "--page=database"]).startup_page,
-            StartupPageRequest::RecognizedPage(DEFAULT_STARTUP_PAGE)
-        );
+    fn the_database_page_opens_the_database_updates_page() {
+        ["--page=database", "--page=database-updates"]
+            .into_iter()
+            .for_each(|page_argument| {
+                assert_eq!(
+                    parsed_arguments(&["lazaret", page_argument]).startup_page,
+                    StartupPageRequest::RecognizedPage(StartupPage::ApplicationPage(
+                        ApplicationPage::DatabaseUpdates
+                    ))
+                );
+            });
     }
 
     #[test]

@@ -47,6 +47,21 @@ pub struct DatabaseHostStatus {
     directory_status: DatabaseDirectoryStatus,
 }
 
+#[cfg(test)]
+impl DatabaseHostStatus {
+    pub fn installed_with_service(service_state: FreshclamServiceState) -> Self {
+        Self {
+            freshclam_probe: ProgramProbe::VersionReported {
+                version_text: "ClamAV 1.4.3".to_owned(),
+            },
+            service_state,
+            directory_status: DatabaseDirectoryStatus::DefinitionsMissing {
+                database_directory: std::path::PathBuf::from("/var/lib/clamav"),
+            },
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct UpdateTiming {
     started_at: Timestamp,

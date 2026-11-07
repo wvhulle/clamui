@@ -23,18 +23,25 @@ use crate::{
     protection_page::{
         protection_timeline_page::shown_coverage_text,
         protection_timeline_presentation::{
-            AlertReadiness, CheckedCondition, ReducedSettingGroup, TrustedProgramGroup,
-            alerts_condition, daemon_condition, daemon_is_answering, database_update_condition,
-            engine_condition, on_access_condition, program_trust_condition,
-            runtime_reduction_condition, scheduled_scan_condition, third_party_source_condition,
-            trust_list_condition, updater_failed,
+            AlertReadiness, ReducedSettingGroup, alerts_condition, daemon_condition,
+            daemon_is_answering, engine_condition, on_access_condition,
+            runtime_reduction_condition, scheduled_scan_condition, trust_list_condition,
         },
+    },
+    shared_widgets::step_timeline::{
+        program_trust_steps::{TrustedProgramGroup, program_trust_condition},
+        step_evidence_builders::CheckedCondition,
     },
     sharing::analysis_page::trusted_detections_page::trust_list_contents::{
         LazaretListReading, TrustListReading,
     },
-    signatures::signature_sources_page::signature_provider_catalogue::{
-        provider_of_signature_file, signature_file_source_name,
+    signatures::{
+        database_updates_page::database_updates_presentation::{
+            database_update_condition, third_party_source_condition, updater_failed,
+        },
+        signature_sources_page::signature_provider_catalogue::{
+            provider_of_signature_file, signature_file_source_name,
+        },
     },
 };
 
