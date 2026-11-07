@@ -27,17 +27,6 @@ use crate::{
             trust_outcome_text,
         },
     },
-    scans::manual_scan_page::scan_results_section::{
-        detected_threat_row::{
-            DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput,
-            ThreatQuarantineState,
-        },
-        scan_problem_row::{ScanProblemRow, problem_rows_of},
-        scan_results_state::{
-            ScanResultsView, fingerprint_failure_text, format_scan_report, status_icon,
-            status_style_class,
-        },
-    },
     shared_widgets::{
         awaited_dialogs::{
             AlertChoice, TextExportOutcome, add_alert_choice, add_dismissing_choice, alert_choice,
@@ -45,6 +34,17 @@ use crate::{
         },
         component_streams::run_stream_to_completion,
         false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
+        scan_runs::scan_results_section::{
+            detected_threat_row::{
+                DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput,
+                ThreatQuarantineState,
+            },
+            scan_problem_row::{ScanProblemRow, problem_rows_of},
+            scan_results_state::{
+                ScanResultsView, fingerprint_failure_text, format_scan_report, status_icon,
+                status_style_class,
+            },
+        },
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -69,7 +69,13 @@ impl AlertChoice for QuarantineDialogChoice {
     }
 }
 
+pub struct ScanResultsSectionInit {
+    pub quarantine_vault: QuarantineVault,
+    pub dismiss_label: String,
+}
+
 pub struct ScanResultsSection {
+    dismiss_label: String,
     results_view: ScanResultsView,
     results_generation: u64,
     quarantine_vault: QuarantineVault,
@@ -92,13 +98,13 @@ pub enum ScanResultsSectionInput {
     FalsePositiveReportConfirmed(FalsePositiveReport),
     CopyReportRequested,
     ExportReportRequested,
-    NewScanRequested,
+    ResultsDismissRequested,
 }
 
 #[derive(Debug)]
 pub enum ScanResultsSectionOutput {
     QuarantineEntriesChanged,
-    NewScanRequested,
+    ResultsDismissRequested,
     ToastRequested(String),
 }
 
@@ -298,7 +304,7 @@ impl ScanResultsSection {
 
 #[relm4::component(pub)]
 impl Component for ScanResultsSection {
-    type Init = QuarantineVault;
+    type Init = ScanResultsSectionInit;
     type Input = ScanResultsSectionInput;
     type Output = ScanResultsSectionOutput;
     type CommandOutput = ScanResultsSectionCommand;
@@ -352,8 +358,8 @@ impl Component for ScanResultsSection {
                 },
 
                 gtk::Button {
-                    set_label: &gettext("New Scan"),
-                    connect_clicked => ScanResultsSectionInput::NewScanRequested,
+                    set_label: &model.dismiss_label,
+                    connect_clicked => ScanResultsSectionInput::ResultsDismissRequested,
                 },
 
 
@@ -386,11 +392,16 @@ impl Component for ScanResultsSection {
     }
 
     fn init(
-        quarantine_vault: QuarantineVault,
+        section_init: ScanResultsSectionInit,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let ScanResultsSectionInit {
+            quarantine_vault,
+            dismiss_label,
+        } = section_init;
         let model = Self {
+            dismiss_label,
             results_view: ScanResultsView::empty_results(),
             results_generation: 0,
             quarantine_vault,
@@ -538,8 +549,8 @@ impl Component for ScanResultsSection {
                     gettext("Results copied to clipboard"),
                 ));
             }
-            ScanResultsSectionInput::NewScanRequested => {
-                let _page_closed = sender.output(ScanResultsSectionOutput::NewScanRequested);
+            ScanResultsSectionInput::ResultsDismissRequested => {
+                let _page_closed = sender.output(ScanResultsSectionOutput::ResultsDismissRequested);
             }
             ScanResultsSectionInput::ExportReportRequested => {
                 let exported_report = format_scan_report(&self.results_view);

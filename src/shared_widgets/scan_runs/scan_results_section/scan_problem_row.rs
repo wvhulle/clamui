@@ -8,7 +8,7 @@ use relm4::{
 
 use crate::{
     host_services::clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-    scans::manual_scan_page::scan_results_section::scan_results_state::{
+    shared_widgets::scan_runs::scan_results_section::scan_results_state::{
         ProblemPathGroup, ScanResultsView,
     },
 };

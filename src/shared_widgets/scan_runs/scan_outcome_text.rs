@@ -3,53 +3,24 @@ use std::path::Path;
 use gettextrs::{gettext, ngettext};
 
 use crate::{
-    host_services::{
-        clamav_programs::trusted_program_lookup::ProgramLocation,
-        clamav_scanner::{
-            scan_progress_events::{
-                CompletedScanOutcome, ScanProblem, ThreatFindings, UnscannedFileCause,
-            },
-            scan_target_enumeration::ScanTargetFailure,
-            scanner_command_builder::ScannerProgramPaths,
-            scanner_output_parser::{
-                ScanFailureReason, ScanNotice, sanitize_scanner_line, sanitize_scanner_text,
-            },
+    host_services::clamav_scanner::{
+        scan_progress_events::{
+            CompletedScanOutcome, ScanProblem, ThreatFindings, UnscannedFileCause,
+        },
+        scan_target_enumeration::ScanTargetFailure,
+        scanner_output_parser::{
+            ScanFailureReason, ScanNotice, sanitize_scanner_line, sanitize_scanner_text,
         },
     },
-    scans::manual_scan_page::{
-        scan_page_state::ScanEnding,
-        scan_results_section::scan_results_state::{ProblemPathGroup, ScanResultsStatus},
-    },
     shared_widgets::{
+        scan_runs::{
+            scan_results_section::scan_results_state::{ProblemPathGroup, ScanResultsStatus},
+            scan_run_progress::ScanEnding,
+        },
         scanner_exit_text::abnormal_scanner_exit_text,
         scanner_start_failure_text::describe_start_failure,
     },
 };
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScannerProgramTrust {
-    ProgramsTrusted,
-    ReplaceableProgramRefused,
-}
-
-pub fn scanner_program_trust(scanner_programs: &ScannerProgramPaths) -> ScannerProgramTrust {
-    let program_refused = [
-        &scanner_programs.clamdscan_program,
-        &scanner_programs.clamscan_program,
-    ]
-    .into_iter()
-    .any(|program_location| {
-        matches!(
-            program_location,
-            ProgramLocation::OnlyReplaceableCandidates { .. }
-        )
-    });
-    if program_refused {
-        ScannerProgramTrust::ReplaceableProgramRefused
-    } else {
-        ScannerProgramTrust::ProgramsTrusted
-    }
-}
 
 fn describe_target_failure(target_failure: &ScanTargetFailure) -> String {
     match target_failure {

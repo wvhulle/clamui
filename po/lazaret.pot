@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 11:06+0100\n"
+"POT-Creation-Date: 2026-11-07 11:18+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -32,8 +32,8 @@ msgid "Detections"
 msgstr ""
 
 #: src/application_window/application_pages.rs:59
-#: src/scans/manual_scan_page/scan_page_component.rs:363
-#: src/scans/manual_scan_page/scan_page_component.rs:629
+#: src/scans/manual_scan_page/scan_page_component.rs:354
+#: src/scans/manual_scan_page/scan_page_component.rs:521
 msgid "Scan"
 msgstr ""
 
@@ -45,8 +45,8 @@ msgstr ""
 #: src/application_window/sidebar_area_status.rs:92
 #: src/findings/detections_page/incident_timeline_presentation.rs:44
 #: src/findings/quarantine_page/quarantine_entries_page.rs:620
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:222
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:209
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:222
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:215
 msgid "Quarantine"
 msgstr ""
 
@@ -145,7 +145,7 @@ msgstr ""
 
 #: src/application_window/settings_navigation.rs:87
 #: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:41
-#: src/scans/manual_scan_page/scan_page_component.rs:1121
+#: src/scans/manual_scan_page/scan_page_component.rs:1016
 msgid "Device Auto-Scan"
 msgstr ""
 
@@ -577,11 +577,11 @@ msgstr ""
 #: src/findings/quarantine_page/quarantine_entries_page.rs:125
 #: src/findings/quarantine_page/quarantine_entries_page.rs:436
 #: src/logs_page/activity_logs_page.rs:176
-#: src/scans/manual_scan_page/scan_page_component.rs:707
+#: src/scans/manual_scan_page/scan_page_component.rs:599
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:205
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:449
 #: src/shared_widgets/false_positive_report_dialog.rs:76
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:211
 #: src/shared_widgets/trust_confirmation_dialog.rs:113
 #: src/signatures/database_updates_page/database_updates_presentation.rs:57
 msgid "Cancel"
@@ -973,7 +973,7 @@ msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entries_page.rs:208
 #: src/host_services/clamav_programs/false_positive_submission.rs:184
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:130
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:136
 #, rust-format
 msgid "The report was not sent: {error}"
 msgstr ""
@@ -1092,7 +1092,7 @@ msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entries_page.rs:627
 #: src/scans/manual_scan_page/scan_options_section.rs:107
-#: src/scans/manual_scan_page/scan_page_component.rs:652
+#: src/scans/manual_scan_page/scan_page_component.rs:544
 msgid "More"
 msgstr ""
 
@@ -1180,7 +1180,7 @@ msgstr[1] ""
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:118
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:206
 #: src/protection_page/protection_timeline_page.rs:281
-#: src/scans/manual_scan_page/scan_page_component.rs:314
+#: src/scans/manual_scan_page/scan_page_component.rs:305
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:114
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
 #: src/shared_widgets/service_log/service_log_state.rs:51
@@ -1281,8 +1281,8 @@ msgid "Firewall services could not be listed without systemd."
 msgstr ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:149
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:133
-#: src/scans/manual_scan_page/scan_run_state.rs:169
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:140
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:133
 #, rust-format
 msgid "{count} threat found"
 msgid_plural "{count} threats found"
@@ -1301,8 +1301,8 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:230
-#: src/scans/manual_scan_page/scan_page_component.rs:567
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:105
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:105
+#: src/shared_widgets/scan_runs/scan_run_start.rs:159
 msgid "Threats Detected"
 msgstr ""
 
@@ -1933,7 +1933,7 @@ msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:228
 #: src/protection_page/protection_timeline_presentation.rs:78
-#: src/scans/manual_scan_page/scan_page_component.rs:253
+#: src/scans/manual_scan_page/scan_page_component.rs:244
 msgid "Review"
 msgstr ""
 
@@ -2241,185 +2241,189 @@ msgstr ""
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:147
+#: src/scans/manual_scan_page/scan_page_component.rs:138
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:273
+#: src/scans/manual_scan_page/scan_page_component.rs:264
 msgid "No Profile (Manual)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:316
+#: src/scans/manual_scan_page/scan_page_component.rs:307
 #, rust-format
 msgid "Backend: unknown, the scanner programs could not be looked up: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:320
+#: src/scans/manual_scan_page/scan_page_component.rs:311
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:323
+#: src/scans/manual_scan_page/scan_page_component.rs:314
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:364
-#: src/scans/manual_scan_page/scan_progress_view.rs:39
+#: src/scans/manual_scan_page/scan_page_component.rs:355
+#: src/shared_widgets/scan_runs/scan_progress_view.rs:39
 msgid "Preparing…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:368
+#: src/scans/manual_scan_page/scan_page_component.rs:359
 msgid "Cancelling…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:375
+#: src/scans/manual_scan_page/scan_page_component.rs:366
 #, rust-format
 msgid "Scanning {name}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:378
+#: src/scans/manual_scan_page/scan_page_component.rs:369
 #, rust-format
 msgid "Scanning {count} location"
 msgid_plural "Scanning {count} locations"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:387
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:108
+#: src/scans/manual_scan_page/scan_page_component.rs:378
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:61
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:108
 msgid "Scan cancelled by user"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:391
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:160
+#: src/scans/manual_scan_page/scan_page_component.rs:382
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:160
 msgid "Threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:396
-#: src/scans/manual_scan_page/scan_page_component.rs:569
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:107
+#: src/scans/manual_scan_page/scan_page_component.rs:387
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:60
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:107
+#: src/shared_widgets/scan_runs/scan_run_start.rs:161
 msgid "The scan did not finish cleanly"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:398
-#: src/scans/manual_scan_page/scan_page_component.rs:568
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:106
+#: src/scans/manual_scan_page/scan_page_component.rs:389
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:59
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:106
+#: src/shared_widgets/scan_runs/scan_run_start.rs:160
 msgid "No threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:612
+#: src/scans/manual_scan_page/scan_page_component.rs:504
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:636
+#: src/scans/manual_scan_page/scan_page_component.rs:528
 msgid "Add Files"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:644
+#: src/scans/manual_scan_page/scan_page_component.rs:536
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:213
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:336
 msgid "Add Folder"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:661
+#: src/scans/manual_scan_page/scan_page_component.rs:553
 msgid "Run EICAR Test"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:672
+#: src/scans/manual_scan_page/scan_page_component.rs:564
 msgid "Copy Results"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:683
+#: src/scans/manual_scan_page/scan_page_component.rs:575
 msgid "Export Results…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:697
+#: src/scans/manual_scan_page/scan_page_component.rs:589
 msgid "Start Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:718
+#: src/scans/manual_scan_page/scan_page_component.rs:610
 msgid "Lazaret refuses a ClamAV program that your account could replace"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:719
+#: src/scans/manual_scan_page/scan_page_component.rs:611
 msgid "Details"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:763
+#: src/scans/manual_scan_page/scan_page_component.rs:655
 msgid "Scan Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:768
+#: src/scans/manual_scan_page/scan_page_component.rs:660
 msgid "Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:783
+#: src/scans/manual_scan_page/scan_page_component.rs:675
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:218
 msgid "Manage Profiles"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:792
+#: src/scans/manual_scan_page/scan_page_component.rs:684
 msgid "Scan Targets"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:815
+#: src/scans/manual_scan_page/scan_page_component.rs:707
 msgid "Drop files or folders to scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:824
+#: src/scans/manual_scan_page/scan_page_component.rs:716
 msgid "Add Files…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:830
+#: src/scans/manual_scan_page/scan_page_component.rs:722
 msgid "Add Folder…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:840
+#: src/scans/manual_scan_page/scan_page_component.rs:732
 msgid "System scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:848
+#: src/scans/manual_scan_page/scan_page_component.rs:740
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:224
 msgid "Folders scanned"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:854
+#: src/scans/manual_scan_page/scan_page_component.rs:746
 msgid "Run Now"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:861
+#: src/scans/manual_scan_page/scan_page_component.rs:753
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:870
+#: src/scans/manual_scan_page/scan_page_component.rs:762
 msgid "Found so far"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1015
+#: src/scans/manual_scan_page/scan_page_component.rs:884
+msgid "New Scan"
+msgstr ""
+
+#: src/scans/manual_scan_page/scan_page_component.rs:910
 msgid "Recent scans"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1017
+#: src/scans/manual_scan_page/scan_page_component.rs:912
 msgid ""
 "Scans started from Lazaret, newest first. Select one to read its transcript."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1020
+#: src/scans/manual_scan_page/scan_page_component.rs:915
 msgid "No scans were started from Lazaret yet"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1053
+#: src/scans/manual_scan_page/scan_page_component.rs:948
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1061
+#: src/scans/manual_scan_page/scan_page_component.rs:956
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1123
+#: src/scans/manual_scan_page/scan_page_component.rs:1018
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
@@ -2590,260 +2594,6 @@ msgstr ""
 #: src/scans/manual_scan_page/scan_profiles_dialog/scan_profile_row.rs:106
 #: src/shared_widgets/awaited_dialogs.rs:133
 msgid "Export"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_progress_view.rs:43
-#, rust-format
-msgid "Finding files… {count} found"
-msgid_plural "Finding files… {count} found"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:66
-msgid "Trust This File…"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:71
-msgid "Ignore This Detection Everywhere…"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:77
-msgid "Report False Positive…"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:83
-msgid "Skip This Path in Lazaret Scans"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:86
-msgid "Copy Path"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:150
-msgid "Critical"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:151
-msgid "High"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:152
-msgid "Medium"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:153
-msgid "Low"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:173
-#, rust-format
-msgid ""
-"Moved to quarantine: {path}. Check its reputation on the Quarantine page."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:233
-msgid "More Actions"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_problem_row.rs:80
-#, rust-format
-msgid "{count} more file, listed in the exported report"
-msgid_plural "{count} more files, listed in the exported report"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_problem_row.rs:95
-msgid "Scan details"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:140
-msgid "report it from the Quarantine page"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:184
-#, rust-format
-msgid "Quarantine {count} Threat"
-msgid_plural "Quarantine {count} Threats"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:199
-msgid "Move to Quarantine?"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:202
-msgid "This removes each original file from its current location."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:355
-msgid "New Scan"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:363
-msgid "Detected Threats"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:375
-msgid "Problems"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:420
-#, rust-format
-msgid "Move '{path}' to quarantine?"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:438
-#, rust-format
-msgid "Move {count} detected file to quarantine?"
-msgid_plural "Move {count} detected files to quarantine?"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:453
-msgid "Path copied to clipboard"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:464
-msgid "This file will be skipped in future scans"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:466
-msgid "This exclusion already exists"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:538
-msgid "Results copied to clipboard"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:620
-msgid "Results exported"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:67
-#, rust-format
-msgid "{done} of {total} file scanned"
-msgid_plural "{done} of {total} files scanned"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:75
-#: src/scans/manual_scan_page/scan_run_state.rs:176
-#, rust-format
-msgid "{count} file scanned"
-msgid_plural "{count} files scanned"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:83
-#, rust-format
-msgid "{count} entry skipped by exclusions"
-msgid_plural "{count} entries skipped by exclusions"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:145
-msgid "Files scanned"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:150
-msgid "Files planned"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:155
-msgid "Directories"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:203
-msgid ""
-"The file is no longer there. If it is in quarantine, trust it from the "
-"Quarantine page."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:207
-msgid ""
-"The file can't be read, possibly because on-access scanning blocks it. Move "
-"it to quarantine, then trust it from the Quarantine page."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:210
-#, rust-format
-msgid "The file could not be read: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:57
-msgid "Scan target does not exist or contains an invalid NUL byte"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:60
-msgid "Scan target is not a regular file or directory"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:65
-#, rust-format
-msgid "Unable to enumerate scan target {path}: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:72
-#, rust-format
-msgid "Unable to write private clamd file list: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:76
-msgid "Listing the scan target stopped unexpectedly."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:84
-msgid "No files could be scanned"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:107
-#, rust-format
-msgid "{count} file was not scanned"
-msgid_plural "{count} files were not scanned"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:117
-msgid "The connection to clamd was lost during the scan."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:120
-msgid "The scanner did not report a result for these files."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:142
-#: src/scans/manual_scan_page/scan_run_state.rs:242
-#, rust-format
-msgid "{count} file could not be accessed"
-msgid_plural "{count} files could not be accessed"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:148
-#, rust-format
-msgid "{count} file could not be read"
-msgid_plural "{count} files could not be read"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:154
-#, rust-format
-msgid ""
-"{count} non-fatal warning during scan; some files may have been only "
-"partially scanned"
-msgid_plural ""
-"{count} non-fatal warnings during scan; some files may have been only "
-"partially scanned"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:247
-msgid "ClamAV could not open these files."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:260
-#: src/shared_widgets/activity_entries/activity_export_formats.rs:48
-msgid "The scanner reported a threat without naming the file."
 msgstr ""
 
 #: src/scans/manual_scan_page/system_scan_run.rs:133
@@ -3545,6 +3295,11 @@ msgid_plural "Found {count} threats"
 msgstr[0] ""
 msgstr[1] ""
 
+#: src/shared_widgets/activity_entries/activity_export_formats.rs:48
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:231
+msgid "The scanner reported a threat without naming the file."
+msgstr ""
+
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:63
 msgid "Scheduled scan skipped (on battery power)"
 msgstr ""
@@ -4135,6 +3890,251 @@ msgstr ""
 
 #: src/shared_widgets/quarantine_failure_text.rs:94
 msgid "A path stored in the quarantine database could not be read"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:28
+msgid "Scan target does not exist or contains an invalid NUL byte"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:31
+msgid "Scan target is not a regular file or directory"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:36
+#, rust-format
+msgid "Unable to enumerate scan target {path}: {error}"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:43
+#, rust-format
+msgid "Unable to write private clamd file list: {error}"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:47
+msgid "Listing the scan target stopped unexpectedly."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:55
+msgid "No files could be scanned"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:78
+#, rust-format
+msgid "{count} file was not scanned"
+msgid_plural "{count} files were not scanned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:88
+msgid "The connection to clamd was lost during the scan."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:91
+msgid "The scanner did not report a result for these files."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:113
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:213
+#, rust-format
+msgid "{count} file could not be accessed"
+msgid_plural "{count} files could not be accessed"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:119
+#, rust-format
+msgid "{count} file could not be read"
+msgid_plural "{count} files could not be read"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:125
+#, rust-format
+msgid ""
+"{count} non-fatal warning during scan; some files may have been only "
+"partially scanned"
+msgid_plural ""
+"{count} non-fatal warnings during scan; some files may have been only "
+"partially scanned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:147
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:75
+#, rust-format
+msgid "{count} file scanned"
+msgid_plural "{count} files scanned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_outcome_text.rs:218
+msgid "ClamAV could not open these files."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_progress_view.rs:43
+#, rust-format
+msgid "Finding files… {count} found"
+msgid_plural "Finding files… {count} found"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:66
+msgid "Trust This File…"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:71
+msgid "Ignore This Detection Everywhere…"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:77
+msgid "Report False Positive…"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:83
+msgid "Skip This Path in Lazaret Scans"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:86
+msgid "Copy Path"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:150
+msgid "Critical"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:151
+msgid "High"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:152
+msgid "Medium"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:153
+msgid "Low"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:173
+#, rust-format
+msgid ""
+"Moved to quarantine: {path}. Check its reputation on the Quarantine page."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:233
+msgid "More Actions"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_problem_row.rs:80
+#, rust-format
+msgid "{count} more file, listed in the exported report"
+msgid_plural "{count} more files, listed in the exported report"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_problem_row.rs:95
+msgid "Scan details"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:146
+msgid "report it from the Quarantine page"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:190
+#, rust-format
+msgid "Quarantine {count} Threat"
+msgid_plural "Quarantine {count} Threats"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:205
+msgid "Move to Quarantine?"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:208
+msgid "This removes each original file from its current location."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:369
+msgid "Detected Threats"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:381
+msgid "Problems"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:431
+#, rust-format
+msgid "Move '{path}' to quarantine?"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:449
+#, rust-format
+msgid "Move {count} detected file to quarantine?"
+msgid_plural "Move {count} detected files to quarantine?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:464
+msgid "Path copied to clipboard"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:475
+msgid "This file will be skipped in future scans"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:477
+msgid "This exclusion already exists"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:549
+msgid "Results copied to clipboard"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:631
+msgid "Results exported"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:67
+#, rust-format
+msgid "{done} of {total} file scanned"
+msgid_plural "{done} of {total} files scanned"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:83
+#, rust-format
+msgid "{count} entry skipped by exclusions"
+msgid_plural "{count} entries skipped by exclusions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:145
+msgid "Files scanned"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:150
+msgid "Files planned"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:155
+msgid "Directories"
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:203
+msgid ""
+"The file is no longer there. If it is in quarantine, trust it from the "
+"Quarantine page."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:207
+msgid ""
+"The file can't be read, possibly because on-access scanning blocks it. Move "
+"it to quarantine, then trust it from the Quarantine page."
+msgstr ""
+
+#: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:210
+#, rust-format
+msgid "The file could not be read: {error}"
 msgstr ""
 
 #: src/shared_widgets/scanner_exit_text.rs:8

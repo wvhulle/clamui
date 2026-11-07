@@ -9,6 +9,7 @@ pub mod journal_follow_failure_text;
 pub mod loading_indicators;
 pub mod page_widget_templates;
 pub mod quarantine_failure_text;
+pub mod scan_runs;
 pub mod scanner_exit_text;
 pub mod scanner_start_failure_text;
 pub mod service_log;

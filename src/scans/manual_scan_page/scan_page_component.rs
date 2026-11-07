@@ -1,8 +1,6 @@
 use std::{path::PathBuf, time::Instant};
 
-use futures::{StreamExt, future::ready, stream};
 use gettextrs::{gettext, ngettext};
-use jiff::Timestamp;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmWidgetExt,
     abstractions::Toaster,
@@ -20,26 +18,19 @@ use crate::{
     },
     host_services::{
         activity_history::activity_history_database::{
-            ActivityHistory, ActivityHistoryFailure, ActivityRecord, FoundThreatCount,
-            NewActivityEntry, ScanActivityStatus, ScanOrigin,
+            ActivityHistory, ActivityHistoryFailure, ScanOrigin,
         },
-        clamav_config::detection_options::read_host_clamscan_detection_arguments,
         clamav_scanner::{
-            scan_exclusion_rules::ScanExclusions,
             scan_progress_estimates::file_progress_text,
-            scan_progress_events::{ScanProgressEvent, ScanRequest, scan_progress_events},
+            scan_progress_events::ScanProgressEvent,
             scanner_command_builder::{
                 ProgramLookupFailure, ScannerBackend, ScannerProgramPaths, choose_scanner_backend,
             },
             scanner_output_parser::sanitize_scanner_line,
-            scanner_process_events::ScanStartFailure,
         },
         desktop::{
             desktop_notifications::notify_outside_the_window,
-            stored_settings::{
-                SHOW_LIVE_PROGRESS_KEY, application_settings, read_exclusion_entries,
-                scanner_backend_preference,
-            },
+            stored_settings::{application_settings, scanner_backend_preference},
             stored_settings_watch::forward_setting_changes,
         },
         protection_evidence::host_protection_evidence::{
@@ -60,13 +51,8 @@ use crate::{
         },
         eicar_test_file::{EicarTestFileFailure, written_eicar_test_file},
         exclusions_page::scan_exclusions_page::ScanExclusionsSection,
-        found_threat_row::FoundThreatRow,
         scan_options_section::ScanOptionsSection,
-        scan_page_state::{
-            CancelRequest, CurrentFileDisplay, FinishedScan, LiveProgress, RunningScan, ScanEnding,
-            ScanPageState, ScanRun, ScanRunNumber, ScanStartPermission, ScanStartPermit,
-            ScanStreamEnding, TemporaryScanTarget,
-        },
+        scan_page_state::{ScanPageState, ScanStartPermission, ScanStartPermit},
         scan_profile_selection::{ProfileChoiceRow, ScanProfileChoice, TargetRowsChange},
         scan_profiles_dialog::{
             profile_display_text::{describe_profile_store_failure, displayed_profile_name},
@@ -76,18 +62,8 @@ use crate::{
                 run_blocking_profile_task,
             },
         },
-        scan_progress_view::ScanProgressBar,
-        scan_results_section::{
-            scan_results_component::{
-                ScanResultsSection, ScanResultsSectionInput, ScanResultsSectionOutput,
-            },
-            scan_results_state::{ScanResultsStatus, ScanResultsView},
-        },
-        scan_run_state::{
-            ScannerProgramTrust, problem_path_groups, results_status, scan_summary_text,
-            scan_target_name, scanner_program_trust, unlisted_notice_lines,
-        },
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
+        scanner_program_trust::{ScannerProgramTrust, scanner_program_trust},
         system_scan_run::{
             SystemScanControl, SystemScanStart, scan_found_threats, unit_run_toast_text,
         },
@@ -100,12 +76,27 @@ use crate::{
             },
         },
         awaited_dialogs::{chosen_files_to_open, chosen_folders_to_open, deliver_local_outcome},
-        component_streams::run_stream_then,
         loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
+        scan_runs::{
+            found_threat_row::FoundThreatRow,
+            scan_outcome_text::scan_target_name,
+            scan_progress_view::ScanProgressBar,
+            scan_results_section::scan_results_component::{
+                ScanResultsSection, ScanResultsSectionInit, ScanResultsSectionInput,
+                ScanResultsSectionOutput,
+            },
+            scan_run_progress::{
+                CancelRequest, FinishedScan, RunningScan, ScanEnding, ScanRunNumber,
+                ScanStreamEnding, TemporaryScanTarget,
+            },
+            scan_run_start::{
+                ScanRunCommands, ScanRunRequest, finished_results_view, finished_scan_activity,
+                notify_finished_scan, start_scan_run,
+            },
+        },
     },
 };
 
-const PROGRESS_BATCH_SIZE: usize = 256;
 const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
 
 enum ProfileManagerView {
@@ -477,128 +468,29 @@ impl ScanPage {
         let scan_run_number = self.next_scan_run_number;
         self.next_scan_run_number = scan_run_number.following_run();
         self.found_threat_rows.guard().clear();
-        let settings = application_settings();
-        let current_file_display = if settings.boolean(SHOW_LIVE_PROGRESS_KEY) {
-            CurrentFileDisplay::ShowCurrentFile
-        } else {
-            CurrentFileDisplay::HideCurrentFile
-        };
-        let scan_exclusions = ScanExclusions::from_entries(
-            &read_exclusion_entries(&settings)
-                .into_iter()
-                .chain(self.profile_choice.selected_exclusion_entries())
-                .collect::<Vec<_>>(),
-            &glib::home_dir(),
-        );
-        let backend_preference = scanner_backend_preference(&settings);
-        let file_list_directory = self.file_list_directory.clone();
-        let started_instant = Instant::now();
-        let scan_run = ScanRun::starting(
-            scan_run_number,
-            scan_targets.clone(),
-            Timestamp::now(),
-            started_instant,
-        );
-        let scan_events = stream::once(async move {
-            let scanner_programs =
-                ScannerProgramPaths::locate_trusted_programs_in_background().await?;
-            let scanner_backend =
-                choose_scanner_backend(backend_preference, &scanner_programs).await;
-            let detection_arguments = read_host_clamscan_detection_arguments().await?;
-            Ok::<ScanRequest, ScanStartFailure>(ScanRequest {
-                scan_exclusions,
-                scan_targets,
-                scanner_backend,
-                scanner_programs,
-                file_list_directory,
-                detection_arguments,
-            })
-        })
-        .flat_map(|scan_request| match scan_request {
-            Ok(scan_request) => scan_progress_events(scan_request).left_stream(),
-            Err(start_failure) => stream::once(ready(ScanProgressEvent::ScanPhaseUnstartable(
-                start_failure,
-            )))
-            .right_stream(),
-        });
-        let scan_stream = run_stream_then(
+        let running_scan = start_scan_run(
             sender,
-            scan_events
-                .ready_chunks(PROGRESS_BATCH_SIZE)
-                .map(
-                    move |progress_batch| ScanPageCommand::ProgressBatchArrived {
+            ScanRunRequest {
+                scan_run_number,
+                scan_targets,
+                extra_exclusion_entries: self.profile_choice.selected_exclusion_entries(),
+                file_list_directory: self.file_list_directory.clone(),
+                temporary_scan_target,
+            },
+            ScanRunCommands {
+                progress_command: |scan_run_number, progress_batch| {
+                    ScanPageCommand::ProgressBatchArrived {
                         scan_run_number,
                         progress_batch,
-                    },
-                ),
-            ScanPageCommand::ScanStreamFinished { scan_run_number },
+                    }
+                },
+                finished_command: |scan_run_number| ScanPageCommand::ScanStreamFinished {
+                    scan_run_number,
+                },
+            },
         );
-        self.scan_page_state.begin_scan_run(
-            start_permit,
-            RunningScan::started(
-                scan_run,
-                scan_stream,
-                LiveProgress::starting(current_file_display, started_instant),
-                temporary_scan_target,
-            ),
-        );
-    }
-}
-
-fn finished_results_view(finished_scan: &FinishedScan) -> ScanResultsView {
-    let scan_outcome = &finished_scan.scan_run.scan_outcome;
-    ScanResultsView {
-        results_status: results_status(scan_outcome, finished_scan.scan_ending),
-        inspected_file_count: scan_outcome.inspected_file_count,
-        planned_file_count: scan_outcome.planned_file_count,
-        scanned_directory_count: scan_outcome.scanned_directory_count,
-        excluded_entry_count: scan_outcome.excluded_entry_count,
-        elapsed_time: finished_scan.elapsed_time,
-        detected_threats: scan_outcome.threat_findings.attributed_threats().to_vec(),
-        problem_path_groups: problem_path_groups(scan_outcome),
-        notice_lines: unlisted_notice_lines(scan_outcome),
-        noteworthy_output: scan_outcome.noteworthy_output.clone(),
-    }
-}
-
-fn notify_finished_scan(finished_scan: &FinishedScan) {
-    let scan_outcome = &finished_scan.scan_run.scan_outcome;
-    let notification_title = match results_status(scan_outcome, finished_scan.scan_ending) {
-        ScanResultsStatus::ThreatsDetected => gettext("Threats Detected"),
-        ScanResultsStatus::NoThreatsDetected => gettext("No threats found"),
-        ScanResultsStatus::FinishedWithProblems => gettext("The scan did not finish cleanly"),
-        ScanResultsStatus::ScanCancelled => return,
-    };
-    notify_outside_the_window(
-        "scan-finished",
-        &notification_title,
-        &scan_summary_text(scan_outcome),
-    );
-}
-
-fn finished_scan_activity(finished_scan: &FinishedScan) -> NewActivityEntry {
-    let scan_run = &finished_scan.scan_run;
-    let scan_outcome = &scan_run.scan_outcome;
-    let scan_status = match FoundThreatCount::from_findings(&scan_outcome.threat_findings) {
-        Some(found_threats) => ScanActivityStatus::ScanInfected { found_threats },
-        None => match finished_scan.scan_ending {
-            ScanEnding::ScanCancelled => ScanActivityStatus::ScanCancelled,
-            ScanEnding::ScanCompleted if scan_outcome.scan_problems.is_empty() => {
-                ScanActivityStatus::ScanClean
-            }
-            ScanEnding::ScanCompleted => ScanActivityStatus::ScanFailed,
-        },
-    };
-    NewActivityEntry {
-        started_at: scan_run.started_at,
-        activity_record: ActivityRecord::ScanActivity {
-            scan_targets: scan_run.scan_targets.clone(),
-            inspected_file_count: scan_outcome.inspected_file_count,
-            scan_status,
-            scan_origin: ScanOrigin::ManualScan,
-        },
-        duration_millis: finished_scan.elapsed_time.as_millis() as u64,
-        activity_output: scan_run.scan_outcome.noteworthy_output.clone(),
+        self.scan_page_state
+            .begin_scan_run(start_permit, running_scan);
     }
 }
 
@@ -987,14 +879,17 @@ impl Component for ScanPage {
                 .launch(gtk::ListBox::default())
                 .detach(),
             scan_results_section: ScanResultsSection::builder()
-                .launch(page_init.quarantine_vault)
+                .launch(ScanResultsSectionInit {
+                    quarantine_vault: page_init.quarantine_vault,
+                    dismiss_label: gettext("New Scan"),
+                })
                 .forward(
                     sender.input_sender(),
                     |section_output| match section_output {
                         ScanResultsSectionOutput::QuarantineEntriesChanged => {
                             ScanPageInput::QuarantineEntriesChanged
                         }
-                        ScanResultsSectionOutput::NewScanRequested => {
+                        ScanResultsSectionOutput::ResultsDismissRequested => {
                             ScanPageInput::NewScanRequested
                         }
                         ScanResultsSectionOutput::ToastRequested(toast_message) => {
@@ -1265,7 +1160,8 @@ impl Component for ScanPage {
                             .emit(ScanResultsSectionInput::ResultsShown(
                                 finished_results_view(finished_scan),
                             ));
-                        let new_entry = finished_scan_activity(finished_scan);
+                        let new_entry =
+                            finished_scan_activity(finished_scan, ScanOrigin::ManualScan);
                         notify_finished_scan(finished_scan);
                         let activity_history = self.activity_history.clone();
                         sender.oneshot_command(async move {
