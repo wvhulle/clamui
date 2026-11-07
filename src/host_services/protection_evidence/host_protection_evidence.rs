@@ -1,6 +1,12 @@
-use std::{convert::Infallible, fs, io, path::Path};
+use std::{fs, io, path::Path};
 
 use bytesize::ByteSize;
+use clamd_configuration::{
+    clamd_conf_format::config_lines::ClamdConfigLines,
+    merged_clamd_config::tunable_settings_in,
+    setting_kinds::limit_in_units,
+    tunable_record::{BaseSettings, LiveOverrides},
+};
 use futures::future::join_all;
 use jiff::Timestamp;
 use relm4::gtk::gio::prelude::SettingsExt;
@@ -11,12 +17,11 @@ use crate::{
         TrustListReading, read_configured_trust_list,
     },
     host_services::{
-        clamav_admin_service::protection_change_rules::{
-            ValuesInEffect, limit_in_units, protection_reduction,
+        clamav_admin_service::live_settings_client::{
+            BASE_CLAMD_CONFIG_PATH, LIVE_OVERRIDES_PATH, StoredOverridesFailure,
+            read_stored_overrides,
         },
-        clamav_config::clamav_host_config::{
-            ConfigSetting, HostConfigView, parse_config_settings, read_clamd_config,
-        },
+        clamav_config::clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
         clamav_programs::{
             component_availability::{
                 ProbeFailure, ProgramProbe, located_clamd_answers_ping,
@@ -445,9 +450,6 @@ pub enum ProgramTrustFinding {
     },
 }
 
-const RUNTIME_OVERRIDES_PATH: &str = "/var/lib/lazaret/clamd-overrides.conf";
-const BASE_CLAMD_CONFIG_PATH: &str = "/etc/clamav/clamd.conf";
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReducedSetting {
     pub setting_key: String,
@@ -469,8 +471,8 @@ pub enum OverridesChangeTime {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum OverridesReadFailure {
-    #[error("the runtime overrides file could not be read: {failure_kind}")]
-    OverridesFileUnreadable { failure_kind: io::ErrorKind },
+    #[error(transparent)]
+    StoredOverridesUnusable(#[from] StoredOverridesFailure),
     #[error("the task reading the runtime overrides stopped before it finished")]
     ReadingTaskInterrupted,
 }
@@ -489,43 +491,6 @@ pub enum RuntimeReductions {
     },
 }
 
-fn values_for_key(config_settings: &[ConfigSetting], setting_key: &str) -> Vec<String> {
-    config_settings
-        .iter()
-        .filter(|config_setting| config_setting.setting_key == setting_key)
-        .map(|config_setting| config_setting.setting_value.clone())
-        .collect()
-}
-
-pub fn reduced_settings(
-    base_settings: &[ConfigSetting],
-    override_settings: &[ConfigSetting],
-) -> Vec<ReducedSetting> {
-    let mut overridden_keys = override_settings
-        .iter()
-        .map(|override_setting| override_setting.setting_key.clone())
-        .collect::<Vec<_>>();
-    overridden_keys.dedup();
-    overridden_keys
-        .into_iter()
-        .filter_map(|setting_key| {
-            let base_values = values_for_key(base_settings, &setting_key);
-            let changed_values = values_for_key(override_settings, &setting_key);
-            protection_reduction(
-                &setting_key,
-                &ValuesInEffect::<Infallible>::from_config_values(base_values.clone()),
-                &changed_values,
-            )
-            .weakens_protection()
-            .then(|| ReducedSetting {
-                base_value: sanitize_scanner_line(&base_values.join(", ")),
-                changed_value: sanitize_scanner_line(&changed_values.join(", ")),
-                setting_key: sanitize_scanner_line(&setting_key),
-            })
-        })
-        .collect()
-}
-
 fn overrides_change_time(overrides_path: &Path) -> OverridesChangeTime {
     fs::metadata(overrides_path)
         .and_then(|overrides_metadata| overrides_metadata.modified())
@@ -536,49 +501,73 @@ fn overrides_change_time(overrides_path: &Path) -> OverridesChangeTime {
         })
 }
 
-pub fn runtime_reductions_against_base(
-    base_settings: &[ConfigSetting],
-    override_settings: &[ConfigSetting],
-    change_time: OverridesChangeTime,
-) -> RuntimeReductions {
-    let reduced_settings = reduced_settings(base_settings, override_settings);
-    if reduced_settings.is_empty() {
-        RuntimeReductions::NothingReduced
-    } else {
-        RuntimeReductions::SettingsReduced {
-            change_time,
-            reduced_settings,
-        }
+fn config_lines_in(config_text: &str) -> ClamdConfigLines {
+    match config_text.parse() {
+        Ok(config_lines) => config_lines,
+        Err(never_fails) => match never_fails {},
     }
 }
 
-pub fn runtime_reductions_without_base(
-    override_settings: &[ConfigSetting],
+pub fn runtime_reductions_against(
+    live_overrides: &LiveOverrides,
+    base_text: io::Result<String>,
     change_time: OverridesChangeTime,
-    base_failure_kind: io::ErrorKind,
+    now: Timestamp,
 ) -> RuntimeReductions {
-    let unreadable_base = ValuesInEffect::ConfigUnreadable(base_failure_kind);
-    let overridden_settings = override_settings
-        .iter()
-        .filter(|override_setting| {
-            protection_reduction(
-                &override_setting.setting_key,
-                &unreadable_base,
-                &values_for_key(override_settings, &override_setting.setting_key),
-            )
-            .weakens_protection()
-        })
-        .map(|override_setting| OverriddenSetting {
-            setting_key: sanitize_scanner_line(&override_setting.setting_key),
-            changed_value: sanitize_scanner_line(&override_setting.setting_value),
-        })
-        .collect::<Vec<_>>();
-    if overridden_settings.is_empty() {
-        RuntimeReductions::NothingReduced
-    } else {
-        RuntimeReductions::BaseConfigUnreadable {
-            change_time,
-            overridden_settings,
+    let base_lines = base_text.ok().map(|base_text| config_lines_in(&base_text));
+    let base_settings = base_lines
+        .as_ref()
+        .and_then(|base_lines| tunable_settings_in(base_lines).ok());
+    let weakening_reports = |base_view| {
+        live_overrides
+            .override_reports(base_view, now)
+            .into_iter()
+            .filter(|override_report| override_report.protection_reduction.weakens_protection())
+            .collect::<Vec<_>>()
+    };
+    match (base_lines.as_ref(), base_settings.as_ref()) {
+        (Some(base_lines), Some(base_settings)) => {
+            let reduced_settings = weakening_reports(BaseSettings::ReadableBase(base_settings))
+                .into_iter()
+                .map(|override_report| ReducedSetting {
+                    setting_key: sanitize_scanner_line(override_report.setting_name),
+                    base_value: sanitize_scanner_line(
+                        &base_lines
+                            .values_of(override_report.setting_name)
+                            .join(", "),
+                    ),
+                    changed_value: sanitize_scanner_line(
+                        &override_report.changed_values.join(", "),
+                    ),
+                })
+                .collect::<Vec<_>>();
+            if reduced_settings.is_empty() {
+                RuntimeReductions::NothingReduced
+            } else {
+                RuntimeReductions::SettingsReduced {
+                    change_time,
+                    reduced_settings,
+                }
+            }
+        }
+        (_unreadable_lines, _untyped_settings) => {
+            let overridden_settings = weakening_reports(BaseSettings::UnreadableBase)
+                .into_iter()
+                .map(|override_report| OverriddenSetting {
+                    setting_key: sanitize_scanner_line(override_report.setting_name),
+                    changed_value: sanitize_scanner_line(
+                        &override_report.changed_values.join(", "),
+                    ),
+                })
+                .collect::<Vec<_>>();
+            if overridden_settings.is_empty() {
+                RuntimeReductions::NothingReduced
+            } else {
+                RuntimeReductions::BaseConfigUnreadable {
+                    change_time,
+                    overridden_settings,
+                }
+            }
         }
     }
 }
@@ -587,36 +576,20 @@ pub fn runtime_reductions_in_files(
     overrides_path: &Path,
     base_config_path: &Path,
 ) -> RuntimeReductions {
-    let overrides_text = match fs::read_to_string(overrides_path) {
-        Ok(overrides_text) => overrides_text,
-        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => {
-            return RuntimeReductions::NothingReduced;
-        }
-        Err(read_failure) => {
-            return RuntimeReductions::OverridesUnreadable(
-                OverridesReadFailure::OverridesFileUnreadable {
-                    failure_kind: read_failure.kind(),
-                },
-            );
-        }
-    };
-    let override_settings = parse_config_settings(&overrides_text);
-    let change_time = overrides_change_time(overrides_path);
-    match fs::read_to_string(base_config_path) {
-        Ok(base_text) => runtime_reductions_against_base(
-            &parse_config_settings(&base_text),
-            &override_settings,
-            change_time,
+    match read_stored_overrides(overrides_path) {
+        Ok(live_overrides) => runtime_reductions_against(
+            &live_overrides,
+            fs::read_to_string(base_config_path),
+            overrides_change_time(overrides_path),
+            Timestamp::now(),
         ),
-        Err(unreadable_base) => {
-            runtime_reductions_without_base(&override_settings, change_time, unreadable_base.kind())
-        }
+        Err(stored_failure) => RuntimeReductions::OverridesUnreadable(stored_failure.into()),
     }
 }
 
 fn inspect_runtime_reductions() -> RuntimeReductions {
     runtime_reductions_in_files(
-        &readable_host_path(RUNTIME_OVERRIDES_PATH),
+        &readable_host_path(LIVE_OVERRIDES_PATH),
         &readable_host_path(BASE_CLAMD_CONFIG_PATH),
     )
 }
@@ -1150,26 +1123,36 @@ mod protection_evidence_tests {
         }
     }
 
+    fn stored_overrides(overrides_text: &str) -> LiveOverrides {
+        LiveOverrides::from_toml_text(overrides_text).expect("stored overrides")
+    }
+
+    fn evidence_moment() -> Timestamp {
+        Timestamp::from_second(0).expect("timestamp")
+    }
+
     #[test]
     fn only_overrides_that_weaken_the_base_config_are_reduced_settings() {
-        let base_settings = vec![
-            config_setting("OnAccessPrevention", "yes"),
-            config_setting("MaxThreads", "12"),
-            config_setting("OnAccessIncludePath", "/home"),
-        ];
-        let override_settings = vec![
-            config_setting("OnAccessPrevention", "no"),
-            config_setting("MaxThreads", "2"),
-            config_setting("OnAccessIncludePath", "/home"),
-            config_setting("OnAccessIncludePath", "/srv"),
-        ];
+        let live_overrides = stored_overrides(
+            "[OnAccessPrevention]\nstate = \"temporary-reduction\"\nvalue = false\nexpires_at = \
+             \"1970-01-02T00:00:00Z\"\n\n[MaxThreads]\nstate = \"permanent\"\nvalue = \
+             2\n\n[OnAccessIncludePath]\nstate = \"permanent\"\nvalue = [\"/home\", \"/srv\"]\n",
+        );
         assert_eq!(
-            reduced_settings(&base_settings, &override_settings),
-            vec![ReducedSetting {
-                setting_key: "OnAccessPrevention".to_owned(),
-                base_value: "yes".to_owned(),
-                changed_value: "no".to_owned(),
-            }]
+            runtime_reductions_against(
+                &live_overrides,
+                Ok("OnAccessPrevention yes\nMaxThreads 12\nOnAccessIncludePath /home\n".to_owned()),
+                OverridesChangeTime::ChangeTimeUnknown,
+                evidence_moment(),
+            ),
+            RuntimeReductions::SettingsReduced {
+                change_time: OverridesChangeTime::ChangeTimeUnknown,
+                reduced_settings: vec![ReducedSetting {
+                    setting_key: "OnAccessPrevention".to_owned(),
+                    base_value: "yes".to_owned(),
+                    changed_value: "no".to_owned(),
+                }],
+            }
         );
     }
 
@@ -1463,15 +1446,27 @@ mod protection_evidence_tests {
         let base_config = temporary_root.path().join("clamd.conf");
         fs::write(&base_config, "OnAccessPrevention yes\n").expect("base config");
         assert_eq!(
-            runtime_reductions_in_files(&temporary_root.path().join("missing.conf"), &base_config),
+            runtime_reductions_in_files(&temporary_root.path().join("missing.toml"), &base_config),
             RuntimeReductions::NothingReduced
         );
         assert!(matches!(
             runtime_reductions_in_files(temporary_root.path(), &base_config),
-            RuntimeReductions::OverridesUnreadable(
-                OverridesReadFailure::OverridesFileUnreadable { .. }
-            )
+            RuntimeReductions::OverridesUnreadable(OverridesReadFailure::StoredOverridesUnusable(
+                StoredOverridesFailure::OverridesFileUnreadable { .. }
+            ))
         ));
+        let planted_overrides = temporary_root.path().join("planted.toml");
+        fs::write(
+            &planted_overrides,
+            "[VirusEvent]\nstate = \"permanent\"\nvalue = \"/bin/sh\"\n",
+        )
+        .expect("planted");
+        assert_eq!(
+            runtime_reductions_in_files(&planted_overrides, &base_config),
+            RuntimeReductions::OverridesUnreadable(OverridesReadFailure::StoredOverridesUnusable(
+                StoredOverridesFailure::OverridesFileInvalid
+            ))
+        );
     }
 
     #[test]
@@ -1536,17 +1531,17 @@ mod protection_evidence_tests {
 
     #[test]
     fn overrides_against_an_unreadable_base_are_not_called_harmless() {
-        let base_failure_kind = io::ErrorKind::PermissionDenied;
-        let override_settings = vec![
-            config_setting("OnAccessPrevention", "no"),
-            config_setting("DetectPUA", "yes"),
-            config_setting("MaxThreads", "2"),
-        ];
+        let live_overrides = stored_overrides(
+            "[OnAccessPrevention]\nstate = \"permanent\"\nvalue = false\n\n[DetectPUA]\nstate = \
+             \"permanent\"\nvalue = true\n\n[MaxThreads]\nstate = \"permanent\"\nvalue = 2\n",
+        );
+        let unreadable_base = || Err(io::Error::from(io::ErrorKind::PermissionDenied));
         assert_eq!(
-            runtime_reductions_without_base(
-                &override_settings,
+            runtime_reductions_against(
+                &live_overrides,
+                unreadable_base(),
                 OverridesChangeTime::ChangeTimeUnknown,
-                base_failure_kind
+                evidence_moment(),
             ),
             RuntimeReductions::BaseConfigUnreadable {
                 change_time: OverridesChangeTime::ChangeTimeUnknown,
@@ -1557,39 +1552,13 @@ mod protection_evidence_tests {
             }
         );
         assert_eq!(
-            runtime_reductions_without_base(
-                &override_settings[1..],
+            runtime_reductions_against(
+                &LiveOverrides::default(),
+                unreadable_base(),
                 OverridesChangeTime::ChangeTimeUnknown,
-                base_failure_kind
+                evidence_moment(),
             ),
             RuntimeReductions::NothingReduced
-        );
-        assert_eq!(
-            runtime_reductions_without_base(
-                &[],
-                OverridesChangeTime::ChangeTimeUnknown,
-                base_failure_kind
-            ),
-            RuntimeReductions::NothingReduced
-        );
-    }
-
-    #[test]
-    fn a_reduction_keeps_an_unknown_change_time_unknown() {
-        assert_eq!(
-            runtime_reductions_against_base(
-                &[config_setting("OnAccessPrevention", "yes")],
-                &[config_setting("OnAccessPrevention", "no")],
-                OverridesChangeTime::ChangeTimeUnknown,
-            ),
-            RuntimeReductions::SettingsReduced {
-                change_time: OverridesChangeTime::ChangeTimeUnknown,
-                reduced_settings: vec![ReducedSetting {
-                    setting_key: "OnAccessPrevention".to_owned(),
-                    base_value: "yes".to_owned(),
-                    changed_value: "no".to_owned(),
-                }],
-            }
         );
     }
 }

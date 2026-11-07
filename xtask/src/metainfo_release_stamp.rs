@@ -3,7 +3,8 @@ use std::{env, fs, path::Path, process::Command};
 use crate::{task_failure::TaskFailure, tool_commands::tool_stdout};
 
 pub const APPLICATION_ID: &str = "page.codeberg.wvhulle.Lazaret";
-const METAINFO_PATH: &str = "data/page.codeberg.wvhulle.Lazaret.metainfo.xml.in";
+const METAINFO_PATH: &str =
+    "data/desktop_integration/page.codeberg.wvhulle.Lazaret.metainfo.xml.in";
 const RELEASE_ELEMENT_PREFIX: &str = "<release version=";
 
 fn stamped_metainfo(metainfo_text: &str, version: &str, release_date: &str) -> Option<String> {

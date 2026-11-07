@@ -34,17 +34,17 @@ impl FileManagerKind {
             Self::Nautilus => {
                 include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/data/file-manager-actions/nautilus-scan-script.in"
+                    "/data/desktop_integration/file-manager-actions/nautilus-scan-script.in"
                 ))
             }
             Self::Nemo => include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/data/file-manager-actions/nemo-scan.nemo_action.in"
+                "/data/desktop_integration/file-manager-actions/nemo-scan.nemo_action.in"
             )),
             Self::Dolphin => {
                 include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/data/file-manager-actions/dolphin-scan.desktop.in"
+                    "/data/desktop_integration/file-manager-actions/dolphin-scan.desktop.in"
                 ))
             }
         }

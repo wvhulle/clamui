@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use clamd_configuration::{
+    override_reports::OverrideLifetime, protection_rules::ProtectionReduction,
+};
 use gettextrs::gettext;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
@@ -8,12 +11,9 @@ use relm4::{
 
 use crate::{
     host_services::{
-        clamav_admin_service::{
-            live_settings_client::{
-                LiveChangeFailure, LiveChangeOutcome, LiveTuning, OverrideSetting,
-                apply_live_change, change_confirmation_text, change_effect, read_live_tuning,
-            },
-            protection_change_rules::ProtectionReduction,
+        clamav_admin_service::live_settings_client::{
+            LiveChangeFailure, LiveChangeOutcome, LiveTuning, OverrideSetting, apply_live_change,
+            change_confirmation_text, change_effect, read_live_tuning, reset_live_settings,
         },
         clamav_config::{
             clamav_host_config::{
@@ -30,6 +30,7 @@ use crate::{
             typed_setting_values::TypedSettingValue,
         },
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
+        desktop::locale_formatting::exact_local_time_text,
     },
     shared_widgets::{
         awaited_dialogs::{
@@ -145,6 +146,7 @@ pub enum ChangedRow {
         value_position: usize,
     },
     DetectionSwitch(DetectionOption),
+    AllOverrides,
 }
 
 enum CopyDialogState {
@@ -165,9 +167,16 @@ impl ChangedRow {
                 setting_key: changed_key,
                 value_position: changed_position,
             } => changed_key == setting_key && *changed_position == value_position,
-            Self::DetectionSwitch(_) => false,
+            Self::DetectionSwitch(_) | Self::AllOverrides => false,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AdminServiceNotice {
+    LiveTuningNotInstalled,
+    AdminServiceUnreachable,
+    NothingToExplain,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -310,6 +319,7 @@ pub enum EngineSettingsSectionsInput {
         switched_on: bool,
     },
     DriftSnippetCopyRequested,
+    ResetToSystemRequested,
 }
 
 #[derive(Debug)]
@@ -381,6 +391,7 @@ fn live_change_failure_text(change_failure: &LiveChangeFailure) -> String {
         LiveChangeFailure::ReportedByAdminService {
             admin_service_message,
         } => change_not_made(admin_service_message),
+        LiveChangeFailure::InvalidRequest { request_problem } => change_not_made(request_problem),
         LiveChangeFailure::AdminServiceCallFailed(call_failure) => {
             change_not_made(&call_failure.to_string())
         }
@@ -534,7 +545,9 @@ impl EngineSettingsSections {
                 LiveTuningLoad::TuningRead(LiveTuning::Available {
                     tunable_settings, ..
                 }) => !tunable_settings.is_empty(),
-                LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
+                LiveTuningLoad::TuningRead(
+                    LiveTuning::AdminServiceNotInstalled | LiveTuning::AdminServiceUnreachable(_),
+                )
                 | LiveTuningLoad::TuningNotOffered
                 | LiveTuningLoad::LoadingTuning => false,
             }
@@ -547,7 +560,9 @@ impl EngineSettingsSections {
             }) => tunable_settings
                 .iter()
                 .any(|tunable_key| tunable_key == setting_key),
-            LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
+            LiveTuningLoad::TuningRead(
+                LiveTuning::AdminServiceNotInstalled | LiveTuning::AdminServiceUnreachable(_),
+            )
             | LiveTuningLoad::TuningNotOffered
             | LiveTuningLoad::LoadingTuning => false,
         }
@@ -558,18 +573,77 @@ impl EngineSettingsSections {
             LiveTuningLoad::TuningRead(LiveTuning::Available {
                 active_overrides, ..
             }) => active_overrides,
-            LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
+            LiveTuningLoad::TuningRead(
+                LiveTuning::AdminServiceNotInstalled | LiveTuning::AdminServiceUnreachable(_),
+            )
             | LiveTuningLoad::TuningNotOffered
             | LiveTuningLoad::LoadingTuning => &[],
         }
     }
 
-    const fn admin_service_is_unavailable(&self) -> bool {
-        self.settings_section.offers_live_tuning()
-            && matches!(
-                self.tuning_load,
-                LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
-            )
+    fn admin_service_notice(&self) -> AdminServiceNotice {
+        if !self.settings_section.offers_live_tuning() {
+            return AdminServiceNotice::NothingToExplain;
+        }
+        match &self.tuning_load {
+            LiveTuningLoad::TuningRead(LiveTuning::AdminServiceNotInstalled) => {
+                AdminServiceNotice::LiveTuningNotInstalled
+            }
+            LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnreachable(_)) => {
+                AdminServiceNotice::AdminServiceUnreachable
+            }
+            LiveTuningLoad::TuningRead(LiveTuning::Available { .. })
+            | LiveTuningLoad::TuningNotOffered
+            | LiveTuningLoad::LoadingTuning => AdminServiceNotice::NothingToExplain,
+        }
+    }
+
+    fn permanent_overrides(&self) -> Vec<OverrideSetting> {
+        self.active_overrides()
+            .iter()
+            .filter(|active_override| {
+                active_override.override_lifetime == OverrideLifetime::Permanent
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn temporary_reductions_text(&self) -> String {
+        self.active_overrides()
+            .iter()
+            .filter_map(|active_override| match active_override.override_lifetime {
+                OverrideLifetime::ExpiresAt { expires_at } => Some(
+                    gettext("{key} {value}, until {time}")
+                        .replace(
+                            "{key}",
+                            &sanitize_scanner_line(&active_override.setting_key),
+                        )
+                        .replace(
+                            "{value}",
+                            &sanitize_scanner_line(&active_override.setting_value),
+                        )
+                        .replace("{time}", &exact_local_time_text(expires_at)),
+                ),
+                OverrideLifetime::Permanent => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn overridden_keys(&self) -> Vec<String> {
+        let mut overridden_keys = self
+            .active_overrides()
+            .iter()
+            .map(|active_override| active_override.setting_key.clone())
+            .collect::<Vec<_>>();
+        overridden_keys.dedup();
+        overridden_keys
+    }
+
+    fn can_reset_overrides(&self) -> bool {
+        self.is_unlocked()
+            && matches!(self.change_progress, ChangeProgress::NoChangeRunning)
+            && !self.active_overrides().is_empty()
     }
 
     const fn is_unlocked(&self) -> bool {
@@ -609,7 +683,7 @@ impl EngineSettingsSections {
 
     fn drift_snippet(&self) -> String {
         drift_snippet_text(
-            self.active_overrides(),
+            &self.permanent_overrides(),
             self.settings_section.config_kind(),
             ConfigFileOwner::NixOsConfiguration,
         )
@@ -622,18 +696,27 @@ impl EngineSettingsSections {
                 config_file_owner,
             } => {
                 if self.offers_live_changes() {
-                    live_tunable_config_description(config_path)
-                } else if self.admin_service_is_unavailable() {
-                    format!(
-                        "{}\n\n{}",
-                        managed_config_description(*config_file_owner, config_path),
+                    return live_tunable_config_description(config_path);
+                }
+                let managed_description =
+                    managed_config_description(*config_file_owner, config_path);
+                match self.admin_service_notice() {
+                    AdminServiceNotice::LiveTuningNotInstalled => format!(
+                        "{managed_description}\n\n{}",
+                        gettext(
+                            "Live tuning is not installed. On NixOS, enable \
+                             services.lazaret.liveTuning; on Debian and Ubuntu, install the \
+                             Lazaret package, which includes the ClamAV admin service."
+                        )
+                    ),
+                    AdminServiceNotice::AdminServiceUnreachable => format!(
+                        "{managed_description}\n\n{}",
                         gettext(
                             "Settings can't be changed here right now: the Lazaret ClamAV admin \
                              service could not be reached."
                         )
-                    )
-                } else {
-                    managed_config_description(*config_file_owner, config_path)
+                    ),
+                    AdminServiceNotice::NothingToExplain => managed_description,
                 }
             }
             ConfigLoad::LoadingConfig => gettext("Reading the configuration…"),
@@ -726,7 +809,7 @@ impl EngineSettingsSections {
                                     setting_key,
                                     value_position,
                                 } => setting_row.is_changed_row(setting_key, *value_position),
-                                ChangedRow::DetectionSwitch(_) => false,
+                                ChangedRow::DetectionSwitch(_) | ChangedRow::AllOverrides => false,
                             }),
                     ),
                 );
@@ -847,6 +930,25 @@ impl Component for EngineSettingsSections {
                             add_css_class: "flat",
                             connect_clicked => EngineSettingsSectionsInput::DriftSnippetCopyRequested,
                         },
+                    },
+
+                    adw::ActionRow {
+                        set_use_markup: false,
+                        set_title: &gettext("Reduced protection that ends on its own"),
+                        set_subtitle_lines: 0,
+                        #[watch]
+                        set_subtitle: &model.temporary_reductions_text(),
+                        #[watch]
+                        set_visible: !model.temporary_reductions_text().is_empty(),
+                    },
+
+                    adw::ButtonRow {
+                        set_title: &gettext("Reset to System Configuration"),
+                        #[watch]
+                        set_visible: !model.active_overrides().is_empty(),
+                        #[watch]
+                        set_sensitive: model.can_reset_overrides(),
+                        connect_activated => EngineSettingsSectionsInput::ResetToSystemRequested,
                     },
                 },
 
@@ -1106,6 +1208,22 @@ impl Component for EngineSettingsSections {
             }
             EngineSettingsSectionsInput::DriftSnippetCopyRequested => {
                 root.clipboard().set_text(&self.drift_snippet());
+            }
+            EngineSettingsSectionsInput::ResetToSystemRequested => {
+                if self.can_reset_overrides() {
+                    let overridden_keys = self.overridden_keys();
+                    self.change_progress = ChangeProgress::ChangeRunning {
+                        changed_row: ChangedRow::AllOverrides,
+                    };
+                    sender.oneshot_command(async move {
+                        let change_outcome = reset_live_settings(overridden_keys).await;
+                        EngineSettingsSectionsCommand::LiveChangeFinished {
+                            change_outcome,
+                            live_tuning: read_live_tuning().await,
+                        }
+                    });
+                    self.refresh_changeable_rows();
+                }
             }
         }
     }

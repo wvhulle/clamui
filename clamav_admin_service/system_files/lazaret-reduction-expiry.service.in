@@ -1,0 +1,7 @@
+[Unit]
+Description=End runtime changes that reduced ClamAV protection once they expire
+ConditionPathExists=/var/lib/lazaret/live-overrides.toml
+
+[Service]
+Type=oneshot
+ExecStart=@ADMIN_SERVICE_PATH@ expire

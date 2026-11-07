@@ -19,6 +19,7 @@ enum_variant_names = "allow"
 futures = "0.3.34"
 gettext-rs = { version = "0.8", features = ["gettext-system"] }
 hex = "0.4"
+lazaret-clamd-configuration = { version = "0.1.0", path = "clamd_configuration" }
 humantime = "2.4"
 ksni = "0.3.7"
 oo7 = "0.6"

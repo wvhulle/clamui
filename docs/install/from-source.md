@@ -32,7 +32,7 @@ systemctl --user enable --now lazaret.service
 
 ## Live tuning
 
-The steps are the same as for the Debian package, with the paths under your `PREFIX`. List the allowed settings in `/etc/lazaret/tunable-settings`, then install `$PREFIX/share/lazaret/clamav-daemon-live-tuning.conf` as a drop-in for your clamd service. Check the clamd path and service name for your distribution, and reload systemd and D-Bus afterwards:
+The steps are the same as for the Debian package, with the paths under your `PREFIX`. List the allowed settings in `/etc/lazaret/tunable-settings`, then install `$PREFIX/share/lazaret/clamav-daemon-live-tuning.conf` and `clamav-clamonacc-live-tuning.conf` as drop-ins for your clamd and clamonacc services. clamd must be socket-activated, because the admin service waits for the new clamd on that socket after a restart. Check the clamd path and service name for your distribution, and reload systemd and D-Bus afterwards:
 
 ```sh
 sudo systemctl daemon-reload

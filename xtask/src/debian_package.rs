@@ -37,16 +37,19 @@ const MERGED_CLAMD_CONFIG_PATH: &str = "/run/lazaret/clamd.conf";
 const RUNTIME_DEPENDENCIES: &str =
     "clamav, dconf-gsettings-backend | gsettings-backend, hicolor-icon-theme";
 const RECOMMENDED_PACKAGES: &str = "clamav-daemon, clamdscan, clamav-freshclam, polkitd";
-const INSTALLED_ADMIN_SERVICE_FILES: [&str; 6] = [
+const INSTALLED_ADMIN_SERVICE_FILES: [&str; 8] = [
     "/usr/share/polkit-1/actions/page.codeberg.wvhulle.Lazaret.policy",
     "/usr/share/dbus-1/system.d/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf",
     "/usr/share/dbus-1/system-services/page.codeberg.wvhulle.Lazaret.ClamavAdmin.service",
     "/usr/lib/systemd/system/lazaret-clamav-admin.service",
     "/usr/lib/systemd/system/lazaret-settings-merge.service",
+    "/usr/lib/systemd/system/lazaret-reduction-expiry.service",
+    "/usr/lib/systemd/system/lazaret-reduction-expiry.timer",
     "/usr/lib/systemd/user/lazaret.service",
 ];
 const POSTINST_SCRIPT: &str = "#!/bin/sh\nset -e\nif [ -d /run/systemd/system ]; then\n  \
                                systemctl daemon-reload || true\n  systemctl reload dbus.service \
+                               || true\n  systemctl enable --now lazaret-reduction-expiry.timer \
                                || true\nfi\n";
 
 struct DebianControlFields<'fields> {

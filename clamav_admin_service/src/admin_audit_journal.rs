@@ -1,9 +1,8 @@
 use std::{io, os::unix::net::UnixDatagram};
 
-use crate::{
-    detection_trust_files::{TrustRequest, request_action_name},
-    protection_change_rules::ProtectionReduction,
-};
+use clamd_configuration::{live_overrides::ReductionExpiry, protection_rules::ProtectionReduction};
+
+use crate::detection_trust_files::{TrustRequest, request_action_name};
 
 const JOURNAL_SOCKET_PATH: &str = "/run/systemd/journal/socket";
 const SYSLOG_IDENTIFIER: &str = "lazaret-clamav-admin";
@@ -12,6 +11,7 @@ const WARNING_PRIORITY: &str = "4";
 const PROTECTION_REDUCTION_FIELD: &str = "LAZARET_PROTECTION_REDUCTION";
 const SHA256_FIELD: &str = "LAZARET_SHA256";
 const SIGNATURE_NAME_FIELD: &str = "LAZARET_SIGNATURE_NAME";
+const EXPIRES_AT_FIELD: &str = "LAZARET_EXPIRES_AT";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditOutcome {
@@ -46,24 +46,33 @@ pub enum RequestingUser {
 }
 
 pub const SETTINGS_ACTION_NAME: &str = "change-settings";
+pub const EXPIRY_ACTION_NAME: &str = "expire-reductions";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditedAction<'record> {
-    ChangeSettings,
+    ChangeSettings { reduction_expiry: ReductionExpiry },
+    ExpireReductions,
     TrustChange(&'record TrustRequest),
 }
 
 impl AuditedAction<'_> {
     const fn action_name(self) -> &'static str {
         match self {
-            Self::ChangeSettings => SETTINGS_ACTION_NAME,
+            Self::ChangeSettings { .. } => SETTINGS_ACTION_NAME,
+            Self::ExpireReductions => EXPIRY_ACTION_NAME,
             Self::TrustChange(trust_request) => request_action_name(trust_request),
         }
     }
 
     fn target_fields(self) -> Vec<JournalField> {
         match self {
-            Self::ChangeSettings => Vec::new(),
+            Self::ChangeSettings {
+                reduction_expiry: ReductionExpiry::ExpiresAt { expires_at },
+            } => vec![JournalField::new(EXPIRES_AT_FIELD, expires_at.to_string())],
+            Self::ChangeSettings {
+                reduction_expiry: ReductionExpiry::NoExpiry,
+            }
+            | Self::ExpireReductions => Vec::new(),
             Self::TrustChange(
                 TrustRequest::TrustFile { sha256_hex, .. }
                 | TrustRequest::ForgetTrustedFile { sha256_hex },
@@ -242,7 +251,11 @@ mod admin_audit_journal_tests {
     #[test]
     fn the_reduction_kind_is_recorded_and_reads_back() {
         let recorded_fields = journal_fields(&AdminAuditRecord {
-            audited_action: AuditedAction::ChangeSettings,
+            audited_action: AuditedAction::ChangeSettings {
+                reduction_expiry: ReductionExpiry::ExpiresAt {
+                    expires_at: jiff::Timestamp::from_second(86_400).expect("timestamp"),
+                },
+            },
             action_subject: "OnAccessPrevention no",
             requesting_user: RequestingUser::UnknownUser,
             audit_outcome: AuditOutcome::ActionApplied,
@@ -257,6 +270,10 @@ mod admin_audit_journal_tests {
             Some("unknown")
         );
         assert_eq!(field_value(&recorded_fields, SHA256_FIELD), None);
+        assert_eq!(
+            field_value(&recorded_fields, EXPIRES_AT_FIELD).as_deref(),
+            Some("1970-01-02T00:00:00Z")
+        );
     }
 
     #[test]

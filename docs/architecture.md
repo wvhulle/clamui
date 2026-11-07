@@ -112,31 +112,39 @@ sequenceDiagram
     participant Settings as Settings page
     participant AdminService as lazaret-clamav-admin
     participant Polkit as polkit
+    participant Systemd as systemd
     participant Clamd as clamd
 
-    Settings->>AdminService: change MaxThreads to 8 (system bus)
+    Settings->>AdminService: SettingChanges as TOML (system bus)
+    AdminService->>AdminService: deserialize into typed values, check the allowlist
     AdminService->>Polkit: authorize page.codeberg.wvhulle.Lazaret.apply-settings
     Polkit-->>AdminService: allowed after a password prompt
-    AdminService->>AdminService: check allowlist and protected settings
-    AdminService->>AdminService: write overrides, merge into /run/lazaret/clamd.conf
-    AdminService->>Clamd: restart clamav-daemon
-    alt clamd answers on its socket
+    AdminService->>AdminService: store live-overrides.toml, merge into /run/lazaret/clamd.conf
+    AdminService->>Systemd: RestartUnit clamav-daemon, wait for JobRemoved
+    AdminService->>Clamd: zPING on the activation socket, racing a stopped unit
+    alt PONG
         AdminService-->>Settings: applied
-    else unhealthy
+    else unit failed or stopped
         AdminService->>AdminService: restore previous overrides, restart again
         AdminService-->>Settings: rolled back
     end
 ```
 
-The admin service is started by D-Bus activation. It authorizes each request with polkit, so the GUI is never trusted. It only accepts settings listed in `/etc/lazaret/tunable-settings`. It always refuses settings from `data/protected-clamav-settings.txt`, the settings that run commands or change identity, even when they are on the allowlist. Changes are stored in `/var/lib/lazaret/clamd-overrides.conf` and merged with `/etc/clamav/clamd.conf` into `/run/lazaret/clamd.conf`, which clamd is configured to read. Without any overrides, the merged file equals the base file.
+All parsing, serializing and merging of clamd settings lives in the `clamd_configuration/` crate, which does no I/O. The settings Lazaret can change are fields of one typed record, `TunableRecord`. Each field has the value type clamd expects: switches, counts that fit the C `int` clamd parses them into, sizes as `ClamdSize` (binary `K`, `M` and `G` suffixes, `0` meaning no limit), contained absolute paths and single-line text. The same record is read from `clamd.conf` through a small serde format and from the stored state through TOML, so a value is checked once, when it is deserialized. Settings that run commands or change identity, listed in `clamd_configuration/setting_lists/protected-clamav-settings.txt`, have no field and can't be represented in a change at all. Rendered lines longer than ClamAV's `MAX_OPTION_LINE_LENGTH` are refused, because clamd would split them.
 
-The Detection settings page maps to `DetectPUA`, `HeuristicAlerts`, `AlertOLE2Macros`, `AlertEncrypted`, `ScanArchive` and `AlertExceedsMax`. A switch can only change when its key is in `/etc/lazaret/tunable-settings`. `clamscan` doesn't read `clamd.conf`, so every `clamscan` run gets the same values as `--detect-pua=…` and similar flags, read from the configuration clamd uses.
+The admin service is started by D-Bus activation and authorizes each request with polkit, so the GUI is never trusted. It only applies settings listed in `/etc/lazaret/tunable-settings`. Changes are stored in `/var/lib/lazaret/live-overrides.toml`, where each setting is either `permanent` or a `temporary-reduction` with `expires_at`. A change that reduces protection compared with the system configuration is stored as a temporary reduction and ends after `/etc/lazaret/reduction-lifetime` seconds; `lazaret-reduction-expiry.timer` removes it and restarts clamd. Setting a value equal to the system configuration, or going back to the system configuration, removes the entry. If the state file can't be read or holds anything that doesn't deserialize, the merge uses the system configuration unchanged.
+
+`lazaret-settings-merge.service` writes `/run/lazaret/clamd.conf` from `/etc/clamav/clamd.conf` and the stored changes. It is `PartOf` clamav-daemon, so every restart of clamd, including the one `nixos-rebuild` or `apt` triggers after changing the system configuration, merges again first. clamd and clamonacc see the merged file at `/etc/clamav/clamd.conf` through `BindReadOnlyPaths`, so their start commands stay as the distribution wrote them.
+
+The admin service waits for readiness without timeouts: the restart goes through systemd's `RestartUnit` and waits for the job's `JobRemoved` signal, then a `zPING` is sent to clamd's socket-activated socket, which blocks until the new clamd accepts it. If the unit fails or stops first, the change is rolled back.
+
+The Detection settings page maps to `DetectPUA`, `HeuristicAlerts`, `AlertOLE2Macros`, `AlertEncrypted`, `ScanArchive` and `AlertExceedsMax`, which the NixOS module allows by default. `clamscan` doesn't read `clamd.conf`, so every `clamscan` run gets the same values as `--detect-pua=…` and similar flags, read from the configuration clamd uses.
 
 ## Trusted detections
 
 The admin service also maintains two ClamAV allowlists in the signature directory: `lazaret-local.sfp` (SHA-256 and size of trusted files) and `lazaret-local.ign2` (ignored detection names). Each change has its own polkit action, `page.codeberg.wvhulle.Lazaret.trust-detection`, and the prompt names the exact hash or detection name. Heuristic detections can only be trusted by hash. Ignored names are written unpinned, without the `:md5` of the database entry: `sigtool --find-sigs` matches by regular expression, can return several entries for one name and prints bytecode signatures decoded rather than as stored, so Lazaret can't compute that MD5 reliably. Pinned lines that someone else wrote are kept, and stop ignoring removes them by name. The lists are never read or written through a symbolic link, and lines that don't fit their format are dropped. After a change the admin service asks clamd to reload its signatures.
 
-Every settings change and trust request, also refused ones, is written by the admin service to the system journal with `LAZARET_ACTION`, `LAZARET_SUBJECT`, `LAZARET_OUTCOME`, `LAZARET_REQUESTER_UID`, `LAZARET_WEAKENS_PROTECTION` and `LAZARET_PROTECTION_REDUCTION`, the kind of reduction. Trust requests also record the exact `LAZARET_SHA256` or `LAZARET_SIGNATURE_NAME`, so Lazaret attributes each trust entry by exact match. When the admin service can't read the clamd configuration, it records a change as `current-values-unknown` rather than as harmless. Lazaret reads these records back only from `_SYSTEMD_UNIT=lazaret-clamav-admin.service` with `_UID=0`, so software running as the desktop user can neither forge nor erase them. The Trusted Detections page warns about allowlists in the signature directory that Lazaret didn't write.
+Every settings change, expiry and trust request, also refused ones, is written by the admin service to the system journal with `LAZARET_ACTION`, `LAZARET_SUBJECT`, `LAZARET_OUTCOME`, `LAZARET_REQUESTER_UID`, `LAZARET_WEAKENS_PROTECTION` and `LAZARET_PROTECTION_REDUCTION`, the kind of reduction. Temporary reductions record `LAZARET_EXPIRES_AT`. Trust requests also record the exact `LAZARET_SHA256` or `LAZARET_SIGNATURE_NAME`, so Lazaret attributes each trust entry by exact match. When the admin service can't read the clamd configuration, it records a change as `current-values-unknown` rather than as harmless. Lazaret reads these records back only from `_SYSTEMD_UNIT=lazaret-clamav-admin.service` with `_UID=0`, so software running as the desktop user can neither forge nor erase them. The Trusted Detections page warns about allowlists in the signature directory that Lazaret didn't write.
 
 ## Background alerts and scheduled scans
 

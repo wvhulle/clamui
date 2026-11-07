@@ -1,11 +1,11 @@
 use std::io;
 
+use clamd_configuration::protection_rules::ProtectionReduction;
 use gettextrs::gettext;
 use jiff::Timestamp;
 use systemd::journal::Journal;
 
 use crate::host_services::{
-    clamav_admin_service::protection_change_rules::ProtectionReduction,
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
     systemd_journal::unit_journal_reader::{journal_field_value, open_system_journal},
 };

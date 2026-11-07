@@ -6,27 +6,50 @@ COPY_DIALOG_NOTICE = "Nothing is applied"
 COPY_LINE_LABEL = "Copy Line"
 LIVE_CONFIG_DESCRIPTION = "combines your system configuration"
 MERGED_CONFIG = "/run/lazaret/clamd.conf"
-OVERRIDES_FILE = "/var/lib/lazaret/clamd-overrides.conf"
+OVERRIDES_FILE = "/var/lib/lazaret/live-overrides.toml"
+CHANGE_DOCUMENT_FILE = "/tmp/admin-service-change.toml"
 USER_ANSWER_FILE = "/tmp/admin-service-answer"
 USER_REQUEST_FILE = "/tmp/admin-service-request"
 
 
-def apply_command(key, value):
+def change_document(key, toml_value):
+    return f'change = "set-values"\n\n[setting_values]\n{key} = {toml_value}\n'
+
+
+def reset_document(key):
+    return f'change = "back-to-system"\nsetting_names = ["{key}"]\n'
+
+
+def call_with_document(document):
+    machine.succeed(f"printf %s {shlex.quote(document)} > {CHANGE_DOCUMENT_FILE}; chmod 644 {CHANGE_DOCUMENT_FILE}")
     return (
         "busctl --timeout=400 call page.codeberg.wvhulle.Lazaret.ClamavAdmin "
         "/page/codeberg/wvhulle/Lazaret/ClamavAdmin "
         "page.codeberg.wvhulle.Lazaret.ClamavAdmin ApplyChanges "
-        f"'a(ss)' 1 {key} {value} 2>&1"
+        f's "$(cat {CHANGE_DOCUMENT_FILE})" 2>&1'
     )
 
 
-def apply_as_root(key, value):
-    return machine.execute(apply_command(key, value))
+def apply_command(key, toml_value):
+    return call_with_document(change_document(key, toml_value))
 
 
-def start_apply_as_user(key, value):
+def apply_as_root(key, toml_value):
+    return machine.execute(apply_command(key, toml_value))
+
+
+def reset_as_root(key):
+    return machine.execute(call_with_document(reset_document(key)))
+
+
+def config_seen_by_clamd():
+    clamd_pid = machine.succeed("systemctl show --property=MainPID --value clamav-daemon.service").strip()
+    return machine.succeed(f"nsenter --target {clamd_pid} --mount cat /etc/clamav/clamd.conf")
+
+
+def start_apply_as_user(key, toml_value):
     machine.succeed(f"rm -f {USER_ANSWER_FILE}")
-    request_body = f"#!/bin/sh\n({apply_command(key, value)}; echo finished) > {USER_ANSWER_FILE}\n"
+    request_body = f"#!/bin/sh\n({apply_command(key, toml_value)}; echo finished) > {USER_ANSWER_FILE}\n"
     as_user(f"printf %s {shlex.quote(request_body)} > {USER_REQUEST_FILE}; chmod +x {USER_REQUEST_FILE}")
     as_user(f"swaymsg exec {USER_REQUEST_FILE}")
 
@@ -86,9 +109,12 @@ with subtest("the socket survives a daemon restart"):
     machine.succeed("test -S /run/clamav/clamd.ctl")
     wait_for_clamd()
 
-with subtest("the daemon reads the merged configuration"):
-    machine.succeed(f"systemctl cat clamav-daemon.service | grep -- --config-file={MERGED_CONFIG}")
+with subtest("live tuning is on by default and the daemon sees the merged configuration"):
+    machine.succeed("grep -qx DetectPUA /etc/lazaret/tunable-settings")
+    machine.succeed(f"systemctl cat clamav-daemon.service | grep -- 'BindReadOnlyPaths=-{MERGED_CONFIG}:/etc/clamav/clamd.conf'")
+    machine.fail("systemctl cat clamav-daemon.service | grep -- --config-file")
     assert "DatabaseDirectory" in machine.succeed(f"cat {MERGED_CONFIG}")
+    assert config_seen_by_clamd() == machine.succeed(f"cat {MERGED_CONFIG}")
 
 with subtest("a user change asks for a password, shows the change, and applies"):
     start_apply_as_user("MaxThreads", "7")
@@ -128,7 +154,7 @@ with subtest("while locked, Copy configuration line only copies the line"):
     machine.screenshot("locked_copy")
     machine.wait_for_text("Copied", timeout=timedelta(seconds=60))
     assert "MaxThreads 3" not in machine.succeed(f"cat {MERGED_CONFIG}"), "a locked edit changed clamd"
-    assert "MaxThreads 3" not in machine.succeed(f"cat {OVERRIDES_FILE}"), "a locked edit changed clamd"
+    assert "value = 3" not in machine.succeed(f"cat {OVERRIDES_FILE}"), "a locked edit changed clamd"
 
 with subtest("unlocking, editing and confirming applies through a real password prompt"):
     show_scan_engine_page()
@@ -162,30 +188,53 @@ with subtest("a second change starts from the value just applied"):
     time.sleep(1)
 
 with subtest("protected and unlisted settings are refused by the admin service"):
-    for key, value in (("VirusEvent", "/bin/sh"), ("User", "root"), ("MaxFileSize", "1M")):
-        status, output = apply_as_root(key, value)
+    for key, toml_value in (("VirusEvent", '"/bin/sh"'), ("User", '"root"'), ("MaxFileSize", '"1M"'), ("MaxThreads", '"many"')):
+        status, output = apply_as_root(key, toml_value)
         assert status != 0, output
     merged = machine.succeed(f"cat {MERGED_CONFIG}")
     assert "VirusEvent" not in merged and "User root" not in merged and "MaxFileSize" not in merged
 
-with subtest("a protected key planted in the overrides is dropped at merge"):
-    machine.succeed(f"printf 'VirusEvent /bin/sh\\nUser root\\nMaxThreads 5\\n' > {OVERRIDES_FILE}")
-    machine.succeed("systemctl restart lazaret-settings-merge.service")
+with subtest("a protected key planted in the stored changes makes the merge fall back to the base"):
+    machine.succeed(
+        f"printf '[VirusEvent]\\nstate = \"permanent\"\\nvalue = \"/bin/sh\"\\n\\n[MaxThreads]\\nstate = \"permanent\"\\nvalue = 5\\n' > {OVERRIDES_FILE}"
+    )
+    merge_again()
     merged = machine.succeed(f"cat {MERGED_CONFIG}")
-    assert "VirusEvent" not in merged and "User root" not in merged
-    assert "MaxThreads 5" in merged
+    assert "VirusEvent" not in merged and "MaxThreads 5" not in merged, merged
+    assert "MaxThreads 4" in merged, merged
 
-with subtest("clamd still starts when the overrides cannot be used"):
-    machine.succeed(f"printf 'not a valid line\\n\\0\\0' > {OVERRIDES_FILE}")
+with subtest("clamd still starts when the stored changes cannot be read"):
+    machine.succeed(f"printf 'not toml at all\\n\\0\\0' > {OVERRIDES_FILE}")
     merge_again()
 
-with subtest("an unhealthy restart restores the previous settings"):
-    machine.succeed(f"printf 'MaxThreads 6\\n' > {OVERRIDES_FILE}")
+with subtest("a restart that fails restores the previous settings"):
+    machine.succeed(f"printf '[MaxThreads]\\nstate = \"permanent\"\\nvalue = 6\\n' > {OVERRIDES_FILE}")
     merge_again()
-    machine.succeed("systemctl reset-failed clamav-daemon.service")
-    status, output = apply_as_root("NotARealClamdOption", "rejected")
+    status, output = apply_as_root("MaxThreads", "3")
     assert status == 0 and "rolled-back" in output, output
-    overrides = machine.succeed(f"cat {OVERRIDES_FILE}")
-    assert overrides.strip() == "MaxThreads 6", overrides
-    assert "NotARealClamdOption" not in machine.succeed(f"cat {MERGED_CONFIG}")
-    machine.succeed(f"clamdscan --config-file={MERGED_CONFIG} --ping 1")
+    assert "value = 6" in machine.succeed(f"cat {OVERRIDES_FILE}")
+    assert "MaxThreads 3" not in machine.succeed(f"cat {MERGED_CONFIG}")
+    wait_for_clamd()
+
+with subtest("a change that reduces protection ends on its own"):
+    status, output = apply_as_root("DetectPUA", "false")
+    assert status == 0 and "applied" in output, output
+    assert "temporary-reduction" in machine.succeed(f"cat {OVERRIDES_FILE}")
+    assert "DetectPUA no" in config_seen_by_clamd()
+    time.sleep(35)
+    machine.succeed("systemctl start lazaret-reduction-expiry.service")
+    wait_for_clamd()
+    assert "DetectPUA no" not in config_seen_by_clamd()
+    machine.succeed("journalctl _SYSTEMD_UNIT=lazaret-reduction-expiry.service LAZARET_ACTION=expire-reductions | grep -q DetectPUA")
+
+with subtest("going back to the system configuration removes the change"):
+    status, output = reset_as_root("MaxThreads")
+    assert status == 0 and "applied" in output, output
+    wait_for_clamd()
+    assert "MaxThreads 4" in config_seen_by_clamd()
+
+with subtest("a rebuild that changes the base reaches clamd without a reboot"):
+    machine.succeed("/run/current-system/specialisation/newBase/bin/switch-to-configuration test")
+    machine.wait_until_succeeds(f"grep -q 'MaxThreads 11' {MERGED_CONFIG}", timeout=timedelta(seconds=120))
+    wait_for_clamd()
+    assert "MaxThreads 11" in config_seen_by_clamd()

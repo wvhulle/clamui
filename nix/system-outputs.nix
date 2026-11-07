@@ -31,6 +31,8 @@ let
       ../gtk_scene_capture/assets
       ../po
       ../data
+      ../clamav_admin_service/system_files
+      ../clamd_configuration/setting_lists
       ../migrations
     ];
   };
@@ -232,7 +234,7 @@ let
       }
       ''
         mkdir -p "$out"
-        cp ${../data/page.codeberg.wvhulle.Lazaret.gschema.xml} "$out/page.codeberg.wvhulle.Lazaret.gschema.xml"
+        cp ${../data/desktop_integration/page.codeberg.wvhulle.Lazaret.gschema.xml} "$out/page.codeberg.wvhulle.Lazaret.gschema.xml"
         cp ${pkgs.glib.getSchemaPath pkgs.gtk4}/*.gschema.xml "$out"/
         cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.gschema.xml "$out"/
         cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.enums.xml "$out"/
@@ -297,11 +299,17 @@ in
   formatter = treefmtWrapper;
 
   devShells.default = craneLib.devShell {
-    checks = self.checks.${system};
+    inputsFrom = [
+      lazaretPackage
+      clamavAdminPackage
+      xtaskPackage
+    ];
     packages = [
       treefmtWrapper
       rustfmtToolchain
+      pkgs.clamav
       pkgs.gettext
+      pkgs.git
       pkgs.glib
       pkgs.gnumake
       pkgs.nixfmt

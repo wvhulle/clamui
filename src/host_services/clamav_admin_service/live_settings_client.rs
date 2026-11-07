@@ -1,11 +1,18 @@
-use std::convert::Infallible;
+use std::{collections::BTreeSet, fs, io, path::Path};
 
+use clamd_configuration::{
+    clamd_conf_format::config_lines::{ClamdConfigLines, SettingLine},
+    live_overrides::SettingChanges,
+    merged_clamd_config::{requested_settings_in, tunable_settings_in},
+    override_reports::{OverrideLifetime, change_reduction_from},
+    protection_rules::ProtectionReduction,
+    tunable_record::{BaseSettings, LiveOverrides, TunableSettingName},
+};
 use gettextrs::gettext;
+use jiff::Timestamp;
 use zbus::{Connection, proxy};
 
-use crate::host_services::clamav_admin_service::protection_change_rules::{
-    ProtectionReduction, ValuesInEffect, protection_reduction,
-};
+use crate::host_services::desktop::flatpak_sandbox::readable_host_path;
 
 #[proxy(
     interface = "page.codeberg.wvhulle.Lazaret.ClamavAdmin",
@@ -15,25 +22,27 @@ use crate::host_services::clamav_admin_service::protection_change_rules::{
 trait ClamavAdmin {
     fn get_tunable_settings(&self) -> zbus::Result<Vec<String>>;
 
-    fn get_overrides(&self) -> zbus::Result<Vec<(String, String)>>;
-
-    fn apply_changes(&self, changes: &[(&str, &str)]) -> zbus::Result<String>;
+    fn apply_changes(&self, change_document: &str) -> zbus::Result<String>;
 }
 
 const APPLIED_ANSWER: &str = "applied";
 const ROLLED_BACK_ANSWER: &str = "rolled-back";
 const SERVICE_UNKNOWN_ERROR: &str = "org.freedesktop.DBus.Error.ServiceUnknown";
 const ACCESS_DENIED_ERROR: &str = "org.freedesktop.DBus.Error.AccessDenied";
+pub const LIVE_OVERRIDES_PATH: &str = "/var/lib/lazaret/live-overrides.toml";
+pub const BASE_CLAMD_CONFIG_PATH: &str = "/etc/clamav/clamd.conf";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OverrideSetting {
     pub setting_key: String,
     pub setting_value: String,
+    pub override_lifetime: OverrideLifetime,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LiveTuning {
-    AdminServiceUnavailable(zbus::Error),
+    AdminServiceNotInstalled,
+    AdminServiceUnreachable(zbus::Error),
     Available {
         tunable_settings: Vec<String>,
         active_overrides: Vec<OverrideSetting>,
@@ -57,6 +66,8 @@ pub enum LiveChangeFailure {
     AdminServiceMissing,
     #[error("the ClamAV admin service reported: {admin_service_message}")]
     ReportedByAdminService { admin_service_message: String },
+    #[error("the requested value can't be used: {request_problem}")]
+    InvalidRequest { request_problem: String },
     #[error(transparent)]
     AdminServiceCallFailed(zbus::Error),
 }
@@ -88,31 +99,90 @@ async fn admin_service_proxy() -> zbus::Result<ClamavAdminProxy<'static>> {
     ClamavAdminProxy::new(&Connection::system().await?).await
 }
 
-async fn read_live_tuning_from(
-    clamav_admin_service: &ClamavAdminProxy<'_>,
-) -> zbus::Result<LiveTuning> {
-    Ok(LiveTuning::Available {
-        tunable_settings: clamav_admin_service.get_tunable_settings().await?,
-        active_overrides: clamav_admin_service
-            .get_overrides()
-            .await?
-            .into_iter()
-            .map(|(setting_key, setting_value)| OverrideSetting {
-                setting_key,
-                setting_value,
-            })
-            .collect(),
-    })
+fn config_lines_in(config_text: &str) -> ClamdConfigLines {
+    match config_text.parse() {
+        Ok(config_lines) => config_lines,
+        Err(never_fails) => match never_fails {},
+    }
+}
+
+pub fn read_stored_overrides(
+    overrides_path: &Path,
+) -> Result<LiveOverrides, StoredOverridesFailure> {
+    match fs::read_to_string(overrides_path) {
+        Ok(overrides_text) => LiveOverrides::from_toml_text(&overrides_text)
+            .map_err(|_invalid_overrides| StoredOverridesFailure::OverridesFileInvalid),
+        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => {
+            Ok(LiveOverrides::default())
+        }
+        Err(read_failure) => Err(StoredOverridesFailure::OverridesFileUnreadable {
+            failure_kind: read_failure.kind(),
+        }),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum StoredOverridesFailure {
+    #[error("the runtime changes file could not be read: {failure_kind}")]
+    OverridesFileUnreadable { failure_kind: io::ErrorKind },
+    #[error("the runtime changes file is not in the expected format")]
+    OverridesFileInvalid,
+}
+
+pub fn active_override_settings(
+    live_overrides: &LiveOverrides,
+    base_config_path: &Path,
+) -> Vec<OverrideSetting> {
+    let base_settings = fs::read_to_string(base_config_path)
+        .ok()
+        .and_then(|base_text| tunable_settings_in(&config_lines_in(&base_text)).ok());
+    let base_view = base_settings
+        .as_ref()
+        .map_or(BaseSettings::UnreadableBase, BaseSettings::ReadableBase);
+    live_overrides
+        .override_reports(base_view, Timestamp::now())
+        .into_iter()
+        .flat_map(|override_report| {
+            override_report
+                .changed_values
+                .into_iter()
+                .map(move |setting_value| OverrideSetting {
+                    setting_key: override_report.setting_name.to_owned(),
+                    setting_value,
+                    override_lifetime: override_report.override_lifetime,
+                })
+        })
+        .collect()
+}
+
+fn live_tuning_from_answer(tunable_answer: zbus::Result<Vec<String>>) -> LiveTuning {
+    match tunable_answer {
+        Ok(tunable_settings) => LiveTuning::Available {
+            tunable_settings,
+            active_overrides: read_stored_overrides(&readable_host_path(LIVE_OVERRIDES_PATH))
+                .map(|live_overrides| {
+                    active_override_settings(
+                        &live_overrides,
+                        &readable_host_path(BASE_CLAMD_CONFIG_PATH),
+                    )
+                })
+                .unwrap_or_default(),
+        },
+        Err(zbus::Error::MethodError(error_name, _error_message, _reply))
+            if error_name.as_str() == SERVICE_UNKNOWN_ERROR =>
+        {
+            LiveTuning::AdminServiceNotInstalled
+        }
+        Err(call_failure) => LiveTuning::AdminServiceUnreachable(call_failure),
+    }
 }
 
 async fn live_tuning_on_bus(bus_connection: zbus::Result<Connection>) -> LiveTuning {
-    let read_tuning = async {
+    let tunable_answer = async {
         let clamav_admin_service = ClamavAdminProxy::new(&bus_connection?).await?;
-        read_live_tuning_from(&clamav_admin_service).await
+        clamav_admin_service.get_tunable_settings().await
     };
-    read_tuning
-        .await
-        .unwrap_or_else(LiveTuning::AdminServiceUnavailable)
+    live_tuning_from_answer(tunable_answer.await)
 }
 
 pub async fn read_live_tuning() -> LiveTuning {
@@ -138,16 +208,71 @@ fn outcome_of_admin_service_call(admin_service_answer: zbus::Result<String>) -> 
     }
 }
 
+async fn send_setting_changes(setting_changes: &SettingChanges) -> LiveChangeOutcome {
+    let change_document = match setting_changes.to_toml_text() {
+        Ok(change_document) => change_document,
+        Err(serialize_failure) => {
+            return LiveChangeOutcome::NothingChanged(LiveChangeFailure::InvalidRequest {
+                request_problem: serialize_failure.to_string(),
+            });
+        }
+    };
+    let admin_service_answer = async {
+        admin_service_proxy()
+            .await?
+            .apply_changes(&change_document)
+            .await
+    };
+    outcome_of_admin_service_call(admin_service_answer.await)
+}
+
+fn request_lines(setting_key: &str, setting_values: &[String]) -> Result<ClamdConfigLines, String> {
+    setting_values
+        .iter()
+        .map(|setting_value| {
+            SettingLine::rendered(setting_key, setting_value)
+                .map(|setting_line| setting_line.line_text)
+                .map_err(|line_problem| line_problem.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|line_texts| config_lines_in(&line_texts.join("\n")))
+}
+
+pub async fn reset_live_settings(setting_keys: Vec<String>) -> LiveChangeOutcome {
+    let setting_names = setting_keys
+        .iter()
+        .map(|setting_key| setting_key.parse::<TunableSettingName>())
+        .collect::<Result<BTreeSet<_>, _>>();
+    match setting_names {
+        Ok(setting_names) => {
+            send_setting_changes(&SettingChanges::BackToSystem { setting_names }).await
+        }
+        Err(unknown_name) => LiveChangeOutcome::NothingChanged(LiveChangeFailure::InvalidRequest {
+            request_problem: unknown_name.to_string(),
+        }),
+    }
+}
+
 pub async fn apply_live_change(
     setting_key: String,
     setting_values: Vec<String>,
 ) -> LiveChangeOutcome {
-    let changes = setting_values
-        .iter()
-        .map(|setting_value| (setting_key.as_str(), setting_value.as_str()))
-        .collect::<Vec<_>>();
-    let admin_service_answer = async { admin_service_proxy().await?.apply_changes(&changes).await };
-    outcome_of_admin_service_call(admin_service_answer.await)
+    let requested_settings =
+        request_lines(&setting_key, &setting_values).and_then(|requested_lines| {
+            requested_settings_in(&requested_lines)
+                .map_err(|request_problem| request_problem.to_string())
+        });
+    match requested_settings {
+        Ok(requested_settings) => {
+            send_setting_changes(&SettingChanges::SetValues {
+                setting_values: Box::new(requested_settings),
+            })
+            .await
+        }
+        Err(request_problem) => {
+            LiveChangeOutcome::NothingChanged(LiveChangeFailure::InvalidRequest { request_problem })
+        }
+    }
 }
 
 pub fn change_effect(
@@ -155,11 +280,21 @@ pub fn change_effect(
     current_values: &[String],
     new_values: &[String],
 ) -> ProtectionReduction {
-    protection_reduction(
-        setting_key,
-        &ValuesInEffect::<Infallible>::from_config_values(current_values.to_vec()),
-        new_values,
-    )
+    match (
+        request_lines(setting_key, current_values),
+        request_lines(setting_key, new_values),
+    ) {
+        (Ok(current_lines), Ok(requested_lines)) => {
+            change_reduction_from(&current_lines, &requested_lines, Timestamp::now())
+        }
+        (Err(_unusable_current), Ok(requested_lines)) => change_reduction_from(
+            &ClamdConfigLines::default(),
+            &requested_lines,
+            Timestamp::now(),
+        )
+        .or_else(ProtectionReduction::CurrentValuesUnknown),
+        (_any_current, Err(_unusable_request)) => ProtectionReduction::CurrentValuesUnknown,
+    }
 }
 
 fn reduction_headline(protection_reduction: ProtectionReduction) -> Option<String> {
@@ -338,7 +473,7 @@ mod live_settings_client_tests {
             .block_on(live_tuning_on_bus(unreachable_bus));
         assert!(matches!(
             live_tuning,
-            LiveTuning::AdminServiceUnavailable(zbus::Error::Address(_))
+            LiveTuning::AdminServiceUnreachable(zbus::Error::Address(_))
         ));
     }
 }

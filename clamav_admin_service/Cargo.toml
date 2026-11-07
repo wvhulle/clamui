@@ -9,9 +9,12 @@ publish = false
 enum_variant_names = "allow"
 
 [dependencies]
+futures = "0.3.34"
+jiff = { version = "0.2.39", default-features = false, features = ["serde", "std"] }
+lazaret-clamd-configuration = { version = "0.1.0", path = "../clamd_configuration" }
 rustix = { version = "1", features = ["fs"] }
 tempfile = "3"
 thiserror = "2"
-tokio = { version = "1.54", features = ["rt"] }
-zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }
-
+tokio = { version = "1.54", features = ["io-util", "macros", "net", "rt", "time"] }
+toml = "1.1"
+zbus = { version = "5.19", default-features = false, features = ["tokio"] }

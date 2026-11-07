@@ -2588,6 +2588,7 @@ dependencies = [
  "inotify",
  "jiff",
  "ksni",
+ "lazaret-clamd-configuration",
  "libc",
  "oo7",
  "regex",
@@ -2613,10 +2614,14 @@ dependencies = [
 name = "lazaret-clamav-admin"
 version = "0.1.0"
 dependencies = [
+ "futures",
+ "jiff",
+ "lazaret-clamd-configuration",
  "rustix 1.1.5",
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "zbus",
 ]
 

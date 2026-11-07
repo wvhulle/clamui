@@ -1,10 +1,10 @@
 use std::ffi::OsString;
 
+use clamd_configuration::override_reports::clamav_default_texts;
 use tokio::task::{JoinError, spawn_blocking};
 
-use crate::host_services::{
-    clamav_admin_service::protection_change_rules::protective_switch_named,
-    clamav_config::clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
+use crate::host_services::clamav_config::clamav_host_config::{
+    ConfigSetting, HostConfigView, read_clamd_config,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,8 +50,9 @@ impl DetectionOption {
     }
 
     pub fn enabled_by_default(self) -> bool {
-        protective_switch_named(self.setting_key())
-            .is_some_and(|protective_switch| protective_switch.on_by_default)
+        clamav_default_texts(self.setting_key())
+            .iter()
+            .any(|default_text| switch_value_is_on(default_text))
     }
 }
 
@@ -147,7 +148,7 @@ mod detection_options_tests {
     fn every_detection_option_has_a_clamav_default() {
         DETECTION_OPTIONS.into_iter().for_each(|detection_option| {
             assert!(
-                protective_switch_named(detection_option.setting_key()).is_some(),
+                !clamav_default_texts(detection_option.setting_key()).is_empty(),
                 "{detection_option:?}"
             );
         });

@@ -775,8 +775,16 @@ mod tunable_record_tests {
     }
 
     #[test]
+    fn the_shipped_list_of_tunable_settings_matches_the_record() {
+        let shipped_names = include_str!("../setting_lists/tunable-clamd-settings.txt")
+            .lines()
+            .collect::<Vec<_>>();
+        assert_eq!(shipped_names, tunable_setting_names());
+    }
+
+    #[test]
     fn no_tunable_setting_is_protected() {
-        let protected_names = include_str!("../../data/protected-clamav-settings.txt");
+        let protected_names = crate::PROTECTED_SETTING_NAMES;
         assert!(tunable_setting_names().iter().all(|tunable_name| {
             !protected_names
                 .lines()

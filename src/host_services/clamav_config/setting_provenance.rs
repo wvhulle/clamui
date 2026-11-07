@@ -1,13 +1,10 @@
 use std::{fs, path::Path};
 
+use clamd_configuration::PROTECTED_SETTING_NAMES;
 use gettextrs::gettext;
 
 use crate::host_services::clamav_admin_service::live_settings_client::OverrideSetting;
 
-const PROTECTED_SETTINGS_LIST: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/data/protected-clamav-settings.txt"
-));
 const NIX_STORE_PREFIX: &str = "/nix/store/";
 const LIVE_TUNING_RUNTIME_PREFIX: &str = "/run/lazaret/";
 
@@ -30,7 +27,7 @@ pub enum SettingLock {
 }
 
 pub fn setting_lock_for_key(setting_key: &str) -> SettingLock {
-    if PROTECTED_SETTINGS_LIST
+    if PROTECTED_SETTING_NAMES
         .lines()
         .map(str::trim)
         .any(|protected_key| protected_key.eq_ignore_ascii_case(setting_key))
@@ -184,6 +181,8 @@ pub fn values_with_edit(
 
 #[cfg(test)]
 mod setting_provenance_tests {
+    use clamd_configuration::override_reports::OverrideLifetime;
+
     use super::*;
 
     fn single_value(setting_value: &str) -> Vec<String> {
@@ -324,6 +323,7 @@ mod setting_provenance_tests {
         let override_of = |setting_key: &str, setting_value: &str| OverrideSetting {
             setting_key: setting_key.to_owned(),
             setting_value: setting_value.to_owned(),
+            override_lifetime: OverrideLifetime::Permanent,
         };
         let active_overrides = vec![
             override_of("OnAccessIncludePath", "/home"),

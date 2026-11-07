@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::protection_change_rules::ProtectionReduction;
+use clamd_configuration::protection_rules::ProtectionReduction;
 
 pub const TRUSTED_FILES_NAME: &str = "lazaret-local.sfp";
 pub const IGNORED_SIGNATURES_NAME: &str = "lazaret-local.ign2";

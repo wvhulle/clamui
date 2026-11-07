@@ -1,3 +1,4 @@
+use clamd_configuration::setting_kinds::whole_number_in_text;
 use gettextrs::gettext;
 use relm4::{
     FactorySender, adw,
@@ -7,18 +8,15 @@ use relm4::{
     prelude::{DynamicIndex, FactoryComponent},
 };
 
-use crate::host_services::{
-    clamav_admin_service::protection_change_rules::whole_number_in_text,
-    clamav_config::{
-        setting_provenance::SettingLock,
-        typed_setting_values::{
-            DraftApplyTiming, DraftEdit, SIZE_UNITS, SettingParseFailure, SizeUnit, SwitchPosition,
-            TypedSettingValue, parse_setting_value,
-        },
+use crate::host_services::clamav_config::{
+    setting_provenance::SettingLock,
+    typed_setting_values::{
+        DraftApplyTiming, DraftEdit, SIZE_UNITS, SettingParseFailure, SizeUnit, SwitchPosition,
+        TypedSettingValue, parse_setting_value,
     },
 };
 
-const SIZE_COUNT_CEILING: f64 = 4_294_967_295.0;
+const SIZE_COUNT_CEILING: f64 = i32::MAX as f64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RowChangeActivity {

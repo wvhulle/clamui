@@ -74,26 +74,25 @@ let
   mergedConfigPath = "/run/lazaret/clamd.conf";
   adminBusName = "page.codeberg.wvhulle.Lazaret.ClamavAdmin";
 
-  protectedSettings = builtins.filter (protectedKey: protectedKey != "") (
-    lib.splitString "\n" (builtins.readFile ../data/protected-clamav-settings.txt)
+  tunableSettingNames = builtins.filter (settingName: settingName != "") (
+    lib.splitString "\n" (
+      builtins.readFile ../clamd_configuration/setting_lists/tunable-clamd-settings.txt
+    )
   );
-  isProtectedSetting =
-    settingKey:
-    builtins.any (protectedKey: lib.toLower protectedKey == lib.toLower settingKey) protectedSettings;
-  refusedSettings = builtins.filter isProtectedSetting liveTuning.allowedSettings;
+  liveTuningBind = [ "-${mergedConfigPath}:/etc/clamav/clamd.conf" ];
 
   adminServiceDataFiles = pkgs.linkFarm "lazaret-clamav-admin-data" [
     {
       name = "share/polkit-1/actions/page.codeberg.wvhulle.Lazaret.policy";
-      path = ../data/page.codeberg.wvhulle.Lazaret.policy;
+      path = ../clamav_admin_service/system_files/page.codeberg.wvhulle.Lazaret.policy;
     }
     {
       name = "share/dbus-1/system.d/${adminBusName}.conf";
-      path = ../data/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf;
+      path = ../clamav_admin_service/system_files/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf;
     }
     {
       name = "share/dbus-1/system-services/${adminBusName}.service";
-      path = ../data/page.codeberg.wvhulle.Lazaret.ClamavAdmin.service;
+      path = ../clamav_admin_service/system_files/page.codeberg.wvhulle.Lazaret.ClamavAdmin.service;
     }
   ];
 in
@@ -131,11 +130,17 @@ in
       };
     };
     liveTuning = {
-      enable = lib.mkEnableOption ''
-        changing allowed clamd settings from Lazaret at runtime. Each change asks for administrator
-        authorization. Changes are stored outside the Nix configuration, so they drift from it
-        until you copy them over
-      '';
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = lazaretSettings.enable && clamavSettings.daemon.enable;
+        defaultText = lib.literalExpression "config.services.lazaret.enable && config.services.clamav.daemon.enable";
+        description = ''
+          Whether Lazaret may change the allowed clamd settings at runtime. Each change asks for
+          administrator authorization. Changes are stored outside the Nix configuration, so they
+          drift from it until you copy them over or reset them. Changes that reduce protection
+          end on their own after `reductionLifetime`.
+        '';
+      };
       adminServicePackage = lib.mkOption {
         type = lib.types.package;
         default = lazaretFlake.packages.${system}.clamav-admin;
@@ -143,16 +148,29 @@ in
         description = "The root admin service that validates and applies changes.";
       };
       allowedSettings = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
+        type = lib.types.listOf (lib.types.enum tunableSettingNames);
+        default = [
+          "DetectPUA"
+          "HeuristicAlerts"
+          "AlertOLE2Macros"
+          "AlertEncrypted"
+          "ScanArchive"
+          "AlertExceedsMax"
+        ];
         example = [
           "OnAccessMaxFileSize"
           "OnAccessIncludePath"
         ];
         description = ''
-          The clamd settings that may change at runtime. Settings that run commands or change
-          identity, such as VirusEvent or User, are refused here and again by the admin service.
+          The clamd settings that may change at runtime. Only settings whose value type Lazaret
+          knows can be listed; settings that run commands or change identity, such as VirusEvent
+          or User, are never among them.
         '';
+      };
+      reductionLifetime = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 86400;
+        description = "Seconds after which a runtime change that reduces protection ends on its own.";
       };
     };
   };
@@ -182,16 +200,13 @@ in
     (lib.mkIf liveTuning.enable {
       assertions = [
         {
-          assertion = refusedSettings == [ ];
-          message = "services.lazaret.liveTuning.allowedSettings contains settings that can never change at runtime: ${lib.concatStringsSep ", " refusedSettings}";
-        }
-        {
           assertion = clamavSettings.daemon.enable;
           message = "services.lazaret.liveTuning needs services.clamav.daemon.enable";
         }
       ];
 
       environment.etc."lazaret/tunable-settings".text = lib.concatLines liveTuning.allowedSettings;
+      environment.etc."lazaret/reduction-lifetime".text = toString liveTuning.reductionLifetime;
       environment.systemPackages = [ adminServiceDataFiles ];
       services.dbus.packages = [ adminServiceDataFiles ];
       security.polkit.enable = true;
@@ -223,13 +238,12 @@ in
         before = [
           "clamav-daemon.service"
           "clamav-clamonacc.service"
-          "clamdscan.service"
         ];
+        partOf = [ "clamav-daemon.service" ];
         requiredBy = [
           "clamav-daemon.service"
         ]
-        ++ lib.optional clamavSettings.clamonacc.enable "clamav-clamonacc.service"
-        ++ lib.optional clamavSettings.scanner.enable "clamdscan.service";
+        ++ lib.optional clamavSettings.clamonacc.enable "clamav-clamonacc.service";
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -239,17 +253,30 @@ in
         };
       };
 
+      systemd.services.lazaret-reduction-expiry = {
+        description = "End runtime changes that reduced ClamAV protection once they expire";
+        unitConfig.ConditionPathExists = "/var/lib/lazaret/live-overrides.toml";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${lib.getExe liveTuning.adminServicePackage} expire";
+        };
+      };
+
+      systemd.timers.lazaret-reduction-expiry = {
+        description = "Check for expired runtime changes that reduced ClamAV protection";
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnCalendar = "*:0/15";
+          Persistent = true;
+        };
+      };
+
       systemd.services.clamav-daemon.serviceConfig = {
-        ExecStart = lib.mkForce "${clamavSettings.package}/bin/clamd --config-file=${mergedConfigPath}";
+        BindReadOnlyPaths = liveTuningBind;
         RuntimeDirectoryPreserve = true;
       };
-      systemd.services.clamav-clamonacc.serviceConfig.ExecStart =
-        lib.mkIf clamavSettings.clamonacc.enable (
-          lib.mkForce "${clamavSettings.package}/bin/clamonacc -F --fdpass --config-file=${mergedConfigPath}"
-        );
-      systemd.services.clamdscan.serviceConfig.ExecStart = lib.mkIf clamavSettings.scanner.enable (
-        lib.mkForce "${clamavSettings.package}/bin/clamdscan --multiscan --fdpass --infected --allmatch --config-file=${mergedConfigPath} ${lib.concatStringsSep " " clamavSettings.scanner.scanDirectories}"
-      );
+      systemd.services.clamav-clamonacc.serviceConfig.BindReadOnlyPaths =
+        lib.mkIf clamavSettings.clamonacc.enable liveTuningBind;
     })
   ];
 }

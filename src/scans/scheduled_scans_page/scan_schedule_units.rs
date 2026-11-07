@@ -18,11 +18,11 @@ const SERVICE_FILE_NAME: &str = "lazaret-scheduled-scan.service";
 const TIMER_FILE_NAME: &str = "lazaret-scheduled-scan.timer";
 const SERVICE_TEMPLATE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/data/lazaret-scheduled-scan.service.in"
+    "/data/user_units/lazaret-scheduled-scan.service.in"
 ));
 const TIMER_TEMPLATE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/data/lazaret-scheduled-scan.timer.in"
+    "/data/user_units/lazaret-scheduled-scan.timer.in"
 ));
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

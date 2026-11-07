@@ -1,6 +1,7 @@
 [Unit]
 Description=Merge runtime changes into the clamd configuration
 Before=clamav-daemon.service clamav-clamonacc.service
+PartOf=clamav-daemon.service
 
 [Service]
 Type=oneshot

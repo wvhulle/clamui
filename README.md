@@ -1,4 +1,4 @@
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/main/data/icons/hicolor/scalable/apps/page.codeberg.wvhulle.Lazaret.svg" width="96" align="right" alt="Lazaret icon: a walled quarantine station with a yellow flag on an island">
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/main/data/desktop_integration/icons/hicolor/scalable/apps/page.codeberg.wvhulle.Lazaret.svg" width="96" align="right" alt="Lazaret icon: a walled quarantine station with a yellow flag on an island">
 
 # Lazaret
 

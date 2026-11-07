@@ -1,4 +1,4 @@
-use crate::host_services::clamav_admin_service::protection_change_rules::{
+use clamd_configuration::setting_kinds::{
     SettingValueKind, limit_in_units, path_is_absolute_and_contained, setting_value_kind,
     value_fits_setting_kind, value_has_only_safe_characters, whole_number_in_text,
 };

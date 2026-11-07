@@ -67,16 +67,18 @@ systemctl --user status lazaret.service
 
 ## Live tuning
 
-Live tuning lets you change chosen clamd settings from the app. Each change shows what will happen and asks for an administrator password. Settings that run commands or change identity, such as `VirusEvent` or `User`, are always refused, and a change that leaves clamd unhealthy is rolled back.
+Live tuning lets you change chosen clamd settings from the app. It is on whenever `services.lazaret.enable` and `services.clamav.daemon.enable` are both set, and by default allows the six switches on the Detection page. Each change shows what will happen and asks for an administrator password, and a change that leaves clamd unable to start is rolled back.
 
 ```nix
 services.lazaret.liveTuning = {
-  enable = true;
-  allowedSettings = [ "OnAccessMaxFileSize" "MaxThreads" ];
+  allowedSettings = [ "DetectPUA" "OnAccessMaxFileSize" "MaxThreads" ];
+  reductionLifetime = 3600;
 };
 ```
 
-Evaluation fails if `allowedSettings` contains a refused setting. Changes are stored in `/var/lib/lazaret/clamd-overrides.conf`, outside your Nix files. The settings page shows a snippet to copy into your configuration, so the change survives without the override.
+`allowedSettings` only accepts settings whose value type Lazaret knows, so settings that run commands or change identity, such as `VirusEvent` or `User`, fail evaluation. Changes are stored in `/var/lib/lazaret/live-overrides.toml`, outside your Nix files. A change that reduces protection, such as turning off PUA detection, ends on its own after `reductionLifetime` seconds (one day by default). The settings page shows a snippet of the permanent changes to copy into your configuration, and a button to go back to the system configuration.
+
+Set `services.lazaret.liveTuning.enable = false` to keep clamd fully declarative.
 
 ## API keys for reputation lookups
 

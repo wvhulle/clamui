@@ -34,24 +34,26 @@ systemctl --user enable --now lazaret.service
 
 ## Live tuning
 
-Live tuning lets you change chosen clamd settings from the app, after an administrator password prompt. Settings that run commands or change identity, such as `VirusEvent` or `User`, are always refused, and a change that leaves clamd unhealthy is rolled back. It is off until you allow settings and point clamd at the merged configuration.
+Live tuning lets you change chosen clamd settings from the app, after an administrator password prompt. Only settings whose value type Lazaret knows can be allowed, so settings that run commands or change identity, such as `VirusEvent` or `User`, are never accepted, and a change that leaves clamd unable to start is rolled back. A change that reduces protection ends on its own after `/etc/lazaret/reduction-lifetime` seconds (one day if the file is missing). It is off until you allow settings and let clamd and clamonacc see the merged configuration.
 
 1. List the settings you allow, one per line:
 
    ```sh
-   printf 'MaxThreads\nOnAccessMaxFileSize\n' | sudo tee /etc/lazaret/tunable-settings
+   printf 'DetectPUA\nMaxThreads\nOnAccessMaxFileSize\n' | sudo tee /etc/lazaret/tunable-settings
    ```
 
-2. Let clamd read the configuration that Lazaret merges from `/etc/clamav/clamd.conf` and your changes:
+2. Let clamd and clamonacc read the configuration that Lazaret merges from `/etc/clamav/clamd.conf` and your changes. The drop-ins bind the merged file over `/etc/clamav/clamd.conf` for these services only, so their start commands stay unchanged:
 
    ```sh
    sudo install -Dm644 /usr/share/lazaret/clamav-daemon-live-tuning.conf \
      /etc/systemd/system/clamav-daemon.service.d/lazaret.conf
+   sudo install -Dm644 /usr/share/lazaret/clamav-clamonacc-live-tuning.conf \
+     /etc/systemd/system/clamav-clamonacc.service.d/lazaret.conf
    sudo systemctl daemon-reload
    sudo systemctl restart clamav-daemon
    ```
 
-Without changes, the merged file is identical to `/etc/clamav/clamd.conf`. Changes are stored in `/var/lib/lazaret/clamd-overrides.conf`. To undo live tuning, remove the drop-in, reload systemd and restart `clamav-daemon`.
+Without changes, the merged file is identical to `/etc/clamav/clamd.conf`. Changes are stored in `/var/lib/lazaret/live-overrides.toml`. To undo live tuning, remove the drop-ins, reload systemd and restart `clamav-daemon`.
 
 ## API keys for reputation lookups
 

@@ -1,38 +1,42 @@
 mod admin_audit_journal;
+mod clamav_services;
 mod detection_trust_files;
-mod merged_clamd_config;
-mod protection_change_rules;
 mod settings_application;
-mod tunable_setting_rules;
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     path::PathBuf,
     process::ExitCode,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    thread,
     time::Duration,
 };
 
-use zbus::{blocking::connection::Builder, fdo, interface, message::Header, zvariant::Value};
+use clamd_configuration::{
+    clamd_conf_format::serializer::to_setting_lines,
+    live_overrides::{ReductionExpiry, SettingChanges},
+    protection_rules::ProtectionReduction,
+};
+use jiff::Timestamp;
+use zbus::{connection::Builder, fdo, interface, message::Header, zvariant::Value};
 
 use crate::{
     admin_audit_journal::{
         AdminAuditRecord, AuditOutcome, AuditedAction, RequestingUser, record_admin_action,
     },
+    clamav_services::{
+        ClamavServices, ServicesReadiness, SystemClamavServices, clamd_reloads_signatures,
+    },
     detection_trust_files::{
         TrustRequest, apply_trust_request, request_protection_reduction, request_summary,
         validated_request,
     },
-    merged_clamd_config::OverrideSetting,
-    protection_change_rules::{ProtectionReduction, ValuesInEffect, protection_reduction},
     settings_application::{
-        ApplicationOutcome, SettingsPaths, SystemClamavServices, apply_setting_changes,
-        clamd_reloads_signatures, config_values_in_effect, read_current_overrides,
-        read_tunable_settings, write_merged_config,
+        ApplicationFailure, ApplicationOutcome, SettingsPaths, apply_setting_changes,
+        expire_reductions, planned_overrides_change, read_lines_in_effect, read_tunable_allowlist,
+        write_merged_config,
     },
 };
 
@@ -52,20 +56,30 @@ const APPLIED_ANSWER: &str = "applied";
 const RELOAD_PENDING_ANSWER: &str = "applied-reload-pending";
 const ROLLED_BACK_ANSWER: &str = "rolled-back";
 const IDLE_EXIT_PAUSE: Duration = Duration::from_secs(60);
+const ROOT_USER_ID: u32 = 0;
 
 type PolkitSubject<'subject> = (&'subject str, HashMap<&'subject str, Value<'subject>>);
 
-fn changes_for_prompt(requested_changes: &[OverrideSetting]) -> String {
-    requested_changes
-        .iter()
-        .map(|requested_change| {
-            format!(
-                "{} {}",
-                requested_change.setting_key, requested_change.setting_value
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+fn changes_for_prompt(setting_changes: &SettingChanges) -> String {
+    match setting_changes {
+        SettingChanges::SetValues { setting_values } => to_setting_lines(setting_values.as_ref())
+            .map(|setting_lines| {
+                setting_lines
+                    .into_iter()
+                    .map(|setting_line| setting_line.line_text)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default(),
+        SettingChanges::BackToSystem { setting_names } => format!(
+            "back to the system configuration: {}",
+            setting_names
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
 }
 
 struct AuthorizationRequest<'request> {
@@ -129,19 +143,19 @@ async fn caller_is_authorized(
 
 fn configured_path(
     settings_paths: &SettingsPaths,
-    setting_key: &str,
+    setting_name: &str,
     default_path: &str,
 ) -> PathBuf {
-    match config_values_in_effect(settings_paths, setting_key) {
-        ValuesInEffect::Configured { setting_values } => setting_values
-            .into_iter()
-            .next()
-            .filter(|configured_value| configured_value.starts_with('/'))
-            .map_or_else(|| PathBuf::from(default_path), PathBuf::from),
-        ValuesInEffect::NotConfigured | ValuesInEffect::ConfigUnreadable(_) => {
-            PathBuf::from(default_path)
-        }
-    }
+    read_lines_in_effect(settings_paths)
+        .ok()
+        .and_then(|lines_in_effect| {
+            lines_in_effect
+                .values_of(setting_name)
+                .first()
+                .filter(|configured_value| configured_value.starts_with('/'))
+                .map(PathBuf::from)
+        })
+        .unwrap_or_else(|| PathBuf::from(default_path))
 }
 
 fn local_socket_in_config(settings_paths: &SettingsPaths) -> PathBuf {
@@ -154,33 +168,6 @@ fn database_directory_in_config(settings_paths: &SettingsPaths) -> PathBuf {
         "DatabaseDirectory",
         DEFAULT_DATABASE_DIRECTORY,
     )
-}
-
-fn requested_changes_reduction(
-    settings_paths: &SettingsPaths,
-    requested_changes: &[OverrideSetting],
-) -> ProtectionReduction {
-    let new_values_by_key = requested_changes.iter().fold(
-        BTreeMap::<&str, Vec<String>>::new(),
-        |mut new_values_by_key, requested_change| {
-            new_values_by_key
-                .entry(requested_change.setting_key.as_str())
-                .or_default()
-                .push(requested_change.setting_value.clone());
-            new_values_by_key
-        },
-    );
-    new_values_by_key
-        .iter()
-        .map(|(setting_key, new_values)| {
-            protection_reduction(
-                setting_key,
-                &config_values_in_effect(settings_paths, setting_key),
-                new_values,
-            )
-        })
-        .find(|change_reduction| change_reduction.weakens_protection())
-        .unwrap_or(ProtectionReduction::NoReduction)
 }
 
 fn caller_of(message_header: &Header<'_>) -> fdo::Result<String> {
@@ -216,21 +203,26 @@ impl Drop for FinishedRequestMarker {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct PlannedAudit {
+    protection_reduction: ProtectionReduction,
+    reduction_expiry: ReductionExpiry,
+}
+
+const UNPLANNED_AUDIT: PlannedAudit = PlannedAudit {
+    protection_reduction: ProtectionReduction::NoReduction,
+    reduction_expiry: ReductionExpiry::NoExpiry,
+};
+
 #[interface(name = "page.codeberg.wvhulle.Lazaret.ClamavAdmin")]
 impl ClamavAdminService {
     fn get_tunable_settings(&self) -> fdo::Result<Vec<String>> {
-        read_tunable_settings(&self.settings_paths)
-            .map_err(|read_failure| fdo::Error::Failed(read_failure.to_string()))
-    }
-
-    fn get_overrides(&self) -> fdo::Result<Vec<(String, String)>> {
-        read_current_overrides(&self.settings_paths)
-            .map(|current_overrides| {
-                current_overrides
-                    .into_iter()
-                    .map(|current_override| {
-                        (current_override.setting_key, current_override.setting_value)
-                    })
+        read_tunable_allowlist(&self.settings_paths)
+            .map(|tunable_allowlist| {
+                tunable_allowlist
+                    .allowed_names
+                    .iter()
+                    .map(ToString::to_string)
                     .collect()
             })
             .map_err(|read_failure| fdo::Error::Failed(read_failure.to_string()))
@@ -239,62 +231,71 @@ impl ClamavAdminService {
     async fn apply_changes(
         &self,
         #[zbus(header)] message_header: Header<'_>,
-        changes: Vec<(String, String)>,
+        change_document: String,
     ) -> fdo::Result<String> {
         let finish_activity = self.start_request();
         let caller_name = caller_of(&message_header)?;
-        let requested_changes = changes
-            .into_iter()
-            .map(|(setting_key, setting_value)| OverrideSetting {
-                setting_key,
-                setting_value,
-            })
-            .collect::<Vec<_>>();
-        let change_summary = changes_for_prompt(&requested_changes);
-        let protection_reduction =
-            requested_changes_reduction(&self.settings_paths, &requested_changes);
+        let setting_changes = SettingChanges::from_toml_text(&change_document)
+            .map_err(|parse_failure| fdo::Error::InvalidArgs(parse_failure.to_string()))?;
+        let change_summary = changes_for_prompt(&setting_changes);
         let requesting_user = requesting_user(&caller_name).await;
-        let audit = |audit_outcome| {
+        let now = Timestamp::now();
+        let audit = |audit_outcome, planned_audit: PlannedAudit| {
             record_admin_action(&AdminAuditRecord {
-                audited_action: AuditedAction::ChangeSettings,
+                audited_action: AuditedAction::ChangeSettings {
+                    reduction_expiry: planned_audit.reduction_expiry,
+                },
                 action_subject: &change_summary,
                 requesting_user,
                 audit_outcome,
-                protection_reduction,
+                protection_reduction: planned_audit.protection_reduction,
             });
         };
+        let planned_audit =
+            match planned_overrides_change(&self.settings_paths, &setting_changes, now) {
+                Ok(overrides_change) => PlannedAudit {
+                    protection_reduction: overrides_change.protection_reduction,
+                    reduction_expiry: overrides_change.reduction_expiry,
+                },
+                Err(planning_failure) => {
+                    audit(AuditOutcome::ActionFailed, UNPLANNED_AUDIT);
+                    return Err(fdo::Error::Failed(planning_failure.to_string()));
+                }
+            };
         let authorization_request = AuthorizationRequest {
             action_id: APPLY_ACTION_ID,
             detail_key: CHANGE_DETAIL_KEY,
             detail_text: &change_summary,
         };
         if !caller_is_authorized(&caller_name, authorization_request).await? {
-            audit(AuditOutcome::AuthorizationRefused);
+            audit(AuditOutcome::AuthorizationRefused, planned_audit);
             return Err(fdo::Error::AccessDenied(
                 "administrator authorization was not given".to_owned(),
             ));
         }
-        let settings_paths = self.settings_paths.clone();
-        let application_outcome = tokio::task::spawn_blocking(move || {
-            let mut clamav_services = SystemClamavServices {
-                local_socket: local_socket_in_config(&settings_paths),
-            };
-            apply_setting_changes(&settings_paths, &requested_changes, &mut clamav_services)
-        })
-        .await
-        .map_err(|join_failure| fdo::Error::Failed(join_failure.to_string()))?;
+        let local_socket = local_socket_in_config(&self.settings_paths);
+        let mut clamav_services = SystemClamavServices {
+            local_socket: &local_socket,
+        };
+        let application_outcome = apply_setting_changes(
+            &self.settings_paths,
+            &setting_changes,
+            &mut clamav_services,
+            now,
+        )
+        .await;
         drop(finish_activity);
         match application_outcome {
             Ok(ApplicationOutcome::ChangesApplied) => {
-                audit(AuditOutcome::ActionApplied);
+                audit(AuditOutcome::ActionApplied, planned_audit);
                 Ok(APPLIED_ANSWER.to_owned())
             }
-            Ok(ApplicationOutcome::RolledBackAfterUnhealthyRestart) => {
-                audit(AuditOutcome::ActionRolledBack);
+            Ok(ApplicationOutcome::RolledBackAfterFailedRestart) => {
+                audit(AuditOutcome::ActionRolledBack, planned_audit);
                 Ok(ROLLED_BACK_ANSWER.to_owned())
             }
             Err(application_failure) => {
-                audit(AuditOutcome::ActionFailed);
+                audit(AuditOutcome::ActionFailed, planned_audit);
                 Err(fdo::Error::Failed(application_failure.to_string()))
             }
         }
@@ -394,21 +395,14 @@ impl ClamavAdminService {
                 "administrator authorization was not given".to_owned(),
             ));
         }
-        let settings_paths = self.settings_paths.clone();
-        let applied_request = trust_request.clone();
-        let trust_outcome = tokio::task::spawn_blocking(move || {
-            apply_trust_request(
-                &database_directory_in_config(&settings_paths),
-                &applied_request,
-            )
-            .map(|()| clamd_reloads_signatures(&local_socket_in_config(&settings_paths)))
-        })
-        .await
-        .map_err(|join_failure| fdo::Error::Failed(join_failure.to_string()))?;
-        drop(finish_activity);
-        match trust_outcome {
-            Ok(clamd_reloading) => {
+        let trust_answer = match apply_trust_request(
+            &database_directory_in_config(&self.settings_paths),
+            &trust_request,
+        ) {
+            Ok(()) => {
                 audit(AuditOutcome::ActionApplied);
+                let clamd_reloading =
+                    clamd_reloads_signatures(&local_socket_in_config(&self.settings_paths)).await;
                 Ok(if clamd_reloading {
                     APPLIED_ANSWER
                 } else {
@@ -420,11 +414,13 @@ impl ClamavAdminService {
                 audit(AuditOutcome::ActionFailed);
                 Err(fdo::Error::Failed(trust_refusal.to_string()))
             }
-        }
+        };
+        drop(finish_activity);
+        trust_answer
     }
 }
 
-fn serve_clamav_admin_service() -> zbus::Result<()> {
+async fn serve_clamav_admin_service() -> zbus::Result<()> {
     let admin_service_activity = Arc::new(AdminServiceActivity::default());
     let _service_connection = Builder::system()?
         .name(ADMIN_BUS_NAME)?
@@ -435,9 +431,10 @@ fn serve_clamav_admin_service() -> zbus::Result<()> {
                 admin_service_activity: Arc::clone(&admin_service_activity),
             },
         )?
-        .build()?;
+        .build()
+        .await?;
     loop {
-        thread::sleep(IDLE_EXIT_PAUSE);
+        tokio::time::sleep(IDLE_EXIT_PAUSE).await;
         let finished_recently = admin_service_activity
             .request_finished_recently
             .swap(false, Ordering::SeqCst);
@@ -451,27 +448,64 @@ fn serve_clamav_admin_service() -> zbus::Result<()> {
     }
 }
 
+async fn expire_and_restart(settings_paths: &SettingsPaths) -> Result<(), ApplicationFailure> {
+    let expired_names = expire_reductions(settings_paths, Timestamp::now())?;
+    if expired_names.is_empty() {
+        return Ok(());
+    }
+    let local_socket = local_socket_in_config(settings_paths);
+    let services_readiness = SystemClamavServices {
+        local_socket: &local_socket,
+    }
+    .restart_until_ready()
+    .await;
+    record_admin_action(&AdminAuditRecord {
+        audited_action: AuditedAction::ExpireReductions,
+        action_subject: &format!("expired: {}", expired_names.join(", ")),
+        requesting_user: RequestingUser::KnownUser {
+            user_id: ROOT_USER_ID,
+        },
+        audit_outcome: match services_readiness {
+            Ok(ServicesReadiness::ServicesReady) => AuditOutcome::ActionApplied,
+            Ok(ServicesReadiness::ServiceNotReady { .. }) | Err(_) => AuditOutcome::ActionFailed,
+        },
+        protection_reduction: ProtectionReduction::NoReduction,
+    });
+    services_readiness
+        .map(|_services_readiness| ())
+        .map_err(ApplicationFailure::from)
+}
+
 #[derive(Debug, thiserror::Error)]
-enum AdminServiceModeFailure {
+enum AdminModeFailure {
     #[error("the ClamAV admin service could not serve on the system bus: {0}")]
     ServingFailed(#[from] zbus::Error),
     #[error("the merged clamd configuration could not be written: {0}")]
     MergeFailed(#[from] std::io::Error),
-    #[error("usage: lazaret-clamav-admin serve|merge")]
+    #[error("expired reductions could not be removed: {0}")]
+    ExpiryFailed(#[from] ApplicationFailure),
+    #[error("usage: lazaret-clamav-admin serve|merge|expire")]
     UnknownMode,
 }
 
-fn run_requested_mode(requested_mode: &str) -> Result<(), AdminServiceModeFailure> {
+async fn run_requested_mode(requested_mode: &str) -> Result<(), AdminModeFailure> {
+    let settings_paths = SettingsPaths::on_this_host();
     match requested_mode {
-        "serve" => Ok(serve_clamav_admin_service()?),
-        "merge" => Ok(write_merged_config(&SettingsPaths::on_this_host())?),
-        _unknown_mode => Err(AdminServiceModeFailure::UnknownMode),
+        "serve" => Ok(serve_clamav_admin_service().await?),
+        "merge" => Ok(write_merged_config(&settings_paths, Timestamp::now())?),
+        "expire" => Ok(expire_and_restart(&settings_paths).await?),
+        _unknown_mode => Err(AdminModeFailure::UnknownMode),
     }
 }
 
 fn main() -> ExitCode {
     let requested_mode = std::env::args().nth(1).unwrap_or_default();
-    match run_requested_mode(&requested_mode) {
+    let mode_outcome = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(AdminModeFailure::from)
+        .and_then(|admin_runtime| admin_runtime.block_on(run_requested_mode(&requested_mode)));
+    match mode_outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(mode_failure) => {
             eprintln!("{mode_failure}");
@@ -513,18 +547,20 @@ mod clamav_admin_service_tests {
 
     #[test]
     fn the_prompt_shows_the_exact_change() {
+        let setting_changes = SettingChanges::from_toml_text(
+            "change = \"set-values\"\n\n[setting_values]\nOnAccessPrevention = \
+             false\nOnAccessMaxFileSize = \"200M\"\n",
+        )
+        .expect("parsed");
         assert_eq!(
-            changes_for_prompt(&[OverrideSetting {
-                setting_key: "OnAccessPrevention".to_owned(),
-                setting_value: "false".to_owned(),
-            }]),
-            "OnAccessPrevention false"
+            changes_for_prompt(&setting_changes),
+            "OnAccessPrevention no, OnAccessMaxFileSize 200M"
         );
     }
 
     #[test]
     fn both_actions_retain_no_authorization_and_show_the_exact_request() {
-        let policy_text = include_str!("../../data/page.codeberg.wvhulle.Lazaret.policy");
+        let policy_text = include_str!("../system_files/page.codeberg.wvhulle.Lazaret.policy");
         assert!(policy_text.contains(&format!("id=\"{APPLY_ACTION_ID}\"")));
         assert!(policy_text.contains(&format!("id=\"{TRUST_ACTION_ID}\"")));
         assert_eq!(
@@ -540,7 +576,8 @@ mod clamav_admin_service_tests {
 
     #[test]
     fn the_bus_configuration_names_this_service() {
-        let bus_policy = include_str!("../../data/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf");
+        let bus_policy =
+            include_str!("../system_files/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf");
         assert!(bus_policy.contains(&format!("own=\"{ADMIN_BUS_NAME}\"")));
         assert!(bus_policy.contains(&format!("send_destination=\"{ADMIN_BUS_NAME}\"")));
     }

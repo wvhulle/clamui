@@ -11,7 +11,7 @@ use crate::{
     shared_widgets::engine_settings::config_setting_row::size_unit_labels,
 };
 
-const SIZE_COUNT_CEILING: f64 = 4_294_967_295.0;
+const SIZE_COUNT_CEILING: f64 = i32::MAX as f64;
 
 pub struct ConfigLineCopyInit {
     pub setting_key: String,

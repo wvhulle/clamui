@@ -11,6 +11,12 @@ pub fn to_setting_lines<Record: Serialize>(
     record.serialize(RecordSerializer)
 }
 
+pub fn value_texts<Value: ?Sized + Serialize>(
+    setting_value: &Value,
+) -> Result<Vec<String>, ClamdFormatError> {
+    setting_value.serialize(ValueSerializer)
+}
+
 fn unsupported_shape(shape_name: &str) -> ClamdFormatError {
     ClamdFormatError::Message(format!("clamd.conf can't hold a {shape_name}"))
 }

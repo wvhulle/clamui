@@ -47,6 +47,33 @@ let
     builtins.filter (moduleAssertion: !moduleAssertion.assertion)
       (liveTuningEvaluation allowedSettings).config.assertions;
 
+  refusedByOptionType =
+    allowedSettings:
+    !(builtins.tryEval (
+      builtins.deepSeq (liveTuningEvaluation allowedSettings).config.services.lazaret.liveTuning.allowedSettings true
+    )).success;
+
+  defaultLiveTuningSystem = nixpkgs.lib.nixosSystem {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    modules = [
+      self.nixosModules.default
+      {
+        services.lazaret.enable = true;
+        services.clamav.daemon.enable = true;
+        services.clamav.clamonacc.enable = true;
+        boot.loader.grub.enable = false;
+        fileSystems."/" = {
+          device = "nodev";
+          fsType = "tmpfs";
+        };
+        system.stateVersion = "25.11";
+      }
+    ];
+  };
+
+  defaultLiveTuning = defaultLiveTuningSystem.config.services.lazaret.liveTuning;
+  defaultSystemdServices = defaultLiveTuningSystem.config.systemd.services;
+
   keyFileEvaluation =
     keyFilePath:
     nixpkgs.lib.nixosSystem {
@@ -153,8 +180,24 @@ let
   };
 in
 assert failedAssertions [ "OnAccessMaxFileSize" ] == [ ];
-assert failedAssertions [ "VirusEvent" ] != [ ];
-assert failedAssertions [ "user" ] != [ ];
+assert refusedByOptionType [ "VirusEvent" ];
+assert refusedByOptionType [ "User" ];
+assert !refusedByOptionType [ "DetectPUA" ];
+assert defaultLiveTuning.enable;
+assert builtins.elem "DetectPUA" defaultLiveTuning.allowedSettings;
+assert !backgroundServiceSystem.config.services.lazaret.liveTuning.enable;
+assert
+  defaultSystemdServices.clamav-daemon.serviceConfig.BindReadOnlyPaths == [
+    "-/run/lazaret/clamd.conf:/etc/clamav/clamd.conf"
+  ];
+assert
+  defaultSystemdServices.clamav-clamonacc.serviceConfig.BindReadOnlyPaths == [
+    "-/run/lazaret/clamd.conf:/etc/clamav/clamd.conf"
+  ];
+assert
+  !(pkgs.lib.hasInfix "--config-file" defaultSystemdServices.clamav-daemon.serviceConfig.ExecStart);
+assert builtins.elem "clamav-daemon.service" defaultSystemdServices.lazaret-settings-merge.partOf;
+assert defaultLiveTuningSystem.config.systemd.timers ? lazaret-reduction-expiry;
 assert failedKeyFileAssertions "/run/agenix/abuse-ch-key" == [ ];
 assert failedKeyFileAssertions "/nix/store/abc-abuse-ch-key" != [ ];
 assert failedKeyFileAssertions "relative/abuse-ch-key" != [ ];

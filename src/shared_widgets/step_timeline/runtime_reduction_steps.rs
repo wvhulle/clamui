@@ -2,6 +2,7 @@ use gettextrs::{gettext, ngettext};
 
 use crate::{
     host_services::{
+        clamav_admin_service::live_settings_client::StoredOverridesFailure,
         desktop::locale_formatting::exact_local_time_text,
         protection_evidence::host_protection_evidence::{
             OverriddenSetting, OverridesChangeTime, OverridesReadFailure, ReducedSetting,
@@ -67,11 +68,19 @@ fn override_change_time_row(change_time: OverridesChangeTime) -> StepEvidenceRow
 
 fn overrides_failure_text(read_failure: OverridesReadFailure) -> String {
     match read_failure {
-        OverridesReadFailure::OverridesFileUnreadable { failure_kind } => gettext(
+        OverridesReadFailure::StoredOverridesUnusable(
+            StoredOverridesFailure::OverridesFileUnreadable { failure_kind },
+        ) => gettext(
             "Unknown whether settings were reduced, because the runtime changes could not be \
              read: {error}",
         )
         .replace("{error}", &failure_kind.to_string()),
+        OverridesReadFailure::StoredOverridesUnusable(
+            StoredOverridesFailure::OverridesFileInvalid,
+        ) => gettext(
+            "Unknown whether settings were reduced, because the runtime changes file is not in \
+             the expected format. ClamAV runs with the system configuration until it is fixed.",
+        ),
         OverridesReadFailure::ReadingTaskInterrupted => gettext(
             "Unknown whether settings were reduced, because reading the runtime changes stopped \
              before it finished",
