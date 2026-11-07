@@ -1,11 +1,10 @@
-use std::{num::NonZeroU64, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, num::NonZeroU64, path::PathBuf, time::Duration};
 
 use jiff::Timestamp;
 use tokio::task::spawn_blocking;
-use turso::{Builder, Connection, Row, Value};
+use turso::{Builder, Connection, Row, transaction::TransactionBehavior};
 
 use crate::host_services::{
-    activity_history::submission_history_store::SUBMISSION_SCHEMA,
     clamav_scanner::{
         scan_progress_events::ThreatFindings, scanner_output_parser::sanitize_scanner_line,
     },
@@ -18,40 +17,20 @@ use crate::host_services::{
 const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const MAXIMUM_RETAINED_ENTRIES: i64 = 10_000;
 const ENTRIES_KEEPING_OUTPUT: i64 = 200;
-const HISTORY_SCHEMA: &str = "
-    CREATE TABLE IF NOT EXISTS activity_entries (
-        entry_id INTEGER PRIMARY KEY,
-        started_at_unix INTEGER NOT NULL,
-        activity_status TEXT NOT NULL,
-        activity_targets TEXT NOT NULL,
-        inspected_file_count INTEGER NOT NULL,
-        threat_count INTEGER NOT NULL,
-        duration_millis INTEGER NOT NULL,
-        activity_output TEXT NOT NULL,
-        scan_origin TEXT
-    );
-    CREATE TABLE IF NOT EXISTS background_detections (
-        detection_id INTEGER PRIMARY KEY,
-        file_path BLOB NOT NULL,
-        signature_name TEXT NOT NULL,
-        found_on_access INTEGER NOT NULL,
-        found_by_schedule INTEGER NOT NULL,
-        first_seen_unix INTEGER NOT NULL,
-        last_seen_unix INTEGER NOT NULL,
-        sighting_count INTEGER NOT NULL,
-        resolution TEXT NOT NULL,
-        resolved_at_unix INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS detection_journal_position (
-        position_row INTEGER PRIMARY KEY,
-        journal_cursor TEXT NOT NULL
-    );
-";
+const HISTORY_SCHEMA: &str = include_str!("../../../data/database-schemas/history.sql");
 const HISTORY_CONNECTION_PRAGMAS: &str = "PRAGMA foreign_keys=ON;";
-const ENTRY_COLUMNS: &str = "entry_id, started_at_unix, activity_status, activity_targets, \
-                             inspected_file_count, threat_count, duration_millis, \
-                             activity_output, scan_origin";
-const SCAN_ORIGIN_COLUMN: &str = "scan_origin";
+const ENTRY_QUERY: &str = "
+    SELECT activity_entries.entry_id, activity_entries.started_at_unix,
+        activity_entries.activity_status, activity_entries.duration_millis,
+        activity_entries.activity_output, scan_activities.scan_origin,
+        scan_inspections.inspected_file_count, scan_threat_counts.threat_count
+    FROM activity_entries
+    LEFT JOIN scan_activities ON scan_activities.entry_id = activity_entries.entry_id
+    LEFT JOIN scan_inspections ON scan_inspections.entry_id = activity_entries.entry_id
+    LEFT JOIN scan_threat_counts ON scan_threat_counts.entry_id = activity_entries.entry_id
+    ORDER BY activity_entries.started_at_unix DESC, activity_entries.entry_id DESC";
+const TARGET_QUERY: &str =
+    "SELECT entry_id, target_path FROM scan_activity_targets ORDER BY entry_id, target_position";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ActivityHistoryFailure {
@@ -69,6 +48,8 @@ pub enum ActivityHistoryFailure {
     StoredStatusUnknown,
     #[error("a stored history entry has an unknown scan origin")]
     StoredOriginUnknown,
+    #[error("a stored scan entry lacks its scan details, or an update entry has them")]
+    StoredScanDetailsInconsistent,
     #[error("a stored submission has an unknown service, kind or status")]
     StoredSubmissionUnreadable,
     #[error("a stored history entry has an impossible time: {0}")]
@@ -94,17 +75,11 @@ impl FoundThreatCount {
         }
     }
 
-    const fn stored_count(self) -> u64 {
+    const fn exported_count(self) -> u64 {
         match self {
             Self::CountedThreats { threat_count } => threat_count.get(),
             Self::UncountedThreats => 0,
         }
-    }
-
-    fn from_stored_count(stored_count: u64) -> Self {
-        NonZeroU64::new(stored_count).map_or(Self::UncountedThreats, |threat_count| {
-            Self::CountedThreats { threat_count }
-        })
     }
 }
 
@@ -123,6 +98,12 @@ pub enum ScanOrigin {
     DeviceScan,
 }
 
+const ALL_SCAN_ORIGINS: [ScanOrigin; 3] = [
+    ScanOrigin::ManualScan,
+    ScanOrigin::ScheduledScan,
+    ScanOrigin::DeviceScan,
+];
+
 impl ScanOrigin {
     pub const fn stored_origin_text(self) -> &'static str {
         match self {
@@ -131,44 +112,12 @@ impl ScanOrigin {
             Self::DeviceScan => "device_scan",
         }
     }
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StoredScanOrigin {
-    OriginRecorded(ScanOrigin),
-    OriginNotRecorded,
-}
-
-impl StoredScanOrigin {
-    fn column_value(self) -> Value {
-        match self {
-            Self::OriginRecorded(scan_origin) => {
-                Value::Text(scan_origin.stored_origin_text().to_owned())
-            }
-            Self::OriginNotRecorded => Value::Null,
-        }
-    }
-
-    fn from_column_value(column_value: Value) -> Result<Self, ActivityHistoryFailure> {
-        match column_value {
-            Value::Null => Ok(Self::OriginNotRecorded),
-            Value::Text(origin_text) => match origin_text.as_str() {
-                "manual_scan" => Ok(Self::OriginRecorded(ScanOrigin::ManualScan)),
-                "scheduled_scan" => Ok(Self::OriginRecorded(ScanOrigin::ScheduledScan)),
-                "device_scan" => Ok(Self::OriginRecorded(ScanOrigin::DeviceScan)),
-                _unknown_origin => Err(ActivityHistoryFailure::StoredOriginUnknown),
-            },
-            Value::Integer(_) | Value::Real(_) | Value::Blob(_) => {
-                Err(ActivityHistoryFailure::StoredOriginUnknown)
-            }
-        }
-    }
-
-    const fn origin_of_base_status(self) -> ScanOrigin {
-        match self {
-            Self::OriginRecorded(scan_origin) => scan_origin,
-            Self::OriginNotRecorded => ScanOrigin::ManualScan,
-        }
+    pub fn from_stored_origin_text(stored_text: &str) -> Result<Self, ActivityHistoryFailure> {
+        ALL_SCAN_ORIGINS
+            .into_iter()
+            .find(|scan_origin| scan_origin.stored_origin_text() == stored_text)
+            .ok_or(ActivityHistoryFailure::StoredOriginUnknown)
     }
 }
 
@@ -180,6 +129,28 @@ pub enum UpdateActivityStatus {
     UpdateResultUnknown,
     UpdateFailed,
     UpdateCancelled,
+}
+
+const ALL_UPDATE_STATUSES: [UpdateActivityStatus; 6] = [
+    UpdateActivityStatus::UpdateApplied,
+    UpdateActivityStatus::UpdateAlreadyCurrent,
+    UpdateActivityStatus::UpdateRequested,
+    UpdateActivityStatus::UpdateResultUnknown,
+    UpdateActivityStatus::UpdateFailed,
+    UpdateActivityStatus::UpdateCancelled,
+];
+
+impl UpdateActivityStatus {
+    const fn stored_status_text(self) -> &'static str {
+        match self {
+            Self::UpdateApplied => "update_applied",
+            Self::UpdateAlreadyCurrent => "update_already_current",
+            Self::UpdateRequested => "update_requested",
+            Self::UpdateResultUnknown => "update_result_unknown",
+            Self::UpdateFailed => "update_failed",
+            Self::UpdateCancelled => "update_cancelled",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -200,7 +171,7 @@ pub enum ActivityRecord {
 
 const SCAN_TARGET_SEPARATOR: char = '\n';
 
-fn stored_scan_targets(scan_targets: &[PathBuf]) -> String {
+fn exported_scan_targets(scan_targets: &[PathBuf]) -> String {
     scan_targets
         .iter()
         .map(|scan_target| sanitize_scanner_line(&scan_target.to_string_lossy()))
@@ -208,20 +179,44 @@ fn stored_scan_targets(scan_targets: &[PathBuf]) -> String {
         .join(&SCAN_TARGET_SEPARATOR.to_string())
 }
 
-fn scan_targets_from_stored_text(stored_targets: &str) -> Vec<PathBuf> {
-    stored_targets
-        .split(SCAN_TARGET_SEPARATOR)
-        .filter(|stored_target| !stored_target.is_empty())
-        .map(PathBuf::from)
+fn stored_target_paths(scan_targets: &[PathBuf]) -> Vec<String> {
+    scan_targets
+        .iter()
+        .map(|scan_target| sanitize_scanner_line(&scan_target.to_string_lossy()))
+        .filter(|target_text| !target_text.is_empty())
         .collect()
 }
 
-pub struct StoredActivityColumns {
+pub struct ExportedActivityColumns {
     pub activity_status: &'static str,
-    pub scan_origin: StoredScanOrigin,
     pub activity_targets: String,
     pub inspected_file_count: u64,
     pub threat_count: u64,
+}
+
+struct StoredScanDetails {
+    scan_status_text: &'static str,
+    scan_origin: ScanOrigin,
+    target_paths: Vec<String>,
+    scan_inspection: ScanInspection,
+}
+
+enum ScanInspection {
+    InspectionNotRun,
+    InspectedFiles {
+        inspected_file_count: u64,
+        stored_threat_count: StoredThreatCount,
+    },
+}
+
+enum StoredThreatCount {
+    NoThreatCountRow,
+    ThreatCountRow { threat_count: NonZeroU64 },
+}
+
+enum StoredActivityDetails {
+    UpdateWithoutDetails,
+    ScanWithDetails(StoredScanDetails),
 }
 
 impl ActivityRecord {
@@ -234,25 +229,7 @@ impl ActivityRecord {
                 ScanActivityStatus::ScanCancelled => "scan_cancelled",
             },
             Self::SkippedScan { .. } => "scan_skipped",
-            Self::UpdateActivity { update_status } => match update_status {
-                UpdateActivityStatus::UpdateApplied => "update_applied",
-                UpdateActivityStatus::UpdateAlreadyCurrent => "update_already_current",
-                UpdateActivityStatus::UpdateRequested => "update_requested",
-                UpdateActivityStatus::UpdateResultUnknown => "update_result_unknown",
-                UpdateActivityStatus::UpdateFailed => "update_failed",
-                UpdateActivityStatus::UpdateCancelled => "update_cancelled",
-            },
-        }
-    }
-
-    pub const fn stored_scan_origin(&self) -> StoredScanOrigin {
-        match self {
-            Self::ScanActivity { scan_origin, .. } => {
-                StoredScanOrigin::OriginRecorded(*scan_origin)
-            }
-            Self::SkippedScan { .. } | Self::UpdateActivity { .. } => {
-                StoredScanOrigin::OriginNotRecorded
-            }
+            Self::UpdateActivity { update_status } => update_status.stored_status_text(),
         }
     }
 
@@ -265,7 +242,7 @@ impl ActivityRecord {
         }
     }
 
-    const fn stored_inspected_file_count(&self) -> u64 {
+    const fn exported_inspected_file_count(&self) -> u64 {
         match self {
             Self::ScanActivity {
                 inspected_file_count,
@@ -275,70 +252,135 @@ impl ActivityRecord {
         }
     }
 
-    const fn stored_threat_count(&self) -> u64 {
+    const fn exported_threat_count(&self) -> u64 {
         match self {
             Self::ScanActivity {
                 scan_status: ScanActivityStatus::ScanInfected { found_threats },
                 ..
-            } => found_threats.stored_count(),
+            } => found_threats.exported_count(),
             Self::ScanActivity { .. } | Self::SkippedScan { .. } | Self::UpdateActivity { .. } => 0,
         }
     }
 
-    pub fn stored_columns(&self) -> StoredActivityColumns {
-        StoredActivityColumns {
+    pub fn exported_columns(&self) -> ExportedActivityColumns {
+        ExportedActivityColumns {
             activity_status: self.stored_status_text(),
-            scan_origin: self.stored_scan_origin(),
-            activity_targets: stored_scan_targets(self.scan_targets()),
-            inspected_file_count: self.stored_inspected_file_count(),
-            threat_count: self.stored_threat_count(),
+            activity_targets: exported_scan_targets(self.scan_targets()),
+            inspected_file_count: self.exported_inspected_file_count(),
+            threat_count: self.exported_threat_count(),
         }
     }
 
-    fn from_stored_columns(
-        stored_status: &str,
-        stored_origin: StoredScanOrigin,
-        stored_targets: &str,
-        inspected_file_count: u64,
-        threat_count: u64,
-    ) -> Result<Self, ActivityHistoryFailure> {
-        let scan_activity = |scan_status, scan_origin| Self::ScanActivity {
-            scan_targets: scan_targets_from_stored_text(stored_targets),
+    fn stored_details(&self) -> StoredActivityDetails {
+        match self {
+            Self::ScanActivity {
+                scan_targets,
+                inspected_file_count,
+                scan_status,
+                scan_origin,
+            } => StoredActivityDetails::ScanWithDetails(StoredScanDetails {
+                scan_status_text: self.stored_status_text(),
+                scan_origin: *scan_origin,
+                target_paths: stored_target_paths(scan_targets),
+                scan_inspection: ScanInspection::InspectedFiles {
+                    inspected_file_count: *inspected_file_count,
+                    stored_threat_count: match scan_status {
+                        ScanActivityStatus::ScanInfected {
+                            found_threats: FoundThreatCount::CountedThreats { threat_count },
+                        } => StoredThreatCount::ThreatCountRow {
+                            threat_count: *threat_count,
+                        },
+                        ScanActivityStatus::ScanInfected {
+                            found_threats: FoundThreatCount::UncountedThreats,
+                        }
+                        | ScanActivityStatus::ScanClean
+                        | ScanActivityStatus::ScanFailed
+                        | ScanActivityStatus::ScanCancelled => StoredThreatCount::NoThreatCountRow,
+                    },
+                },
+            }),
+            Self::SkippedScan { scan_targets } => {
+                StoredActivityDetails::ScanWithDetails(StoredScanDetails {
+                    scan_status_text: self.stored_status_text(),
+                    scan_origin: ScanOrigin::ScheduledScan,
+                    target_paths: stored_target_paths(scan_targets),
+                    scan_inspection: ScanInspection::InspectionNotRun,
+                })
+            }
+            Self::UpdateActivity { .. } => StoredActivityDetails::UpdateWithoutDetails,
+        }
+    }
+}
+
+fn activity_record_from_row(
+    entry_row: &Row,
+    scan_targets: Vec<PathBuf>,
+) -> Result<ActivityRecord, ActivityHistoryFailure> {
+    let stored_status: String = entry_row.get(2)?;
+    let scan_origin_text: Option<String> = entry_row.get(5)?;
+    let inspected_file_count: Option<u64> = entry_row.get(6)?;
+    let threat_count: Option<u64> = entry_row.get(7)?;
+    if let Some(update_status) = ALL_UPDATE_STATUSES
+        .into_iter()
+        .find(|update_status| update_status.stored_status_text() == stored_status)
+    {
+        return match scan_origin_text {
+            None => Ok(ActivityRecord::UpdateActivity { update_status }),
+            Some(_) => Err(ActivityHistoryFailure::StoredScanDetailsInconsistent),
+        };
+    }
+    let scan_origin = match scan_origin_text {
+        Some(origin_text) => ScanOrigin::from_stored_origin_text(&origin_text)?,
+        None => return Err(ActivityHistoryFailure::StoredScanDetailsInconsistent),
+    };
+    let ran_scan = |inspected_file_count, scan_status| ActivityRecord::ScanActivity {
+        scan_targets: scan_targets.clone(),
+        inspected_file_count,
+        scan_status,
+        scan_origin,
+    };
+    match (stored_status.as_str(), inspected_file_count, threat_count) {
+        ("scan_skipped", None, None) => Ok(ActivityRecord::SkippedScan {
+            scan_targets: scan_targets.clone(),
+        }),
+        ("scan_clean", Some(inspected_file_count), None) => Ok(ran_scan(
             inspected_file_count,
-            scan_status,
-            scan_origin,
-        };
-        let infected_status = ScanActivityStatus::ScanInfected {
-            found_threats: FoundThreatCount::from_stored_count(threat_count),
-        };
-        let update_activity = |update_status| Self::UpdateActivity { update_status };
-        let base_origin = stored_origin.origin_of_base_status();
-        Ok(match stored_status {
-            "scan_clean" => scan_activity(ScanActivityStatus::ScanClean, base_origin),
-            "scan_infected" => scan_activity(infected_status, base_origin),
-            "scan_failed" => scan_activity(ScanActivityStatus::ScanFailed, base_origin),
-            "scan_cancelled" => scan_activity(ScanActivityStatus::ScanCancelled, base_origin),
-            "scheduled_scan_clean" => {
-                scan_activity(ScanActivityStatus::ScanClean, ScanOrigin::ScheduledScan)
-            }
-            "scheduled_scan_infected" => scan_activity(infected_status, ScanOrigin::ScheduledScan),
-            "scheduled_scan_failed" => {
-                scan_activity(ScanActivityStatus::ScanFailed, ScanOrigin::ScheduledScan)
-            }
-            "scheduled_scan_cancelled" => {
-                scan_activity(ScanActivityStatus::ScanCancelled, ScanOrigin::ScheduledScan)
-            }
-            "scan_skipped" => Self::SkippedScan {
-                scan_targets: scan_targets_from_stored_text(stored_targets),
+            ScanActivityStatus::ScanClean,
+        )),
+        ("scan_failed", Some(inspected_file_count), None) => Ok(ran_scan(
+            inspected_file_count,
+            ScanActivityStatus::ScanFailed,
+        )),
+        ("scan_cancelled", Some(inspected_file_count), None) => Ok(ran_scan(
+            inspected_file_count,
+            ScanActivityStatus::ScanCancelled,
+        )),
+        ("scan_infected", Some(inspected_file_count), None) => Ok(ran_scan(
+            inspected_file_count,
+            ScanActivityStatus::ScanInfected {
+                found_threats: FoundThreatCount::UncountedThreats,
             },
-            "update_applied" => update_activity(UpdateActivityStatus::UpdateApplied),
-            "update_already_current" => update_activity(UpdateActivityStatus::UpdateAlreadyCurrent),
-            "update_requested" => update_activity(UpdateActivityStatus::UpdateRequested),
-            "update_result_unknown" => update_activity(UpdateActivityStatus::UpdateResultUnknown),
-            "update_failed" => update_activity(UpdateActivityStatus::UpdateFailed),
-            "update_cancelled" => update_activity(UpdateActivityStatus::UpdateCancelled),
-            _unknown_status => return Err(ActivityHistoryFailure::StoredStatusUnknown),
-        })
+        )),
+        ("scan_infected", Some(inspected_file_count), Some(stored_count)) => {
+            NonZeroU64::new(stored_count)
+                .map(|threat_count| {
+                    ran_scan(
+                        inspected_file_count,
+                        ScanActivityStatus::ScanInfected {
+                            found_threats: FoundThreatCount::CountedThreats { threat_count },
+                        },
+                    )
+                })
+                .ok_or(ActivityHistoryFailure::StoredScanDetailsInconsistent)
+        }
+        (
+            "scan_skipped" | "scan_clean" | "scan_failed" | "scan_cancelled" | "scan_infected",
+            _stored_inspection,
+            _stored_threats,
+        ) => Err(ActivityHistoryFailure::StoredScanDetailsInconsistent),
+        (_unknown_status, _stored_inspection, _stored_threats) => {
+            Err(ActivityHistoryFailure::StoredStatusUnknown)
+        }
     }
 }
 
@@ -359,67 +401,140 @@ pub struct ActivityEntryRecord {
     pub activity_output: String,
 }
 
-fn stored_count(stored_value: i64) -> u64 {
-    u64::try_from(stored_value).unwrap_or(0)
-}
-
-fn activity_entry_from_row(entry_row: &Row) -> Result<ActivityEntryRecord, ActivityHistoryFailure> {
-    let stored_status: String = entry_row.get(2)?;
-    let stored_targets: String = entry_row.get(3)?;
-    let inspected_file_count: i64 = entry_row.get(4)?;
-    let threat_count: i64 = entry_row.get(5)?;
-    let duration_millis: i64 = entry_row.get(6)?;
+fn activity_entry_from_row(
+    entry_row: &Row,
+    targets_by_entry: &mut BTreeMap<i64, Vec<PathBuf>>,
+) -> Result<ActivityEntryRecord, ActivityHistoryFailure> {
+    let entry_id: i64 = entry_row.get(0)?;
     Ok(ActivityEntryRecord {
-        entry_id: entry_row.get(0)?,
+        entry_id,
         started_at: Timestamp::from_second(entry_row.get(1)?)?,
-        activity_record: ActivityRecord::from_stored_columns(
-            &stored_status,
-            StoredScanOrigin::from_column_value(entry_row.get_value(8)?)?,
-            &stored_targets,
-            stored_count(inspected_file_count),
-            stored_count(threat_count),
+        activity_record: activity_record_from_row(
+            entry_row,
+            targets_by_entry.remove(&entry_id).unwrap_or_default(),
         )?,
-        duration_millis: stored_count(duration_millis),
-        activity_output: entry_row.get(7)?,
+        duration_millis: entry_row.get(3)?,
+        activity_output: entry_row.get(4)?,
     })
 }
 
-async fn activity_entries_have_origin_column(
+async fn stored_targets_by_entry(
     database_connection: &Connection,
-) -> Result<bool, ActivityHistoryFailure> {
-    let mut column_rows = database_connection
-        .query("PRAGMA table_info(activity_entries)", ())
-        .await?;
-    while let Some(column_row) = column_rows.next().await? {
-        let column_name: String = column_row.get(1)?;
-        if column_name == SCAN_ORIGIN_COLUMN {
-            return Ok(true);
-        }
+) -> Result<BTreeMap<i64, Vec<PathBuf>>, ActivityHistoryFailure> {
+    let mut target_rows = database_connection.query(TARGET_QUERY, ()).await?;
+    let mut targets_by_entry = BTreeMap::<i64, Vec<PathBuf>>::new();
+    while let Some(target_row) = target_rows.next().await? {
+        targets_by_entry
+            .entry(target_row.get(0)?)
+            .or_default()
+            .push(PathBuf::from(target_row.get::<String>(1)?));
     }
-    Ok(false)
+    Ok(targets_by_entry)
 }
 
-async fn add_scan_origin_column(
+async fn write_activity_details(
     database_connection: &Connection,
+    entry_id: i64,
+    activity_record: &ActivityRecord,
 ) -> Result<(), ActivityHistoryFailure> {
-    if activity_entries_have_origin_column(database_connection).await? {
+    let StoredActivityDetails::ScanWithDetails(scan_details) = activity_record.stored_details()
+    else {
         return Ok(());
-    }
-    match database_connection
+    };
+    database_connection
         .execute(
-            "ALTER TABLE activity_entries ADD COLUMN scan_origin TEXT",
-            (),
+            "INSERT INTO scan_activities (entry_id, activity_status, scan_origin) VALUES (?1, ?2, \
+             ?3)",
+            (
+                entry_id,
+                scan_details.scan_status_text,
+                scan_details.scan_origin.stored_origin_text(),
+            ),
         )
-        .await
-    {
-        Ok(_changed_rows) => Ok(()),
-        Err(_concurrent_migration)
-            if activity_entries_have_origin_column(database_connection).await? =>
-        {
-            Ok(())
-        }
-        Err(alter_failure) => Err(alter_failure.into()),
+        .await?;
+    for (target_position, target_path) in scan_details.target_paths.into_iter().enumerate() {
+        database_connection
+            .execute(
+                "INSERT INTO scan_activity_targets (entry_id, target_position, target_path) \
+                 VALUES (?1, ?2, ?3)",
+                (entry_id, target_position as u64, target_path),
+            )
+            .await?;
     }
+    let ScanInspection::InspectedFiles {
+        inspected_file_count,
+        stored_threat_count,
+    } = scan_details.scan_inspection
+    else {
+        return Ok(());
+    };
+    database_connection
+        .execute(
+            "INSERT INTO scan_inspections (entry_id, activity_status, inspected_file_count) \
+             VALUES (?1, ?2, ?3)",
+            (
+                entry_id,
+                scan_details.scan_status_text,
+                inspected_file_count,
+            ),
+        )
+        .await?;
+    if let StoredThreatCount::ThreatCountRow { threat_count } = stored_threat_count {
+        database_connection
+            .execute(
+                "INSERT INTO scan_threat_counts (entry_id, activity_status, threat_count) VALUES \
+                 (?1, ?2, ?3)",
+                (entry_id, scan_details.scan_status_text, threat_count.get()),
+            )
+            .await?;
+    }
+    Ok(())
+}
+
+async fn insert_activity_entry(
+    database_connection: &Connection,
+    activity_entry: &ActivityEntryRecord,
+) -> Result<(), ActivityHistoryFailure> {
+    database_connection
+        .execute(
+            "INSERT INTO activity_entries (entry_id, started_at_unix, activity_status, \
+             duration_millis, activity_output) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                activity_entry.entry_id,
+                activity_entry.started_at.as_second(),
+                activity_entry.activity_record.stored_status_text(),
+                activity_entry.duration_millis,
+                activity_entry.activity_output.as_str(),
+            ),
+        )
+        .await?;
+    write_activity_details(
+        database_connection,
+        activity_entry.entry_id,
+        &activity_entry.activity_record,
+    )
+    .await
+}
+
+async fn next_entry_id(database_connection: &Connection) -> Result<i64, ActivityHistoryFailure> {
+    Ok(database_connection
+        .prepare("SELECT COALESCE(MAX(entry_id), 0) + 1 FROM activity_entries")
+        .await?
+        .query_row(())
+        .await?
+        .get(0)?)
+}
+
+async fn list_activity_entries(
+    database_connection: &Connection,
+) -> Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure> {
+    let mut targets_by_entry = stored_targets_by_entry(database_connection).await?;
+    let mut entry_rows = database_connection.query(ENTRY_QUERY, ()).await?;
+    let mut recent_entries = Vec::new();
+    while let Some(entry_row) = entry_rows.next().await? {
+        recent_entries.push(activity_entry_from_row(&entry_row, &mut targets_by_entry)?);
+    }
+    Ok(recent_entries)
 }
 
 #[derive(Clone, Debug)]
@@ -451,8 +566,6 @@ impl ActivityHistory {
             .execute_batch(HISTORY_CONNECTION_PRAGMAS)
             .await?;
         database_connection.execute_batch(HISTORY_SCHEMA).await?;
-        database_connection.execute_batch(SUBMISSION_SCHEMA).await?;
-        add_scan_origin_column(&database_connection).await?;
         secure_database_files(&self.database_path);
         Ok(database_connection)
     }
@@ -461,46 +574,36 @@ impl ActivityHistory {
         &self,
         new_entry: NewActivityEntry,
     ) -> Result<(), ActivityHistoryFailure> {
-        let StoredActivityColumns {
-            activity_status,
-            scan_origin,
-            activity_targets,
-            inspected_file_count,
-            threat_count,
-        } = new_entry.activity_record.stored_columns();
         let _history_lock = self.lock_history().await?;
-        let database_connection = self.open_connection().await?;
-        database_connection
+        let mut database_connection = self.open_connection().await?;
+        let entry_transaction = database_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .await?;
+        let entry_id = next_entry_id(&entry_transaction).await?;
+        insert_activity_entry(
+            &entry_transaction,
+            &ActivityEntryRecord {
+                entry_id,
+                started_at: new_entry.started_at,
+                activity_record: new_entry.activity_record,
+                duration_millis: new_entry.duration_millis,
+                activity_output: new_entry.activity_output,
+            },
+        )
+        .await?;
+        entry_transaction
             .execute(
-                "INSERT INTO activity_entries (started_at_unix, activity_status, \
-                 activity_targets, inspected_file_count, threat_count, duration_millis, \
-                 activity_output, scan_origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                vec![
-                    Value::Integer(new_entry.started_at.as_second()),
-                    Value::Text(activity_status.to_owned()),
-                    Value::Text(activity_targets),
-                    Value::Integer(inspected_file_count as i64),
-                    Value::Integer(threat_count as i64),
-                    Value::Integer(new_entry.duration_millis as i64),
-                    Value::Text(new_entry.activity_output),
-                    scan_origin.column_value(),
-                ],
+                "UPDATE activity_entries SET activity_output = '' WHERE entry_id <= ?1 - ?2",
+                (entry_id, ENTRIES_KEEPING_OUTPUT),
             )
             .await?;
-        database_connection
+        entry_transaction
             .execute(
-                "UPDATE activity_entries SET activity_output = '' WHERE entry_id <= (SELECT \
-                 MAX(entry_id) FROM activity_entries) - ?1",
-                [ENTRIES_KEEPING_OUTPUT],
+                "DELETE FROM activity_entries WHERE entry_id <= ?1 - ?2",
+                (entry_id, MAXIMUM_RETAINED_ENTRIES),
             )
             .await?;
-        database_connection
-            .execute(
-                "DELETE FROM activity_entries WHERE entry_id <= (SELECT MAX(entry_id) FROM \
-                 activity_entries) - ?1",
-                [MAXIMUM_RETAINED_ENTRIES],
-            )
-            .await?;
+        entry_transaction.commit().await?;
         Ok(())
     }
 
@@ -509,20 +612,7 @@ impl ActivityHistory {
     ) -> Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure> {
         let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
-        let mut entry_rows = database_connection
-            .query(
-                &format!(
-                    "SELECT {ENTRY_COLUMNS} FROM activity_entries ORDER BY started_at_unix DESC, \
-                     entry_id DESC"
-                ),
-                (),
-            )
-            .await?;
-        let mut recent_entries = Vec::new();
-        while let Some(entry_row) = entry_rows.next().await? {
-            recent_entries.push(activity_entry_from_row(&entry_row)?);
-        }
-        Ok(recent_entries)
+        list_activity_entries(&database_connection).await
     }
 
     pub async fn clear_all_entries(&self) -> Result<(), ActivityHistoryFailure> {
@@ -646,8 +736,8 @@ mod activity_history_database_tests {
         connection
             .execute(
                 "INSERT INTO activity_entries (entry_id, started_at_unix, activity_status, \
-                 activity_targets, inspected_file_count, threat_count, duration_millis, \
-                 activity_output) VALUES (1, 1, 'scan_clean', '', 0, 0, 0, 'stale output')",
+                 duration_millis, activity_output) VALUES (1, 1, 'update_applied', 0, 'stale \
+                 output')",
                 (),
             )
             .await
@@ -655,8 +745,7 @@ mod activity_history_database_tests {
         connection
             .execute(
                 "INSERT INTO activity_entries (entry_id, started_at_unix, activity_status, \
-                 activity_targets, inspected_file_count, threat_count, duration_millis, \
-                 activity_output) VALUES (500, 2, 'scan_clean', '', 0, 0, 0, 'fresh')",
+                 duration_millis, activity_output) VALUES (500, 2, 'update_applied', 0, 'fresh')",
                 (),
             )
             .await
@@ -725,187 +814,6 @@ mod activity_history_database_tests {
     }
 
     #[tokio::test]
-    async fn every_scan_origin_round_trips_through_its_column() {
-        for scan_origin in [
-            ScanOrigin::ManualScan,
-            ScanOrigin::ScheduledScan,
-            ScanOrigin::DeviceScan,
-        ] {
-            let scanned_record = ActivityRecord::ScanActivity {
-                scan_targets: vec![PathBuf::from("/run/media/user/USB STICK")],
-                inspected_file_count: 12,
-                scan_status: ScanActivityStatus::ScanClean,
-                scan_origin,
-            };
-            assert_eq!(
-                recorded_and_listed(scanned_record.clone()).await,
-                scanned_record
-            );
-            assert_eq!(
-                StoredScanOrigin::from_column_value(
-                    StoredScanOrigin::OriginRecorded(scan_origin).column_value()
-                )
-                .expect("known origin"),
-                StoredScanOrigin::OriginRecorded(scan_origin)
-            );
-        }
-    }
-
-    #[test]
-    fn a_device_scan_is_stored_with_its_own_origin_text() {
-        assert_eq!(
-            StoredScanOrigin::OriginRecorded(ScanOrigin::DeviceScan).column_value(),
-            Value::Text("device_scan".to_owned())
-        );
-        assert!(matches!(
-            StoredScanOrigin::from_column_value(Value::Text("usb_scan".to_owned())),
-            Err(ActivityHistoryFailure::StoredOriginUnknown)
-        ));
-    }
-
-    #[test]
-    fn rows_stored_before_origins_were_recorded_read_as_manual_scans() {
-        [
-            "scan_clean",
-            "scan_infected",
-            "scan_failed",
-            "scan_cancelled",
-        ]
-        .into_iter()
-        .for_each(|stored_status| {
-            assert!(matches!(
-                ActivityRecord::from_stored_columns(
-                    stored_status,
-                    StoredScanOrigin::OriginNotRecorded,
-                    "/tmp",
-                    1,
-                    0
-                ),
-                Ok(ActivityRecord::ScanActivity {
-                    scan_origin: ScanOrigin::ManualScan,
-                    ..
-                })
-            ));
-        });
-    }
-
-    #[test]
-    fn statuses_written_with_the_origin_inside_read_as_the_base_status_and_scheduled() {
-        [
-            ("scheduled_scan_clean", "scan_clean"),
-            ("scheduled_scan_infected", "scan_infected"),
-            ("scheduled_scan_failed", "scan_failed"),
-            ("scheduled_scan_cancelled", "scan_cancelled"),
-        ]
-        .into_iter()
-        .for_each(|(combined_status, base_status)| {
-            let read_record = ActivityRecord::from_stored_columns(
-                combined_status,
-                StoredScanOrigin::OriginNotRecorded,
-                "/tmp",
-                1,
-                0,
-            )
-            .expect("known status");
-            assert!(matches!(
-                read_record,
-                ActivityRecord::ScanActivity {
-                    scan_origin: ScanOrigin::ScheduledScan,
-                    ..
-                }
-            ));
-            assert_eq!(read_record.stored_status_text(), base_status);
-            assert_eq!(
-                read_record.stored_scan_origin(),
-                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan)
-            );
-        });
-    }
-
-    #[tokio::test]
-    async fn an_old_history_gains_the_origin_column_and_keeps_its_rows() {
-        let temporary_root = tempfile::tempdir().expect("temporary root");
-        let database_path = temporary_root.path().join("history.db");
-        let old_connection = rusqlite::Connection::open(&database_path).expect("old database");
-        old_connection
-            .execute_batch(
-                "CREATE TABLE activity_entries (entry_id INTEGER PRIMARY KEY, started_at_unix \
-                 INTEGER NOT NULL, activity_status TEXT NOT NULL, activity_targets TEXT NOT NULL, \
-                 inspected_file_count INTEGER NOT NULL, threat_count INTEGER NOT NULL, \
-                 duration_millis INTEGER NOT NULL, activity_output TEXT NOT NULL);
-                 INSERT INTO activity_entries VALUES (1, 100, 'scan_clean', '/old', 4, 0, 0, '');
-                 INSERT INTO activity_entries VALUES (2, 200, 'scheduled_scan_failed', '/home', 0, \
-                 0, 0, '');",
-            )
-            .expect("old rows");
-        drop(old_connection);
-        let history = ActivityHistory::at_database_path(database_path.clone());
-        let origins_of = |listed_entries: Vec<ActivityEntryRecord>| {
-            listed_entries
-                .into_iter()
-                .map(|listed_entry| listed_entry.activity_record.stored_scan_origin())
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            origins_of(history.list_recent_entries().await.expect("listed")),
-            vec![
-                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan),
-                StoredScanOrigin::OriginRecorded(ScanOrigin::ManualScan),
-            ]
-        );
-        history
-            .record_activity(NewActivityEntry {
-                started_at: Timestamp::constant(300, 0),
-                activity_record: ActivityRecord::ScanActivity {
-                    scan_targets: vec![PathBuf::from("/srv")],
-                    inspected_file_count: 1,
-                    scan_status: ScanActivityStatus::ScanClean,
-                    scan_origin: ScanOrigin::ScheduledScan,
-                },
-                duration_millis: 0,
-                activity_output: String::new(),
-            })
-            .await
-            .expect("recorded after migration");
-        let reopened_history = ActivityHistory::at_database_path(database_path.clone());
-        assert_eq!(
-            origins_of(
-                reopened_history
-                    .list_recent_entries()
-                    .await
-                    .expect("listed")
-            ),
-            vec![
-                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan),
-                StoredScanOrigin::OriginRecorded(ScanOrigin::ScheduledScan),
-                StoredScanOrigin::OriginRecorded(ScanOrigin::ManualScan),
-            ]
-        );
-        let raw_rows = rusqlite::Connection::open(&database_path)
-            .expect("reopened")
-            .prepare("SELECT activity_status, scan_origin FROM activity_entries ORDER BY entry_id")
-            .expect("statement")
-            .query_map([], |raw_row| {
-                Ok(format!(
-                    "{}:{}",
-                    raw_row.get::<_, String>(0)?,
-                    raw_row.get::<_, Option<String>>(1)?.unwrap_or_default()
-                ))
-            })
-            .expect("rows")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("raw rows");
-        assert_eq!(
-            raw_rows,
-            vec![
-                "scan_clean:",
-                "scheduled_scan_failed:",
-                "scan_clean:scheduled_scan"
-            ]
-        );
-    }
-
-    #[tokio::test]
     async fn updates_and_skipped_scans_read_back_without_scan_counts() {
         let update_record = ActivityRecord::UpdateActivity {
             update_status: UpdateActivityStatus::UpdateAlreadyCurrent,
@@ -951,22 +859,216 @@ mod activity_history_database_tests {
         );
     }
 
-    #[test]
-    fn old_comma_joined_targets_read_as_one_target() {
+    #[tokio::test]
+    async fn line_breaks_inside_a_target_cannot_split_it() {
+        let scanned_record = ActivityRecord::ScanActivity {
+            scan_targets: vec![PathBuf::from("/scan/odd\nname"), PathBuf::new()],
+            inspected_file_count: 1,
+            scan_status: ScanActivityStatus::ScanClean,
+            scan_origin: ScanOrigin::ManualScan,
+        };
         assert_eq!(
-            scan_targets_from_stored_text("/scan/one, /scan/two"),
-            vec![PathBuf::from("/scan/one, /scan/two")]
+            recorded_and_listed(scanned_record).await.scan_targets(),
+            [PathBuf::from("/scan/odd name")]
         );
-        assert_eq!(scan_targets_from_stored_text(""), Vec::<PathBuf>::new());
     }
 
-    #[test]
-    fn line_breaks_inside_a_target_cannot_split_it() {
+    fn every_activity_record() -> Vec<ActivityRecord> {
+        let scan_targets = vec![PathBuf::from("/home/user"), PathBuf::from("/srv/share")];
+        let ran_statuses = [
+            ScanActivityStatus::ScanClean,
+            ScanActivityStatus::ScanInfected {
+                found_threats: FoundThreatCount::CountedThreats {
+                    threat_count: NonZeroU64::new(3).expect("three threats"),
+                },
+            },
+            ScanActivityStatus::ScanInfected {
+                found_threats: FoundThreatCount::UncountedThreats,
+            },
+            ScanActivityStatus::ScanFailed,
+            ScanActivityStatus::ScanCancelled,
+        ];
+        ran_statuses
+            .into_iter()
+            .flat_map(|scan_status| {
+                ALL_SCAN_ORIGINS
+                    .into_iter()
+                    .map(move |scan_origin| (scan_status, scan_origin))
+            })
+            .map(|(scan_status, scan_origin)| ActivityRecord::ScanActivity {
+                scan_targets: scan_targets.clone(),
+                inspected_file_count: 12,
+                scan_status,
+                scan_origin,
+            })
+            .chain([ActivityRecord::SkippedScan {
+                scan_targets: scan_targets.clone(),
+            }])
+            .chain(
+                ALL_UPDATE_STATUSES
+                    .into_iter()
+                    .map(|update_status| ActivityRecord::UpdateActivity { update_status }),
+            )
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn every_activity_variant_round_trips_through_the_tables() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+        let recorded_records = every_activity_record();
+        for (entry_position, activity_record) in recorded_records.iter().enumerate() {
+            history
+                .record_activity(NewActivityEntry {
+                    started_at: Timestamp::constant(100 + entry_position as i64, 0),
+                    activity_record: activity_record.clone(),
+                    duration_millis: 7,
+                    activity_output: format!("output {entry_position}"),
+                })
+                .await
+                .expect("recorded");
+        }
+        let listed_records = history
+            .list_recent_entries()
+            .await
+            .expect("listed")
+            .into_iter()
+            .rev()
+            .map(|listed_entry| listed_entry.activity_record)
+            .collect::<Vec<_>>();
+        assert_eq!(listed_records, recorded_records);
+    }
+
+    fn raw_count(database_path: &std::path::Path, count_query: &str) -> i64 {
+        rusqlite::Connection::open(database_path)
+            .expect("database")
+            .query_row(count_query, [], |count_row| count_row.get(0))
+            .expect("count")
+    }
+
+    #[tokio::test]
+    async fn updates_store_no_scan_rows_and_targets_are_ordered_rows() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let database_path = temporary_root.path().join("history.db");
+        let history = ActivityHistory::at_database_path(database_path.clone());
+        for activity_record in every_activity_record() {
+            history
+                .record_activity(NewActivityEntry {
+                    started_at: Timestamp::constant(100, 0),
+                    activity_record,
+                    duration_millis: 0,
+                    activity_output: String::new(),
+                })
+                .await
+                .expect("recorded");
+        }
         assert_eq!(
-            scan_targets_from_stored_text(&stored_scan_targets(&[PathBuf::from(
-                "/scan/odd\nname"
-            )])),
-            vec![PathBuf::from("/scan/odd name")]
+            raw_count(
+                &database_path,
+                "SELECT COUNT(*) FROM scan_activities JOIN activity_entries USING (entry_id) \
+                 WHERE activity_entries.activity_status LIKE 'update_%'"
+            ),
+            0
         );
+        assert_eq!(
+            raw_count(&database_path, "SELECT COUNT(*) FROM scan_activities"),
+            16
+        );
+        assert_eq!(
+            raw_count(&database_path, "SELECT COUNT(*) FROM scan_inspections"),
+            15
+        );
+        assert_eq!(
+            raw_count(&database_path, "SELECT COUNT(*) FROM scan_threat_counts"),
+            3
+        );
+        assert_eq!(
+            raw_count(&database_path, "SELECT COUNT(*) FROM scan_activity_targets"),
+            32
+        );
+        assert_eq!(
+            raw_count(
+                &database_path,
+                "SELECT COUNT(*) FROM scan_activity_targets WHERE target_position = 1 AND \
+                 target_path = '/srv/share'"
+            ),
+            16
+        );
+        history.clear_all_entries().await.expect("cleared");
+        assert_eq!(
+            raw_count(
+                &database_path,
+                "SELECT (SELECT COUNT(*) FROM scan_activities) + (SELECT COUNT(*) FROM \
+                 scan_activity_targets) + (SELECT COUNT(*) FROM scan_inspections) + (SELECT \
+                 COUNT(*) FROM scan_threat_counts)"
+            ),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn the_activity_schema_refuses_rows_that_cannot_exist() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let database_path = temporary_root.path().join("history.db");
+        ActivityHistory::at_database_path(database_path.clone())
+            .list_recent_entries()
+            .await
+            .expect("created");
+        let checked_connection = rusqlite::Connection::open(&database_path).expect("database");
+        checked_connection
+            .execute_batch(
+                "PRAGMA foreign_keys = ON;
+                 INSERT INTO activity_entries VALUES (1, 1, 'scan_infected', 0, '');
+                 INSERT INTO scan_activities VALUES (1, 'scan_infected', 'manual_scan');
+                 INSERT INTO scan_inspections VALUES (1, 'scan_infected', 3);
+                 INSERT INTO activity_entries VALUES (2, 1, 'scan_clean', 0, '');
+                 INSERT INTO scan_activities VALUES (2, 'scan_clean', 'manual_scan');
+                 INSERT INTO scan_inspections VALUES (2, 'scan_clean', 3);
+                 INSERT INTO activity_entries VALUES (3, 1, 'update_applied', 0, '');
+                 INSERT INTO activity_entries VALUES (4, 1, 'scan_skipped', 0, '');",
+            )
+            .expect("valid rows");
+        [
+            "INSERT INTO activity_entries VALUES (9, 1, 'scheduled_scan_clean', 0, '')",
+            "INSERT INTO activity_entries VALUES (9, 1, 'scan_clean', -1, '')",
+            "INSERT INTO scan_activities VALUES (3, 'update_applied', 'manual_scan')",
+            "INSERT INTO scan_activities VALUES (3, 'scan_clean', 'manual_scan')",
+            "INSERT INTO scan_activities VALUES (4, 'scan_skipped', 'manual_scan')",
+            "INSERT INTO scan_activities VALUES (4, 'scan_skipped', 'usb_scan')",
+            "INSERT INTO scan_threat_counts VALUES (1, 'scan_infected', 0)",
+            "INSERT INTO scan_threat_counts VALUES (2, 'scan_clean', 4)",
+            "INSERT INTO scan_threat_counts VALUES (2, 'scan_infected', 4)",
+            "INSERT INTO scan_inspections VALUES (4, 'scan_skipped', 0)",
+            "INSERT INTO scan_inspections VALUES (1, 'scan_infected', -1)",
+            "INSERT INTO scan_activity_targets VALUES (3, 0, '/home')",
+            "INSERT INTO scan_activity_targets VALUES (1, -1, '/home')",
+            "INSERT INTO scan_activity_targets VALUES (1, 0, '')",
+        ]
+        .into_iter()
+        .for_each(|invalid_insert| {
+            assert!(
+                checked_connection.execute(invalid_insert, []).is_err(),
+                "accepted: {invalid_insert}"
+            );
+        });
+    }
+
+    #[tokio::test]
+    async fn an_infected_scan_without_its_inspection_row_is_unreadable() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let database_path = temporary_root.path().join("history.db");
+        let history = ActivityHistory::at_database_path(database_path.clone());
+        history.list_recent_entries().await.expect("created");
+        rusqlite::Connection::open(&database_path)
+            .expect("database")
+            .execute_batch(
+                "INSERT INTO activity_entries VALUES (1, 1, 'scan_infected', 0, '');
+                 INSERT INTO scan_activities VALUES (1, 'scan_infected', 'manual_scan');",
+            )
+            .expect("partial rows");
+        assert!(matches!(
+            history.list_recent_entries().await,
+            Err(ActivityHistoryFailure::StoredScanDetailsInconsistent)
+        ));
     }
 }

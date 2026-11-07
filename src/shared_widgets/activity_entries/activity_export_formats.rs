@@ -1,8 +1,8 @@
 use gettextrs::gettext;
 
 use crate::host_services::activity_history::activity_history_database::{
-    ActivityEntryRecord, ActivityRecord, FoundThreatCount, ScanActivityStatus, ScanOrigin,
-    StoredActivityColumns, UpdateActivityStatus,
+    ActivityEntryRecord, ActivityRecord, ExportedActivityColumns, FoundThreatCount,
+    ScanActivityStatus, ScanOrigin, UpdateActivityStatus,
 };
 
 const CSV_HEADER: &str =
@@ -91,13 +91,12 @@ struct ExportedActivityEntry<'entry> {
 
 impl<'entry> ExportedActivityEntry<'entry> {
     fn from_entry(activity_entry: &'entry ActivityEntryRecord) -> Self {
-        let StoredActivityColumns {
+        let ExportedActivityColumns {
             activity_status,
             activity_targets,
-            scan_origin: _stored_origin,
             inspected_file_count,
             threat_count,
-        } = activity_entry.activity_record.stored_columns();
+        } = activity_entry.activity_record.exported_columns();
         Self {
             entry_id: activity_entry.entry_id,
             started_at: activity_entry.started_at,

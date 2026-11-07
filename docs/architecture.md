@@ -152,6 +152,28 @@ flowchart LR
 
 `lazaret --background` runs without a window and follows the journal of the ClamAV services. A detection by clamd or clamonacc raises an alert, and the Detections page shows its timeline. Scheduled scans are a systemd user timer and service that Lazaret writes to `~/.config/systemd/user`. The service runs a headless scan with the same scanner code as the Scan page.
 
+## Stored data
+
+Lazaret keeps two SQLite databases in its data directory, `history.db` and `quarantine.db`. Their tables are created from `data/database-schemas/`, which the screenshot fixtures load too. The tables follow the shape of the Rust types: each state that carries its own data has its own detail table, keyed like its parent and deleted with it, so a column never holds a placeholder such as `0` or `''`. `CHECK` constraints list the valid values and combinations, and every connection turns on `PRAGMA foreign_keys`. Detail tables repeat the parent's status in their key, so a foreign key ties each detail row to the one status it belongs to.
+
+### history.db
+
+```mermaid
+erDiagram
+    activity_entries ||--o| scan_activities : "scan or skipped scan"
+    scan_activities ||--o{ scan_activity_targets : "targets in order"
+    scan_activities ||--o| scan_inspections : "scan that ran"
+    scan_inspections ||--o| scan_threat_counts : "infected, counted"
+```
+
+| Table | Key | References | Stores |
+|---|---|---|---|
+| `activity_entries` | `entry_id` | | One scan or signature update: start, status, duration and output. |
+| `scan_activities` | `entry_id` | `activity_entries (entry_id, activity_status)` | The origin of a scan. A skipped scan is always scheduled. |
+| `scan_activity_targets` | `entry_id, target_position` | `scan_activities` | One scanned path per row, in the order given. |
+| `scan_inspections` | `entry_id` | `scan_activities (entry_id, activity_status)` | How many files a scan that ran inspected. Skipped scans have none. |
+| `scan_threat_counts` | `entry_id` | `scan_inspections (entry_id, activity_status)` | The threat count of an infected scan. An infected scan without this row found threats it couldn't count. |
+
 ## Deployments
 
 ```mermaid
