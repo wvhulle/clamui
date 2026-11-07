@@ -44,7 +44,7 @@ enum RepositoryTask {
         output_directory: PathBuf,
     },
     ListWidgets {
-        #[arg(default_value = "--page=scan")]
+        #[arg(default_value = "--page=manual-scan")]
         page_argument: String,
     },
     PublishScreenshots {

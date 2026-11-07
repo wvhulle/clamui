@@ -10,14 +10,14 @@ machine.succeed("systemctl start clamav-daemon.service")
 machine.wait_until_succeeds("clamdscan --ping 1", timeout=timedelta(seconds=120))
 machine.succeed(f"printf %s {shlex.quote(EICAR_TEXT)} > {SCANNED_FILE}")
 
-with subtest("the Protection page shows the system timer"):
+with subtest("the window opens on the first area that needs attention"):
     activate_application_action("show-window")
     wait_for_lazaret_window()
     time.sleep(3)
-    machine.screenshot("protection_page")
+    machine.screenshot("start_page")
 
 with subtest("Run Now asks for a password and runs the system scan"):
-    activate_window_action("show-page", "scan")
+    activate_window_action("show-page", "manual-scan")
     time.sleep(2)
     click_on_text("Run Now")
     time.sleep(3)
@@ -45,7 +45,7 @@ with subtest("the scan's journal line becomes a detection that is not called blo
     matching = wait_for_notification("Malware found")
     assert not notifications_mentioning("Malware blocked"), matching
     time.sleep(2)
-    machine.screenshot("protection_after_scan")
+    machine.screenshot("after_scheduled_scan")
     assert "ended with an error" not in machine.get_screen_text(), "a found threat was shown as a failed scan"
 
 with subtest("the Lazaret schedule is locked because the system has a timer"):
@@ -65,7 +65,7 @@ with subtest("settings the system owns are locked and copy a snippet"):
     machine.screenshot("scanner_engine_settings")
 
 with subtest("signature sources have their own page"):
-    activate_window_action("show-page", "signatures")
+    activate_window_action("show-page", "signature-sources")
     time.sleep(2)
     machine.screenshot("signatures_page")
     machine.wait_for_text("Signature Sources", timeout=timedelta(seconds=60))

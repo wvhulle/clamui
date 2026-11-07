@@ -5,9 +5,26 @@ use crate::application_window::application_pages::{ALL_APPLICATION_PAGES, Applic
 const STARTUP_PAGE_PREFIX: &str = "--page=";
 const BACKGROUND_ARGUMENT: &str = "--background";
 const PREFERENCES_PAGE_NAME: &str = "preferences";
-const DATABASE_PAGE_NAME: &str = "database";
-const ANALYSIS_PAGE_NAME: &str = "analysis";
-const PROTECTION_PAGE_NAME: &str = "protection";
+const PAGE_NAME_ALIASES: [(&str, StartupPage); 6] = [
+    ("protection", StartupPage::FirstAreaNeedingAttention),
+    ("logs", StartupPage::FirstAreaNeedingAttention),
+    (
+        "signatures",
+        StartupPage::ApplicationPage(ApplicationPage::SignatureSources),
+    ),
+    (
+        "database",
+        StartupPage::ApplicationPage(ApplicationPage::DatabaseUpdates),
+    ),
+    (
+        "scan",
+        StartupPage::ApplicationPage(ApplicationPage::ManualScan),
+    ),
+    (
+        "analysis",
+        StartupPage::ApplicationPage(ApplicationPage::TrustedDetections),
+    ),
+];
 const DEFAULT_STARTUP_PAGE: StartupPage = StartupPage::FirstAreaNeedingAttention;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -32,25 +49,23 @@ pub struct StartupRequest {
 
 impl StartupPageRequest {
     fn from_page_name(requested_page_name: &str) -> Self {
-        match requested_page_name {
-            PREFERENCES_PAGE_NAME => Self::RecognizedPage(StartupPage::PreferencesDialog),
-            PROTECTION_PAGE_NAME => Self::RecognizedPage(StartupPage::FirstAreaNeedingAttention),
-            DATABASE_PAGE_NAME => Self::RecognizedPage(StartupPage::ApplicationPage(
-                ApplicationPage::DatabaseUpdates,
-            )),
-            ANALYSIS_PAGE_NAME => Self::RecognizedPage(StartupPage::ApplicationPage(
-                ApplicationPage::TrustedDetections,
-            )),
-            application_page_name => ApplicationPage::from_page_name(application_page_name)
-                .map_or_else(
-                    || Self::UnrecognizedPage {
-                        requested_page_name: application_page_name.to_owned(),
-                    },
-                    |application_page| {
-                        Self::RecognizedPage(StartupPage::ApplicationPage(application_page))
-                    },
-                ),
+        if requested_page_name == PREFERENCES_PAGE_NAME {
+            return Self::RecognizedPage(StartupPage::PreferencesDialog);
         }
+        ApplicationPage::from_page_name(requested_page_name)
+            .map(StartupPage::ApplicationPage)
+            .or_else(|| {
+                PAGE_NAME_ALIASES
+                    .into_iter()
+                    .find(|(alias_name, _aliased_page)| *alias_name == requested_page_name)
+                    .map(|(_alias_name, aliased_page)| aliased_page)
+            })
+            .map_or_else(
+                || Self::UnrecognizedPage {
+                    requested_page_name: requested_page_name.to_owned(),
+                },
+                Self::RecognizedPage,
+            )
     }
 
     pub const fn shown_startup_page(&self) -> StartupPage {
@@ -173,7 +188,16 @@ mod startup_arguments_tests {
             ("--page=scan-engine", ApplicationPage::ScanEngine),
             ("--page=on-access", ApplicationPage::OnAccessScanning),
             ("--page=scheduled-scans", ApplicationPage::ScheduledScans),
-            ("--page=scan", ApplicationPage::ManualScan),
+            ("--page=manual-scan", ApplicationPage::ManualScan),
+            (
+                "--page=signature-sources",
+                ApplicationPage::SignatureSources,
+            ),
+            (
+                "--page=trusted-detections",
+                ApplicationPage::TrustedDetections,
+            ),
+            ("--page=online-lookups", ApplicationPage::OnlineLookups),
         ]
         .into_iter()
         .for_each(|(page_argument, expected_page)| {
@@ -194,6 +218,48 @@ mod startup_arguments_tests {
             }
         );
         assert_eq!(startup_page.shown_startup_page(), DEFAULT_STARTUP_PAGE);
+    }
+
+    #[test]
+    fn old_page_names_still_open_their_new_pages() {
+        [
+            ("protection", StartupPage::FirstAreaNeedingAttention),
+            ("logs", StartupPage::FirstAreaNeedingAttention),
+            (
+                "signatures",
+                StartupPage::ApplicationPage(ApplicationPage::SignatureSources),
+            ),
+            (
+                "database",
+                StartupPage::ApplicationPage(ApplicationPage::DatabaseUpdates),
+            ),
+            (
+                "scan",
+                StartupPage::ApplicationPage(ApplicationPage::ManualScan),
+            ),
+            (
+                "analysis",
+                StartupPage::ApplicationPage(ApplicationPage::TrustedDetections),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(old_name, expected_page)| {
+            assert_eq!(
+                parsed_arguments(&["lazaret", &format!("--page={old_name}")]).startup_page,
+                StartupPageRequest::RecognizedPage(expected_page),
+                "{old_name}"
+            );
+        });
+    }
+
+    #[test]
+    fn hardening_is_no_longer_a_page() {
+        assert_eq!(
+            parsed_arguments(&["lazaret", "--page=hardening"])
+                .startup_page
+                .shown_startup_page(),
+            StartupPage::FirstAreaNeedingAttention
+        );
     }
 
     #[test]

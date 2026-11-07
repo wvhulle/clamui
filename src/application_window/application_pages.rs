@@ -34,12 +34,12 @@ pub const ALL_APPLICATION_PAGES: [ApplicationPage; 12] = [
 impl ApplicationPage {
     pub const fn page_name(self) -> &'static str {
         match self {
-            Self::SignatureSources => "signatures",
+            Self::SignatureSources => "signature-sources",
             Self::DatabaseUpdates => "database-updates",
             Self::ScanEngine => "scan-engine",
             Self::OnAccessScanning => "on-access",
             Self::ScheduledScans => "scheduled-scans",
-            Self::ManualScan => "scan",
+            Self::ManualScan => "manual-scan",
             Self::RemovableDrives => "removable-drives",
             Self::Detections => "detections",
             Self::Quarantine => "quarantine",

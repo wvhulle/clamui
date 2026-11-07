@@ -6,11 +6,12 @@ wait_for_lazaret_service()
 machine.succeed("systemctl start clamav-daemon.service")
 machine.wait_until_succeeds("clamdscan --ping 1", timeout=timedelta(seconds=120))
 
-with subtest("the Protection page lists both updaters"):
+with subtest("Database Updates lists both updaters"):
     activate_application_action("show-window")
     wait_for_lazaret_window()
+    activate_window_action("show-page", "database-updates")
     time.sleep(3)
-    machine.screenshot("protection_with_updaters")
+    machine.screenshot("database_updates_with_updaters")
 
 with subtest("a failed update is reported through a real password prompt"):
     activate_application_action("update-definitions")
