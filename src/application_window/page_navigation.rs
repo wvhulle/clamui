@@ -99,7 +99,7 @@ use crate::{
     },
     shared_widgets::{
         audit_sections::{
-            audit_check_results::{HARDENING_AUDIT_CATEGORIES, SIGNATURE_AUDIT_CATEGORIES},
+            audit_check_results::HARDENING_AUDIT_CATEGORIES,
             audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
         },
         component_streams::{RunningStream, run_stream},
@@ -115,9 +115,14 @@ use crate::{
             submissions_state::{SubmissionTally, SubmissionsPageOutput},
         },
     },
-    signatures::database_updates_page::{
-        database_updates_component::{DatabaseUpdatesPage, DatabaseUpdatesPageInput},
-        database_updates_state::DatabaseUpdatesPageOutput,
+    signatures::{
+        database_updates_page::{
+            database_updates_component::{DatabaseUpdatesPage, DatabaseUpdatesPageInput},
+            database_updates_state::DatabaseUpdatesPageOutput,
+        },
+        signature_sources_page::signature_sources_component::{
+            SignatureSourcesPage, SignatureSourcesPageInput, SignatureSourcesPageOutput,
+        },
     },
 };
 
@@ -144,7 +149,7 @@ pub struct PageNavigation {
     toaster: Toaster,
     quarantine_page: Controller<QuarantineEntriesPage>,
     logs_page: Controller<ActivityLogsPage>,
-    signatures_page: Controller<AuditSectionsPage>,
+    signature_sources_page: Controller<SignatureSourcesPage>,
     hardening_page: Controller<AuditSectionsPage>,
     protection_page: Controller<ProtectionTimelinePage>,
     database_updates_page: Controller<DatabaseUpdatesPage>,
@@ -361,6 +366,16 @@ const fn forwarded_online_lookups_output(
     }
 }
 
+const fn forwarded_signature_sources_output(
+    signature_sources_output: SignatureSourcesPageOutput,
+) -> PageNavigationInput {
+    match signature_sources_output {
+        SignatureSourcesPageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
+    }
+}
+
 const fn forwarded_scan_engine_output(
     scan_engine_output: ScanEnginePageOutput,
 ) -> PageNavigationInput {
@@ -494,6 +509,10 @@ impl PageNavigation {
         self.evidence_refresh = next_refresh;
         self.protection_page
             .emit(ProtectionTimelinePageInput::EvidenceRefreshChanged(
+                next_refresh,
+            ));
+        self.signature_sources_page
+            .emit(SignatureSourcesPageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
         self.database_updates_page
@@ -710,7 +729,7 @@ impl Component for PageNavigation {
                                 add: &page_root(ApplicationPage::Submissions, model.submissions_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Signatures.page_name()), &ApplicationPage::Signatures.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Signatures, model.signatures_page.widget()),
+                                add: &page_root(ApplicationPage::Signatures, model.signature_sources_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::DatabaseUpdates.page_name()), &ApplicationPage::DatabaseUpdates.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::DatabaseUpdates, model.database_updates_page.widget()),
@@ -840,17 +859,9 @@ impl Component for PageNavigation {
         let online_lookups_page = OnlineLookupsPage::builder()
             .launch(())
             .forward(sender.input_sender(), forwarded_online_lookups_output);
-        let signatures_page = AuditSectionsPage::builder()
-            .launch(AuditSectionsPageInit {
-                page_title: gettext("Signatures"),
-                page_description: gettext(
-                    "Where ClamAV's malware signatures come from, and which other sources you \
-                     could add.",
-                ),
-                audited_categories: &SIGNATURE_AUDIT_CATEGORIES,
-                linked_pages: &[ApplicationPage::DatabaseUpdates],
-            })
-            .detach();
+        let signature_sources_page = SignatureSourcesPage::builder()
+            .launch(())
+            .forward(sender.input_sender(), forwarded_signature_sources_output);
         let hardening_page = AuditSectionsPage::builder()
             .launch(AuditSectionsPageInit {
                 page_title: gettext("Hardening"),
@@ -875,7 +886,7 @@ impl Component for PageNavigation {
             toaster: Toaster::default(),
             quarantine_page,
             logs_page,
-            signatures_page,
+            signature_sources_page,
             hardening_page,
             protection_page,
             database_updates_page,
@@ -1079,6 +1090,10 @@ impl Component for PageNavigation {
                 self.refresh_area_summaries();
                 self.protection_page
                     .emit(ProtectionTimelinePageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
+                self.signature_sources_page
+                    .emit(SignatureSourcesPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
                 self.database_updates_page

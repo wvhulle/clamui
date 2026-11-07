@@ -413,8 +413,8 @@ fn decision_choices(
             },
             StepChoiceRow {
                 choice_description: gettext(
-                    "You know this file is fine. ClamAV still reports it at the next scan; \
-                     trust it from Quarantine or a scan result to stop that.",
+                    "You know this file is fine. ClamAV still reports it at the next scan; trust \
+                     it from Quarantine or a scan result to stop that.",
                 ),
                 chosen_action: IncidentStepAction::DismissIncident,
             },

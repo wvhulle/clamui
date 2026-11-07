@@ -108,7 +108,10 @@ pub fn some_lookup_key_unreadable(lookup_key_statuses: &LookupKeyStatuses) -> bo
 
 pub fn ready_services_text(lookup_key_statuses: &LookupKeyStatuses) -> String {
     gettext("{ready} of {total} services ready")
-        .replace("{ready}", &ready_service_count(lookup_key_statuses).to_string())
+        .replace(
+            "{ready}",
+            &ready_service_count(lookup_key_statuses).to_string(),
+        )
         .replace("{total}", &ALL_LOOKUP_SERVICES.len().to_string())
 }
 

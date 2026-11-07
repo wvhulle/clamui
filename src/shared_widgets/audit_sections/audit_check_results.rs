@@ -54,14 +54,11 @@ impl AuditStatus {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuditCategory {
-    SignatureSources,
     FirewallProtection,
     AccessControl,
     IntrusionDetection,
     RootkitCoverage,
 }
-
-pub const SIGNATURE_AUDIT_CATEGORIES: [AuditCategory; 1] = [AuditCategory::SignatureSources];
 
 pub const HARDENING_AUDIT_CATEGORIES: [AuditCategory; 4] = [
     AuditCategory::FirewallProtection,
@@ -73,7 +70,6 @@ pub const HARDENING_AUDIT_CATEGORIES: [AuditCategory; 4] = [
 impl AuditCategory {
     pub fn section_title(self) -> String {
         match self {
-            Self::SignatureSources => gettext("Signature Sources"),
             Self::FirewallProtection => gettext("Firewall"),
             Self::AccessControl => gettext("Access Control"),
             Self::IntrusionDetection => gettext("Intrusion Detection"),

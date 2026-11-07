@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 13:52+0100\n"
+"POT-Creation-Date: 2026-11-07 14:34+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -75,7 +75,6 @@ msgid "Submissions"
 msgstr ""
 
 #: src/application_window/application_pages.rs:78
-#: src/application_window/page_navigation.rs:845
 msgid "Signatures"
 msgstr ""
 
@@ -100,7 +99,7 @@ msgid "Scheduled Scans"
 msgstr ""
 
 #: src/application_window/application_pages.rs:83
-#: src/application_window/page_navigation.rs:856
+#: src/application_window/page_navigation.rs:867
 msgid "Hardening"
 msgstr ""
 
@@ -199,51 +198,45 @@ msgid ""
 "administrator approval."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:234
+#: src/application_window/page_navigation.rs:239
 #: src/preferences_dialog/preferences_dialog_component.rs:74
 msgid "Preferences"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:235
+#: src/application_window/page_navigation.rs:240
 msgid "About Lazaret"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:236
+#: src/application_window/page_navigation.rs:241
 #: src/application_window/system_tray_menu.rs:75
 #: src/application_window/window_close_behavior.rs:111
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:287
+#: src/application_window/page_navigation.rs:292
 #: src/application_window/sidebar_area_status.rs:698
 #: src/scans/removable_drives_page/removable_drives_presentation.rs:104
 #, rust-format
 msgid "Scanning {drive}"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:290
+#: src/application_window/page_navigation.rs:295
 #: src/scans/manual_scan_page/scan_page_component.rs:282
 msgid "Open Removable Drives"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:605
+#: src/application_window/page_navigation.rs:624
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:847
-msgid ""
-"Where ClamAV's malware signatures come from, and which other sources you "
-"could add."
-msgstr ""
-
-#: src/application_window/page_navigation.rs:858
+#: src/application_window/page_navigation.rs:869
 msgid ""
 "Protections outside ClamAV that make exploits harder. They are listed for "
 "reference and don't affect the Protection summary."
 msgstr ""
 
 #: src/application_window/sidebar_area_status.rs:107
-#: src/shared_widgets/audit_sections/audit_check_results.rs:76
+#: src/signatures/signature_sources_page/signature_sources_component.rs:143
 msgid "Signature Sources"
 msgstr ""
 
@@ -844,6 +837,7 @@ msgstr ""
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:118
 #: src/sharing/online_lookups_page/online_lookups_component.rs:79
 #: src/signatures/database_updates_page/database_updates_component.rs:252
+#: src/signatures/signature_sources_page/signature_sources_component.rs:121
 msgid "Check again"
 msgstr ""
 
@@ -859,6 +853,7 @@ msgstr ""
 #: src/sharing/online_lookups_page/online_lookups_component.rs:83
 #: src/sharing/submissions_page/submissions_component.rs:467
 #: src/signatures/database_updates_page/database_updates_component.rs:256
+#: src/signatures/signature_sources_page/signature_sources_component.rs:125
 msgid "Checking"
 msgstr ""
 
@@ -879,6 +874,7 @@ msgstr ""
 #: src/scans/scheduled_scans_page/scheduled_scans_component.rs:204
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:187
 #: src/signatures/database_updates_page/database_updates_component.rs:399
+#: src/signatures/signature_sources_page/signature_sources_component.rs:232
 msgid "Command copied to clipboard"
 msgstr ""
 
@@ -3749,20 +3745,20 @@ msgstr ""
 msgid "Fail"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/audit_check_results.rs:77
+#: src/shared_widgets/audit_sections/audit_check_results.rs:73
 msgid "Firewall"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/audit_check_results.rs:78
+#: src/shared_widgets/audit_sections/audit_check_results.rs:74
 msgid "Access Control"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/audit_check_results.rs:79
+#: src/shared_widgets/audit_sections/audit_check_results.rs:75
 msgid "Intrusion Detection"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/audit_check_results.rs:80
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:361
+#: src/shared_widgets/audit_sections/audit_check_results.rs:76
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:330
 msgid "Rootkits"
 msgstr ""
 
@@ -3775,115 +3771,116 @@ msgid "Open in browser"
 msgstr ""
 
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:196
+#: src/signatures/signature_sources_page/signature_sources_component.rs:241
 #, rust-format
 msgid "Could not open documentation: {error}"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:94
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:87
 msgid "AppArmor"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:102
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:95
 #, rust-format
 msgid "Unknown, because AppArmor's state could not be read: {error}"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:106
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:99
 msgid "Unknown, because reading AppArmor's state stopped before it finished"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:113
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:106
 msgid "AppArmor is enabled"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:119
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:125
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:112
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:118
 msgid "AppArmor module is loaded but not enabled"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:127
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:120
 msgid "Enable AppArmor for application sandboxing"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:133
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:126
 msgid "SELinux"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:139
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:132
 msgid "SELinux is enforcing"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:144
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:137
 msgid "SELinux is in permissive mode"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:147
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:140
 msgid "Consider switching to enforcing mode for stronger protection"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:153
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:159
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:146
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:152
 msgid "SELinux is disabled"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:161
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:154
 msgid "Enable SELinux for mandatory access control"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:165
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:158
 msgid "SELinux mode could not be determined"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:182
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:175
 msgid "MAC Framework"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:184
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:177
 msgid "No mandatory access control framework detected"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:186
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:179
 msgid "Consider enabling AppArmor or SELinux"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:237
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:230
 msgid "fail2ban is active and protecting services"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:238
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:231
 msgid "CrowdSec is active with community threat intelligence"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:244
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:237
 msgid "Start fail2ban to protect against brute force attacks"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:245
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:238
 msgid "Start CrowdSec for collaborative intrusion prevention"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:273
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:266
 #, rust-format
 msgid "{name} is installed but not running"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:305
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:298
 msgid "Intrusion Prevention"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:307
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:300
 msgid "No intrusion detection system found"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:310
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:303
 msgid "Install fail2ban or CrowdSec to protect against attacks"
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:363
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:332
 msgid "ClamAV does not cover rootkits, and Lazaret does not check for them."
 msgstr ""
 
-#: src/shared_widgets/audit_sections/security_audit_checks.rs:366
+#: src/shared_widgets/audit_sections/security_audit_checks.rs:335
 msgid ""
 "Run a check yourself. A rootkit can hide from checks made on the running "
 "system, so a clean result is only weak evidence."
@@ -4779,7 +4776,7 @@ msgstr ""
 #: src/shared_widgets/step_timeline/step_evidence_builders.rs:107
 #: src/signatures/database_updates_page/database_updates_presentation.rs:266
 #: src/signatures/database_updates_page/signature_update_run/signature_update_session.rs:378
-#: src/signatures/signature_sources_page/signature_source_checks.rs:149
+#: src/signatures/signature_sources_page/signature_source_checks.rs:152
 #, rust-format
 msgid "Unknown. {reason}"
 msgstr ""
@@ -5704,7 +5701,7 @@ msgstr ""
 msgid "Install freshclam before requesting database updates."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:32
+#: src/signatures/signature_sources_page/signature_source_checks.rs:35
 #, rust-format
 msgid ""
 "{provider} needs a {credential}, and fangfrisch only reads it from its "
@@ -5714,7 +5711,7 @@ msgid ""
 "file kept outside the Nix store, such as an agenix or sops-nix secret."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:46
+#: src/signatures/signature_sources_page/signature_source_checks.rs:49
 #, rust-format
 msgid ""
 "{provider} needs a {credential} from its website. fangfrisch reads it from "
@@ -5723,16 +5720,16 @@ msgid ""
 "so other users can't see it."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:70
+#: src/signatures/signature_sources_page/signature_source_checks.rs:73
 msgid "Not in use"
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:90
+#: src/signatures/signature_sources_page/signature_source_checks.rs:93
 #, rust-format
 msgid "Add these lines to fangfrisch's settings file, usually {path}."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:97
+#: src/signatures/signature_sources_page/signature_source_checks.rs:100
 #, rust-format
 msgid ""
 "{provider} needs a free abuse.ch Auth-Key. Add these lines to fangfrisch's "
@@ -5740,6 +5737,30 @@ msgid ""
 "make the file readable by root only, so other users can't see it."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_source_checks.rs:130
+#: src/signatures/signature_sources_page/signature_source_checks.rs:133
 msgid "In use"
+msgstr ""
+
+#: src/signatures/signature_sources_page/signature_sources_component.rs:136
+msgid ""
+"Where ClamAV's malware signatures come from, and which other sources you "
+"could add."
+msgstr ""
+
+#: src/signatures/signature_sources_page/signature_sources_component.rs:157
+msgid "abuse.ch Key"
+msgstr ""
+
+#: src/signatures/signature_sources_page/signature_sources_component.rs:160
+msgid "abuse.ch Auth-Key"
+msgstr ""
+
+#: src/signatures/signature_sources_page/signature_sources_presentation.rs:34
+msgid ""
+"URLhaus signatures through fangfrisch, MalwareBazaar lookups and "
+"MalwareBazaar uploads all use this key. It is kept and edited on Submissions."
+msgstr ""
+
+#: src/signatures/signature_sources_page/signature_sources_presentation.rs:41
+msgid "Checking the API key…"
 msgstr ""

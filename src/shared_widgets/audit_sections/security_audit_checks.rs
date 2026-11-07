@@ -1,7 +1,6 @@
-use std::{io, path::Path};
+use std::io;
 
 use gettextrs::gettext;
-use tokio::task::spawn_blocking;
 
 use crate::{
     hardening_page::{
@@ -13,17 +12,11 @@ use crate::{
         suggested_audit_commands::{SuggestedRemedy, rootkit_check_command, suggested_command},
     },
     host_services::{
-        clamav_programs::{
-            database_directory_status::{DatabaseFolderReadFailure, configured_database_directory},
-            distribution_install_guides::DistributionFamily,
-        },
+        clamav_programs::distribution_install_guides::DistributionFamily,
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, probe_unit_state},
     },
     shared_widgets::audit_sections::audit_check_results::{
         AuditCategory, AuditCheck, AuditSection, AuditStatus,
-    },
-    signatures::signature_sources_page::signature_source_checks::{
-        signature_source_checks, unreadable_source_checks,
     },
 };
 
@@ -332,30 +325,6 @@ async fn inspect_tool_presence(detection_tool: IntrusionDetectionTool) -> ToolPr
     }
 }
 
-fn signature_file_names(
-    database_directory: &Path,
-) -> Result<Vec<String>, DatabaseFolderReadFailure> {
-    match std::fs::read_dir(database_directory) {
-        Ok(directory_entries) => Ok(directory_entries
-            .filter_map(Result::ok)
-            .map(|directory_entry| directory_entry.file_name().to_string_lossy().into_owned())
-            .collect()),
-        Err(read_failure) if read_failure.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(read_failure) => Err(read_failure.into()),
-    }
-}
-
-async fn signature_sources_section(distribution_family: DistributionFamily) -> Vec<AuditCheck> {
-    match spawn_blocking(|| signature_file_names(&configured_database_directory()))
-        .await
-        .map_err(DatabaseFolderReadFailure::from)
-        .flatten()
-    {
-        Ok(signature_files) => signature_source_checks(&signature_files, distribution_family),
-        Err(read_failure) => unreadable_source_checks(read_failure),
-    }
-}
-
 pub fn rootkit_coverage_check(distribution_family: DistributionFamily) -> AuditCheck {
     AuditCheck::new(
         gettext("Rootkits"),
@@ -387,7 +356,6 @@ pub async fn gather_audit_section(
             distribution_family,
         ),
         AuditCategory::RootkitCoverage => vec![rootkit_coverage_check(distribution_family)],
-        AuditCategory::SignatureSources => signature_sources_section(distribution_family).await,
     };
     AuditSection {
         audit_category,
@@ -428,9 +396,8 @@ mod security_audit_checks_tests {
     #[ignore = "reads the real host"]
     async fn host_audit_reports_every_section() {
         let audited_sections = futures::future::join_all(
-            crate::shared_widgets::audit_sections::audit_check_results::SIGNATURE_AUDIT_CATEGORIES
+            crate::shared_widgets::audit_sections::audit_check_results::HARDENING_AUDIT_CATEGORIES
                 .into_iter()
-                .chain(crate::shared_widgets::audit_sections::audit_check_results::HARDENING_AUDIT_CATEGORIES)
                 .map(|audit_category| {
                     gather_audit_section(
                         audit_category,
