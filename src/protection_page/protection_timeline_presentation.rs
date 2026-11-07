@@ -8,6 +8,7 @@ use crate::{
         clamav_programs::{
             component_availability::ProbeFailure,
             distribution_install_guides::{DistributionFamily, engine_install_guides},
+            trusted_program_lookup::ClamavProgram,
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
@@ -93,6 +94,67 @@ impl StepActionButton for ProtectionStepAction {
 
 pub type ProtectionStep = TimelineStep<ProtectionStepAction>;
 type ProtectionEvidenceRow = ActionableEvidenceRow<ProtectionStepAction>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CheckedCondition {
+    ConditionMet,
+    SetupSuggested,
+    ReviewSuggested,
+    EvidenceUnknown,
+    ConditionFailed,
+    PrerequisiteMissing,
+}
+
+impl CheckedCondition {
+    pub const fn node_state(self) -> SettledNodeState {
+        match self {
+            Self::ConditionMet => SettledNodeState::Completed,
+            Self::SetupSuggested => SettledNodeState::ActNext,
+            Self::ReviewSuggested | Self::EvidenceUnknown => SettledNodeState::NeedsReview,
+            Self::ConditionFailed => SettledNodeState::HasFailed,
+            Self::PrerequisiteMissing => SettledNodeState::AwaitingPrerequisite,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TrustedProgramGroup {
+    AllClamavPrograms,
+    ScannerPrograms,
+    UpdaterPrograms,
+}
+
+impl TrustedProgramGroup {
+    fn includes_program(self, program_name: &str) -> bool {
+        let scanner_names = [
+            ClamavProgram::ClamdClient.program_name(),
+            ClamavProgram::StandaloneScanner.program_name(),
+        ];
+        match self {
+            Self::AllClamavPrograms => true,
+            Self::ScannerPrograms => scanner_names.contains(&program_name),
+            Self::UpdaterPrograms => program_name == ClamavProgram::SignatureUpdater.program_name(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReducedSettingGroup {
+    AllSettings,
+    OnAccessSettings,
+    EngineSettings,
+}
+
+impl ReducedSettingGroup {
+    fn includes_setting(self, setting_key: &str) -> bool {
+        let on_access_setting = setting_key.starts_with("OnAccess");
+        match self {
+            Self::AllSettings => true,
+            Self::OnAccessSettings => on_access_setting,
+            Self::EngineSettings => !on_access_setting,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AlertReadiness {
@@ -198,6 +260,15 @@ fn probe_failure_text(probe_failure: &ProbeFailure) -> String {
     }
 }
 
+pub const fn engine_condition(engine_installation: &EngineInstallation) -> CheckedCondition {
+    match engine_installation {
+        EngineInstallation::VersionReported { .. } => CheckedCondition::ConditionMet,
+        EngineInstallation::ScannerRefused { .. } => CheckedCondition::ReviewSuggested,
+        EngineInstallation::VersionUnverified(_) => CheckedCondition::EvidenceUnknown,
+        EngineInstallation::EngineMissing => CheckedCondition::SetupSuggested,
+    }
+}
+
 fn engine_step(
     engine_installation: &EngineInstallation,
     distribution_family: DistributionFamily,
@@ -207,30 +278,31 @@ fn engine_step(
         "ClamAV is the engine that recognizes malware. Lazaret uses the copy installed on this \
          computer and never bundles its own.",
     );
+    let node_state = engine_condition(engine_installation).node_state();
     match engine_installation {
         EngineInstallation::VersionReported { version_banner } => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::Completed,
+            node_state,
             version_banner.clone(),
         ),
         EngineInstallation::ScannerRefused { refused_path } => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::NeedsReview,
+            node_state,
             gettext("refused {path}, because your account can replace it")
                 .replace("{path}", refused_path),
         ),
         EngineInstallation::VersionUnverified(probe_failure) => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::NeedsReview,
+            node_state,
             probe_failure_text(probe_failure),
         ),
         EngineInstallation::EngineMissing => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::ActNext,
+            node_state,
             gettext("ClamAV was not found on this computer"),
         )
         .with_guidance_commands(
@@ -275,6 +347,50 @@ fn program_trust_rows(program_trust_finding: &ProgramTrustFinding) -> Vec<StepEv
     }
 }
 
+const fn finding_program_name(program_trust_finding: &ProgramTrustFinding) -> &'static str {
+    match program_trust_finding {
+        ProgramTrustFinding::ReplaceableProgramIgnored { program_name, .. }
+        | ProgramTrustFinding::OnlyReplaceableProgram { program_name, .. } => program_name,
+    }
+}
+
+fn program_findings_condition<'finding>(
+    program_trust_findings: impl IntoIterator<Item = &'finding ProgramTrustFinding>,
+) -> CheckedCondition {
+    let found_conditions = program_trust_findings
+        .into_iter()
+        .map(|program_trust_finding| match program_trust_finding {
+            ProgramTrustFinding::OnlyReplaceableProgram { .. } => CheckedCondition::ConditionFailed,
+            ProgramTrustFinding::ReplaceableProgramIgnored { .. } => {
+                CheckedCondition::ReviewSuggested
+            }
+        })
+        .collect::<Vec<_>>();
+    if found_conditions.contains(&CheckedCondition::ConditionFailed) {
+        CheckedCondition::ConditionFailed
+    } else if found_conditions.is_empty() {
+        CheckedCondition::ConditionMet
+    } else {
+        CheckedCondition::ReviewSuggested
+    }
+}
+
+pub fn program_trust_condition(
+    program_trust: &ProgramTrustInspection,
+    program_group: TrustedProgramGroup,
+) -> CheckedCondition {
+    match program_trust {
+        ProgramTrustInspection::ProgramsChecked(program_trust_findings) => {
+            program_findings_condition(program_trust_findings.iter().filter(
+                |program_trust_finding| {
+                    program_group.includes_program(finding_program_name(program_trust_finding))
+                },
+            ))
+        }
+        ProgramTrustInspection::CheckInterrupted => CheckedCondition::EvidenceUnknown,
+    }
+}
+
 fn program_trust_title() -> String {
     gettext("Scanner programs can be trusted")
 }
@@ -295,7 +411,8 @@ fn program_trust_step(program_trust: &ProgramTrustInspection) -> Option<Protecti
         ProgramTrustInspection::CheckInterrupted => Some(no_guidance_step(
             program_trust_title(),
             program_trust_details(),
-            SettledNodeState::NeedsReview,
+            program_trust_condition(program_trust, TrustedProgramGroup::AllClamavPrograms)
+                .node_state(),
             gettext("Unknown, because checking the ClamAV programs stopped before it finished"),
         )),
     }
@@ -311,20 +428,13 @@ fn program_findings_step(program_trust_findings: &[ProgramTrustFinding]) -> Opti
             ProgramTrustFinding::OnlyReplaceableProgram { .. }
         )
     });
-    let (node_state, status_text) = if any_program_refused {
-        (
-            SettledNodeState::HasFailed,
-            gettext(
-                "A ClamAV program can be replaced by your account, so Lazaret refuses to run it",
-            ),
-        )
+    let node_state = program_findings_condition(program_trust_findings).node_state();
+    let status_text = if any_program_refused {
+        gettext("A ClamAV program can be replaced by your account, so Lazaret refuses to run it")
     } else {
-        (
-            SettledNodeState::NeedsReview,
-            gettext(
-                "A ClamAV program in your account shadows the system copy. Lazaret ignores it, \
-                 but check where it came from",
-            ),
+        gettext(
+            "A ClamAV program in your account shadows the system copy. Lazaret ignores it, but \
+             check where it came from",
         )
     };
     Some(TimelineStep::settled(
@@ -389,7 +499,44 @@ fn overrides_failure_text(read_failure: OverridesReadFailure) -> String {
     }
 }
 
+pub fn runtime_reduction_condition(
+    runtime_reductions: &RuntimeReductions,
+    setting_group: ReducedSettingGroup,
+) -> CheckedCondition {
+    match runtime_reductions {
+        RuntimeReductions::NothingReduced => CheckedCondition::ConditionMet,
+        RuntimeReductions::OverridesUnreadable(_) => CheckedCondition::EvidenceUnknown,
+        RuntimeReductions::SettingsReduced {
+            reduced_settings, ..
+        } => {
+            if reduced_settings
+                .iter()
+                .any(|reduced_setting| setting_group.includes_setting(&reduced_setting.setting_key))
+            {
+                CheckedCondition::ReviewSuggested
+            } else {
+                CheckedCondition::ConditionMet
+            }
+        }
+        RuntimeReductions::BaseConfigUnreadable {
+            overridden_settings,
+            ..
+        } => {
+            if overridden_settings.iter().any(|overridden_setting| {
+                setting_group.includes_setting(&overridden_setting.setting_key)
+            }) {
+                CheckedCondition::EvidenceUnknown
+            } else {
+                CheckedCondition::ConditionMet
+            }
+        }
+    }
+}
+
 fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<ProtectionStep> {
+    let node_state =
+        runtime_reduction_condition(runtime_reductions, ReducedSettingGroup::AllSettings)
+            .node_state();
     match runtime_reductions {
         RuntimeReductions::NothingReduced => None,
         RuntimeReductions::OverridesUnreadable(read_failure) => Some(TimelineStep::settled(
@@ -402,7 +549,7 @@ fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<Prot
             overrides_failure_text(*read_failure),
             SettledStep {
                 header_action: runtime_review_action(),
-                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+                ..SettledStep::without_offers(node_state)
             },
         )),
         RuntimeReductions::SettingsReduced {
@@ -426,7 +573,7 @@ fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<Prot
                     )
                 })),
                 header_action: runtime_review_action(),
-                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+                ..SettledStep::without_offers(node_state)
             },
         )),
         RuntimeReductions::BaseConfigUnreadable {
@@ -458,7 +605,7 @@ fn runtime_reduction_step(runtime_reductions: &RuntimeReductions) -> Option<Prot
                         .chain(std::iter::once(override_change_time_row(*change_time))),
                 ),
                 header_action: runtime_review_action(),
-                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+                ..SettledStep::without_offers(node_state)
             },
         )),
     }
@@ -516,7 +663,7 @@ fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<P
 }
 
 struct TrustListVerdict {
-    node_state: SettledNodeState,
+    checked_condition: CheckedCondition,
     status_text: String,
     evidence_rows: Vec<StepEvidenceRow>,
 }
@@ -568,7 +715,7 @@ fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustLi
     .collect();
     if !trust_list.foreign_allowlists.is_empty() {
         return Some(TrustListVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::ReviewSuggested,
             status_text: gettext(
                 "An allowlist that Lazaret didn't write tells ClamAV to stay silent",
             ),
@@ -582,7 +729,7 @@ fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustLi
         ) => {
             let lazaret_entries = trusted_files.len() + ignored_signatures.len();
             (lazaret_entries > 0).then(|| TrustListVerdict {
-                node_state: SettledNodeState::Completed,
+                checked_condition: CheckedCondition::ConditionMet,
                 status_text: ngettext(
                     "{count} file or detection is never reported",
                     "{count} files or detections are never reported",
@@ -595,7 +742,7 @@ fn trust_list_contents_verdict(trust_list: &TrustListContents) -> Option<TrustLi
         (LazaretListReading::ListUnreadable(_), _)
         | (LazaretListReading::ListRead(_), LazaretListReading::ListUnreadable(_)) => {
             Some(TrustListVerdict {
-                node_state: SettledNodeState::NeedsReview,
+                checked_condition: CheckedCondition::EvidenceUnknown,
                 status_text: gettext(
                     "Lazaret can't read its own allowlist, so it can't tell what ClamAV stays \
                      silent about",
@@ -611,7 +758,7 @@ fn trust_list_verdict(trust_list_reading: &TrustListReading) -> Option<TrustList
         TrustListReading::ListsRead(trust_list) => trust_list_contents_verdict(trust_list),
         TrustListReading::FolderMissing => None,
         TrustListReading::FolderUnreadable(read_failure) => Some(TrustListVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::EvidenceUnknown,
             status_text: gettext(
                 "Lazaret can't read the signature folder, so it can't tell what ClamAV stays \
                  silent about",
@@ -624,12 +771,20 @@ fn trust_list_verdict(trust_list_reading: &TrustListReading) -> Option<TrustList
     }
 }
 
+pub fn trust_list_condition(trust_list_reading: &TrustListReading) -> CheckedCondition {
+    trust_list_verdict(trust_list_reading)
+        .map_or(CheckedCondition::ConditionMet, |trust_list_verdict| {
+            trust_list_verdict.checked_condition
+        })
+}
+
 fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<ProtectionStep> {
     let TrustListVerdict {
-        node_state,
+        checked_condition,
         status_text,
         evidence_rows,
     } = trust_list_verdict(trust_list_reading)?;
+    let node_state = checked_condition.node_state();
     let review_action =
         ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::TrustedDetections);
     Some(TimelineStep::settled(
@@ -654,30 +809,82 @@ fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<ProtectionSt
     ))
 }
 
-fn database_state(
+fn database_condition(
     database_evidence: &DatabaseEvidence,
     reference_moment: Timestamp,
-) -> SettledNodeState {
+) -> CheckedCondition {
     match database_evidence {
         DatabaseEvidence::BuiltAt { built_at } if *built_at > reference_moment => {
-            SettledNodeState::NeedsReview
+            CheckedCondition::ReviewSuggested
         }
         DatabaseEvidence::BuiltAt { built_at }
             if reference_moment.duration_since(*built_at) < DATABASE_FRESH_LIMIT =>
         {
-            SettledNodeState::Completed
+            CheckedCondition::ConditionMet
         }
         DatabaseEvidence::BuiltAt { built_at }
             if reference_moment.duration_since(*built_at) < DATABASE_STALE_LIMIT =>
         {
-            SettledNodeState::NeedsReview
+            CheckedCondition::ReviewSuggested
         }
         DatabaseEvidence::BuiltAt { .. } | DatabaseEvidence::DatabaseMissing => {
-            SettledNodeState::HasFailed
+            CheckedCondition::ConditionFailed
         }
         DatabaseEvidence::AgeUndetermined | DatabaseEvidence::InspectionInterrupted => {
-            SettledNodeState::NeedsReview
+            CheckedCondition::EvidenceUnknown
         }
+    }
+}
+
+pub fn database_update_condition(
+    signature_evidence: &SignatureEvidence,
+    reference_moment: Timestamp,
+) -> CheckedCondition {
+    let database_state =
+        database_condition(&signature_evidence.database_evidence, reference_moment);
+    if database_state == CheckedCondition::ConditionMet
+        && signature_evidence
+            .updater_evidence
+            .iter()
+            .any(updater_failed)
+    {
+        CheckedCondition::ReviewSuggested
+    } else {
+        database_state
+    }
+}
+
+pub fn third_party_source_condition(
+    third_party_listing: &ThirdPartySignatureListing,
+    reference_moment: Timestamp,
+) -> CheckedCondition {
+    match third_party_listing {
+        ThirdPartySignatureListing::FolderUnreadable(_) => CheckedCondition::EvidenceUnknown,
+        ThirdPartySignatureListing::FilesListed(signature_files) => {
+            if signature_files.iter().any(|signature_file| {
+                reference_moment.duration_since(signature_file.modified_at)
+                    > THIRD_PARTY_STALE_LIMIT
+            }) {
+                CheckedCondition::ReviewSuggested
+            } else {
+                CheckedCondition::ConditionMet
+            }
+        }
+    }
+}
+
+fn signature_condition(
+    signature_evidence: &SignatureEvidence,
+    reference_moment: Timestamp,
+) -> CheckedCondition {
+    let update_state = database_update_condition(signature_evidence, reference_moment);
+    if update_state == CheckedCondition::ConditionMet
+        && third_party_source_condition(&signature_evidence.third_party_listing, reference_moment)
+            != CheckedCondition::ConditionMet
+    {
+        CheckedCondition::ReviewSuggested
+    } else {
+        update_state
     }
 }
 
@@ -712,7 +919,7 @@ fn database_status_text(
     }
 }
 
-fn updater_failed(updater_evidence: &UpdaterEvidence) -> bool {
+pub fn updater_failed(updater_evidence: &UpdaterEvidence) -> bool {
     match updater_evidence.last_result {
         UpdaterUnitResult::UpdateSucceeded | UpdaterUnitResult::UpdateAlreadyCurrent => false,
         UpdaterUnitResult::UpdaterError { .. } | UpdaterUnitResult::ServiceFailed { .. } => true,
@@ -900,35 +1107,8 @@ fn signature_step(
     moment_context: MomentContext,
     distribution_family: DistributionFamily,
 ) -> ProtectionStep {
-    let any_updater_failed = signature_evidence
-        .updater_evidence
-        .iter()
-        .any(updater_failed);
-    let third_party_unreadable = matches!(
-        signature_evidence.third_party_listing,
-        ThirdPartySignatureListing::FolderUnreadable(_)
-    );
-    let any_source_stale = signature_evidence
-        .third_party_listing
-        .listed_files()
-        .iter()
-        .any(|signature_file| {
-            moment_context
-                .reference_moment
-                .duration_since(signature_file.modified_at)
-                > THIRD_PARTY_STALE_LIMIT
-        });
-    let base_state = database_state(
-        &signature_evidence.database_evidence,
-        moment_context.reference_moment,
-    );
-    let evidence_state = if base_state == SettledNodeState::Completed
-        && (any_updater_failed || any_source_stale || third_party_unreadable)
-    {
-        SettledNodeState::NeedsReview
-    } else {
-        base_state
-    };
+    let evidence_state =
+        signature_condition(signature_evidence, moment_context.reference_moment).node_state();
     let update_progress = update_progress_of(signature_update);
     let manual_row = manual_update_row(signature_update, moment_context);
     let other_rows = updater_output_rows(&update_progress)
@@ -1011,6 +1191,20 @@ fn signature_step(
     })
 }
 
+pub const fn daemon_condition(daemon_evidence: &DaemonEvidence) -> CheckedCondition {
+    match daemon_evidence {
+        DaemonEvidence::ClamdAnswering {
+            loaded_signatures: LoadedSignatures::BehindDisk { .. },
+        } => CheckedCondition::ReviewSuggested,
+        DaemonEvidence::ClamdAnswering { .. } => CheckedCondition::ConditionMet,
+        DaemonEvidence::UnitActiveNotAnswering { .. } | DaemonEvidence::UnitStopped { .. } => {
+            CheckedCondition::ConditionFailed
+        }
+        DaemonEvidence::UnitStateUnknown => CheckedCondition::EvidenceUnknown,
+        DaemonEvidence::NeverSetUp => CheckedCondition::SetupSuggested,
+    }
+}
+
 fn daemon_step(
     daemon_evidence: &DaemonEvidence,
     distribution_family: DistributionFamily,
@@ -1020,6 +1214,7 @@ fn daemon_step(
         "clamd keeps the signatures loaded in memory. On-access blocking and scheduled scans both \
          send their files to it.",
     );
+    let node_state = daemon_condition(daemon_evidence).node_state();
     match daemon_evidence {
         DaemonEvidence::ClamdAnswering {
             loaded_signatures:
@@ -1030,7 +1225,7 @@ fn daemon_step(
         } => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::NeedsReview,
+            node_state,
             gettext("clamd still uses signatures {loaded}, but {disk} is on disk")
                 .replace("{loaded}", loaded_version)
                 .replace("{disk}", disk_version),
@@ -1038,13 +1233,13 @@ fn daemon_step(
         DaemonEvidence::ClamdAnswering { .. } => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::Completed,
+            node_state,
             gettext("clamd is answering"),
         ),
         DaemonEvidence::UnitActiveNotAnswering { service_unit } => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::HasFailed,
+            node_state,
             gettext(
                 "{unit} is running, but clamd does not answer. It may still be loading signatures.",
             )
@@ -1057,13 +1252,13 @@ fn daemon_step(
         DaemonEvidence::UnitStateUnknown => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::NeedsReview,
+            node_state,
             gettext("clamd does not answer, and systemd could not report its state"),
         ),
         DaemonEvidence::UnitStopped { service_unit } => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::HasFailed,
+            node_state,
             gettext("{unit} is not running").replace("{unit}", service_unit),
         )
         .with_guidance_commands(remedy_commands(
@@ -1073,7 +1268,7 @@ fn daemon_step(
         DaemonEvidence::NeverSetUp => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::ActNext,
+            node_state,
             gettext("clamd is not set up, so scans fall back to the slower clamscan"),
         )
         .with_guidance_commands(remedy_commands(
@@ -1083,7 +1278,7 @@ fn daemon_step(
     }
 }
 
-fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
+pub const fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
     matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
 }
 
@@ -1157,7 +1352,7 @@ fn on_access_rows(on_access_config: &OnAccessConfig) -> Vec<ProtectionEvidenceRo
 }
 
 struct OnAccessVerdict {
-    node_state: SettledNodeState,
+    checked_condition: CheckedCondition,
     status_text: String,
     suggested_remedies: Vec<SuggestedRemedy>,
 }
@@ -1165,7 +1360,7 @@ struct OnAccessVerdict {
 fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict {
     match on_access_config {
         OnAccessConfig::ConfigUnreadable(_) => OnAccessVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::EvidenceUnknown,
             status_text: gettext(
                 "Running, but clamd.conf could not be read, so what is checked and whether \
                  detected files are blocked is unknown",
@@ -1177,7 +1372,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::BlockAccess,
             ..
         } => OnAccessVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::ReviewSuggested,
             status_text: gettext("Running, but no folders or mounts are watched"),
             suggested_remedies: vec![SuggestedRemedy::OnAccessWatchedPathAdd],
         },
@@ -1186,7 +1381,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::ReportOnly,
             ..
         } => OnAccessVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::ReviewSuggested,
             status_text: gettext(
                 "Running, but no folders or mounts are watched, and detected files would not be \
                  blocked",
@@ -1201,7 +1396,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::ReportOnly,
             ..
         } => OnAccessVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::ReviewSuggested,
             status_text: gettext("Files are checked, but detected files are not blocked"),
             suggested_remedies: vec![SuggestedRemedy::OnAccessPreventionEnable],
         },
@@ -1210,7 +1405,7 @@ fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict
             blocking_response: OnAccessResponse::BlockAccess,
             ..
         } => OnAccessVerdict {
-            node_state: SettledNodeState::Completed,
+            checked_condition: CheckedCondition::ConditionMet,
             status_text: gettext("Detected files are blocked"),
             suggested_remedies: Vec::new(),
         },
@@ -1223,29 +1418,29 @@ fn on_access_verdict(
 ) -> OnAccessVerdict {
     match on_access_evidence.on_access_scanner {
         OnAccessScanner::UnitStateUnknown => OnAccessVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::EvidenceUnknown,
             status_text: gettext(
                 "Unknown whether on-access scanning runs, because systemd could not report it",
             ),
             suggested_remedies: Vec::new(),
         },
         OnAccessScanner::NeverSetUp => OnAccessVerdict {
-            node_state: SettledNodeState::NeedsReview,
+            checked_condition: CheckedCondition::ReviewSuggested,
             status_text: gettext("On-access scanning is not set up"),
             suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
         },
         OnAccessScanner::UnitStopped { .. } if !daemon_answering => OnAccessVerdict {
-            node_state: SettledNodeState::AwaitingPrerequisite,
+            checked_condition: CheckedCondition::PrerequisiteMissing,
             status_text: daemon_awaited_text(),
             suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
         },
         OnAccessScanner::UnitStopped { service_unit } => OnAccessVerdict {
-            node_state: SettledNodeState::HasFailed,
+            checked_condition: CheckedCondition::ConditionFailed,
             status_text: gettext("{unit} is not running").replace("{unit}", service_unit),
             suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
         },
         OnAccessScanner::MonitorRunning if !daemon_answering => OnAccessVerdict {
-            node_state: SettledNodeState::AwaitingPrerequisite,
+            checked_condition: CheckedCondition::PrerequisiteMissing,
             status_text: daemon_awaited_text(),
             suggested_remedies: Vec::new(),
         },
@@ -1253,6 +1448,13 @@ fn on_access_verdict(
             running_monitor_verdict(&on_access_evidence.on_access_config)
         }
     }
+}
+
+pub fn on_access_condition(
+    on_access_evidence: &OnAccessEvidence,
+    daemon_answering: bool,
+) -> CheckedCondition {
+    on_access_verdict(on_access_evidence, daemon_answering).checked_condition
 }
 
 fn on_access_step(
@@ -1273,7 +1475,7 @@ fn on_access_step(
         on_access_verdict.status_text,
         SettledStep {
             evidence_rows: on_access_rows(&on_access_evidence.on_access_config),
-            ..SettledStep::without_offers(on_access_verdict.node_state)
+            ..SettledStep::without_offers(on_access_verdict.checked_condition.node_state())
         },
     )
     .with_guidance_commands(
@@ -1337,7 +1539,7 @@ fn unknown_run_text(read_failure: UnitJournalReadFailure) -> String {
     gettext("Unknown. {reason}").replace("{reason}", &unit_journal_failure_text(read_failure))
 }
 
-fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
+const fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
     match last_result {
         ScanUnitResult::NothingFound | ScanUnitResult::ThreatsFound => false,
         ScanUnitResult::ScannerError { .. } | ScanUnitResult::ServiceFailed { .. } => true,
@@ -1353,6 +1555,38 @@ fn scanned_folders_text(scan_service: &ScanServiceEvidence) -> String {
     }
 }
 
+pub const fn scheduled_scan_condition(
+    scheduled_scan_evidence: &ScheduledScanEvidence,
+    daemon_answering: bool,
+) -> CheckedCondition {
+    match scheduled_scan_evidence {
+        ScheduledScanEvidence::SystemTimer {
+            timer_state: TimerState::TimerInactive | TimerState::TimerActive { .. },
+            ..
+        } if !daemon_answering => CheckedCondition::PrerequisiteMissing,
+        ScheduledScanEvidence::SystemTimer {
+            timer_state: TimerState::TimerInactive,
+            ..
+        } => CheckedCondition::ConditionFailed,
+        ScheduledScanEvidence::SystemTimer {
+            timer_state: TimerState::TimerActive { .. },
+            scan_service,
+            ..
+        } => match scan_service {
+            ScanServiceEvidence::ServiceConfigured { last_result, .. }
+                if scan_result_failed(last_result) =>
+            {
+                CheckedCondition::ReviewSuggested
+            }
+            ScanServiceEvidence::ServiceConfigured { .. } => CheckedCondition::ConditionMet,
+            ScanServiceEvidence::ServiceMissing => CheckedCondition::ReviewSuggested,
+            ScanServiceEvidence::ServiceUnreadable => CheckedCondition::EvidenceUnknown,
+        },
+        ScheduledScanEvidence::LazaretSchedule => CheckedCondition::ConditionMet,
+        ScheduledScanEvidence::NoSchedule => CheckedCondition::ReviewSuggested,
+    }
+}
+
 fn scheduled_scan_step(
     scheduled_scan_evidence: &ScheduledScanEvidence,
     scheduled_scan_starting: bool,
@@ -1365,6 +1599,8 @@ fn scheduled_scan_step(
         "A scheduled scan catches files that were not opened, or that only became detectable \
          after a signature update.",
     );
+    let node_state =
+        scheduled_scan_condition(scheduled_scan_evidence, daemon_answering).node_state();
     match scheduled_scan_evidence {
         ScheduledScanEvidence::SystemTimer {
             service_unit,
@@ -1413,13 +1649,13 @@ fn scheduled_scan_step(
             match timer_state {
                 TimerState::TimerInactive | TimerState::TimerActive { .. } if !daemon_answering => {
                     settled_scan_step(
-                        SettledNodeState::AwaitingPrerequisite,
+                        node_state,
                         daemon_awaited_text(),
                         EvidenceRowControl::NoRowControl,
                     )
                 }
                 TimerState::TimerInactive => settled_scan_step(
-                    SettledNodeState::HasFailed,
+                    node_state,
                     gettext("The system timer is not active"),
                     run_now_control,
                 ),
@@ -1441,23 +1677,23 @@ fn scheduled_scan_step(
                         if scan_result_failed(last_result) =>
                     {
                         settled_scan_step(
-                            SettledNodeState::NeedsReview,
+                            node_state,
                             gettext("The last scan ended with an error"),
                             run_now_control,
                         )
                     }
                     ScanServiceEvidence::ServiceConfigured { .. } => settled_scan_step(
-                        SettledNodeState::Completed,
+                        node_state,
                         gettext("Next scan: {time}").replace("{time}", &next_run_text(*next_run)),
                         run_now_control,
                     ),
                     ScanServiceEvidence::ServiceMissing => settled_scan_step(
-                        SettledNodeState::NeedsReview,
+                        node_state,
                         gettext("The timer starts a scan service that is not installed"),
                         run_now_control,
                     ),
                     ScanServiceEvidence::ServiceUnreadable => settled_scan_step(
-                        SettledNodeState::NeedsReview,
+                        node_state,
                         gettext("The scan service could not be read from systemd"),
                         run_now_control,
                     ),
@@ -1467,7 +1703,7 @@ fn scheduled_scan_step(
         ScheduledScanEvidence::LazaretSchedule => no_guidance_step(
             step_title,
             mechanism_details,
-            SettledNodeState::Completed,
+            node_state,
             gettext("Scheduled by Lazaret"),
         ),
         ScheduledScanEvidence::NoSchedule => TimelineStep::settled(
@@ -1478,13 +1714,31 @@ fn scheduled_scan_step(
                 header_action: StepActionSlot::ActionOffered(OfferedAction::suggested(
                     ProtectionStepAction::SetUpSettingsSubpage(SettingsSubpage::ScanSchedule),
                 )),
-                ..SettledStep::without_offers(SettledNodeState::NeedsReview)
+                ..SettledStep::without_offers(node_state)
             },
         )
         .with_guidance_commands(remedy_commands(
             SuggestedRemedy::ScheduledScanEnable,
             distribution_family,
         )),
+    }
+}
+
+pub fn alerts_condition(
+    alert_readiness: &AlertReadiness,
+    background_service_state: UnitState,
+) -> CheckedCondition {
+    match &alert_readiness.journal_access {
+        JournalAccess::JournalUnreadable | JournalAccess::FollowingFailed(_) => {
+            CheckedCondition::ConditionFailed
+        }
+        JournalAccess::FollowingJournal
+            if !alert_readiness.notifications_enabled
+                || background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive) =>
+        {
+            CheckedCondition::ReviewSuggested
+        }
+        JournalAccess::FollowingJournal => CheckedCondition::ConditionMet,
     }
 }
 
@@ -1498,36 +1752,28 @@ fn alerts_step(
         "Lazaret follows the system journal and notifies you when something is detected. It can \
          only do that while it is running, so it should run in the background.",
     );
-    let (node_state, status_text) = match &alert_readiness.journal_access {
-        JournalAccess::JournalUnreadable => (
-            SettledNodeState::HasFailed,
-            gettext(
-                "The system journal can't be read. Add your user to the systemd-journal group.",
-            ),
-        ),
-        JournalAccess::FollowingFailed(follow_failure) => (
-            SettledNodeState::HasFailed,
-            journal_follow_failure_text(follow_failure),
-        ),
-        JournalAccess::FollowingJournal if !alert_readiness.notifications_enabled => (
-            SettledNodeState::NeedsReview,
-            gettext("Notifications are turned off in the preferences"),
-        ),
+    let node_state = alerts_condition(alert_readiness, background_service_state).node_state();
+    let status_text = match &alert_readiness.journal_access {
+        JournalAccess::JournalUnreadable => {
+            gettext("The system journal can't be read. Add your user to the systemd-journal group.")
+        }
+        JournalAccess::FollowingFailed(follow_failure) => {
+            journal_follow_failure_text(follow_failure)
+        }
+        JournalAccess::FollowingJournal if !alert_readiness.notifications_enabled => {
+            gettext("Notifications are turned off in the preferences")
+        }
         JournalAccess::FollowingJournal
             if background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive) =>
         {
-            (
-                SettledNodeState::NeedsReview,
-                gettext(
-                    "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
-                     background",
-                ),
+            gettext(
+                "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
+                 background",
             )
         }
-        JournalAccess::FollowingJournal => (
-            SettledNodeState::Completed,
-            gettext("Running in the background and following the journal"),
-        ),
+        JournalAccess::FollowingJournal => {
+            gettext("Running in the background and following the journal")
+        }
     };
     no_guidance_step(step_title, mechanism_details, node_state, status_text).with_guidance_commands(
         if alert_readiness.journal_access == JournalAccess::FollowingJournal
@@ -1665,32 +1911,19 @@ pub fn protection_timeline(
 
 #[cfg(test)]
 mod protection_timeline_presentation_tests {
-    use bytesize::ByteSize;
-
     use super::*;
     use crate::{
         host_services::{
             clamav_programs::database_directory_status::DatabaseFolderReadFailure,
             systemd_bus::host_systemd_units::ServiceFailureKind,
         },
+        protection_page::protection_evidence_fixtures::{
+            REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
+        },
         shared_widgets::step_timeline::timeline_step_contents::StepPhase,
         sharing::analysis_page::trusted_detections_page::trust_list_contents::TrustListReadFailure,
         signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
     };
-
-    const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
-
-    fn english_formatters() -> &'static MomentFormatters {
-        static ENGLISH_FORMATTERS: std::sync::OnceLock<MomentFormatters> =
-            std::sync::OnceLock::new();
-        ENGLISH_FORMATTERS.get_or_init(|| {
-            MomentFormatters::try_for_locales(
-                &icu::locale::locale!("en"),
-                &icu::locale::locale!("en"),
-            )
-            .unwrap()
-        })
-    }
 
     fn known_update_host(update_progress: SignatureUpdateProgress) -> SignatureUpdateView {
         SignatureUpdateView::HostStatusKnown(
@@ -1782,57 +2015,6 @@ mod protection_timeline_presentation_tests {
             .chain(protection_timeline.engine_steps)
             .chain(protection_timeline.review_steps)
             .collect()
-    }
-
-    fn healthy_evidence() -> ProtectionEvidence {
-        ProtectionEvidence {
-            program_trust: ProgramTrustInspection::ProgramsChecked(Vec::new()),
-            trust_list: TrustListReading::ListsRead(empty_trust_list()),
-            runtime_reductions: RuntimeReductions::NothingReduced,
-            account_setting_findings: Vec::new(),
-            engine_installation: EngineInstallation::VersionReported {
-                version_banner: "ClamAV 1.5.4/28174".to_owned(),
-            },
-            signature_evidence: SignatureEvidence {
-                database_evidence: DatabaseEvidence::BuiltAt {
-                    built_at: REFERENCE_MOMENT - SignedDuration::from_hours(5),
-                },
-                updater_evidence: Vec::new(),
-                third_party_listing: ThirdPartySignatureListing::FilesListed(Vec::new()),
-            },
-            daemon_evidence: DaemonEvidence::ClamdAnswering {
-                loaded_signatures: LoadedSignatures::MatchesDisk,
-            },
-            on_access_evidence: OnAccessEvidence {
-                on_access_scanner: OnAccessScanner::MonitorRunning,
-                on_access_config: OnAccessConfig::ConfigRead {
-                    watch_scope: WatchScope::WatchedLocations {
-                        first_location: WatchedLocation::WatchedFolder {
-                            folder_path: "/home/user/Downloads".to_owned(),
-                        },
-                        other_locations: Vec::new(),
-                    },
-                    blocking_response: OnAccessResponse::BlockAccess,
-                    size_limit: OnAccessSizeLimit::ConfiguredLimit {
-                        size_limit: ByteSize::mib(100),
-                    },
-                },
-            },
-            scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
-                service_unit: "clamdscan.service",
-                timer_state: TimerState::TimerActive {
-                    next_run: UnitTimestamp::RecordedAt {
-                        recorded_at: REFERENCE_MOMENT + SignedDuration::from_hours(6),
-                    },
-                },
-                scan_service: ScanServiceEvidence::ServiceConfigured {
-                    scan_targets: vec!["/tmp".to_owned(), "/var/tmp".to_owned()],
-                    last_result: ScanUnitResult::NothingFound,
-                },
-                last_completed_run: ScanRunHistory::NoCompletedScan,
-            },
-            background_service_state: UnitState::UnitLoaded(UnitActivity::UnitActive),
-        }
     }
 
     fn ready_alerts() -> AlertReadiness {
@@ -2135,14 +2317,6 @@ mod protection_timeline_presentation_tests {
         let engine_steps = idle_timeline(&protection_evidence).engine_steps;
         assert_eq!(engine_steps[0].node_state(), StepNodeState::HasFailed);
         assert_eq!(engine_steps.len(), 3);
-    }
-
-    fn empty_trust_list() -> TrustListContents {
-        TrustListContents {
-            trusted_files: LazaretListReading::ListRead(Vec::new()),
-            ignored_signatures: LazaretListReading::ListRead(Vec::new()),
-            foreign_allowlists: Vec::new(),
-        }
     }
 
     fn trust_review_steps(trust_list_reading: TrustListReading) -> Vec<ProtectionStep> {

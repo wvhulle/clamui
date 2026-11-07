@@ -26,30 +26,43 @@ use crate::{
             GatheringStart,
         },
         settings_navigation::{SettingsSubpage, settings_subpage_frame},
+        sidebar_area_status::{
+            AreaSummaryContext, SidebarAreaSummary, StatusIndicator, all_area_summaries,
+            attention_summary_text, worst_area_status,
+        },
     },
     findings::{
         detections_page::background_detections_page::{
             BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageInput,
             BackgroundDetectionsPageOutput,
         },
-        quarantine_page::quarantine_entries_page::{
-            QuarantineEntriesPage, QuarantineEntriesPageInput,
+        quarantine_page::{
+            quarantine_entries_page::{
+                QuarantineEntriesPage, QuarantineEntriesPageInput, QuarantineEntriesPageOutput,
+            },
+            quarantine_page_state::QuarantineEntryCount,
         },
     },
     host_services::{
         activity_history::activity_history_database::ActivityHistory,
-        desktop::running_instance_forwarding::paths_from_bytes,
+        desktop::{
+            locale_formatting::host_moment_formatters,
+            running_instance_forwarding::paths_from_bytes,
+        },
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::host_protection_evidence::{
-            ProtectionEvidence, WATCHED_SERVICE_UNITS, gather_protection_evidence,
-            lazaret_schedule_is_enabled,
+            ProtectionEvidence, WATCHED_SERVICE_UNITS, detection_notifications_are_enabled,
+            gather_protection_evidence, lazaret_schedule_is_enabled,
         },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
         systemd_bus::host_systemd_units::watched_unit_changes,
     },
     logs_page::activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
-    protection_page::protection_timeline_page::{
-        ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
+    protection_page::{
+        protection_timeline_page::{
+            ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
+        },
+        protection_timeline_presentation::AlertReadiness,
     },
     scans::{
         manual_scan_page::{
@@ -136,6 +149,11 @@ impl SettingsSubpageContent {
     }
 }
 
+enum AreaSummaries {
+    SummariesPending,
+    SummariesComputed(Vec<SidebarAreaSummary>),
+}
+
 struct OpenedSettingsSubpage {
     settings_subpage: SettingsSubpage,
     subpage_frame: adw::NavigationPage,
@@ -169,6 +187,10 @@ pub struct PageNavigation {
     detections_page: Controller<BackgroundDetectionsPage>,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
+    journal_access: JournalAccess,
+    unresolved_detections: usize,
+    quarantine_entry_count: QuarantineEntryCount,
+    area_summaries: AreaSummaries,
     _unit_watch: RunningStream,
 }
 
@@ -189,6 +211,7 @@ pub enum PageNavigationInput {
     SignaturesUpdated,
     JournalAccessChanged(JournalAccess),
     UnresolvedDetectionsChanged(usize),
+    QuarantineEntriesCounted(QuarantineEntryCount),
     EvidenceRefreshRequested,
 }
 
@@ -369,6 +392,41 @@ fn register_page_actions(
 }
 
 impl PageNavigation {
+    fn refresh_area_summaries(&mut self) {
+        let GatheredEvidence::Gathered {
+            protection_evidence,
+            gathered_at,
+        } = &self.gathered_evidence
+        else {
+            return;
+        };
+        self.area_summaries = AreaSummaries::SummariesComputed(all_area_summaries(
+            protection_evidence,
+            &AreaSummaryContext {
+                alert_readiness: AlertReadiness {
+                    journal_access: self.journal_access.clone(),
+                    notifications_enabled: detection_notifications_are_enabled(),
+                },
+                unresolved_detections: self.unresolved_detections,
+                quarantine_entry_count: self.quarantine_entry_count,
+                home_directory: glib::home_dir().to_string_lossy().into_owned(),
+                moment_formatters: host_moment_formatters(),
+                reference_moment: *gathered_at,
+            },
+        ));
+    }
+
+    fn computed_area_summaries(&self) -> &[SidebarAreaSummary] {
+        match &self.area_summaries {
+            AreaSummaries::SummariesPending => &[],
+            AreaSummaries::SummariesComputed(area_summaries) => area_summaries,
+        }
+    }
+
+    fn protection_status_indicator(&self) -> StatusIndicator {
+        worst_area_status(self.computed_area_summaries()).status_indicator()
+    }
+
     fn advance_evidence_refresh(
         &mut self,
         refresh_trigger: EvidenceRefreshTrigger,
@@ -489,6 +547,40 @@ impl Component for PageNavigation {
                                             sender.input(PageNavigationInput::PageShown(application_page));
                                         }
                                     },
+
+                                    append = &gtk::ListBoxRow {
+                                        set_widget_name: ApplicationPage::Protection.page_name(),
+
+                                        #[wrap(Some)]
+                                        set_child = &gtk::Box {
+                                            set_spacing: 12,
+
+                                            gtk::Image {
+                                                set_icon_name: Some(ApplicationPage::Protection.page_icon()),
+                                            },
+                                            gtk::Label {
+                                                set_label: &ApplicationPage::Protection.page_title(),
+                                            },
+                                            gtk::Image {
+                                                set_hexpand: true,
+                                                set_halign: gtk::Align::End,
+                                                #[watch]
+                                                set_visible: model.protection_status_indicator().is_shown(),
+                                                #[watch]
+                                                set_icon_name: Some(model.protection_status_indicator().icon_name()),
+                                                #[watch]
+                                                set_css_classes: model.protection_status_indicator().css_classes(),
+                                                #[watch]
+                                                set_tooltip_text: Some(&attention_summary_text(model.computed_area_summaries())),
+                                            },
+                                        },
+                                    },
+                                    append: &navigation_row(ApplicationPage::Detections),
+                                    append: &navigation_row(ApplicationPage::Scan),
+                                    append: &navigation_row(ApplicationPage::Logs),
+                                    append: &navigation_row(ApplicationPage::Quarantine),
+                                    append: &navigation_row(ApplicationPage::Signatures),
+                                    append: &navigation_row(ApplicationPage::Hardening),
                                 },
                             },
                         },
@@ -573,7 +665,14 @@ impl Component for PageNavigation {
         let activity_history = ActivityHistory::at_database_path(data_directory.join("history.db"));
         let quarantine_page = QuarantineEntriesPage::builder()
             .launch(quarantine_vault.clone())
-            .detach();
+            .forward(
+                sender.input_sender(),
+                |quarantine_output| match quarantine_output {
+                    QuarantineEntriesPageOutput::EntriesCounted(quarantine_entry_count) => {
+                        PageNavigationInput::QuarantineEntriesCounted(quarantine_entry_count)
+                    }
+                },
+            );
         let logs_page = ActivityLogsPage::builder()
             .launch(activity_history.clone())
             .detach();
@@ -650,6 +749,10 @@ impl Component for PageNavigation {
             detections_page,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
+            journal_access: JournalAccess::FollowingJournal,
+            unresolved_detections: 0,
+            quarantine_entry_count: QuarantineEntryCount::CountLoading,
+            area_summaries: AreaSummaries::SummariesPending,
             _unit_watch: run_stream(
                 &sender,
                 watched_unit_changes(&WATCHED_SERVICE_UNITS)
@@ -658,13 +761,6 @@ impl Component for PageNavigation {
         };
         model.advance_evidence_refresh(EvidenceRefreshTrigger::RefreshRequested, &sender);
         let widgets = view_output!();
-        ALL_APPLICATION_PAGES
-            .into_iter()
-            .for_each(|application_page| {
-                widgets
-                    .sidebar_list
-                    .append(&navigation_row(application_page));
-            });
         widgets.sidebar_list.select_row(
             widgets
                 .sidebar_list
@@ -750,12 +846,20 @@ impl Component for PageNavigation {
                     .emit(ActivityLogsPageInput::ReloadEntriesRequested);
             }
             PageNavigationInput::JournalAccessChanged(journal_access) => {
+                self.journal_access = journal_access.clone();
+                self.refresh_area_summaries();
                 self.protection_page
                     .emit(ProtectionTimelinePageInput::JournalAccessChanged(
                         journal_access,
                     ));
             }
+            PageNavigationInput::QuarantineEntriesCounted(quarantine_entry_count) => {
+                self.quarantine_entry_count = quarantine_entry_count;
+                self.refresh_area_summaries();
+            }
             PageNavigationInput::UnresolvedDetectionsChanged(unresolved_detections) => {
+                self.unresolved_detections = unresolved_detections;
+                self.refresh_area_summaries();
                 self.protection_page.emit(
                     ProtectionTimelinePageInput::UnresolvedDetectionsChanged(unresolved_detections),
                 );
@@ -784,6 +888,7 @@ impl Component for PageNavigation {
                     protection_evidence,
                     gathered_at,
                 };
+                self.refresh_area_summaries();
                 self.protection_page
                     .emit(ProtectionTimelinePageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),

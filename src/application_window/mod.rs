@@ -4,6 +4,7 @@ pub mod application_window_shell;
 pub mod page_navigation;
 pub mod protection_evidence_refresh;
 pub mod settings_navigation;
+pub mod sidebar_area_status;
 pub mod startup_arguments;
 pub mod system_tray_connection;
 pub mod system_tray_menu;

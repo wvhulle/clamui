@@ -12,7 +12,9 @@ use crate::{
         quarantine_entry_row::{
             QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput,
         },
-        quarantine_page_state::{EntryOperationKind, QuarantineListing, QuarantinePageState},
+        quarantine_page_state::{
+            EntryOperationKind, QuarantineEntryCount, QuarantineListing, QuarantinePageState,
+        },
     },
     host_services::{
         clamav_programs::{
@@ -253,6 +255,11 @@ pub enum QuarantineEntriesPageInput {
     TrustConfirmed(TrustChoice),
     FalsePositiveReportRequested(ReportedDetection),
     FalsePositiveReportConfirmed(FalsePositiveReport),
+}
+
+#[derive(Debug)]
+pub enum QuarantineEntriesPageOutput {
+    EntriesCounted(QuarantineEntryCount),
 }
 
 #[derive(Debug)]
@@ -676,7 +683,7 @@ impl QuarantineEntriesPage {
 impl Component for QuarantineEntriesPage {
     type Init = QuarantineVault;
     type Input = QuarantineEntriesPageInput;
-    type Output = ();
+    type Output = QuarantineEntriesPageOutput;
     type CommandOutput = QuarantineEntriesPageCommand;
 
     view! {
@@ -1149,6 +1156,9 @@ impl Component for QuarantineEntriesPage {
             QuarantineEntriesPageCommand::EntriesLoaded(load_outcome) => {
                 self.page_state.record_loaded_entries(load_outcome);
                 self.show_matching_entries();
+                let _shell_closed = sender.output(QuarantineEntriesPageOutput::EntriesCounted(
+                    self.page_state.listing().entry_count(),
+                ));
             }
             QuarantineEntriesPageCommand::EntryOperationFinished {
                 entry_id,

@@ -23,7 +23,24 @@ pub enum QuarantineListing {
     ListingFailed(QuarantineMoveFailure),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QuarantineEntryCount {
+    CountLoading,
+    EntriesCounted { entry_count: usize },
+    CountUnavailable,
+}
+
 impl QuarantineListing {
+    pub const fn entry_count(&self) -> QuarantineEntryCount {
+        match self {
+            Self::ListingLoading => QuarantineEntryCount::CountLoading,
+            Self::ListingLoaded(listed_entries) => QuarantineEntryCount::EntriesCounted {
+                entry_count: listed_entries.len(),
+            },
+            Self::ListingFailed(_) => QuarantineEntryCount::CountUnavailable,
+        }
+    }
+
     pub fn listed_entries(&self) -> &[QuarantineEntryRecord] {
         match self {
             Self::ListingLoaded(listed_entries) => listed_entries,
