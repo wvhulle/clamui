@@ -54,8 +54,7 @@ pub enum ActivityHistoryGroupCommand {
 fn history_failure_text(history_view: &FilteredHistoryView) -> String {
     match history_view {
         FilteredHistoryView::HistoryLoadFailed(load_failure) => {
-            gettext("Failed to load historical logs: {error}")
-                .replace("{error}", &describe_history_failure(load_failure))
+            describe_history_failure(load_failure)
         }
         FilteredHistoryView::HistoryLoading | FilteredHistoryView::HistoryLoaded(_) => {
             String::new()
@@ -104,14 +103,21 @@ impl Component for ActivityHistoryGroup {
                 add_css_class: "boxed-list",
                 set_selection_mode: gtk::SelectionMode::None,
                 #[wrap(Some)]
-                set_placeholder = &adw::StatusPage {
-                    add_css_class: "compact",
-                    set_icon_name: Some("dialog-error-symbolic"),
-                    set_title: &gettext("Historical logs can't be read"),
+                set_placeholder = &adw::ActionRow {
+                    set_use_markup: false,
+                    set_title: &gettext("Scan history can't be read"),
+                    set_subtitle_lines: 0,
                     #[watch]
-                    set_description: Some(&gtk::glib::markup_escape_text(
-                        &history_failure_text(&model.history_view),
-                    )),
+                    set_subtitle: &history_failure_text(&model.history_view),
+                    add_prefix = &gtk::Image {
+                        set_icon_name: Some("dialog-error-symbolic"),
+                        add_css_class: "error",
+                    },
+                    add_suffix = &gtk::Button {
+                        set_label: &gettext("Retry"),
+                        set_valign: gtk::Align::Center,
+                        connect_clicked => ActivityHistoryGroupInput::ReloadRequested,
+                    },
                 },
                 connect_row_activated[sender] => move |_history_list, activated_row| {
                     sender.input(ActivityHistoryGroupInput::EntryActivated {
