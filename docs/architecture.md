@@ -178,6 +178,27 @@ erDiagram
 | `detection_resolutions` | `file_path, signature_name` | `background_detections` | How and when you resolved a detection. An open detection has no row, and a later sighting deletes it. |
 | `detection_journal_position` | `position_row`, always 1 | | The journal cursor the follower continues from. |
 
+### quarantine.db
+
+```mermaid
+erDiagram
+    file_contents ||--o{ quarantine : "content"
+    quarantine ||--o| quarantine_signatures : "named threat"
+    quarantine_pending ||--o| pending_payload_hashes : "hashed copy"
+    quarantine_pending ||--o| pending_signatures : "named threat"
+```
+
+| Table | Key | References | Stores |
+|---|---|---|---|
+| `file_contents` | `content_sha256` | | The size of each quarantined content, by its lowercase SHA-256. Removed with the last entry that holds it. |
+| `quarantine` | `entry_id`; `quarantine_path` is unique too | `file_contents` | One quarantined file: where it came from, where its payload is, when it was detected and its permission bits. |
+| `quarantine_signatures` | `entry_id` | `quarantine` | The signature that detected the file. An entry without this row was blocked by on-access scanning before a signature was known. |
+| `quarantine_pending` | `quarantine_path` | | A move that has started but not committed: source, planned size and permission bits. |
+| `pending_payload_hashes` | `quarantine_path` | `quarantine_pending` | The hash of a copied payload. A blocked file renamed into quarantine has no hash until the next start computes it. |
+| `pending_signatures` | `quarantine_path` | `quarantine_pending` | The signature of a pending move, with the same meaning as `quarantine_signatures`. |
+
+A submission in `history.db` names its content by the same SHA-256 as `file_contents`. SQLite can't enforce a foreign key across two database files, so the hash is the only link. Lazaret still treats an entry whose stored hash or detection date doesn't parse as unverified, so a database edited by hand can't make it restore unchecked content.
+
 ## Deployments
 
 ```mermaid

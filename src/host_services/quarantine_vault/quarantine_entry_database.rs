@@ -9,7 +9,7 @@ use bytesize::ByteSize;
 use futures::{TryStreamExt, stream};
 use jiff::Timestamp;
 use tokio::task::spawn_blocking;
-use turso::{Builder, Connection, Database, Row, Value};
+use turso::{Builder, Connection, Database, Row, Value, transaction::TransactionBehavior};
 
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::ThreatIdentity,
@@ -29,34 +29,26 @@ use crate::host_services::{
 
 const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const CONNECTION_PRAGMAS: &str = "PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;";
-const QUARANTINE_SCHEMA: &str = "
-    CREATE TABLE IF NOT EXISTS quarantine (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        original_path TEXT NOT NULL,
-        quarantine_path TEXT NOT NULL UNIQUE,
-        threat_name TEXT NOT NULL,
-        detection_date TEXT NOT NULL,
-        file_size INTEGER NOT NULL,
-        file_hash TEXT NOT NULL,
-        original_permissions INTEGER NOT NULL DEFAULT 420 CHECK (original_permissions BETWEEN 0 \
-                                 AND 511),
-        state TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'restored', 'deleted'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_quarantine_detection_date ON quarantine(detection_date);
-    CREATE INDEX IF NOT EXISTS idx_quarantine_original_path ON quarantine(original_path);
-    CREATE TABLE IF NOT EXISTS quarantine_pending (
-        quarantine_path TEXT PRIMARY KEY,
-        original_path TEXT NOT NULL,
-        threat_name TEXT NOT NULL,
-        file_size INTEGER NOT NULL,
-        file_hash TEXT NOT NULL,
-        original_permissions INTEGER NOT NULL
-    );";
-const NOT_YET_HASHED_TEXT: &str = "";
-const BLOCKED_BY_ON_ACCESS_STORED_TEXT: &str = "lazaret:blocked-by-on-access";
-const LEGACY_BLOCKED_BY_ON_ACCESS_TEXT: &str = "Blocked by on-access scanning";
-const ENTRY_COLUMNS: &str = "id, original_path, quarantine_path, threat_name, detection_date, \
-                             file_size, file_hash, original_permissions";
+const QUARANTINE_SCHEMA: &str = include_str!("../../../data/database-schemas/quarantine.sql");
+const ENTRY_QUERY: &str = "
+    SELECT quarantine.entry_id, quarantine.original_path, quarantine.quarantine_path,
+        quarantine_signatures.signature_name, quarantine.detection_date,
+        file_contents.byte_size, quarantine.content_sha256, quarantine.original_permissions
+    FROM quarantine
+    JOIN file_contents ON file_contents.content_sha256 = quarantine.content_sha256
+    LEFT JOIN quarantine_signatures ON quarantine_signatures.entry_id = quarantine.entry_id";
+const PENDING_QUERY: &str = "
+    SELECT quarantine_pending.quarantine_path, quarantine_pending.original_path,
+        pending_signatures.signature_name, quarantine_pending.byte_size,
+        pending_payload_hashes.content_sha256, quarantine_pending.original_permissions
+    FROM quarantine_pending
+    LEFT JOIN pending_signatures
+        ON pending_signatures.quarantine_path = quarantine_pending.quarantine_path
+    LEFT JOIN pending_payload_hashes
+        ON pending_payload_hashes.quarantine_path = quarantine_pending.quarantine_path";
+const ORPHANED_CONTENT_REMOVAL: &str = "DELETE FROM file_contents WHERE NOT EXISTS (SELECT 1 FROM \
+                                        quarantine WHERE quarantine.content_sha256 = \
+                                        file_contents.content_sha256)";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StoredDetectionDate {
@@ -73,21 +65,27 @@ impl From<String> for StoredDetectionDate {
     }
 }
 
-fn stored_threat_text(threat_identity: &ThreatIdentity) -> String {
-    match threat_identity {
-        ThreatIdentity::Signature { signature_name } => signature_name.clone(),
-        ThreatIdentity::BlockedByOnAccess => BLOCKED_BY_ON_ACCESS_STORED_TEXT.to_owned(),
+fn threat_identity_from_stored(stored_signature: Option<String>) -> ThreatIdentity {
+    match stored_signature {
+        Some(signature_name) => ThreatIdentity::Signature { signature_name },
+        None => ThreatIdentity::BlockedByOnAccess,
     }
 }
 
-fn threat_identity_from_stored(stored_text: String) -> ThreatIdentity {
-    match stored_text.as_str() {
-        BLOCKED_BY_ON_ACCESS_STORED_TEXT | LEGACY_BLOCKED_BY_ON_ACCESS_TEXT => {
-            ThreatIdentity::BlockedByOnAccess
+async fn record_threat_signature(
+    database_connection: &Connection,
+    signature_insert: &str,
+    stored_key: Value,
+    threat_identity: &ThreatIdentity,
+) -> Result<(), QuarantineMoveFailure> {
+    match threat_identity {
+        ThreatIdentity::Signature { signature_name } => {
+            database_connection
+                .execute(signature_insert, (stored_key, signature_name.as_str()))
+                .await?;
+            Ok(())
         }
-        _signature_text => ThreatIdentity::Signature {
-            signature_name: stored_text,
-        },
+        ThreatIdentity::BlockedByOnAccess => Ok(()),
     }
 }
 
@@ -109,15 +107,6 @@ enum PendingPayloadHash {
     Hashed { sha256_hex: String },
 }
 
-impl PendingPayloadHash {
-    fn stored_text(&self) -> String {
-        match self {
-            Self::NotYetHashed => NOT_YET_HASHED_TEXT.to_owned(),
-            Self::Hashed { sha256_hex } => sha256_hex.clone(),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum StoredPendingHash {
     NotYetHashed,
@@ -125,14 +114,15 @@ enum StoredPendingHash {
     UnrecognisedText,
 }
 
-impl From<String> for StoredPendingHash {
-    fn from(stored_text: String) -> Self {
-        if stored_text == NOT_YET_HASHED_TEXT {
-            return Self::NotYetHashed;
+impl StoredPendingHash {
+    fn from_stored_hash(stored_hash: Option<String>) -> Self {
+        match stored_hash {
+            None => Self::NotYetHashed,
+            Some(stored_text) => parsed_sha256_hex(&stored_text)
+                .map_or(Self::UnrecognisedText, |sha256_hex| Self::Hashed {
+                    sha256_hex,
+                }),
         }
-        parsed_sha256_hex(&stored_text).map_or(Self::UnrecognisedText, |sha256_hex| Self::Hashed {
-            sha256_hex,
-        })
     }
 }
 
@@ -142,7 +132,7 @@ struct PendingQuarantineRow {
     threat_identity: ThreatIdentity,
     file_size: ByteSize,
     stored_hash: StoredPendingHash,
-    original_permissions: i64,
+    original_permissions: u32,
 }
 
 struct PendingMove {
@@ -211,9 +201,9 @@ fn entry_record_from_row(
         quarantine_path: stored_path_column(database_row, 2)?,
         threat_identity: threat_identity_from_stored(database_row.get(3)?),
         detection_date: StoredDetectionDate::from(database_row.get::<String>(4)?),
-        file_size: ByteSize::b(database_row.get::<i64>(5)?.max(0) as u64),
+        file_size: ByteSize::b(database_row.get(5)?),
         payload_hash: RecordedPayloadHash::from(database_row.get::<String>(6)?),
-        original_permissions: (database_row.get::<i64>(7)? as u32) & 0o777,
+        original_permissions: database_row.get::<u32>(7)? & 0o777,
     })
 }
 
@@ -344,21 +334,15 @@ impl QuarantineVault {
         &self,
         database_connection: &Connection,
     ) -> Result<(), QuarantineMoveFailure> {
-        let mut pending_rows = database_connection
-            .query(
-                "SELECT quarantine_path, original_path, threat_name, file_size, file_hash, \
-                 original_permissions FROM quarantine_pending",
-                (),
-            )
-            .await?;
+        let mut pending_rows = database_connection.query(PENDING_QUERY, ()).await?;
         let mut pending_entries = Vec::new();
         while let Some(pending_row) = pending_rows.next().await? {
             pending_entries.push(PendingQuarantineRow {
                 quarantine_path: stored_path_column(&pending_row, 0)?,
                 original_path: stored_path_column(&pending_row, 1)?,
                 threat_identity: threat_identity_from_stored(pending_row.get(2)?),
-                file_size: ByteSize::b(pending_row.get::<i64>(3)?.max(0) as u64),
-                stored_hash: StoredPendingHash::from(pending_row.get::<String>(4)?),
+                file_size: ByteSize::b(pending_row.get(3)?),
+                stored_hash: StoredPendingHash::from_stored_hash(pending_row.get(4)?),
                 original_permissions: pending_row.get(5)?,
             });
         }
@@ -377,7 +361,8 @@ impl QuarantineVault {
         let mut entry_rows = database_connection
             .query(
                 format!(
-                    "SELECT {ENTRY_COLUMNS} FROM quarantine ORDER BY detection_date DESC, id DESC"
+                    "{ENTRY_QUERY} ORDER BY quarantine.detection_date DESC, quarantine.entry_id \
+                     DESC"
                 ),
                 (),
             )
@@ -396,7 +381,7 @@ impl QuarantineVault {
     ) -> Result<QuarantineEntryRecord, QuarantineMoveFailure> {
         let mut entry_rows = database_connection
             .query(
-                format!("SELECT {ENTRY_COLUMNS} FROM quarantine WHERE id = ?1"),
+                format!("{ENTRY_QUERY} WHERE quarantine.entry_id = ?1"),
                 [entry_id],
             )
             .await?;
@@ -411,21 +396,42 @@ impl QuarantineVault {
         pending_move: &PendingMove,
         threat_identity: &ThreatIdentity,
     ) -> Result<(), QuarantineMoveFailure> {
-        let database_connection = self.open_connection().await?;
-        database_connection
+        let mut database_connection = self.open_connection().await?;
+        let pending_transaction = database_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .await?;
+        pending_transaction
             .execute(
-                "INSERT INTO quarantine_pending (quarantine_path, original_path, threat_name, \
-                 file_size, file_hash, original_permissions) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                vec![
+                "INSERT INTO quarantine_pending (quarantine_path, original_path, byte_size, \
+                 original_permissions) VALUES (?1, ?2, ?3, ?4)",
+                (
                     path_blob(&pending_move.destination_path),
                     path_blob(&pending_move.source_path),
-                    Value::Text(stored_threat_text(threat_identity)),
-                    Value::Integer(pending_move.file_size.as_u64() as i64),
-                    Value::Text(pending_move.pending_hash.stored_text()),
-                    Value::Integer(i64::from(pending_move.original_permissions)),
-                ],
+                    pending_move.file_size.as_u64(),
+                    pending_move.original_permissions & 0o777,
+                ),
             )
             .await?;
+        if let PendingPayloadHash::Hashed { sha256_hex } = &pending_move.pending_hash {
+            pending_transaction
+                .execute(
+                    "INSERT INTO pending_payload_hashes (quarantine_path, content_sha256) VALUES \
+                     (?1, ?2)",
+                    (
+                        path_blob(&pending_move.destination_path),
+                        sha256_hex.as_str(),
+                    ),
+                )
+                .await?;
+        }
+        record_threat_signature(
+            &pending_transaction,
+            "INSERT INTO pending_signatures (quarantine_path, signature_name) VALUES (?1, ?2)",
+            path_blob(&pending_move.destination_path),
+            threat_identity,
+        )
+        .await?;
+        pending_transaction.commit().await?;
         Ok(())
     }
 
@@ -486,31 +492,29 @@ impl QuarantineVault {
         recorded_payload: &RecordedPayload,
         threat_identity: &ThreatIdentity,
     ) -> Result<i64, QuarantineMoveFailure> {
-        let database_connection = self.open_connection().await?;
-        let entry_transaction = database_connection.unchecked_transaction().await?;
-        entry_transaction
-            .execute(
-                "INSERT INTO quarantine (original_path, quarantine_path, threat_name, \
-                 detection_date, file_size, file_hash, original_permissions) VALUES (?1, ?2, ?3, \
-                 ?4, ?5, ?6, ?7)",
-                vec![
-                    path_blob(&recorded_payload.source_path),
-                    path_blob(&recorded_payload.destination_path),
-                    Value::Text(stored_threat_text(threat_identity)),
-                    Value::Text(format!("{:.3}", Timestamp::now())),
-                    Value::Integer(recorded_payload.file_size.as_u64() as i64),
-                    Value::Text(recorded_payload.sha256_hex.clone()),
-                    Value::Integer(i64::from(recorded_payload.original_permissions & 0o777)),
-                ],
-            )
+        let mut database_connection = self.open_connection().await?;
+        let entry_transaction = database_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .await?;
-        let entry_id = entry_transaction.last_insert_rowid();
-        entry_transaction
-            .execute(
-                "DELETE FROM quarantine_pending WHERE quarantine_path = ?1",
-                vec![path_blob(&recorded_payload.destination_path)],
-            )
-            .await?;
+        insert_committed_entry(
+            &entry_transaction,
+            &CommittedEntry {
+                original_path: &recorded_payload.source_path,
+                quarantine_path: &recorded_payload.destination_path,
+                threat_identity,
+                file_size: recorded_payload.file_size,
+                sha256_hex: &recorded_payload.sha256_hex,
+                original_permissions: recorded_payload.original_permissions,
+                path_conflict: QuarantinePathConflict::FailOnExistingEntry,
+            },
+        )
+        .await?;
+        let entry_id = entry_transaction
+            .prepare("SELECT entry_id FROM quarantine WHERE quarantine_path = ?1")
+            .await?
+            .query_row([path_blob(&recorded_payload.destination_path)])
+            .await?
+            .get(0)?;
         entry_transaction.commit().await?;
         Ok(entry_id)
     }
@@ -627,15 +631,21 @@ impl QuarantineVault {
     }
 
     async fn remove_entry_record(&self, entry_id: i64) -> Result<(), QuarantineMoveFailure> {
-        let database_connection = self.open_connection().await?;
-        let removed_rows = database_connection
-            .execute("DELETE FROM quarantine WHERE id = ?1", [entry_id])
+        let mut database_connection = self.open_connection().await?;
+        let removal_transaction = database_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .await?;
-        if removed_rows > 0 {
-            Ok(())
-        } else {
-            Err(QuarantineMoveFailure::EntryRecordNotRemoved)
+        let removed_rows = removal_transaction
+            .execute("DELETE FROM quarantine WHERE entry_id = ?1", [entry_id])
+            .await?;
+        if removed_rows == 0 {
+            return Err(QuarantineMoveFailure::EntryRecordNotRemoved);
         }
+        removal_transaction
+            .execute(ORPHANED_CONTENT_REMOVAL, ())
+            .await?;
+        removal_transaction.commit().await?;
+        Ok(())
     }
 
     pub async fn restore_quarantined_file(
@@ -766,29 +776,92 @@ async fn recover_verified_pending_entry(
         } => committed_sha256_hex,
     };
     let recovery_transaction = database_connection.unchecked_transaction().await?;
-    recovery_transaction
+    insert_committed_entry(
+        &recovery_transaction,
+        &CommittedEntry {
+            original_path: &pending_entry.original_path,
+            quarantine_path: &pending_entry.quarantine_path,
+            threat_identity: &pending_entry.threat_identity,
+            file_size: pending_entry.file_size,
+            sha256_hex: &committed_sha256_hex,
+            original_permissions: pending_entry.original_permissions,
+            path_conflict: QuarantinePathConflict::KeepExistingEntry,
+        },
+    )
+    .await?;
+    recovery_transaction.commit().await?;
+    Ok(())
+}
+
+enum QuarantinePathConflict {
+    FailOnExistingEntry,
+    KeepExistingEntry,
+}
+
+impl QuarantinePathConflict {
+    const fn entry_insert(&self) -> &'static str {
+        match self {
+            Self::FailOnExistingEntry => {
+                "INSERT INTO quarantine (original_path, quarantine_path, content_sha256, \
+                 detection_date, original_permissions) VALUES (?1, ?2, ?3, ?4, ?5)"
+            }
+            Self::KeepExistingEntry => {
+                "INSERT OR IGNORE INTO quarantine (original_path, quarantine_path, content_sha256, \
+                 detection_date, original_permissions) VALUES (?1, ?2, ?3, ?4, ?5)"
+            }
+        }
+    }
+}
+
+struct CommittedEntry<'entry> {
+    original_path: &'entry Path,
+    quarantine_path: &'entry Path,
+    threat_identity: &'entry ThreatIdentity,
+    file_size: ByteSize,
+    sha256_hex: &'entry str,
+    original_permissions: u32,
+    path_conflict: QuarantinePathConflict,
+}
+
+async fn insert_committed_entry(
+    database_connection: &Connection,
+    committed_entry: &CommittedEntry<'_>,
+) -> Result<(), QuarantineMoveFailure> {
+    database_connection
         .execute(
-            "INSERT OR IGNORE INTO quarantine (original_path, quarantine_path, threat_name, \
-             detection_date, file_size, file_hash, original_permissions) VALUES (?1, ?2, ?3, ?4, \
-             ?5, ?6, ?7)",
-            vec![
-                path_blob(&pending_entry.original_path),
-                path_blob(&pending_entry.quarantine_path),
-                Value::Text(stored_threat_text(&pending_entry.threat_identity)),
-                Value::Text(format!("{:.3}", Timestamp::now())),
-                Value::Integer(pending_entry.file_size.as_u64() as i64),
-                Value::Text(committed_sha256_hex),
-                Value::Integer(pending_entry.original_permissions),
-            ],
+            "INSERT OR IGNORE INTO file_contents (content_sha256, byte_size) VALUES (?1, ?2)",
+            (
+                committed_entry.sha256_hex,
+                committed_entry.file_size.as_u64(),
+            ),
         )
         .await?;
-    recovery_transaction
+    database_connection
+        .execute(
+            committed_entry.path_conflict.entry_insert(),
+            (
+                path_blob(committed_entry.original_path),
+                path_blob(committed_entry.quarantine_path),
+                committed_entry.sha256_hex,
+                format!("{:.3}", Timestamp::now()),
+                committed_entry.original_permissions & 0o777,
+            ),
+        )
+        .await?;
+    record_threat_signature(
+        database_connection,
+        "INSERT OR IGNORE INTO quarantine_signatures (entry_id, signature_name) SELECT entry_id, \
+         ?2 FROM quarantine WHERE quarantine_path = ?1",
+        path_blob(committed_entry.quarantine_path),
+        committed_entry.threat_identity,
+    )
+    .await?;
+    database_connection
         .execute(
             "DELETE FROM quarantine_pending WHERE quarantine_path = ?1",
-            vec![path_blob(&pending_entry.quarantine_path)],
+            [path_blob(committed_entry.quarantine_path)],
         )
         .await?;
-    recovery_transaction.commit().await?;
     Ok(())
 }
 
@@ -866,35 +939,96 @@ mod quarantine_entry_database_tests {
         format!("{:x}", Sha256::digest(file_bytes))
     }
 
+    enum SeededPendingHash<'seeded> {
+        NotYetHashed,
+        Hashed { sha256_hex: &'seeded str },
+        TamperedHash { stored_text: &'seeded str },
+    }
+
     fn seed_pending_row(
         temporary_root: &TempDir,
         payload_path: &Path,
         original_path: &Path,
-        file_hash: &str,
+        seeded_hash: SeededPendingHash<'_>,
+    ) {
+        let sqlite_connection =
+            rusqlite::Connection::open(VaultFixture::database_path(temporary_root))
+                .expect("sqlite connection");
+        sqlite_connection
+            .execute_batch(QUARANTINE_SCHEMA)
+            .expect("quarantine schema");
+        sqlite_connection
+            .execute(
+                "INSERT INTO quarantine_pending VALUES (?1, ?2, 15, 420)",
+                params![
+                    payload_path.as_os_str().as_bytes(),
+                    original_path.as_os_str().as_bytes(),
+                ],
+            )
+            .expect("pending row");
+        sqlite_connection
+            .execute(
+                "INSERT INTO pending_signatures VALUES (?1, 'Crash.Test')",
+                params![payload_path.as_os_str().as_bytes()],
+            )
+            .expect("pending signature");
+        let stored_hash = match seeded_hash {
+            SeededPendingHash::NotYetHashed => return,
+            SeededPendingHash::Hashed { sha256_hex } => sha256_hex,
+            SeededPendingHash::TamperedHash { stored_text } => {
+                sqlite_connection
+                    .execute_batch("PRAGMA ignore_check_constraints=ON")
+                    .expect("ignore checks");
+                stored_text
+            }
+        };
+        sqlite_connection
+            .execute(
+                "INSERT INTO pending_payload_hashes VALUES (?1, ?2)",
+                params![payload_path.as_os_str().as_bytes(), stored_hash],
+            )
+            .expect("pending hash");
+    }
+
+    fn insert_tampered_entry(
+        temporary_root: &TempDir,
+        original_path: &Path,
+        payload_path: &Path,
+        byte_size: i64,
     ) {
         let sqlite_connection =
             rusqlite::Connection::open(VaultFixture::database_path(temporary_root))
                 .expect("sqlite connection");
         sqlite_connection
             .execute_batch(
-                "CREATE TABLE IF NOT EXISTS quarantine_pending (
-                     quarantine_path TEXT PRIMARY KEY, original_path TEXT NOT NULL, threat_name \
-                 TEXT NOT NULL,
-                     file_size INTEGER NOT NULL, file_hash TEXT NOT NULL, original_permissions \
-                 INTEGER NOT NULL
-                 )",
+                "PRAGMA ignore_check_constraints=ON; PRAGMA foreign_keys=ON; INSERT OR IGNORE \
+                 INTO file_contents VALUES ('', 0);",
             )
-            .expect("pending table");
+            .expect("tampered content row");
         sqlite_connection
             .execute(
-                "INSERT INTO quarantine_pending VALUES (?1, ?2, 'Crash.Test', 15, ?3, 420)",
+                "UPDATE file_contents SET byte_size = ?1 WHERE content_sha256 = ''",
+                params![byte_size],
+            )
+            .expect("tampered size");
+        sqlite_connection
+            .execute(
+                "INSERT INTO quarantine (original_path, quarantine_path, content_sha256, \
+                 detection_date, original_permissions) VALUES (?1, ?2, '', \
+                 '2020-01-01T00:00:00Z', 420)",
                 params![
-                    payload_path.as_os_str().as_bytes(),
                     original_path.as_os_str().as_bytes(),
-                    file_hash,
+                    payload_path.as_os_str().as_bytes(),
                 ],
             )
-            .expect("pending row");
+            .expect("tampered row");
+        sqlite_connection
+            .execute(
+                "INSERT INTO quarantine_signatures SELECT entry_id, 'Tampered.Test' FROM \
+                 quarantine WHERE quarantine_path = ?1",
+                params![payload_path.as_os_str().as_bytes()],
+            )
+            .expect("tampered signature");
     }
 
     fn pending_row_count(temporary_root: &TempDir) -> i64 {
@@ -904,6 +1038,166 @@ mod quarantine_entry_database_tests {
                 count_row.get(0)
             })
             .expect("pending count")
+    }
+
+    #[tokio::test]
+    async fn the_screenshot_fixture_loads_as_a_verified_entry() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let quarantine_directory = VaultFixture::quarantine_directory(&temporary_root);
+        fs::create_dir_all(&quarantine_directory).expect("quarantine directory");
+        let payload_path = quarantine_directory.join("0123456789abcdef_invoice.pdf.exe");
+        fs::write(&payload_path, b"fixture payload").expect("payload");
+        rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
+            .expect("sqlite connection")
+            .execute_batch(
+                &(QUARANTINE_SCHEMA.to_owned()
+                    + &include_str!("../../../xtask/assets/quarantine-seed.sql").replace(
+                        "@PAYLOAD_PATH@",
+                        &format!("'{}'", payload_path.to_string_lossy()),
+                    )),
+            )
+            .expect("fixture rows");
+        let quarantine_vault = open_fixture_vault(&temporary_root).await;
+        let listed_entries = quarantine_vault
+            .list_quarantine_entries()
+            .await
+            .expect("listed");
+        assert_eq!(listed_entries.len(), 1);
+        assert_eq!(
+            listed_entries[0].threat_identity,
+            signature_identity("Win.Trojan.Agent")
+        );
+        assert_eq!(listed_entries[0].file_size, ByteSize::b(15));
+        assert_eq!(
+            quarantine_vault
+                .read_verified_payload(listed_entries[0].entry_id, ByteSize::mib(1))
+                .await
+                .expect("verified")
+                .payload_bytes,
+            b"fixture payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn equal_contents_share_one_content_row_until_the_last_entry_leaves() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let first_source = vault_fixture.source_file("first-copy.bin", b"same bytes");
+        let second_source = vault_fixture.source_file("second-copy.bin", b"same bytes");
+        let first_entry = vault_fixture
+            .quarantine_vault
+            .move_file_into_quarantine(&first_source, &signature_identity("Test.Signature"))
+            .await
+            .expect("first quarantined");
+        let second_entry = vault_fixture
+            .quarantine_vault
+            .move_file_into_quarantine(&second_source, &ThreatIdentity::BlockedByOnAccess)
+            .await
+            .expect("second quarantined");
+        let content_rows = async || -> u64 {
+            vault_fixture
+                .quarantine_vault
+                .open_connection()
+                .await
+                .expect("connection")
+                .prepare("SELECT COUNT(*) FROM file_contents")
+                .await
+                .expect("statement")
+                .query_row(())
+                .await
+                .expect("count row")
+                .get(0)
+                .expect("content rows")
+        };
+        assert_eq!(content_rows().await, 1);
+        assert_eq!(first_entry.payload_hash, second_entry.payload_hash);
+        vault_fixture
+            .quarantine_vault
+            .delete_quarantined_file(first_entry.entry_id)
+            .await
+            .expect("first deleted");
+        assert_eq!(content_rows().await, 1);
+        vault_fixture
+            .quarantine_vault
+            .restore_quarantined_file(second_entry.entry_id)
+            .await
+            .expect("second restored");
+        assert_eq!(content_rows().await, 0);
+    }
+
+    #[tokio::test]
+    async fn the_quarantine_schema_refuses_rows_that_cannot_exist() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        drop(open_fixture_vault(&temporary_root).await);
+        let checked_connection =
+            rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
+                .expect("sqlite connection");
+        let valid_sha256 = sha256_text(b"valid");
+        checked_connection
+            .execute_batch(&format!(
+                "PRAGMA foreign_keys = ON;
+                 INSERT INTO file_contents VALUES ('{valid_sha256}', 5);
+                 INSERT INTO quarantine VALUES (1, CAST('/a' AS BLOB), CAST('/q/a' AS BLOB), \
+                 '{valid_sha256}', '2026-11-04T12:00:00.000Z', 420);
+                 INSERT INTO quarantine_pending VALUES (CAST('/q/b' AS BLOB), CAST('/b' AS BLOB), \
+                 5, 420);"
+            ))
+            .expect("valid rows");
+        [
+            "INSERT INTO file_contents VALUES ('', 5)".to_owned(),
+            format!(
+                "INSERT INTO file_contents VALUES ('{}', 5)",
+                valid_sha256.to_uppercase()
+            ),
+            format!(
+                "INSERT INTO file_contents VALUES ('{}', -1)",
+                sha256_text(b"other")
+            ),
+            format!(
+                "INSERT INTO quarantine VALUES (2, CAST('/c' AS BLOB), CAST('/q/c' AS BLOB), \
+                 '{}', '2026-11-04T12:00:00.000Z', 420)",
+                sha256_text(b"missing")
+            ),
+            format!(
+                "INSERT INTO quarantine VALUES (2, CAST('/c' AS BLOB), CAST('/q/a' AS BLOB), \
+                 '{valid_sha256}', '2026-11-04T12:00:00.000Z', 420)"
+            ),
+            format!(
+                "INSERT INTO quarantine VALUES (2, CAST('/c' AS BLOB), CAST('/q/c' AS BLOB), \
+                 '{valid_sha256}', 'yesterday', 420)"
+            ),
+            format!(
+                "INSERT INTO quarantine VALUES (2, CAST('/c' AS BLOB), CAST('/q/c' AS BLOB), \
+                 '{valid_sha256}', '2026-11-04T12:00:00.000Z', 3565)"
+            ),
+            "INSERT INTO quarantine_signatures VALUES (9, 'Orphan.Signature')".to_owned(),
+            "INSERT INTO pending_payload_hashes VALUES (CAST('/q/b' AS BLOB), '')".to_owned(),
+            format!(
+                "INSERT INTO pending_payload_hashes VALUES (CAST('/q/z' AS BLOB), \
+                 '{valid_sha256}')"
+            ),
+            "INSERT INTO pending_signatures VALUES (CAST('/q/z' AS BLOB), 'Orphan')".to_owned(),
+            "INSERT INTO quarantine_pending VALUES (CAST('/q/d' AS BLOB), CAST('/d' AS BLOB), -1, \
+             420)"
+                .to_owned(),
+        ]
+        .into_iter()
+        .for_each(|invalid_insert| {
+            assert!(
+                checked_connection.execute(&invalid_insert, []).is_err(),
+                "accepted: {invalid_insert}"
+            );
+        });
+        checked_connection
+            .execute("DELETE FROM quarantine_pending", [])
+            .expect("pending removed");
+        assert!(
+            checked_connection
+                .execute(
+                    &format!("DELETE FROM file_contents WHERE content_sha256 = '{valid_sha256}'"),
+                    []
+                )
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -976,7 +1270,7 @@ mod quarantine_entry_database_tests {
     }
 
     #[tokio::test]
-    async fn on_access_blocks_are_stored_in_a_stable_form_and_read_back() {
+    async fn on_access_blocks_are_stored_without_a_signature_row_and_read_back() {
         let vault_fixture = VaultFixture::open_fixture().await;
         let source_path = vault_fixture.source_file("blocked.bin", b"blocked bytes");
         let entry_record = vault_fixture
@@ -988,50 +1282,16 @@ mod quarantine_entry_database_tests {
             entry_record.threat_identity,
             ThreatIdentity::BlockedByOnAccess
         );
-        let stored_text: String =
+        let signature_rows: i64 =
             rusqlite::Connection::open(VaultFixture::database_path(&vault_fixture.temporary_root))
                 .expect("sqlite connection")
                 .query_row(
-                    "SELECT threat_name FROM quarantine WHERE id = ?1",
+                    "SELECT COUNT(*) FROM quarantine_signatures WHERE entry_id = ?1",
                     params![entry_record.entry_id],
                     |stored_row| stored_row.get(0),
                 )
-                .expect("stored threat text");
-        assert_eq!(stored_text, BLOCKED_BY_ON_ACCESS_STORED_TEXT);
-    }
-
-    #[tokio::test]
-    async fn legacy_on_access_sentence_reads_back_as_a_blocked_entry_and_restores() {
-        let vault_fixture = VaultFixture::open_fixture().await;
-        let source_path = vault_fixture.source_file("legacy-blocked.bin", b"legacy blocked");
-        let entry_record = vault_fixture
-            .quarantine_vault
-            .move_file_into_quarantine(&source_path, &ThreatIdentity::BlockedByOnAccess)
-            .await
-            .expect("quarantined");
-        rusqlite::Connection::open(VaultFixture::database_path(&vault_fixture.temporary_root))
-            .expect("sqlite connection")
-            .execute(
-                "UPDATE quarantine SET threat_name = 'Blocked by on-access scanning' WHERE id = ?1",
-                params![entry_record.entry_id],
-            )
-            .expect("legacy threat text");
-        let listed_entries = vault_fixture
-            .quarantine_vault
-            .list_quarantine_entries()
-            .await
-            .expect("listed");
-        assert_eq!(listed_entries.len(), 1);
-        assert_eq!(
-            listed_entries[0].threat_identity,
-            ThreatIdentity::BlockedByOnAccess
-        );
-        vault_fixture
-            .quarantine_vault
-            .restore_quarantined_file(entry_record.entry_id)
-            .await
-            .expect("restored");
-        assert_eq!(fs::read(&source_path).expect("restored"), b"legacy blocked");
+                .expect("signature rows");
+        assert_eq!(signature_rows, 0);
     }
 
     #[tokio::test]
@@ -1157,16 +1417,12 @@ mod quarantine_entry_database_tests {
         let payload_path =
             VaultFixture::quarantine_directory(&temporary_root).join("unhashed-payload");
         fs::write(&payload_path, b"unhashed payload").expect("payload");
-        rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
-            .expect("sqlite connection")
-            .execute(
-                "INSERT INTO quarantine (original_path, quarantine_path, threat_name, \
-                 detection_date, file_size, file_hash, original_permissions) VALUES \
-                 ('/home/user/unhashed.bin', ?1, 'Legacy.Test', '2020-01-01T00:00:00Z', 16, '', \
-                 420)",
-                params![payload_path.as_os_str().as_bytes()],
-            )
-            .expect("legacy row");
+        insert_tampered_entry(
+            &temporary_root,
+            Path::new("/home/user/unhashed.bin"),
+            &payload_path,
+            16,
+        );
         let unhashed_vault = open_fixture_vault(&temporary_root).await;
         let unhashed_entry = unhashed_vault
             .list_quarantine_entries()
@@ -1255,7 +1511,7 @@ mod quarantine_entry_database_tests {
             .expect("ignore checks");
         sqlite_connection
             .execute(
-                "UPDATE quarantine SET original_permissions = 3565 WHERE id = ?1",
+                "UPDATE quarantine SET original_permissions = 3565 WHERE entry_id = ?1",
                 [entry_record.entry_id],
             )
             .expect("tamper permissions");
@@ -1288,7 +1544,9 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            &sha256_text(b"pending payload"),
+            SeededPendingHash::Hashed {
+                sha256_hex: &sha256_text(b"pending payload"),
+            },
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
@@ -1314,7 +1572,9 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            &sha256_text(b"pending payload"),
+            SeededPendingHash::Hashed {
+                sha256_hex: &sha256_text(b"pending payload"),
+            },
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
@@ -1345,7 +1605,9 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            "not-a-valid-hash",
+            SeededPendingHash::TamperedHash {
+                stored_text: "not-a-valid-hash",
+            },
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
@@ -1445,7 +1707,7 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            NOT_YET_HASHED_TEXT,
+            SeededPendingHash::NotYetHashed,
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
@@ -1473,25 +1735,14 @@ mod quarantine_entry_database_tests {
     }
 
     #[tokio::test]
-    async fn legacy_entry_without_a_usable_hash_stays_listed_and_is_never_restored() {
+    async fn tampered_entry_without_a_usable_hash_stays_listed_and_is_never_restored() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         drop(open_fixture_vault(&temporary_root).await);
         let original_path = temporary_root.path().join("legacy-unhashed.bin");
         let payload_path =
             VaultFixture::quarantine_directory(&temporary_root).join("legacy-unhashed-payload");
         fs::write(&payload_path, b"legacy unhashed payload").expect("payload");
-        rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
-            .expect("sqlite connection")
-            .execute(
-                "INSERT INTO quarantine (original_path, quarantine_path, threat_name, \
-                 detection_date, file_size, file_hash, original_permissions) VALUES (?1, ?2, \
-                 'Legacy.Test', '2020-01-01T00:00:00Z', 23, '', 420)",
-                params![
-                    original_path.as_os_str().as_bytes(),
-                    payload_path.as_os_str().as_bytes(),
-                ],
-            )
-            .expect("legacy row");
+        insert_tampered_entry(&temporary_root, &original_path, &payload_path, 23);
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
         let listed_entries = quarantine_vault
@@ -1545,7 +1796,7 @@ mod quarantine_entry_database_tests {
             &temporary_root,
             &payload_path,
             &original_path,
-            NOT_YET_HASHED_TEXT,
+            SeededPendingHash::NotYetHashed,
         );
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;

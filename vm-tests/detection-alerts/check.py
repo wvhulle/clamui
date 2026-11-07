@@ -72,7 +72,7 @@ with subtest("quarantining from the timeline clears the blocked file"):
     wait_for_tray_status("Active")
     quarantined = as_user(
         f"sqlite3 -readonly /home/{SAMPLE_USER}/.local/share/lazaret/quarantine.db "
-        "\"select threat_name from quarantine\""
+        "\"select signature_name from quarantine_signatures\""
     )
     assert "Win.Fixture.Agent-1" in quarantined, f"lost the signature: {quarantined}"
 

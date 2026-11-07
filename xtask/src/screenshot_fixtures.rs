@@ -21,14 +21,16 @@ pub struct ScreenshotFixtures {
 }
 
 const HISTORY_SCHEMA: &str = include_str!("../../data/database-schemas/history.sql");
+const QUARANTINE_SCHEMA: &str = include_str!("../../data/database-schemas/quarantine.sql");
 
 fn sql_text_literal(literal_text: &str) -> String {
     format!("'{}'", literal_text.replace('\'', "''"))
 }
 
 fn quarantine_seed_sql(payload_path: &str) -> String {
-    include_str!("../assets/quarantine-seed.sql")
-        .replace("@PAYLOAD_PATH@", &sql_text_literal(payload_path))
+    QUARANTINE_SCHEMA.to_owned()
+        + &include_str!("../assets/quarantine-seed.sql")
+            .replace("@PAYLOAD_PATH@", &sql_text_literal(payload_path))
 }
 
 fn seed_quarantine_database(session_root: &Path) -> Result<(), TaskFailure> {
