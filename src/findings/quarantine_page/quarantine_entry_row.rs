@@ -305,7 +305,7 @@ impl FactoryComponent for QuarantineEntryRow {
 
             add_row = &adw::ActionRow {
                 set_title: &gettext("False Positive"),
-                set_subtitle: &gettext("Trust this exact file so ClamAV stops reporting it on this computer, then restore it. Report it so a signature update fixes the detection for everyone."),
+                set_subtitle: &gettext("Trust… stops ClamAV reporting this exact file on this computer and lists it under Trusted Detections; restore it afterwards. Report… sends it to Cisco Talos, so a later signature update fixes the detection for everyone."),
                 set_subtitle_lines: 0,
 
                 add_suffix = &gtk::Button {

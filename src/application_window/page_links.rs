@@ -3,7 +3,11 @@ use relm4::{adw, adw::prelude::*, gtk};
 
 use crate::application_window::application_pages::ApplicationPage;
 
-const SHOW_PAGE_ACTION: &str = "win.show-page";
+pub const SHOW_PAGE_ACTION: &str = "win.show-page";
+
+pub fn page_target(linked_page: ApplicationPage) -> gtk::glib::Variant {
+    linked_page.page_name().to_variant()
+}
 
 fn page_link_subtitle(linked_page: ApplicationPage) -> String {
     match linked_page {
@@ -15,7 +19,12 @@ fn page_link_subtitle(linked_page: ApplicationPage) -> String {
         }
         ApplicationPage::Logs => gettext("Past scans, updates and system changes"),
         ApplicationPage::Quarantine => gettext("Files isolated from your system"),
-        ApplicationPage::Analysis => gettext("Files and detections that ClamAV never reports"),
+        ApplicationPage::TrustedDetections => {
+            gettext("Files and detections that ClamAV never reports")
+        }
+        ApplicationPage::OnlineLookups => {
+            gettext("What CIRCL, MalwareBazaar and VirusTotal receive when you look something up")
+        }
         ApplicationPage::Submissions => {
             gettext("What you sent to ClamAV, MalwareBazaar and VirusTotal, and the keys")
         }
@@ -38,7 +47,7 @@ pub fn page_link_row(linked_page: ApplicationPage) -> adw::ActionRow {
         .subtitle(page_link_subtitle(linked_page))
         .activatable(true)
         .action_name(SHOW_PAGE_ACTION)
-        .action_target(&linked_page.page_name().to_variant())
+        .action_target(&page_target(linked_page))
         .build();
     link_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
     link_row

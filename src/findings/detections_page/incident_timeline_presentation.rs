@@ -333,7 +333,7 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
         SignatureLookupState::NotLookedUp => None,
         SignatureLookupState::LookingUp => Some(gettext("Looking up…")),
         SignatureLookupState::KeyMissing => Some(gettext(
-            "Add your abuse.ch key in Preferences to look up detections.",
+            "Add your abuse.ch key on Submissions to look up detections.",
         )),
         SignatureLookupState::KeyUnreadable(key_failure) => {
             Some(sanitize_scanner_line(&describe_key_failure(key_failure)))
@@ -412,7 +412,10 @@ fn decision_choices(
                 chosen_action: IncidentStepAction::AskIncidentDeletion,
             },
             StepChoiceRow {
-                choice_description: gettext("You know this file is fine"),
+                choice_description: gettext(
+                    "You know this file is fine. ClamAV still reports it at the next scan; \
+                     trust it from Quarantine or a scan result to stop that.",
+                ),
                 chosen_action: IncidentStepAction::DismissIncident,
             },
         ],
@@ -523,7 +526,9 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> IncidentStep {
         SettledStep {
             choice_rows: vec![StepChoiceRow {
                 choice_description: gettext(
-                    "Send the quarantined copy to ClamAV, MalwareBazaar or VirusTotal",
+                    "Send the quarantined copy to ClamAV, MalwareBazaar or VirusTotal. A false \
+                     positive reported to ClamAV is fixed for everyone by a later signature \
+                     update.",
                 ),
                 chosen_action: IncidentStepAction::SubmitIncidentSample,
             }],

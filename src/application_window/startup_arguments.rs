@@ -6,6 +6,7 @@ const STARTUP_PAGE_PREFIX: &str = "--page=";
 const BACKGROUND_ARGUMENT: &str = "--background";
 const PREFERENCES_PAGE_NAME: &str = "preferences";
 const DATABASE_PAGE_NAME: &str = "database";
+const ANALYSIS_PAGE_NAME: &str = "analysis";
 const DEFAULT_STARTUP_PAGE: StartupPage = StartupPage::ApplicationPage(ApplicationPage::Protection);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,6 +34,9 @@ impl StartupPageRequest {
             PREFERENCES_PAGE_NAME => Self::RecognizedPage(StartupPage::PreferencesDialog),
             DATABASE_PAGE_NAME => Self::RecognizedPage(StartupPage::ApplicationPage(
                 ApplicationPage::DatabaseUpdates,
+            )),
+            ANALYSIS_PAGE_NAME => Self::RecognizedPage(StartupPage::ApplicationPage(
+                ApplicationPage::TrustedDetections,
             )),
             application_page_name => ApplicationPage::from_page_name(application_page_name)
                 .map_or_else(

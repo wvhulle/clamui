@@ -47,6 +47,9 @@ use crate::{
             },
             quarantine_page_state::QuarantineEntryCount,
         },
+        trusted_detections_page::trusted_detections_component::{
+            TrustedDetectionsPage, TrustedDetectionsPageInput, TrustedDetectionsPageOutput,
+        },
     },
     host_services::{
         activity_history::activity_history_database::ActivityHistory,
@@ -103,9 +106,9 @@ use crate::{
         scan_runs::scan_run_progress::PageScanActivity,
     },
     sharing::{
-        analysis_page::{
-            analysis_component::{AnalysisPage, AnalysisPageInput},
-            analysis_state::AnalysisPageOutput,
+        online_lookups_page::{
+            online_lookups_component::{OnlineLookupsPage, OnlineLookupsPageInput},
+            online_lookups_state::OnlineLookupsPageOutput,
         },
         submissions_page::{
             submissions_component::{SubmissionsPage, SubmissionsPageInit, SubmissionsPageInput},
@@ -149,7 +152,8 @@ pub struct PageNavigation {
     on_access_page: Controller<OnAccessPage>,
     scheduled_scans_page: Controller<ScheduledScansPage>,
     detections_page: Controller<BackgroundDetectionsPage>,
-    analysis_page: Controller<AnalysisPage>,
+    trusted_detections_page: Controller<TrustedDetectionsPage>,
+    online_lookups_page: Controller<OnlineLookupsPage>,
     submissions_page: Controller<SubmissionsPage>,
     submission_tally: SubmissionTally,
     evidence_refresh: EvidenceRefresh,
@@ -333,12 +337,25 @@ fn forwarded_submissions_output(submissions_output: SubmissionsPageOutput) -> Pa
         SubmissionsPageOutput::UploadNoticeReady(notice_text) => {
             PageNavigationInput::UploadNoticeReceived(notice_text)
         }
+        SubmissionsPageOutput::StoredKeyChanged => PageNavigationInput::EvidenceRefreshRequested,
     }
 }
 
-const fn forwarded_analysis_output(analysis_output: AnalysisPageOutput) -> PageNavigationInput {
-    match analysis_output {
-        AnalysisPageOutput::EvidenceRefreshRequested => {
+const fn forwarded_trusted_detections_output(
+    trusted_detections_output: TrustedDetectionsPageOutput,
+) -> PageNavigationInput {
+    match trusted_detections_output {
+        TrustedDetectionsPageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
+    }
+}
+
+const fn forwarded_online_lookups_output(
+    online_lookups_output: OnlineLookupsPageOutput,
+) -> PageNavigationInput {
+    match online_lookups_output {
+        OnlineLookupsPageOutput::EvidenceRefreshRequested => {
             PageNavigationInput::EvidenceRefreshRequested
         }
     }
@@ -495,8 +512,12 @@ impl PageNavigation {
             .emit(BackgroundDetectionsPageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
-        self.analysis_page
-            .emit(AnalysisPageInput::EvidenceRefreshChanged(next_refresh));
+        self.trusted_detections_page
+            .emit(TrustedDetectionsPageInput::EvidenceRefreshChanged(
+                next_refresh,
+            ));
+        self.online_lookups_page
+            .emit(OnlineLookupsPageInput::EvidenceRefreshChanged(next_refresh));
         match gathering_start {
             GatheringStart::StartGathering => {
                 let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
@@ -639,7 +660,8 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::RemovableDrives),
                                     append: &navigation_row(ApplicationPage::Logs),
                                     append: &navigation_row(ApplicationPage::Quarantine),
-                                    append: &navigation_row(ApplicationPage::Analysis),
+                                    append: &navigation_row(ApplicationPage::TrustedDetections),
+                                    append: &navigation_row(ApplicationPage::OnlineLookups),
                                     append: &navigation_row(ApplicationPage::Submissions),
                                     append: &navigation_row(ApplicationPage::Signatures),
                                     append: &navigation_row(ApplicationPage::DatabaseUpdates),
@@ -678,8 +700,11 @@ impl Component for PageNavigation {
                             add_titled[Some(ApplicationPage::Quarantine.page_name()), &ApplicationPage::Quarantine.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Quarantine, model.quarantine_page.widget()),
                             },
-                            add_titled[Some(ApplicationPage::Analysis.page_name()), &ApplicationPage::Analysis.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Analysis, model.analysis_page.widget()),
+                            add_titled[Some(ApplicationPage::TrustedDetections.page_name()), &ApplicationPage::TrustedDetections.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::TrustedDetections, model.trusted_detections_page.widget()),
+                            },
+                            add_titled[Some(ApplicationPage::OnlineLookups.page_name()), &ApplicationPage::OnlineLookups.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::OnlineLookups, model.online_lookups_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Submissions.page_name()), &ApplicationPage::Submissions.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Submissions, model.submissions_page.widget()),
@@ -809,9 +834,12 @@ impl Component for PageNavigation {
                 quarantine_vault,
             })
             .forward(sender.input_sender(), forwarded_detections_output);
-        let analysis_page = AnalysisPage::builder()
+        let trusted_detections_page = TrustedDetectionsPage::builder()
             .launch(())
-            .forward(sender.input_sender(), forwarded_analysis_output);
+            .forward(sender.input_sender(), forwarded_trusted_detections_output);
+        let online_lookups_page = OnlineLookupsPage::builder()
+            .launch(())
+            .forward(sender.input_sender(), forwarded_online_lookups_output);
         let signatures_page = AuditSectionsPage::builder()
             .launch(AuditSectionsPageInit {
                 page_title: gettext("Signatures"),
@@ -855,7 +883,8 @@ impl Component for PageNavigation {
             on_access_page,
             scheduled_scans_page,
             detections_page,
-            analysis_page,
+            trusted_detections_page,
+            online_lookups_page,
             submissions_page,
             submission_tally: SubmissionTally::TallyLoading,
             evidence_refresh: EvidenceRefresh::NothingRunning,
@@ -1075,9 +1104,14 @@ impl Component for PageNavigation {
                     .emit(BackgroundDetectionsPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
-                self.analysis_page.emit(AnalysisPageInput::EvidenceGathered(
-                    self.gathered_evidence.clone(),
-                ));
+                self.trusted_detections_page
+                    .emit(TrustedDetectionsPageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
+                self.online_lookups_page
+                    .emit(OnlineLookupsPageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);
             }
             PageNavigationCommand::WatchedUnitChanged => {

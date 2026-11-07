@@ -173,8 +173,8 @@ impl ProtectionTimelinePage {
             ProtectionStepAction::OpenDetections => {
                 show_application_page(root, ApplicationPage::Detections);
             }
-            ProtectionStepAction::OpenAnalysis => {
-                show_application_page(root, ApplicationPage::Analysis);
+            ProtectionStepAction::OpenTrustedDetections => {
+                show_application_page(root, ApplicationPage::TrustedDetections);
             }
         }
     }
@@ -248,7 +248,7 @@ impl Component for ProtectionTimelinePage {
 
                 add = &system_settings_group(&[
                     ApplicationPage::OnAccessScanning,
-                    ApplicationPage::Analysis,
+                    ApplicationPage::TrustedDetections,
                 ]),
             },
             #[watch]

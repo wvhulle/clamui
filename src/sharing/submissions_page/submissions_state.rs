@@ -21,6 +21,7 @@ use crate::{
 pub enum SubmissionsPageOutput {
     TallyChanged(SubmissionTally),
     UploadNoticeReady(String),
+    StoredKeyChanged,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

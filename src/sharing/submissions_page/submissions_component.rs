@@ -51,7 +51,7 @@ use crate::{
     },
     sharing::submissions_page::{
         quarantined_candidate_row::{QuarantinedCandidateRow, QuarantinedCandidateRowOutput},
-        service_key_section::ServiceKeySection,
+        service_key_section::{ServiceKeySection, ServiceKeySectionOutput},
         submission_target_dialog::{ChosenTarget, TargetChoiceRequest, present_target_choice},
         submissions_presentation::{
             candidate_row_view, empty_candidates_text, empty_submissions_text,
@@ -108,6 +108,13 @@ pub enum SubmissionsPageInput {
     MissedMalwareReportRequested,
     MissedMalwareFileChosen(PathBuf),
     RemoteEntryRequested(String),
+    StoredKeyChanged,
+}
+
+const fn page_input_for_key_output(key_output: ServiceKeySectionOutput) -> SubmissionsPageInput {
+    match key_output {
+        ServiceKeySectionOutput::StoredKeyChanged => SubmissionsPageInput::StoredKeyChanged,
+    }
 }
 
 #[derive(Debug)]
@@ -635,10 +642,10 @@ impl Component for SubmissionsPage {
                 }),
             abuse_ch_section: ServiceKeySection::builder()
                 .launch(ThreatIntelService::AbuseChService)
-                .detach(),
+                .forward(sender.input_sender(), page_input_for_key_output),
             virustotal_section: ServiceKeySection::builder()
                 .launch(ThreatIntelService::VirusTotalService)
-                .detach(),
+                .forward(sender.input_sender(), page_input_for_key_output),
         };
         model.reload_submissions(&sender);
         model.reload_candidates(&sender);
@@ -755,6 +762,9 @@ impl Component for SubmissionsPage {
                     gtk::gio::Cancellable::NONE,
                     |_launch_outcome| {},
                 );
+            }
+            SubmissionsPageInput::StoredKeyChanged => {
+                let _shell_closed = sender.output(SubmissionsPageOutput::StoredKeyChanged);
             }
         }
     }

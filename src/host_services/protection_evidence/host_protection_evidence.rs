@@ -7,6 +7,9 @@ use relm4::gtk::gio::prelude::SettingsExt;
 use tokio::task::spawn_blocking;
 
 use crate::{
+    findings::trusted_detections_page::trusted_detections_section::trust_list_contents::{
+        TrustListReading, read_configured_trust_list,
+    },
     host_services::{
         clamav_config::clamav_host_config::{
             ConfigSetting, HostConfigView, parse_config_settings, read_clamd_config,
@@ -49,13 +52,11 @@ use crate::{
             UnitActivity, UnitState, UnitTimestamp, probe_unit_state, probe_user_unit_state,
             service_unit_snapshot, timer_unit_snapshot,
         },
+        threat_intel::service_key_status::{LookupKeyStatuses, read_lookup_key_statuses},
     },
     scans::scheduled_scans_page::{
         scan_schedule_settings::StoredScheduleSettings,
         scan_schedule_units::changed_units_of_current_schedule,
-    },
-    sharing::analysis_page::trusted_detections_section::trust_list_contents::{
-        TrustListReading, read_configured_trust_list,
     },
     signatures::database_updates_page::signature_update_run::updater_exit_status::{
         SignatureUpdaterProgram, UpdaterExitMeaning, classify_updater_exit_status,
@@ -668,6 +669,7 @@ pub struct ProtectionEvidence {
     pub scheduled_scan_evidence: ScheduledScanEvidence,
     pub background_service_state: UnitState,
     pub process_attach_scope: ProcessAttachScope,
+    pub lookup_key_statuses: LookupKeyStatuses,
 }
 
 pub fn scan_targets_from_arguments(program_arguments: &[String]) -> Vec<String> {
@@ -1126,6 +1128,7 @@ pub async fn gather_protection_evidence(lazaret_schedule_enabled: bool) -> Prote
         scheduled_scan_evidence: inspect_scheduled_scan(lazaret_schedule_enabled).await,
         background_service_state: probe_user_unit_state(BACKGROUND_SERVICE_UNIT).await,
         process_attach_scope: inspect_process_attach_scope().await,
+        lookup_key_statuses: read_lookup_key_statuses().await,
     }
 }
 

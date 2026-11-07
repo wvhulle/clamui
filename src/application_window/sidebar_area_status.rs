@@ -9,6 +9,12 @@ use crate::{
             AlertReadiness, alerts_condition, process_attach_condition,
         },
         quarantine_page::quarantine_page_state::QuarantineEntryCount,
+        trusted_detections_page::{
+            trusted_detections_presentation::trust_list_condition,
+            trusted_detections_section::trust_list_contents::{
+                LazaretListReading, TrustListReading,
+            },
+        },
     },
     host_services::{
         clamav_programs::signature_provider_catalogue::{
@@ -33,6 +39,7 @@ use crate::{
             service_run_journal::UpdaterRunHistory,
         },
         systemd_bus::host_systemd_units::UnitTimestamp,
+        threat_intel::service_key_status::LookupKeyStatuses,
     },
     protection_page::protection_timeline_page::shown_coverage_text,
     scans::{
@@ -53,11 +60,8 @@ use crate::{
         },
     },
     sharing::{
-        analysis_page::{
-            analysis_presentation::trust_list_condition,
-            trusted_detections_section::trust_list_contents::{
-                LazaretListReading, TrustListReading,
-            },
+        online_lookups_page::online_lookups_presentation::{
+            ready_services_text, some_lookup_key_unreadable,
         },
         submissions_page::submissions_state::SubmissionTally,
     },
@@ -77,11 +81,12 @@ pub enum SidebarArea {
     RemovableDrives,
     Detections,
     Quarantine,
-    AnalysisAndFalsePositives,
+    TrustedDetections,
+    OnlineLookups,
     Submissions,
 }
 
-pub const ALL_SIDEBAR_AREAS: [SidebarArea; 11] = [
+pub const ALL_SIDEBAR_AREAS: [SidebarArea; 12] = [
     SidebarArea::SignatureSources,
     SidebarArea::DatabaseUpdates,
     SidebarArea::ScanEngine,
@@ -91,7 +96,8 @@ pub const ALL_SIDEBAR_AREAS: [SidebarArea; 11] = [
     SidebarArea::RemovableDrives,
     SidebarArea::Detections,
     SidebarArea::Quarantine,
-    SidebarArea::AnalysisAndFalsePositives,
+    SidebarArea::TrustedDetections,
+    SidebarArea::OnlineLookups,
     SidebarArea::Submissions,
 ];
 
@@ -107,7 +113,8 @@ impl SidebarArea {
             Self::RemovableDrives => gettext("Removable Drives"),
             Self::Detections => gettext("Detections"),
             Self::Quarantine => gettext("Quarantine"),
-            Self::AnalysisAndFalsePositives => gettext("Analysis & False Positives"),
+            Self::TrustedDetections => gettext("Trusted Detections"),
+            Self::OnlineLookups => gettext("Online Lookups"),
             Self::Submissions => gettext("Submissions"),
         }
     }
@@ -806,7 +813,7 @@ fn trusted_entries_text(trusted_entries: usize) -> String {
     .replace("{count}", &trusted_entries.to_string())
 }
 
-fn analysis_summary(trust_list_reading: &TrustListReading) -> AreaSummary {
+fn trusted_detections_summary(trust_list_reading: &TrustListReading) -> AreaSummary {
     let live_state_text = match trust_list_reading {
         TrustListReading::FolderUnreadable(_) => gettext("Signature folder unreadable"),
         TrustListReading::FolderMissing => trusted_entries_text(0),
@@ -827,6 +834,15 @@ fn analysis_summary(trust_list_reading: &TrustListReading) -> AreaSummary {
         }
     };
     condition_summary(trust_list_condition(trust_list_reading), live_state_text)
+}
+
+fn online_lookups_summary(lookup_key_statuses: &LookupKeyStatuses) -> AreaSummary {
+    let area_status = if some_lookup_key_unreadable(lookup_key_statuses) {
+        AreaStatus::AreaNeedsReview
+    } else {
+        AreaStatus::AreaHealthy
+    };
+    summary_of(area_status, ready_services_text(lookup_key_statuses))
 }
 
 fn submissions_summary(submission_tally: SubmissionTally) -> AreaSummary {
@@ -890,7 +906,12 @@ pub fn area_summary(
         }
         SidebarArea::Detections => detections_summary(protection_evidence, area_context),
         SidebarArea::Quarantine => quarantine_summary(area_context.quarantine_entry_count),
-        SidebarArea::AnalysisAndFalsePositives => analysis_summary(&protection_evidence.trust_list),
+        SidebarArea::TrustedDetections => {
+            trusted_detections_summary(&protection_evidence.trust_list)
+        }
+        SidebarArea::OnlineLookups => {
+            online_lookups_summary(&protection_evidence.lookup_key_statuses)
+        }
         SidebarArea::Submissions => submissions_summary(area_context.submission_tally),
     }
 }
@@ -960,6 +981,7 @@ mod sidebar_area_status_tests {
                 },
                 service_run_journal::ScanRunHistory,
             },
+            threat_intel::service_key_status::ServiceKeyStatus,
         },
         scans::removable_drives_page::drive_mount_checks::DeviceAutoScanSettings,
         signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
@@ -1039,6 +1061,7 @@ mod sidebar_area_status_tests {
                 "Nothing to decide",
                 "Empty",
                 "Nothing trusted",
+                "3 of 3 services ready",
                 "Nothing submitted",
             ]
         );
@@ -1363,6 +1386,45 @@ mod sidebar_area_status_tests {
         assert_eq!(
             status_for(SidebarArea::Detections, &healthy_evidence()),
             AreaStatus::AreaHealthy
+        );
+    }
+
+    #[test]
+    fn online_lookups_count_ready_services_and_review_an_unreadable_key() {
+        let with_keys = |abuse_ch_key, virustotal_key| ProtectionEvidence {
+            lookup_key_statuses: LookupKeyStatuses {
+                abuse_ch_key,
+                virustotal_key,
+            },
+            ..healthy_evidence()
+        };
+        assert_eq!(
+            summary_for(
+                SidebarArea::OnlineLookups,
+                &with_keys(
+                    ServiceKeyStatus::KeyMissing,
+                    ServiceKeyStatus::KeyConfigured
+                )
+            ),
+            AreaSummary {
+                area_status: AreaStatus::AreaHealthy,
+                live_state_text: "2 of 3 services ready".to_owned(),
+            }
+        );
+        assert_eq!(
+            summary_for(
+                SidebarArea::OnlineLookups,
+                &with_keys(
+                    ServiceKeyStatus::KeyUnreadable {
+                        failure_text: "permission denied".to_owned(),
+                    },
+                    ServiceKeyStatus::KeyMissing
+                )
+            ),
+            AreaSummary {
+                area_status: AreaStatus::AreaNeedsReview,
+                live_state_text: "1 of 3 services ready".to_owned(),
+            }
         );
     }
 

@@ -94,6 +94,11 @@ pub enum ServiceKeySectionInput {
     KeyWebsiteRequested,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ServiceKeySectionOutput {
+    StoredKeyChanged,
+}
+
 #[derive(Debug)]
 pub enum ServiceKeySectionCommand {
     KeyStatusRead(Result<ResolvedApiKey, KeyStorageFailure>),
@@ -140,7 +145,7 @@ impl ServiceKeySection {
 impl Component for ServiceKeySection {
     type Init = ThreatIntelService;
     type Input = ServiceKeySectionInput;
-    type Output = ();
+    type Output = ServiceKeySectionOutput;
     type CommandOutput = ServiceKeySectionCommand;
 
     view! {
@@ -269,7 +274,10 @@ impl Component for ServiceKeySection {
             ServiceKeySectionCommand::KeyChanged(Err(key_failure)) => {
                 self.key_status_text = describe_key_failure(&key_failure);
             }
-            ServiceKeySectionCommand::KeyChanged(Ok(())) => self.refresh_key_status(&sender),
+            ServiceKeySectionCommand::KeyChanged(Ok(())) => {
+                self.refresh_key_status(&sender);
+                let _page_closed = sender.output(ServiceKeySectionOutput::StoredKeyChanged);
+            }
         }
     }
 }

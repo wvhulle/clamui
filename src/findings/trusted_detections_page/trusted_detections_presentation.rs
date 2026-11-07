@@ -1,8 +1,12 @@
 use gettextrs::{gettext, ngettext};
 
 use crate::{
-    host_services::threat_intel::service_key_storage::{
-        KeyStorageFailure, ResolvedApiKey, describe_key_failure,
+    findings::trusted_detections_page::trusted_detections_section::{
+        trust_list_contents::{
+            AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListContents,
+            TrustListReading,
+        },
+        trusted_detections_group::trust_list_failure_text,
     },
     shared_widgets::step_timeline::{
         step_evidence_builders::{CheckedCondition, evidence_row, plain_rows},
@@ -11,19 +15,12 @@ use crate::{
             StepEvidenceRow, TimelineStep,
         },
     },
-    sharing::analysis_page::trusted_detections_section::{
-        trust_list_contents::{
-            AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListContents,
-            TrustListReading,
-        },
-        trusted_detections_group::trust_list_failure_text,
-    },
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AnalysisStepAction {}
+pub enum TrustedDetectionsStepAction {}
 
-impl StepActionButton for AnalysisStepAction {
+impl StepActionButton for TrustedDetectionsStepAction {
     fn button_label(&self) -> String {
         match *self {}
     }
@@ -33,93 +30,7 @@ impl StepActionButton for AnalysisStepAction {
     }
 }
 
-pub type AnalysisStep = TimelineStep<AnalysisStepAction>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LookupService {
-    CirclHashlookup,
-    MalwareBazaar,
-    VirusTotal,
-}
-
-impl LookupService {
-    pub const fn service_name(self) -> &'static str {
-        match self {
-            Self::CirclHashlookup => "CIRCL hashlookup",
-            Self::MalwareBazaar => "MalwareBazaar",
-            Self::VirusTotal => "VirusTotal",
-        }
-    }
-
-    pub fn received_data_text(self) -> String {
-        match self {
-            Self::CirclHashlookup => gettext("Receives the file's SHA-256 hash"),
-            Self::MalwareBazaar => {
-                gettext("Receives the detection's signature name or the file's SHA-256 hash")
-            }
-            Self::VirusTotal => gettext("Receives the file's SHA-256 hash"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ServiceKeyStatus {
-    KeyChecking,
-    KeyConfigured,
-    KeyMissing,
-    KeyUnreadable { failure_text: String },
-}
-
-impl ServiceKeyStatus {
-    pub fn from_key_reading(key_reading: &Result<ResolvedApiKey, KeyStorageFailure>) -> Self {
-        match key_reading {
-            Ok(ResolvedApiKey::FromKeyFile(_) | ResolvedApiKey::FromKeyring(_)) => {
-                Self::KeyConfigured
-            }
-            Ok(ResolvedApiKey::NotConfigured) => Self::KeyMissing,
-            Err(key_failure) => Self::KeyUnreadable {
-                failure_text: describe_key_failure(key_failure),
-            },
-        }
-    }
-
-    pub fn status_text(&self) -> String {
-        match self {
-            Self::KeyChecking => gettext("Checking the API key…"),
-            Self::KeyConfigured => gettext("API key configured"),
-            Self::KeyMissing => gettext("No API key, so lookups with this service are off"),
-            Self::KeyUnreadable { failure_text } => {
-                gettext("The API key can't be read: {reason}").replace("{reason}", failure_text)
-            }
-        }
-    }
-
-    pub const fn needs_attention(&self) -> bool {
-        match self {
-            Self::KeyChecking | Self::KeyConfigured | Self::KeyMissing => false,
-            Self::KeyUnreadable { .. } => true,
-        }
-    }
-}
-
-pub fn keyed_service_subtitle(
-    lookup_service: LookupService,
-    key_status: &ServiceKeyStatus,
-) -> String {
-    format!(
-        "{}\n{}",
-        lookup_service.received_data_text(),
-        key_status.status_text()
-    )
-}
-
-pub fn keyless_service_subtitle(lookup_service: LookupService) -> String {
-    format!(
-        "{}\n{}",
-        lookup_service.received_data_text(),
-        gettext("No API key needed")
-    )
-}
+pub type TrustedDetectionsStep = TimelineStep<TrustedDetectionsStepAction>;
 
 struct TrustListVerdict {
     checked_condition: CheckedCondition,
@@ -266,7 +177,7 @@ fn trust_list_mechanism_text() -> String {
     )
 }
 
-fn nothing_trusted_step() -> AnalysisStep {
+fn nothing_trusted_step() -> TrustedDetectionsStep {
     TimelineStep::settled(
         gettext("Trusted detections"),
         trust_list_mechanism_text(),
@@ -275,7 +186,9 @@ fn nothing_trusted_step() -> AnalysisStep {
     )
 }
 
-pub fn analysis_status_steps(trust_list_reading: &TrustListReading) -> Vec<AnalysisStep> {
+pub fn trusted_detections_status_steps(
+    trust_list_reading: &TrustListReading,
+) -> Vec<TrustedDetectionsStep> {
     vec![
         trust_list_step(trust_list_reading, |_checked_condition| {
             StepActionSlot::NoAction
@@ -285,17 +198,15 @@ pub fn analysis_status_steps(trust_list_reading: &TrustListReading) -> Vec<Analy
 }
 
 #[cfg(test)]
-mod analysis_presentation_tests {
-    use std::path::PathBuf;
-
+mod trusted_detections_presentation_tests {
     use super::*;
     use crate::{
+        findings::trusted_detections_page::trusted_detections_section::trust_list_contents::TrustListReadFailure,
         host_services::protection_evidence::protection_evidence_fixtures::empty_trust_list,
         shared_widgets::step_timeline::timeline_step_contents::StepNodeState,
-        sharing::analysis_page::trusted_detections_section::trust_list_contents::TrustListReadFailure,
     };
 
-    fn trust_review_steps(trust_list_reading: &TrustListReading) -> Vec<AnalysisStep> {
+    fn trust_review_steps(trust_list_reading: &TrustListReading) -> Vec<TrustedDetectionsStep> {
         trust_list_step(trust_list_reading, |_checked_condition| {
             StepActionSlot::NoAction
         })
@@ -366,46 +277,12 @@ mod analysis_presentation_tests {
     fn empty_readable_trust_lists_add_no_review_step() {
         assert!(trust_review_steps(&TrustListReading::ListsRead(empty_trust_list())).is_empty());
         assert!(trust_review_steps(&TrustListReading::FolderMissing).is_empty());
-        let status_steps = analysis_status_steps(&TrustListReading::FolderMissing);
+        let status_steps = trusted_detections_status_steps(&TrustListReading::FolderMissing);
         assert_eq!(status_steps.len(), 1);
         assert_eq!(status_steps[0].node_state(), StepNodeState::Completed);
         assert_eq!(
             status_steps[0].status_text,
             "ClamAV reports everything it detects"
-        );
-    }
-
-    #[test]
-    fn key_status_rows_tell_configured_missing_and_unreadable_apart() {
-        let configured_status = ServiceKeyStatus::from_key_reading(&Ok(
-            ResolvedApiKey::FromKeyring("0123456789abcdef".to_owned()),
-        ));
-        assert_eq!(configured_status, ServiceKeyStatus::KeyConfigured);
-        assert_eq!(
-            keyed_service_subtitle(LookupService::VirusTotal, &configured_status),
-            "Receives the file's SHA-256 hash\nAPI key configured"
-        );
-        assert!(!configured_status.needs_attention());
-        let missing_status = ServiceKeyStatus::from_key_reading(&Ok(ResolvedApiKey::NotConfigured));
-        assert_eq!(missing_status, ServiceKeyStatus::KeyMissing);
-        assert_eq!(
-            keyed_service_subtitle(LookupService::MalwareBazaar, &missing_status),
-            "Receives the detection's signature name or the file's SHA-256 hash\nNo API key, so \
-             lookups with this service are off"
-        );
-        let unreadable_status =
-            ServiceKeyStatus::from_key_reading(&Err(KeyStorageFailure::KeyFilePermissionDenied {
-                key_file_path: PathBuf::from("/run/agenix/abuse-ch"),
-            }));
-        assert!(unreadable_status.needs_attention());
-        assert!(
-            unreadable_status
-                .status_text()
-                .starts_with("The API key can't be read: ")
-        );
-        assert_eq!(
-            keyless_service_subtitle(LookupService::CirclHashlookup),
-            "Receives the file's SHA-256 hash\nNo API key needed"
         );
     }
 }

@@ -2,6 +2,9 @@ use bytesize::ByteSize;
 use jiff::{SignedDuration, Timestamp};
 
 use crate::{
+    findings::trusted_detections_page::trusted_detections_section::trust_list_contents::{
+        LazaretListReading, TrustListContents, TrustListReading,
+    },
     host_services::{
         desktop::locale_formatting::MomentFormatters,
         protection_evidence::{
@@ -18,9 +21,7 @@ use crate::{
             service_run_journal::ScanRunHistory,
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
-    },
-    sharing::analysis_page::trusted_detections_section::trust_list_contents::{
-        LazaretListReading, TrustListContents, TrustListReading,
+        threat_intel::service_key_status::{LookupKeyStatuses, ServiceKeyStatus},
     },
 };
 
@@ -89,6 +90,10 @@ pub fn healthy_evidence() -> ProtectionEvidence {
         },
         background_service_state: UnitState::UnitLoaded(UnitActivity::UnitActive),
         process_attach_scope: ProcessAttachScope::AttachRestricted,
+        lookup_key_statuses: LookupKeyStatuses {
+            abuse_ch_key: ServiceKeyStatus::KeyConfigured,
+            virustotal_key: ServiceKeyStatus::KeyConfigured,
+        },
     }
 }
 

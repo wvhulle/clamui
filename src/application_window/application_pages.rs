@@ -8,7 +8,8 @@ pub enum ApplicationPage {
     RemovableDrives,
     Logs,
     Quarantine,
-    Analysis,
+    TrustedDetections,
+    OnlineLookups,
     Submissions,
     Signatures,
     DatabaseUpdates,
@@ -18,14 +19,15 @@ pub enum ApplicationPage {
     Hardening,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 14] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 15] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
     ApplicationPage::RemovableDrives,
     ApplicationPage::Logs,
     ApplicationPage::Quarantine,
-    ApplicationPage::Analysis,
+    ApplicationPage::TrustedDetections,
+    ApplicationPage::OnlineLookups,
     ApplicationPage::Submissions,
     ApplicationPage::Signatures,
     ApplicationPage::DatabaseUpdates,
@@ -44,7 +46,8 @@ impl ApplicationPage {
             Self::RemovableDrives => "removable-drives",
             Self::Logs => "logs",
             Self::Quarantine => "quarantine",
-            Self::Analysis => "analysis",
+            Self::TrustedDetections => "trusted-detections",
+            Self::OnlineLookups => "online-lookups",
             Self::Submissions => "submissions",
             Self::Signatures => "signatures",
             Self::DatabaseUpdates => "database-updates",
@@ -69,7 +72,8 @@ impl ApplicationPage {
             Self::RemovableDrives => gettext("Removable Drives"),
             Self::Logs => gettext("Logs"),
             Self::Quarantine => gettext("Quarantine"),
-            Self::Analysis => gettext("Analysis & False Positives"),
+            Self::TrustedDetections => gettext("Trusted Detections"),
+            Self::OnlineLookups => gettext("Online Lookups"),
             Self::Submissions => gettext("Submissions"),
             Self::Signatures => gettext("Signatures"),
             Self::DatabaseUpdates => gettext("Database Updates"),
@@ -88,7 +92,8 @@ impl ApplicationPage {
             Self::RemovableDrives => "drive-removable-media-symbolic",
             Self::Logs => "document-open-recent-symbolic",
             Self::Quarantine => "folder-symbolic",
-            Self::Analysis => "edit-find-symbolic",
+            Self::TrustedDetections => "security-medium-symbolic",
+            Self::OnlineLookups => "edit-find-symbolic",
             Self::Submissions => "document-send-symbolic",
             Self::Signatures => "drive-harddisk-symbolic",
             Self::DatabaseUpdates => "software-update-available-symbolic",
@@ -111,7 +116,11 @@ impl ApplicationPage {
             Self::ScanEngine => &["<Control>8"],
             Self::OnAccessScanning => &["<Control>9"],
             Self::ScheduledScans => &["<Control>0"],
-            Self::RemovableDrives | Self::Analysis | Self::Submissions | Self::Hardening => &[],
+            Self::RemovableDrives
+            | Self::TrustedDetections
+            | Self::OnlineLookups
+            | Self::Submissions
+            | Self::Hardening => &[],
         }
     }
 
@@ -146,12 +155,13 @@ mod application_pages_tests {
         assert_eq!(ApplicationPage::Protection.sidebar_position(), 0);
         assert_eq!(ApplicationPage::Scan.sidebar_position(), 2);
         assert_eq!(ApplicationPage::RemovableDrives.sidebar_position(), 3);
-        assert_eq!(ApplicationPage::Analysis.sidebar_position(), 6);
-        assert_eq!(ApplicationPage::Submissions.sidebar_position(), 7);
-        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 9);
-        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 10);
-        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 11);
-        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 12);
-        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 13);
+        assert_eq!(ApplicationPage::TrustedDetections.sidebar_position(), 6);
+        assert_eq!(ApplicationPage::OnlineLookups.sidebar_position(), 7);
+        assert_eq!(ApplicationPage::Submissions.sidebar_position(), 8);
+        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 10);
+        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 11);
+        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 12);
+        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 13);
+        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 14);
     }
 }

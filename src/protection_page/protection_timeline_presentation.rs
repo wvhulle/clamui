@@ -2,8 +2,14 @@ use gettextrs::gettext;
 use jiff::Timestamp;
 
 use crate::{
-    findings::detections_page::alert_delivery_presentation::{
-        AlertReadiness, alerts_condition, alerts_status_step,
+    findings::{
+        detections_page::alert_delivery_presentation::{
+            AlertReadiness, alerts_condition, alerts_status_step,
+        },
+        trusted_detections_page::{
+            trusted_detections_presentation::trust_list_step,
+            trusted_detections_section::trust_list_contents::TrustListReading,
+        },
     },
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
@@ -36,10 +42,6 @@ use crate::{
             StepActionSlot, StepNodeState, TimelineStep,
         },
     },
-    sharing::analysis_page::{
-        analysis_presentation::trust_list_step,
-        trusted_detections_section::trust_list_contents::TrustListReading,
-    },
     signatures::database_updates_page::database_updates_presentation::{
         signature_node_state, signature_status_step,
     },
@@ -53,7 +55,7 @@ pub enum ProtectionStepAction {
     OpenScheduledScans,
     OpenManualScan,
     OpenDetections,
-    OpenAnalysis,
+    OpenTrustedDetections,
 }
 
 impl StepActionButton for ProtectionStepAction {
@@ -65,7 +67,7 @@ impl StepActionButton for ProtectionStepAction {
             Self::OpenScheduledScans => gettext("Open Scheduled Scans"),
             Self::OpenManualScan => gettext("Open Manual Scan"),
             Self::OpenDetections => gettext("Open Detections"),
-            Self::OpenAnalysis => gettext("Open Analysis"),
+            Self::OpenTrustedDetections => gettext("Open Trusted Detections"),
         }
     }
 
@@ -77,7 +79,7 @@ impl StepActionButton for ProtectionStepAction {
             | Self::OpenScheduledScans
             | Self::OpenManualScan
             | Self::OpenDetections
-            | Self::OpenAnalysis => ActionConsequence::OrdinaryAction,
+            | Self::OpenTrustedDetections => ActionConsequence::OrdinaryAction,
         }
     }
 }
@@ -198,7 +200,7 @@ fn trust_list_review_step(trust_list_reading: &TrustListReading) -> Option<Prote
     trust_list_step(trust_list_reading, |checked_condition| {
         StepActionSlot::ActionOffered(offer_for_condition(
             checked_condition,
-            ProtectionStepAction::OpenAnalysis,
+            ProtectionStepAction::OpenTrustedDetections,
         ))
     })
 }
@@ -399,6 +401,9 @@ mod protection_timeline_presentation_tests {
 
     use super::*;
     use crate::{
+        findings::trusted_detections_page::trusted_detections_section::trust_list_contents::{
+            AllowlistEntries, ForeignAllowlistFile, TrustListContents,
+        },
         host_services::{
             detection_journal::detection_journal_follower::JournalAccess,
             protection_evidence::{
@@ -417,9 +422,6 @@ mod protection_timeline_presentation_tests {
         },
         shared_widgets::step_timeline::timeline_step_contents::{
             EvidenceMoment, EvidenceRowControl, StepEvidenceRow, StepPhase,
-        },
-        sharing::analysis_page::trusted_detections_section::trust_list_contents::{
-            AllowlistEntries, ForeignAllowlistFile, TrustListContents,
         },
     };
 
@@ -784,7 +786,9 @@ mod protection_timeline_presentation_tests {
         assert_eq!(review_steps[0].node_state(), StepNodeState::NeedsReview);
         assert_eq!(
             review_steps[0].header_offer(),
-            Some(OfferedAction::suggested(ProtectionStepAction::OpenAnalysis))
+            Some(OfferedAction::suggested(
+                ProtectionStepAction::OpenTrustedDetections
+            ))
         );
         assert!(
             idle_timeline(&ProtectionEvidence {

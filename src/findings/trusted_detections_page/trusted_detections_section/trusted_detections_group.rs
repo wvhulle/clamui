@@ -4,6 +4,13 @@ use relm4::{
 };
 
 use crate::{
+    findings::trusted_detections_page::trusted_detections_section::{
+        trust_list_contents::{
+            AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListReadFailure,
+            TrustListReading, TrustedFileEntry, read_configured_trust_list,
+        },
+        trust_list_row::{TrustListRow, TrustListRowOutput, TrustRemoval},
+    },
     host_services::{
         desktop::locale_formatting::{byte_size_text, exact_local_time_text},
         settings_helper::{
@@ -18,13 +25,6 @@ use crate::{
     shared_widgets::{
         host_read_failure_text::unit_journal_failure_text,
         trust_confirmation_dialog::present_trust_confirmation,
-    },
-    sharing::analysis_page::trusted_detections_section::{
-        trust_list_contents::{
-            AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListReadFailure,
-            TrustListReading, TrustedFileEntry, read_configured_trust_list,
-        },
-        trust_list_row::{TrustListRow, TrustListRowOutput, TrustRemoval},
     },
 };
 
