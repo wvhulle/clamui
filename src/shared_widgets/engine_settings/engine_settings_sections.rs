@@ -20,6 +20,7 @@ use crate::{
                 ClamavConfigKind, ConfigFileOwner, drift_snippet_text, inspect_config_file_owner,
                 managed_config_description, setting_lock_for_key, values_with_edit,
             },
+            typed_setting_values::TypedSettingValue,
         },
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
         settings_helper::{
@@ -41,7 +42,7 @@ use crate::{
             },
             config_setting_row::{
                 ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput,
-                ConfigSettingRowOutput, RowChangeActivity, SettingAvailability, SettingEditorDraft,
+                ConfigSettingRowOutput, RowChangeActivity, SettingAvailability,
                 config_row_presentation,
             },
             detection_switch_row::{
@@ -294,7 +295,7 @@ pub enum EngineSettingsSectionsInput {
         setting_key: String,
         sibling_values: Vec<String>,
         value_position: usize,
-        editor_draft: SettingEditorDraft,
+        editor_draft: TypedSettingValue,
     },
     ConfigLineCopied(String),
     CopyDialogClosed,
@@ -1368,18 +1369,18 @@ mod engine_settings_sections_tests {
         assert!(matches!(
             row_presentations(SettingAvailability::ChangeableNow).as_slice(),
             [
-                ConfigRowPresentation::EditableSettingRow(SettingEditorDraft::CountDraft {
+                ConfigRowPresentation::EditableSettingRow(TypedSettingValue::CountValue {
                     count_value: 4,
                     ..
                 }),
-                ConfigRowPresentation::ProtectedSettingRow
+                ConfigRowPresentation::ProtectedSettingRow(_)
             ]
         ));
         assert!(matches!(
             row_presentations(SettingAvailability::LockedUntilUnlocked).as_slice(),
             [
                 ConfigRowPresentation::LockedSettingRow { .. },
-                ConfigRowPresentation::ProtectedSettingRow
+                ConfigRowPresentation::ProtectedSettingRow(_)
             ]
         ));
     }

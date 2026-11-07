@@ -11,8 +11,8 @@ use crate::host_services::{
     clamav_config::{
         setting_provenance::SettingLock,
         typed_setting_values::{
-            SIZE_UNITS, SettingParseFailure, SizeAmount, SizeUnit, SwitchPosition,
-            TypedSettingValue, WriteRefusal, parse_setting_value, writable_setting_value,
+            DraftApplyTiming, DraftEdit, SIZE_UNITS, SettingParseFailure, SizeUnit, SwitchPosition,
+            TypedSettingValue, parse_setting_value,
         },
     },
     settings_helper::protection_change_rules::whole_number_in_text,
@@ -63,163 +63,10 @@ pub fn setting_lock_tooltip(lock_reason: SettingLockReason) -> String {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SettingEditorDraft {
-    SwitchDraft(SwitchPosition),
-    CountDraft {
-        count_value: u64,
-        minimum: u64,
-        maximum: u64,
-    },
-    SizeDraft(SizeAmount),
-    PathDraft(String),
-    TextDraft(String),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DraftApplyTiming {
-    AppliedOnEveryEdit,
-    AppliedOnRequest,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DraftComparison {
     SameAsStored,
     ChangedFromStored,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DraftEdit {
-    SwitchSet(SwitchPosition),
-    NumberSet(u64),
-    SizeUnitSet(SizeUnit),
-    TextSet(String),
-}
-
-impl SettingEditorDraft {
-    pub fn from_typed_value(typed_value: TypedSettingValue) -> Self {
-        match typed_value {
-            TypedSettingValue::BooleanValue(switch_position) => Self::SwitchDraft(switch_position),
-            TypedSettingValue::CountValue {
-                count_value,
-                minimum,
-                maximum,
-            } => Self::CountDraft {
-                count_value,
-                minimum,
-                maximum,
-            },
-            TypedSettingValue::SizeValue(size_amount) => Self::SizeDraft(size_amount),
-            TypedSettingValue::PathValue(path_text) => Self::PathDraft(path_text),
-            TypedSettingValue::TextValue(setting_text) => Self::TextDraft(setting_text),
-        }
-    }
-
-    pub fn config_value_text(&self) -> String {
-        match self {
-            Self::SwitchDraft(switch_position) => switch_position.config_text().to_owned(),
-            Self::CountDraft { count_value, .. } => count_value.to_string(),
-            Self::SizeDraft(size_amount) => size_amount.config_text(),
-            Self::PathDraft(draft_text) | Self::TextDraft(draft_text) => draft_text.clone(),
-        }
-    }
-
-    pub fn writable_value(&self, setting_key: &str) -> Result<String, WriteRefusal> {
-        writable_setting_value(setting_key, &self.config_value_text())
-    }
-
-    pub const fn apply_timing(&self) -> DraftApplyTiming {
-        match self {
-            Self::SwitchDraft(_) => DraftApplyTiming::AppliedOnEveryEdit,
-            Self::CountDraft { .. }
-            | Self::SizeDraft(_)
-            | Self::PathDraft(_)
-            | Self::TextDraft(_) => DraftApplyTiming::AppliedOnRequest,
-        }
-    }
-
-    pub fn with_draft_edit(self, draft_edit: DraftEdit) -> Self {
-        match (self, draft_edit) {
-            (Self::SwitchDraft(_), DraftEdit::SwitchSet(switch_position)) => {
-                Self::SwitchDraft(switch_position)
-            }
-            (
-                Self::CountDraft {
-                    minimum, maximum, ..
-                },
-                DraftEdit::NumberSet(count_value),
-            ) => Self::CountDraft {
-                count_value: count_value.clamp(minimum, maximum),
-                minimum,
-                maximum,
-            },
-            (Self::SizeDraft(size_amount), DraftEdit::NumberSet(unit_count)) => {
-                Self::SizeDraft(SizeAmount {
-                    unit_count,
-                    ..size_amount
-                })
-            }
-            (Self::SizeDraft(size_amount), DraftEdit::SizeUnitSet(size_unit)) => {
-                Self::SizeDraft(SizeAmount {
-                    size_unit,
-                    ..size_amount
-                })
-            }
-            (Self::PathDraft(_), DraftEdit::TextSet(draft_text)) => Self::PathDraft(draft_text),
-            (Self::TextDraft(_), DraftEdit::TextSet(draft_text)) => Self::TextDraft(draft_text),
-            (
-                unchanged_draft @ Self::SwitchDraft(_),
-                DraftEdit::NumberSet(_) | DraftEdit::SizeUnitSet(_) | DraftEdit::TextSet(_),
-            )
-            | (
-                unchanged_draft @ Self::CountDraft { .. },
-                DraftEdit::SwitchSet(_) | DraftEdit::SizeUnitSet(_) | DraftEdit::TextSet(_),
-            )
-            | (
-                unchanged_draft @ Self::SizeDraft(_),
-                DraftEdit::SwitchSet(_) | DraftEdit::TextSet(_),
-            )
-            | (
-                unchanged_draft @ (Self::PathDraft(_) | Self::TextDraft(_)),
-                DraftEdit::SwitchSet(_) | DraftEdit::NumberSet(_) | DraftEdit::SizeUnitSet(_),
-            ) => unchanged_draft,
-        }
-    }
-
-    pub const fn shown_switch_position(&self) -> Option<SwitchPosition> {
-        match self {
-            Self::SwitchDraft(switch_position) => Some(*switch_position),
-            Self::CountDraft { .. }
-            | Self::SizeDraft(_)
-            | Self::PathDraft(_)
-            | Self::TextDraft(_) => None,
-        }
-    }
-
-    pub const fn shown_count(&self) -> Option<u64> {
-        match self {
-            Self::CountDraft { count_value, .. } => Some(*count_value),
-            Self::SizeDraft(size_amount) => Some(size_amount.unit_count),
-            Self::SwitchDraft(_) | Self::PathDraft(_) | Self::TextDraft(_) => None,
-        }
-    }
-
-    pub const fn shown_size_unit(&self) -> Option<SizeUnit> {
-        match self {
-            Self::SizeDraft(size_amount) => Some(size_amount.size_unit),
-            Self::SwitchDraft(_)
-            | Self::CountDraft { .. }
-            | Self::PathDraft(_)
-            | Self::TextDraft(_) => None,
-        }
-    }
-
-    pub fn shown_text(&self) -> Option<&str> {
-        match self {
-            Self::PathDraft(draft_text) | Self::TextDraft(draft_text) => Some(draft_text),
-            Self::SwitchDraft(_) | Self::CountDraft { .. } | Self::SizeDraft(_) => None,
-        }
-    }
 }
 
 pub fn size_unit_label(size_unit: SizeUnit) -> String {
@@ -261,21 +108,21 @@ pub fn describe_parse_failure(parse_failure: SettingParseFailure) -> String {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigRowPresentation {
-    ProtectedSettingRow,
+    ProtectedSettingRow(Result<TypedSettingValue, SettingParseFailure>),
     UnknownOptionRow,
     NeedsReviewRow(SettingParseFailure),
     LockedSettingRow {
         lock_reason: SettingLockReason,
-        editor_draft: SettingEditorDraft,
+        editor_draft: TypedSettingValue,
     },
-    EditableSettingRow(SettingEditorDraft),
+    EditableSettingRow(TypedSettingValue),
 }
 
 impl ConfigRowPresentation {
-    const fn editable_draft(&self) -> Option<&SettingEditorDraft> {
+    const fn editable_draft(&self) -> Option<&TypedSettingValue> {
         match self {
             Self::EditableSettingRow(editor_draft) => Some(editor_draft),
-            Self::ProtectedSettingRow
+            Self::ProtectedSettingRow(_)
             | Self::UnknownOptionRow
             | Self::NeedsReviewRow(_)
             | Self::LockedSettingRow { .. } => None,
@@ -290,7 +137,9 @@ pub fn config_row_presentation(
     setting_availability: SettingAvailability,
 ) -> ConfigRowPresentation {
     match setting_lock {
-        SettingLock::NeverChangedHere => ConfigRowPresentation::ProtectedSettingRow,
+        SettingLock::NeverChangedHere => ConfigRowPresentation::ProtectedSettingRow(
+            parse_setting_value(setting_key, setting_value),
+        ),
         SettingLock::ChangedThroughSnippet => match parse_setting_value(setting_key, setting_value)
         {
             Err(SettingParseFailure::UnknownOption) => ConfigRowPresentation::UnknownOptionRow,
@@ -302,26 +151,23 @@ pub fn config_row_presentation(
                 | SettingParseFailure::PathNotAbsolute
                 | SettingParseFailure::EmptyText),
             ) => ConfigRowPresentation::NeedsReviewRow(parse_failure),
-            Ok(typed_value) => {
-                let editor_draft = SettingEditorDraft::from_typed_value(typed_value);
-                match setting_availability {
-                    SettingAvailability::ChangeableNow => {
-                        ConfigRowPresentation::EditableSettingRow(editor_draft)
-                    }
-                    SettingAvailability::LockedUntilUnlocked => {
-                        ConfigRowPresentation::LockedSettingRow {
-                            lock_reason: SettingLockReason::UnlockRequired,
-                            editor_draft,
-                        }
-                    }
-                    SettingAvailability::NotAllowedAtRuntime => {
-                        ConfigRowPresentation::LockedSettingRow {
-                            lock_reason: SettingLockReason::NotAllowedAtRuntime,
-                            editor_draft,
-                        }
+            Ok(editor_draft) => match setting_availability {
+                SettingAvailability::ChangeableNow => {
+                    ConfigRowPresentation::EditableSettingRow(editor_draft)
+                }
+                SettingAvailability::LockedUntilUnlocked => {
+                    ConfigRowPresentation::LockedSettingRow {
+                        lock_reason: SettingLockReason::UnlockRequired,
+                        editor_draft,
                     }
                 }
-            }
+                SettingAvailability::NotAllowedAtRuntime => {
+                    ConfigRowPresentation::LockedSettingRow {
+                        lock_reason: SettingLockReason::NotAllowedAtRuntime,
+                        editor_draft,
+                    }
+                }
+            },
         },
     }
 }
@@ -365,7 +211,7 @@ pub enum ConfigSettingRowOutput {
         setting_key: String,
         sibling_values: Vec<String>,
         value_position: usize,
-        editor_draft: SettingEditorDraft,
+        editor_draft: TypedSettingValue,
     },
 }
 
@@ -465,11 +311,8 @@ impl ConfigSettingRow {
         self.setting_key == setting_key && self.value_position == value_position
     }
 
-    fn draft_comparison(&self, editor_draft: &SettingEditorDraft) -> DraftComparison {
-        if parse_setting_value(&self.setting_key, &self.setting_value)
-            .map(SettingEditorDraft::from_typed_value)
-            .as_ref()
-            == Ok(editor_draft)
+    fn draft_comparison(&self, editor_draft: &TypedSettingValue) -> DraftComparison {
+        if parse_setting_value(&self.setting_key, &self.setting_value).as_ref() == Ok(editor_draft)
         {
             DraftComparison::SameAsStored
         } else {
@@ -477,7 +320,7 @@ impl ConfigSettingRow {
         }
     }
 
-    fn applicable_value(&self, editor_draft: &SettingEditorDraft) -> Option<String> {
+    fn applicable_value(&self, editor_draft: &TypedSettingValue) -> Option<String> {
         match self.draft_comparison(editor_draft) {
             DraftComparison::SameAsStored => None,
             DraftComparison::ChangedFromStored => {
@@ -499,11 +342,7 @@ impl ConfigSettingRow {
             .is_some_and(|editor_draft| editor_draft.writable_value(&self.setting_key).is_err())
     }
 
-    fn report_applied_draft(
-        &self,
-        editor_draft: &SettingEditorDraft,
-        sender: &FactorySender<Self>,
-    ) {
+    fn report_applied_draft(&self, editor_draft: &TypedSettingValue, sender: &FactorySender<Self>) {
         if let Some(config_value) = self.applicable_value(editor_draft) {
             let _parent_closed = sender.output(ConfigSettingRowOutput::ValueApplied {
                 setting_key: self.setting_key.clone(),
@@ -547,15 +386,15 @@ impl ConfigSettingRow {
         }
     }
 
-    fn editor_root(&self, editor_draft: &SettingEditorDraft) -> adw::PreferencesRow {
+    fn editor_root(&self, editor_draft: &TypedSettingValue) -> adw::PreferencesRow {
         match editor_draft {
-            SettingEditorDraft::SwitchDraft(switch_position) => adw::SwitchRow::builder()
+            TypedSettingValue::BooleanValue(switch_position) => adw::SwitchRow::builder()
                 .use_markup(false)
                 .title(&self.setting_key)
                 .active(switch_position.is_switched_on())
                 .build()
                 .upcast(),
-            SettingEditorDraft::CountDraft {
+            TypedSettingValue::CountValue {
                 count_value,
                 minimum,
                 maximum,
@@ -566,21 +405,22 @@ impl ConfigSettingRow {
                 *count_value as f64,
             )
             .upcast(),
-            SettingEditorDraft::SizeDraft(size_amount) => count_spin_row(
+            TypedSettingValue::SizeValue(size_amount) => count_spin_row(
                 &self.setting_key,
                 0.0,
                 SIZE_COUNT_CEILING,
                 size_amount.unit_count as f64,
             )
             .upcast(),
-            SettingEditorDraft::PathDraft(draft_text)
-            | SettingEditorDraft::TextDraft(draft_text) => adw::EntryRow::builder()
-                .use_markup(false)
-                .title(&self.setting_key)
-                .text(draft_text)
-                .show_apply_button(true)
-                .build()
-                .upcast(),
+            TypedSettingValue::PathValue(draft_text) | TypedSettingValue::TextValue(draft_text) => {
+                adw::EntryRow::builder()
+                    .use_markup(false)
+                    .title(&self.setting_key)
+                    .text(draft_text)
+                    .show_apply_button(true)
+                    .build()
+                    .upcast()
+            }
         }
     }
 
@@ -593,7 +433,7 @@ impl ConfigSettingRow {
             return RowEditorWidgets::ReadOnlyWidgets;
         };
         match editor_draft {
-            SettingEditorDraft::SwitchDraft(_) => root.downcast_ref::<adw::SwitchRow>().map_or(
+            TypedSettingValue::BooleanValue(_) => root.downcast_ref::<adw::SwitchRow>().map_or(
                 RowEditorWidgets::ReadOnlyWidgets,
                 |switch_row| {
                     let toggle_sender = sender.clone();
@@ -610,7 +450,7 @@ impl ConfigSettingRow {
                     }
                 },
             ),
-            SettingEditorDraft::CountDraft { .. } => root.downcast_ref::<adw::SpinRow>().map_or(
+            TypedSettingValue::CountValue { .. } => root.downcast_ref::<adw::SpinRow>().map_or(
                 RowEditorWidgets::ReadOnlyWidgets,
                 |spin_row| {
                     let value_sender = sender.clone();
@@ -633,7 +473,7 @@ impl ConfigSettingRow {
                     }
                 },
             ),
-            SettingEditorDraft::SizeDraft(size_amount) => root
+            TypedSettingValue::SizeValue(size_amount) => root
                 .downcast_ref::<adw::SpinRow>()
                 .map_or(RowEditorWidgets::ReadOnlyWidgets, |spin_row| {
                     let value_sender = sender.clone();
@@ -673,7 +513,7 @@ impl ConfigSettingRow {
                         apply_button,
                     }
                 }),
-            SettingEditorDraft::PathDraft(_) | SettingEditorDraft::TextDraft(_) => root
+            TypedSettingValue::PathValue(_) | TypedSettingValue::TextValue(_) => root
                 .downcast_ref::<adw::EntryRow>()
                 .map_or(RowEditorWidgets::ReadOnlyWidgets, |entry_row| {
                     let text_sender = sender.clone();
@@ -698,7 +538,7 @@ impl ConfigSettingRow {
             return;
         };
         match &self.row_presentation {
-            ConfigRowPresentation::ProtectedSettingRow => {
+            ConfigRowPresentation::ProtectedSettingRow(_) => {
                 action_row.add_suffix(&suffix_icon(
                     "changes-prevent-symbolic",
                     &gettext(
@@ -784,7 +624,27 @@ impl FactoryComponent for ConfigSettingRow {
                     describe_parse_failure(*parse_failure)
                 ),
             ),
-            ConfigRowPresentation::ProtectedSettingRow
+            ConfigRowPresentation::LockedSettingRow {
+                editor_draft: TypedSettingValue::BooleanValue(switch_position),
+                ..
+            }
+            | ConfigRowPresentation::ProtectedSettingRow(Ok(TypedSettingValue::BooleanValue(
+                switch_position,
+            ))) => {
+                let switch_row = adw::ActionRow::builder()
+                    .use_markup(false)
+                    .title(&self.setting_key)
+                    .build();
+                switch_row.add_suffix(
+                    &gtk::Switch::builder()
+                        .active(switch_position.is_switched_on())
+                        .sensitive(false)
+                        .valign(gtk::Align::Center)
+                        .build(),
+                );
+                switch_row.upcast()
+            }
+            ConfigRowPresentation::ProtectedSettingRow(_)
             | ConfigRowPresentation::UnknownOptionRow
             | ConfigRowPresentation::LockedSettingRow { .. } => {
                 read_only_row(&self.setting_key, &self.setting_value)
@@ -900,6 +760,7 @@ impl FactoryComponent for ConfigSettingRow {
 #[cfg(test)]
 mod config_setting_row_tests {
     use super::*;
+    use crate::host_services::clamav_config::typed_setting_values::SizeAmount;
 
     fn presentation_of(
         setting_key: &str,
@@ -938,7 +799,34 @@ mod config_setting_row_tests {
             SettingLock::NeverChangedHere,
             SettingAvailability::ChangeableNow,
         );
-        assert_eq!(protected_row, ConfigRowPresentation::ProtectedSettingRow);
+        assert_eq!(
+            protected_row,
+            ConfigRowPresentation::ProtectedSettingRow(Ok(TypedSettingValue::PathValue(
+                "/var/log/clamd.log".to_owned()
+            )))
+        );
+        assert_eq!(
+            config_row_presentation(
+                "Foreground",
+                "yes",
+                SettingLock::NeverChangedHere,
+                SettingAvailability::ChangeableNow,
+            ),
+            ConfigRowPresentation::ProtectedSettingRow(Ok(TypedSettingValue::BooleanValue(
+                SwitchPosition::SwitchedOn
+            )))
+        );
+        assert_eq!(
+            presentation_of(
+                "OnAccessPrevention",
+                "true",
+                SettingAvailability::NotAllowedAtRuntime
+            ),
+            ConfigRowPresentation::LockedSettingRow {
+                lock_reason: SettingLockReason::NotAllowedAtRuntime,
+                editor_draft: TypedSettingValue::BooleanValue(SwitchPosition::SwitchedOn),
+            }
+        );
         assert_eq!(protected_row.editable_draft(), None);
     }
 
@@ -950,13 +838,13 @@ mod config_setting_row_tests {
                 "yes",
                 SettingAvailability::ChangeableNow
             ),
-            ConfigRowPresentation::EditableSettingRow(SettingEditorDraft::SwitchDraft(
+            ConfigRowPresentation::EditableSettingRow(TypedSettingValue::BooleanValue(
                 SwitchPosition::SwitchedOn
             ))
         );
         assert_eq!(
             presentation_of("MaxThreads", "4", SettingAvailability::ChangeableNow),
-            ConfigRowPresentation::EditableSettingRow(SettingEditorDraft::CountDraft {
+            ConfigRowPresentation::EditableSettingRow(TypedSettingValue::CountValue {
                 count_value: 4,
                 minimum: 1,
                 maximum: 256
@@ -964,7 +852,7 @@ mod config_setting_row_tests {
         );
         assert_eq!(
             presentation_of("MaxFileSize", "25M", SettingAvailability::ChangeableNow),
-            ConfigRowPresentation::EditableSettingRow(SettingEditorDraft::SizeDraft(SizeAmount {
+            ConfigRowPresentation::EditableSettingRow(TypedSettingValue::SizeValue(SizeAmount {
                 unit_count: 25,
                 size_unit: SizeUnit::Mebibytes
             }))
@@ -975,7 +863,7 @@ mod config_setting_row_tests {
                 "/home",
                 SettingAvailability::ChangeableNow
             ),
-            ConfigRowPresentation::EditableSettingRow(SettingEditorDraft::PathDraft(
+            ConfigRowPresentation::EditableSettingRow(TypedSettingValue::PathValue(
                 "/home".to_owned()
             ))
         );
@@ -1004,19 +892,19 @@ mod config_setting_row_tests {
 
     #[test]
     fn typed_editors_write_the_same_config_text_as_before() {
-        let edited_text = |editor_draft: SettingEditorDraft, draft_edit: DraftEdit| {
+        let edited_text = |editor_draft: TypedSettingValue, draft_edit: DraftEdit| {
             editor_draft.with_draft_edit(draft_edit).config_value_text()
         };
         assert_eq!(
             edited_text(
-                SettingEditorDraft::SwitchDraft(SwitchPosition::SwitchedOn),
+                TypedSettingValue::BooleanValue(SwitchPosition::SwitchedOn),
                 DraftEdit::SwitchSet(SwitchPosition::SwitchedOff)
             ),
             "no"
         );
         assert_eq!(
             edited_text(
-                SettingEditorDraft::CountDraft {
+                TypedSettingValue::CountValue {
                     count_value: 4,
                     minimum: 1,
                     maximum: 256
@@ -1027,7 +915,7 @@ mod config_setting_row_tests {
         );
         assert_eq!(
             edited_text(
-                SettingEditorDraft::SizeDraft(SizeAmount {
+                TypedSettingValue::SizeValue(SizeAmount {
                     unit_count: 5,
                     size_unit: SizeUnit::Mebibytes
                 }),
@@ -1037,7 +925,7 @@ mod config_setting_row_tests {
         );
         assert_eq!(
             edited_text(
-                SettingEditorDraft::PathDraft("/home".to_owned()),
+                TypedSettingValue::PathValue("/home".to_owned()),
                 DraftEdit::TextSet("/srv/inbox".to_owned())
             ),
             "/srv/inbox"
@@ -1046,7 +934,7 @@ mod config_setting_row_tests {
 
     #[test]
     fn counts_stay_in_range_and_mismatched_edits_change_nothing() {
-        let count_draft = SettingEditorDraft::CountDraft {
+        let count_draft = TypedSettingValue::CountValue {
             count_value: 4,
             minimum: 1,
             maximum: 256,
@@ -1069,17 +957,17 @@ mod config_setting_row_tests {
     #[test]
     fn invalid_paths_and_text_cannot_be_applied() {
         assert!(
-            SettingEditorDraft::PathDraft("relative/path".to_owned())
+            TypedSettingValue::PathValue("relative/path".to_owned())
                 .writable_value("OnAccessIncludePath")
                 .is_err()
         );
         assert!(
-            SettingEditorDraft::TextDraft("mirror;reboot".to_owned())
+            TypedSettingValue::TextValue("mirror;reboot".to_owned())
                 .writable_value("DatabaseMirror")
                 .is_err()
         );
         assert_eq!(
-            SettingEditorDraft::PathDraft("/srv".to_owned()).writable_value("OnAccessIncludePath"),
+            TypedSettingValue::PathValue("/srv".to_owned()).writable_value("OnAccessIncludePath"),
             Ok("/srv".to_owned())
         );
     }

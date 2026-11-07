@@ -109,6 +109,127 @@ pub enum WriteRefusal {
     UnsafeCharacters,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DraftApplyTiming {
+    AppliedOnEveryEdit,
+    AppliedOnRequest,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DraftEdit {
+    SwitchSet(SwitchPosition),
+    NumberSet(u64),
+    SizeUnitSet(SizeUnit),
+    TextSet(String),
+}
+impl TypedSettingValue {
+    pub fn config_value_text(&self) -> String {
+        match self {
+            Self::BooleanValue(switch_position) => switch_position.config_text().to_owned(),
+            Self::CountValue { count_value, .. } => count_value.to_string(),
+            Self::SizeValue(size_amount) => size_amount.config_text(),
+            Self::PathValue(draft_text) | Self::TextValue(draft_text) => draft_text.clone(),
+        }
+    }
+
+    pub fn writable_value(&self, setting_key: &str) -> Result<String, WriteRefusal> {
+        writable_setting_value(setting_key, &self.config_value_text())
+    }
+
+    pub const fn apply_timing(&self) -> DraftApplyTiming {
+        match self {
+            Self::BooleanValue(_) => DraftApplyTiming::AppliedOnEveryEdit,
+            Self::CountValue { .. }
+            | Self::SizeValue(_)
+            | Self::PathValue(_)
+            | Self::TextValue(_) => DraftApplyTiming::AppliedOnRequest,
+        }
+    }
+
+    pub fn with_draft_edit(self, draft_edit: DraftEdit) -> Self {
+        match (self, draft_edit) {
+            (Self::BooleanValue(_), DraftEdit::SwitchSet(switch_position)) => {
+                Self::BooleanValue(switch_position)
+            }
+            (
+                Self::CountValue {
+                    minimum, maximum, ..
+                },
+                DraftEdit::NumberSet(count_value),
+            ) => Self::CountValue {
+                count_value: count_value.clamp(minimum, maximum),
+                minimum,
+                maximum,
+            },
+            (Self::SizeValue(size_amount), DraftEdit::NumberSet(unit_count)) => {
+                Self::SizeValue(SizeAmount {
+                    unit_count,
+                    ..size_amount
+                })
+            }
+            (Self::SizeValue(size_amount), DraftEdit::SizeUnitSet(size_unit)) => {
+                Self::SizeValue(SizeAmount {
+                    size_unit,
+                    ..size_amount
+                })
+            }
+            (Self::PathValue(_), DraftEdit::TextSet(draft_text)) => Self::PathValue(draft_text),
+            (Self::TextValue(_), DraftEdit::TextSet(draft_text)) => Self::TextValue(draft_text),
+            (
+                unchanged_draft @ Self::BooleanValue(_),
+                DraftEdit::NumberSet(_) | DraftEdit::SizeUnitSet(_) | DraftEdit::TextSet(_),
+            )
+            | (
+                unchanged_draft @ Self::CountValue { .. },
+                DraftEdit::SwitchSet(_) | DraftEdit::SizeUnitSet(_) | DraftEdit::TextSet(_),
+            )
+            | (
+                unchanged_draft @ Self::SizeValue(_),
+                DraftEdit::SwitchSet(_) | DraftEdit::TextSet(_),
+            )
+            | (
+                unchanged_draft @ (Self::PathValue(_) | Self::TextValue(_)),
+                DraftEdit::SwitchSet(_) | DraftEdit::NumberSet(_) | DraftEdit::SizeUnitSet(_),
+            ) => unchanged_draft,
+        }
+    }
+
+    pub const fn shown_switch_position(&self) -> Option<SwitchPosition> {
+        match self {
+            Self::BooleanValue(switch_position) => Some(*switch_position),
+            Self::CountValue { .. }
+            | Self::SizeValue(_)
+            | Self::PathValue(_)
+            | Self::TextValue(_) => None,
+        }
+    }
+
+    pub const fn shown_count(&self) -> Option<u64> {
+        match self {
+            Self::CountValue { count_value, .. } => Some(*count_value),
+            Self::SizeValue(size_amount) => Some(size_amount.unit_count),
+            Self::BooleanValue(_) | Self::PathValue(_) | Self::TextValue(_) => None,
+        }
+    }
+
+    pub const fn shown_size_unit(&self) -> Option<SizeUnit> {
+        match self {
+            Self::SizeValue(size_amount) => Some(size_amount.size_unit),
+            Self::BooleanValue(_)
+            | Self::CountValue { .. }
+            | Self::PathValue(_)
+            | Self::TextValue(_) => None,
+        }
+    }
+
+    pub fn shown_text(&self) -> Option<&str> {
+        match self {
+            Self::PathValue(draft_text) | Self::TextValue(draft_text) => Some(draft_text),
+            Self::BooleanValue(_) | Self::CountValue { .. } | Self::SizeValue(_) => None,
+        }
+    }
+}
+
 fn parsed_size_amount(size_text: &str) -> Option<SizeAmount> {
     limit_in_units(size_text)?;
     let (digits, size_unit) = match size_text.chars().last()? {

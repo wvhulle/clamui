@@ -4,11 +4,11 @@ use relm4::{ComponentParts, ComponentSender, SimpleComponent, adw, adw::prelude:
 use crate::{
     host_services::clamav_config::{
         setting_provenance::{ClamavConfigKind, ConfigFileOwner, change_snippet, values_with_edit},
-        typed_setting_values::{SizeUnit, SwitchPosition, WriteRefusal},
+        typed_setting_values::{
+            DraftEdit, SizeUnit, SwitchPosition, TypedSettingValue, WriteRefusal,
+        },
     },
-    shared_widgets::engine_settings::config_setting_row::{
-        DraftEdit, SettingEditorDraft, size_unit_labels,
-    },
+    shared_widgets::engine_settings::config_setting_row::size_unit_labels,
 };
 
 const SIZE_COUNT_CEILING: f64 = 4_294_967_295.0;
@@ -17,7 +17,7 @@ pub struct ConfigLineCopyInit {
     pub setting_key: String,
     pub sibling_values: Vec<String>,
     pub value_position: usize,
-    pub editor_draft: SettingEditorDraft,
+    pub editor_draft: TypedSettingValue,
     pub config_file_owner: ConfigFileOwner,
     pub config_kind: ClamavConfigKind,
 }
@@ -26,7 +26,7 @@ pub struct ConfigLineCopyDialog {
     setting_key: String,
     sibling_values: Vec<String>,
     value_position: usize,
-    editor_draft: SettingEditorDraft,
+    editor_draft: TypedSettingValue,
     config_file_owner: ConfigFileOwner,
     config_kind: ClamavConfigKind,
 }
@@ -50,7 +50,7 @@ pub fn copied_config_line(
     setting_key: &str,
     sibling_values: &[String],
     value_position: usize,
-    editor_draft: &SettingEditorDraft,
+    editor_draft: &TypedSettingValue,
 ) -> Result<String, WriteRefusal> {
     let config_value = editor_draft.writable_value(setting_key)?;
     Ok(change_snippet(
@@ -74,7 +74,7 @@ impl ConfigLineCopyDialog {
     }
 
     const fn shows_switch(&self) -> bool {
-        matches!(self.editor_draft, SettingEditorDraft::SwitchDraft(_))
+        matches!(self.editor_draft, TypedSettingValue::BooleanValue(_))
     }
 
     fn shows_switch_on(&self) -> bool {
@@ -84,29 +84,29 @@ impl ConfigLineCopyDialog {
     }
 
     const fn shows_count(&self) -> bool {
-        matches!(self.editor_draft, SettingEditorDraft::CountDraft { .. })
+        matches!(self.editor_draft, TypedSettingValue::CountValue { .. })
     }
 
     const fn shows_size(&self) -> bool {
-        matches!(self.editor_draft, SettingEditorDraft::SizeDraft(_))
+        matches!(self.editor_draft, TypedSettingValue::SizeValue(_))
     }
 
     const fn shows_text(&self) -> bool {
         matches!(
             self.editor_draft,
-            SettingEditorDraft::PathDraft(_) | SettingEditorDraft::TextDraft(_)
+            TypedSettingValue::PathValue(_) | TypedSettingValue::TextValue(_)
         )
     }
 
     fn count_range(&self) -> (f64, f64) {
         match self.editor_draft {
-            SettingEditorDraft::CountDraft {
+            TypedSettingValue::CountValue {
                 minimum, maximum, ..
             } => (minimum as f64, maximum as f64),
-            SettingEditorDraft::SizeDraft(_)
-            | SettingEditorDraft::SwitchDraft(_)
-            | SettingEditorDraft::PathDraft(_)
-            | SettingEditorDraft::TextDraft(_) => (0.0, SIZE_COUNT_CEILING),
+            TypedSettingValue::SizeValue(_)
+            | TypedSettingValue::BooleanValue(_)
+            | TypedSettingValue::PathValue(_)
+            | TypedSettingValue::TextValue(_) => (0.0, SIZE_COUNT_CEILING),
         }
     }
 
@@ -281,12 +281,12 @@ impl SimpleComponent for ConfigLineCopyDialog {
         };
         let widgets = view_output!();
         let focused_editor: gtk::Widget = match model.editor_draft {
-            SettingEditorDraft::SwitchDraft(_) => widgets.switch_editor.clone().upcast(),
-            SettingEditorDraft::PathDraft(_) | SettingEditorDraft::TextDraft(_) => widgets
+            TypedSettingValue::BooleanValue(_) => widgets.switch_editor.clone().upcast(),
+            TypedSettingValue::PathValue(_) | TypedSettingValue::TextValue(_) => widgets
                 .text_editor
                 .delegate()
                 .map_or_else(|| widgets.text_editor.clone().upcast(), Cast::upcast),
-            SettingEditorDraft::CountDraft { .. } | SettingEditorDraft::SizeDraft(_) => widgets
+            TypedSettingValue::CountValue { .. } | TypedSettingValue::SizeValue(_) => widgets
                 .count_editor
                 .delegate()
                 .map_or_else(|| widgets.count_editor.clone().upcast(), Cast::upcast),
@@ -319,7 +319,7 @@ mod config_line_copy_dialog_tests {
 
     #[test]
     fn the_copied_line_matches_the_snippet_for_the_edited_value() {
-        let copied_line = |config_file_owner, editor_draft: SettingEditorDraft| {
+        let copied_line = |config_file_owner, editor_draft: TypedSettingValue| {
             copied_config_line(
                 config_file_owner,
                 ClamavConfigKind::ClamdDaemonConfig,
@@ -329,7 +329,7 @@ mod config_line_copy_dialog_tests {
                 &editor_draft.with_draft_edit(DraftEdit::NumberSet(3)),
             )
         };
-        let count_draft = SettingEditorDraft::CountDraft {
+        let count_draft = TypedSettingValue::CountValue {
             count_value: 4,
             minimum: 1,
             maximum: 256,
@@ -353,7 +353,7 @@ mod config_line_copy_dialog_tests {
                 "OnAccessIncludePath",
                 &["/home".to_owned(), "/srv".to_owned()],
                 1,
-                &SettingEditorDraft::PathDraft("/data".to_owned()),
+                &TypedSettingValue::PathValue("/data".to_owned()),
             ),
             Ok("OnAccessIncludePath /home\nOnAccessIncludePath /data".to_owned())
         );
@@ -368,7 +368,7 @@ mod config_line_copy_dialog_tests {
                 "OnAccessIncludePath",
                 &["/home".to_owned()],
                 0,
-                &SettingEditorDraft::PathDraft("home".to_owned()),
+                &TypedSettingValue::PathValue("home".to_owned()),
             )
             .is_err()
         );
