@@ -45,6 +45,10 @@ pub struct MomentContext {
     pub reference_moment: Timestamp,
 }
 
+pub fn daemon_awaited_text() -> String {
+    gettext("Needs the daemon, see Scan Engine")
+}
+
 pub const fn evidence_row(evidence_name: String, evidence_value: String) -> StepEvidenceRow {
     StepEvidenceRow::current_fact(evidence_name, evidence_value)
 }

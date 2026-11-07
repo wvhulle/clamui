@@ -5,7 +5,10 @@ use gettextrs::gettext;
 use crate::{
     findings::detections_page::detected_file_state::{DetectedFileState, FileAccess, FileOwner},
     host_services::{
-        clamav_programs::distribution_install_guides::DistributionFamily,
+        clamav_programs::{
+            distribution_install_guides::DistributionFamily,
+            signature_provider_catalogue::{provider_of_signature, signature_source_name},
+        },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::exact_local_time_text,
         detection_journal::detection_history_store::{
@@ -20,9 +23,6 @@ use crate::{
     shared_widgets::step_timeline::timeline_step_contents::{
         ActionConsequence, ActionableEvidenceRow, SettledNodeState, SettledStep, StepActionButton,
         StepChoiceRow, StepEvidenceRow, TimelineStep,
-    },
-    signatures::signature_sources_page::signature_provider_catalogue::{
-        provider_of_signature, signature_source_name,
     },
 };
 

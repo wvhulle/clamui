@@ -4,7 +4,12 @@ use jiff::{SignedDuration, Timestamp};
 use crate::{
     hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
-        clamav_programs::distribution_install_guides::DistributionFamily,
+        clamav_programs::{
+            distribution_install_guides::DistributionFamily,
+            signature_provider_catalogue::{
+                provider_of_signature_file, signature_file_source_name,
+            },
+        },
         desktop::locale_formatting::byte_size_text,
         protection_evidence::{
             clamav_engine_evidence::DatabaseEvidence,
@@ -30,13 +35,8 @@ use crate::{
             },
         },
     },
-    signatures::{
-        database_updates_page::signature_update_run::signature_update_session::{
-            LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
-        },
-        signature_sources_page::signature_provider_catalogue::{
-            provider_of_signature_file, signature_file_source_name,
-        },
+    signatures::database_updates_page::signature_update_run::signature_update_session::{
+        LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
     },
 };
 

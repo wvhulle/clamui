@@ -9,7 +9,7 @@ use crate::{
             host_protection_evidence::{
                 ClamdConfigReadFailure, ConfiguredPrevention, OnAccessConfig, OnAccessConflict,
                 OnAccessEvidence, OnAccessScanner, OnAccessSizeLimit, ProtectionEvidence,
-                WatchScope, WatchedLocation,
+                WatchScope, WatchedLocation, daemon_is_answering,
             },
             kernel_on_access_support::{KernelBlockingSupport, KernelConfigReadFailure},
             on_access_setup_review::{
@@ -18,11 +18,10 @@ use crate::{
             },
         },
     },
-    scans::scan_engine_page::scan_engine_presentation::{daemon_awaited_text, daemon_is_answering},
     shared_widgets::step_timeline::{
         runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
         step_evidence_builders::{
-            CheckedCondition, evidence_row, no_guidance_step, remedy_commands,
+            CheckedCondition, daemon_awaited_text, evidence_row, no_guidance_step, remedy_commands,
         },
         timeline_step_contents::{
             ActionConsequence, ActionableEvidenceRow, EvidenceMoment, EvidenceRowControl,

@@ -10,27 +10,22 @@ use relm4::{
 use tokio::task::spawn_blocking;
 
 use crate::{
-    findings::{
-        detections_page::{
-            detected_file_state::{
-                DetectedFileState, FileOwner, OpeningCheck, inspect_detected_file,
-            },
-            detection_alerts::{
-                DetectionAlert, JournalReplay, JournalResume, plan_detection_alerts,
-                send_detection_alerts, withdraw_detection_alert,
-            },
-            detection_list_row::{DetectionListRow, DetectionListRowOutput},
-            detections_view_state::{
-                IncidentRequest, IncidentView, JournalBatch, detections_needing_attention_first,
-                file_state_for_detection, file_states_to_keep, split_journal_batch,
-                unresolved_detection_count,
-            },
-            incident_timeline_presentation::{
-                DeletionPrompt, DisplayedDetection, IncidentStep, IncidentStepAction,
-                SignatureLookupState, displayed_file_name, incident_timeline,
-            },
+    findings::detections_page::{
+        detected_file_state::{DetectedFileState, FileOwner, OpeningCheck, inspect_detected_file},
+        detection_alerts::{
+            DetectionAlert, JournalReplay, JournalResume, plan_detection_alerts,
+            send_detection_alerts, withdraw_detection_alert,
         },
-        quarantine_page::quarantine_entries_page::describe_quarantine_failure,
+        detection_list_row::{DetectionListRow, DetectionListRowOutput},
+        detections_view_state::{
+            IncidentRequest, IncidentView, JournalBatch, detections_needing_attention_first,
+            file_state_for_detection, file_states_to_keep, split_journal_batch,
+            unresolved_detection_count,
+        },
+        incident_timeline_presentation::{
+            DeletionPrompt, DisplayedDetection, IncidentStep, IncidentStepAction,
+            SignatureLookupState, displayed_file_name, incident_timeline,
+        },
     },
     host_services::{
         activity_history::activity_history_database::{ActivityHistory, ActivityHistoryFailure},
@@ -56,6 +51,7 @@ use crate::{
         component_streams::{RunningStream, run_stream},
         journal_follow_failure_text::journal_follow_failure_text,
         loading_indicators::FirstLoad,
+        quarantine_failure_text::describe_quarantine_failure,
         step_timeline::{
             timeline_step_contents::TimelineStepRowOutput,
             timeline_step_row::{TimelineStepRow, TimelineStepRowInput},

@@ -10,7 +10,6 @@ use relm4::{
 };
 
 use crate::{
-    findings::quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     host_services::{
         clamav_programs::false_positive_submission::SubmittedContent,
         clamav_scanner::scanner_output_parser::{
@@ -22,7 +21,10 @@ use crate::{
             TrustChoice, signature_can_be_ignored, signature_of_detection,
         },
     },
-    shared_widgets::false_positive_report_dialog::ReportedDetection,
+    shared_widgets::{
+        false_positive_report_dialog::ReportedDetection,
+        quarantine_failure_text::describe_quarantine_failure,
+    },
 };
 
 relm4::new_action_group!(ThreatRowActions, "threat-row");

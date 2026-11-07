@@ -8,6 +8,7 @@ use crate::{
     host_services::{
         clamav_programs::{
             database_directory_status::FreshclamServiceState,
+            signature_provider_catalogue::hide_addresses_in_text,
             trusted_program_lookup::{ClamavProgram, ProgramRefusal, locate_trusted_program},
         },
         clamav_scanner::scanner_process_events::{
@@ -21,11 +22,8 @@ use crate::{
             UnitJournalReadFailure, read_journal_off_thread, unit_messages_since,
         },
     },
-    signatures::{
-        database_updates_page::signature_update_run::updater_exit_status::{
-            FreshclamExit, classify_freshclam_wait,
-        },
-        signature_sources_page::signature_provider_catalogue::hide_addresses_in_text,
+    signatures::database_updates_page::signature_update_run::updater_exit_status::{
+        FreshclamExit, classify_freshclam_wait,
     },
 };
 

@@ -1,1 +1,1 @@
-pub mod signature_provider_catalogue;
+pub mod signature_source_checks;

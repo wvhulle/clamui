@@ -8,17 +8,16 @@ use crate::{
         protection_evidence::{
             host_protection_evidence::{
                 ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence,
-                TimerState,
+                TimerState, daemon_is_answering,
             },
             service_run_journal::{ScanRunFindings, ScanRunHistory},
         },
         systemd_bus::host_systemd_units::UnitTimestamp,
     },
-    scans::scan_engine_page::scan_engine_presentation::{daemon_awaited_text, daemon_is_answering},
     shared_widgets::step_timeline::{
         step_evidence_builders::{
-            CheckedCondition, MomentContext, evidence_row, plain_rows, remedy_commands,
-            timed_evidence_row, unknown_run_text,
+            CheckedCondition, MomentContext, daemon_awaited_text, evidence_row, plain_rows,
+            remedy_commands, timed_evidence_row, unknown_run_text,
         },
         timeline_step_contents::{
             ActionConsequence, EvidenceMoment, SettledStep, StepActionButton, StepActionSlot,

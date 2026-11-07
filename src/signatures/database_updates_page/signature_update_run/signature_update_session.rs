@@ -22,10 +22,10 @@ use crate::{
             scanner_process_events::ScanStartFailure,
         },
     },
-    scans::manual_scan_page::scan_run_state::describe_start_failure as describe_scan_start_failure,
     shared_widgets::{
         component_streams::RunningStream,
         host_read_failure_text::{database_folder_failure_text, unit_journal_failure_text},
+        scanner_start_failure_text::describe_start_failure as describe_scan_start_failure,
     },
     signatures::database_updates_page::signature_update_run::{
         database_update_events::{

@@ -250,6 +250,10 @@ pub enum DaemonEvidence {
     NeverSetUp,
 }
 
+pub const fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
+    matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OnAccessScanner {
     MonitorRunning,

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 10:54+0100\n"
+"POT-Creation-Date: 2026-11-07 10:59+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -24,10 +24,10 @@ msgid "Protection"
 msgstr ""
 
 #: src/application_window/application_pages.rs:58
-#: src/application_window/sidebar_area_status.rs:94
-#: src/findings/detections_page/background_detections_page.rs:604
+#: src/application_window/sidebar_area_status.rs:91
+#: src/findings/detections_page/background_detections_page.rs:600
+#: src/findings/detections_page/background_detections_page.rs:619
 #: src/findings/detections_page/background_detections_page.rs:623
-#: src/findings/detections_page/background_detections_page.rs:627
 msgid "Detections"
 msgstr ""
 
@@ -42,10 +42,10 @@ msgid "Logs"
 msgstr ""
 
 #: src/application_window/application_pages.rs:61
-#: src/application_window/sidebar_area_status.rs:95
+#: src/application_window/sidebar_area_status.rs:92
 #: src/findings/detections_page/incident_timeline_presentation.rs:44
-#: src/findings/quarantine_page/quarantine_entries_page.rs:710
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:220
+#: src/findings/quarantine_page/quarantine_entries_page.rs:620
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:222
 #: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:209
 msgid "Quarantine"
 msgstr ""
@@ -56,25 +56,25 @@ msgid "Signatures"
 msgstr ""
 
 #: src/application_window/application_pages.rs:63
-#: src/application_window/sidebar_area_status.rs:89
+#: src/application_window/sidebar_area_status.rs:86
 msgid "Database Updates"
 msgstr ""
 
 #: src/application_window/application_pages.rs:64
-#: src/application_window/sidebar_area_status.rs:90
+#: src/application_window/sidebar_area_status.rs:87
 msgid "Scan Engine"
 msgstr ""
 
 #: src/application_window/application_pages.rs:65
 #: src/application_window/settings_navigation.rs:90
-#: src/application_window/sidebar_area_status.rs:91
+#: src/application_window/sidebar_area_status.rs:88
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:70
 msgid "On-Access Scanning"
 msgstr ""
 
 #: src/application_window/application_pages.rs:66
 #: src/application_window/settings_navigation.rs:86
-#: src/application_window/sidebar_area_status.rs:92
+#: src/application_window/sidebar_area_status.rs:89
 msgid "Scheduled Scans"
 msgstr ""
 
@@ -92,13 +92,13 @@ msgid "The quarantine database could not be opened"
 msgstr ""
 
 #: src/application_window/application_window_shell.rs:100
-#: src/findings/quarantine_page/quarantine_entries_page.rs:102
+#: src/shared_widgets/quarantine_failure_text.rs:50
 #, rust-format
 msgid "A file operation failed: {error}"
 msgstr ""
 
 #: src/application_window/application_window_shell.rs:104
-#: src/findings/quarantine_page/quarantine_entries_page.rs:110
+#: src/shared_widgets/quarantine_failure_text.rs:58
 #, rust-format
 msgid "A background quarantine step stopped unexpectedly: {error}"
 msgstr ""
@@ -155,7 +155,7 @@ msgid "Scanner Engine"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:89
-#: src/findings/detections_page/background_detections_page.rs:639
+#: src/findings/detections_page/background_detections_page.rs:635
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:69
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:742
 msgid "Detection"
@@ -212,323 +212,323 @@ msgid ""
 "approval."
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:88
+#: src/application_window/sidebar_area_status.rs:85
 #: src/shared_widgets/audit_sections/audit_check_results.rs:76
 msgid "Signature Sources"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:93
+#: src/application_window/sidebar_area_status.rs:90
 msgid "Manual Scan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:96
+#: src/application_window/sidebar_area_status.rs:93
 msgid "Analysis & False Positives"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:97
+#: src/application_window/sidebar_area_status.rs:94
 msgid "Submissions"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:267
+#: src/application_window/sidebar_area_status.rs:264
 msgid "Other sources unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:271
+#: src/application_window/sidebar_area_status.rs:268
 msgid "A source is out of date"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:274
+#: src/application_window/sidebar_area_status.rs:271
 msgid "Official signatures only"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:277
+#: src/application_window/sidebar_area_status.rs:274
 #, rust-format
 msgid "Official and {count} other source"
 msgid_plural "Official and {count} other sources"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:306
+#: src/application_window/sidebar_area_status.rs:303
 msgid "No virus definitions"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:308
+#: src/application_window/sidebar_area_status.rs:305
 msgid "Age of the definitions unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:316
+#: src/application_window/sidebar_area_status.rs:313
 msgid "Last update failed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:319
+#: src/application_window/sidebar_area_status.rs:316
 msgid "Definitions dated in the future"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:323
+#: src/application_window/sidebar_area_status.rs:320
 #, rust-format
 msgid "Updated {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:325
+#: src/application_window/sidebar_area_status.rs:322
 #, rust-format
 msgid "Definitions from {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:339
+#: src/application_window/sidebar_area_status.rs:336
 msgid "freshclam is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:340
+#: src/application_window/sidebar_area_status.rs:337
 msgid "Unknown whether freshclam is trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:344
+#: src/application_window/sidebar_area_status.rs:341
 msgid "A freshclam copy in your account is ignored"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:368
+#: src/application_window/sidebar_area_status.rs:365
 msgid "clamd uses older signatures"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:372
+#: src/application_window/sidebar_area_status.rs:369
 msgid "clamd answering"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:373
+#: src/application_window/sidebar_area_status.rs:370
 msgid "clamd not answering"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:374
+#: src/application_window/sidebar_area_status.rs:371
 msgid "clamd state unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:375
+#: src/application_window/sidebar_area_status.rs:372
 msgid "clamd not running"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:376
+#: src/application_window/sidebar_area_status.rs:373
 msgid "clamd not set up"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:385
-#: src/application_window/sidebar_area_status.rs:646
+#: src/application_window/sidebar_area_status.rs:382
+#: src/application_window/sidebar_area_status.rs:643
 msgid "ClamAV not installed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:389
+#: src/application_window/sidebar_area_status.rs:386
 msgid "clamscan is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:393
+#: src/application_window/sidebar_area_status.rs:390
 msgid "ClamAV version unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:405
+#: src/application_window/sidebar_area_status.rs:402
 msgid "A scanner program is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:407
+#: src/application_window/sidebar_area_status.rs:404
 msgid "Unknown whether the scanners are trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:412
+#: src/application_window/sidebar_area_status.rs:409
 msgid "A scanner copy in your account is ignored"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:426
+#: src/application_window/sidebar_area_status.rs:423
 msgid "Runtime changes unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:430
+#: src/application_window/sidebar_area_status.rs:427
 msgid "Settings reduced at runtime"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:451
+#: src/application_window/sidebar_area_status.rs:448
 msgid "Waiting for clamd"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:472
+#: src/application_window/sidebar_area_status.rs:469
 msgid "State unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:473
+#: src/application_window/sidebar_area_status.rs:470
 msgid "Not set up"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:479
+#: src/application_window/sidebar_area_status.rs:476
 msgid "clamonacc not running"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:481
+#: src/application_window/sidebar_area_status.rs:478
 msgid "clamd.conf unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:485
+#: src/application_window/sidebar_area_status.rs:482
 msgid "Nothing watched"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:498
+#: src/application_window/sidebar_area_status.rs:495
 msgid "Checks files, doesn't block"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:500
+#: src/application_window/sidebar_area_status.rs:497
 msgid "Checks files, kernel can't block"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:502
+#: src/application_window/sidebar_area_status.rs:499
 msgid "Checks files, blocking unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:504
+#: src/application_window/sidebar_area_status.rs:501
 #, rust-format
 msgid "Blocking {paths}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:521
+#: src/application_window/sidebar_area_status.rs:518
 msgid "Folder watch limit unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:528
+#: src/application_window/sidebar_area_status.rs:525
 msgid "Mount watching conflicts"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:530
+#: src/application_window/sidebar_area_status.rs:527
 msgid "clamd not excluded"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:531
+#: src/application_window/sidebar_area_status.rs:528
 msgid "Watches / directly"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:534
+#: src/application_window/sidebar_area_status.rs:531
 msgid "Folder watch limit low"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:574
+#: src/application_window/sidebar_area_status.rs:571
 msgid "Timer not active"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:584
+#: src/application_window/sidebar_area_status.rs:581
 msgid "Last scan failed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:587
+#: src/application_window/sidebar_area_status.rs:584
 #, rust-format
 msgid "Next scan {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:589
+#: src/application_window/sidebar_area_status.rs:586
 msgid "No next scan planned"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:591
+#: src/application_window/sidebar_area_status.rs:588
 msgid "Scan service missing"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:592
+#: src/application_window/sidebar_area_status.rs:589
 msgid "Scan service unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:594
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:201
+#: src/application_window/sidebar_area_status.rs:591
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:200
 msgid "Scheduled by Lazaret"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:595
+#: src/application_window/sidebar_area_status.rs:592
 msgid "No scan scheduled"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:638
+#: src/application_window/sidebar_area_status.rs:635
 msgid "Schedule changed outside Lazaret"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:653
+#: src/application_window/sidebar_area_status.rs:650
 msgid "Ready to scan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:658
+#: src/application_window/sidebar_area_status.rs:655
 msgid "Uses the slower clamscan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:666
+#: src/application_window/sidebar_area_status.rs:663
 msgid "An exclusion may skip malware"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:683
+#: src/application_window/sidebar_area_status.rs:680
 msgid "Journal unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:684
+#: src/application_window/sidebar_area_status.rs:681
 msgid "Following the journal stopped"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:686
+#: src/application_window/sidebar_area_status.rs:683
 msgid "Notifications off"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:688
+#: src/application_window/sidebar_area_status.rs:685
 msgid "Alerts stop when Lazaret quits"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:699
+#: src/application_window/sidebar_area_status.rs:696
 msgid "Nothing to decide"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:704
+#: src/application_window/sidebar_area_status.rs:701
 #, rust-format
 msgid "{count} needs a decision"
 msgid_plural "{count} need a decision"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:723
+#: src/application_window/sidebar_area_status.rs:720
 msgid "Loading…"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:726
+#: src/application_window/sidebar_area_status.rs:723
 msgid "Empty"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:730
-#: src/findings/quarantine_page/quarantine_entries_page.rs:610
+#: src/application_window/sidebar_area_status.rs:727
+#: src/findings/quarantine_page/quarantine_entries_page.rs:520
 #, rust-format
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:735
+#: src/application_window/sidebar_area_status.rs:732
 msgid "The quarantine can't be read"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:742
+#: src/application_window/sidebar_area_status.rs:739
 msgid "Nothing trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:745
+#: src/application_window/sidebar_area_status.rs:742
 #, rust-format
 msgid "{count} item trusted"
 msgid_plural "{count} items trusted"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:754
+#: src/application_window/sidebar_area_status.rs:751
 msgid "Signature folder unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:757
+#: src/application_window/sidebar_area_status.rs:754
 msgid "Another allowlist silences ClamAV"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:767
+#: src/application_window/sidebar_area_status.rs:764
 msgid "Lazaret's allowlist is unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:793
+#: src/application_window/sidebar_area_status.rs:790
 msgid "Nothing submitted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:839
+#: src/application_window/sidebar_area_status.rs:836
 #, rust-format
 msgid "{area}: {state}"
 msgstr ""
@@ -574,8 +574,8 @@ msgstr ""
 
 #: src/application_window/window_close_behavior.rs:110
 #: src/findings/detections_page/incident_timeline_presentation.rs:47
-#: src/findings/quarantine_page/quarantine_entries_page.rs:215
-#: src/findings/quarantine_page/quarantine_entries_page.rs:526
+#: src/findings/quarantine_page/quarantine_entries_page.rs:125
+#: src/findings/quarantine_page/quarantine_entries_page.rs:436
 #: src/logs_page/activity_logs_page.rs:176
 #: src/scans/manual_scan_page/scan_page_component.rs:707
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
@@ -591,65 +591,65 @@ msgstr ""
 msgid "Keep Running"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:178
+#: src/findings/detections_page/background_detections_page.rs:174
 msgid ""
 "This file belongs to another user, so it can't be moved or deleted from here"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:181
+#: src/findings/detections_page/background_detections_page.rs:177
 msgid ""
 "This file couldn't be checked, so it can't be moved or deleted from here"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:184
+#: src/findings/detections_page/background_detections_page.rs:180
 #, rust-format
 msgid "The file could not be deleted: {error}"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:188
+#: src/findings/detections_page/background_detections_page.rs:184
 msgid "Checking the file stopped unexpectedly"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:194
+#: src/findings/detections_page/background_detections_page.rs:190
 #, rust-format
 msgid "Your decision could not be saved: {error}"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:398
+#: src/findings/detections_page/background_detections_page.rs:394
 msgid ""
 "Lazaret can't read the system journal, so new background detections won't "
 "appear here. This does not mean nothing was found. Add your user to the "
 "systemd-journal group."
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:406
+#: src/findings/detections_page/background_detections_page.rs:402
 msgid "Loading detections…"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:409
+#: src/findings/detections_page/background_detections_page.rs:405
 msgid "Nothing has been detected in the background."
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:412
+#: src/findings/detections_page/background_detections_page.rs:408
 msgid "What on-access scanning and scheduled scans have found."
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:611
+#: src/findings/detections_page/background_detections_page.rs:607
 msgid "Back to detections"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:715
+#: src/findings/detections_page/background_detections_page.rs:711
 msgid "Copied to clipboard"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:751
+#: src/findings/detections_page/background_detections_page.rs:747
 #, rust-format
 msgid ""
 "Detections while Lazaret wasn't running can't be counted, because where it "
 "stopped reading the system journal could not be read: {error}"
 msgstr ""
 
-#: src/findings/detections_page/background_detections_page.rs:775
+#: src/findings/detections_page/background_detections_page.rs:771
 #, rust-format
 msgid "Detections could not be read: {error}"
 msgstr ""
@@ -964,192 +964,82 @@ msgstr ""
 msgid "{state}, {time}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:63
-msgid "File hash mismatch — file may be corrupted"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:66
-msgid ""
-"This quarantine record has no usable hash, so the file cannot be verified "
-"and is not restored. You can still delete it."
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:70
-msgid ""
-"On-access scanning blocks this file and it is on another filesystem, so it "
-"cannot be moved to quarantine. You can delete it instead."
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:74
-#, rust-format
-msgid "Quarantine entry not found: {id}"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:77
-msgid ""
-"Failed to record quarantine entry in database. File has been restored to "
-"original location."
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:85
-#, rust-format
-msgid ""
-"Failed to record quarantine entry in database. Rollback also failed: "
-"{error}. File may be orphaned at: {path}"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:94
-msgid ""
-"The file was moved, but its quarantine record could not be removed. It may "
-"still appear in the list."
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:98
-#, rust-format
-msgid "A system call failed: {error}"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:106
-#, rust-format
-msgid "The quarantine database operation failed: {error}"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:113
-msgid "The path contains a NUL byte"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:114
-msgid "The path has no parent folder"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:115
-msgid "The path has no file name"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:117
-msgid "The quarantine database path is not valid UTF-8"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:120
-msgid "The quarantine database is not a regular file"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:123
-msgid "On-access scanning blocks reading the file"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:126
-msgid "The blocked file is still unreadable after moving it to quarantine"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:128
-msgid "The file is not a regular file"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:130
-msgid "The quarantined file is not a regular file"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:133
-msgid "There is not enough free space to quarantine the file"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:136
-msgid "The file was replaced while it was being moved, so it was not removed"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:139
-msgid "The path is not inside the quarantine folder"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:141
-msgid "The restore path is not valid"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:143
-msgid "Restoring into a protected system folder is not allowed"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:146
-msgid "A path stored in the quarantine database could not be read"
-msgstr ""
-
-#: src/findings/quarantine_page/quarantine_entries_page.rs:219
+#: src/findings/quarantine_page/quarantine_entries_page.rs:129
 #: src/findings/quarantine_page/quarantine_entry_row.rs:239
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:364
 #: src/scans/manual_scan_page/scan_profiles_dialog/scan_profile_row.rs:95
 msgid "Delete"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:298
+#: src/findings/quarantine_page/quarantine_entries_page.rs:208
 #: src/host_services/clamav_programs/false_positive_submission.rs:184
 #: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:130
 #, rust-format
 msgid "The report was not sent: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:308
+#: src/findings/quarantine_page/quarantine_entries_page.rs:218
 msgid "report it from the scan results"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:323
+#: src/findings/quarantine_page/quarantine_entries_page.rs:233
 msgid "the scanner program is not installed"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:329
+#: src/findings/quarantine_page/quarantine_entries_page.rs:239
 #, rust-format
 msgid ""
 "the scanner program at {program} can be replaced by your account through "
 "{path}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:340
+#: src/findings/quarantine_page/quarantine_entries_page.rs:250
 #, rust-format
 msgid "the file could not be passed to the scanner: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:344
+#: src/findings/quarantine_page/quarantine_entries_page.rs:254
 #, rust-format
 msgid "the scanner could not be started: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:347
+#: src/findings/quarantine_page/quarantine_entries_page.rs:257
 msgid "the scan took too long"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:355
+#: src/findings/quarantine_page/quarantine_entries_page.rs:265
 #, rust-format
 msgid "the clamd detection settings could not be read: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:359
+#: src/findings/quarantine_page/quarantine_entries_page.rs:269
 #, rust-format
 msgid "the scanner programs could not be looked up: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:363
+#: src/findings/quarantine_page/quarantine_entries_page.rs:273
 #, rust-format
 msgid "the quarantined copy could not be read: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:379
+#: src/findings/quarantine_page/quarantine_entries_page.rs:289
 msgid "Restore This File?"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:380
+#: src/findings/quarantine_page/quarantine_entries_page.rs:290
 msgid "ClamAV no longer detects this file with today's signatures."
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:381
+#: src/findings/quarantine_page/quarantine_entries_page.rs:291
 #: src/findings/quarantine_page/quarantine_entry_row.rs:229
 msgid "Restore"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:385
+#: src/findings/quarantine_page/quarantine_entries_page.rs:295
 msgid "Restore a File ClamAV Still Detects?"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:387
+#: src/findings/quarantine_page/quarantine_entries_page.rs:297
 #, rust-format
 msgid ""
 "ClamAV still detects this file as {detection} with today's signatures. Only "
@@ -1157,33 +1047,33 @@ msgid ""
 "first."
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:392
-#: src/findings/quarantine_page/quarantine_entries_page.rs:401
+#: src/findings/quarantine_page/quarantine_entries_page.rs:302
+#: src/findings/quarantine_page/quarantine_entries_page.rs:311
 msgid "Restore Anyway"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:396
+#: src/findings/quarantine_page/quarantine_entries_page.rs:306
 msgid "Restore an Unchecked File?"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:398
+#: src/findings/quarantine_page/quarantine_entries_page.rs:308
 #, rust-format
 msgid "The file could not be checked again before restoring it: {error}"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:411
+#: src/findings/quarantine_page/quarantine_entries_page.rs:321
 msgid "This location is outside your home folder."
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:502
+#: src/findings/quarantine_page/quarantine_entries_page.rs:412
 msgid "The file goes back to:"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:635
+#: src/findings/quarantine_page/quarantine_entries_page.rs:545
 msgid "Clear Old Items?"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:638
+#: src/findings/quarantine_page/quarantine_entries_page.rs:548
 #, rust-format
 msgid ""
 "{count} quarantined file older than 30 days will be permanently deleted."
@@ -1192,90 +1082,90 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:665
+#: src/findings/quarantine_page/quarantine_entries_page.rs:575
 msgid "Delete Quarantined File?"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:666
+#: src/findings/quarantine_page/quarantine_entries_page.rs:576
 msgid "The file will be permanently deleted."
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:717
+#: src/findings/quarantine_page/quarantine_entries_page.rs:627
 #: src/scans/manual_scan_page/scan_options_section.rs:107
 #: src/scans/manual_scan_page/scan_page_component.rs:652
 msgid "More"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:721
+#: src/findings/quarantine_page/quarantine_entries_page.rs:631
 msgid "Clear Old Items…"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:739
+#: src/findings/quarantine_page/quarantine_entries_page.rs:649
 msgid "Check Again"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:740
+#: src/findings/quarantine_page/quarantine_entries_page.rs:650
 msgid "Scan every quarantined file with the current signatures"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:749
+#: src/findings/quarantine_page/quarantine_entries_page.rs:659
 #: src/logs_page/activity_logs_page.rs:266
 #: src/logs_page/activity_logs_page.rs:434
 #: src/shared_widgets/system_changes/system_changes_group.rs:85
 msgid "Refresh"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:755
+#: src/findings/quarantine_page/quarantine_entries_page.rs:665
 msgid "Search"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:776
+#: src/findings/quarantine_page/quarantine_entries_page.rs:686
 msgid "Search by threat name or path"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:791
+#: src/findings/quarantine_page/quarantine_entries_page.rs:701
 msgid "Quarantine Storage"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:792
+#: src/findings/quarantine_page/quarantine_entries_page.rs:702
 msgid ""
 "Detected threats isolated from your system. Expand an entry to check its "
 "reputation."
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:795
+#: src/findings/quarantine_page/quarantine_entries_page.rs:705
 msgid "Total Size"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:818
+#: src/findings/quarantine_page/quarantine_entries_page.rs:728
 msgid "Dismiss"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:835
+#: src/findings/quarantine_page/quarantine_entries_page.rs:745
 msgid "Quarantine can't be read"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:897
+#: src/findings/quarantine_page/quarantine_entries_page.rs:807
 msgid "Loading quarantine…"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:901
+#: src/findings/quarantine_page/quarantine_entries_page.rs:811
 msgid "Quarantine is empty"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:902
+#: src/findings/quarantine_page/quarantine_entries_page.rs:812
 msgid "Threats you quarantine will appear here"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:920
+#: src/findings/quarantine_page/quarantine_entries_page.rs:830
 msgid "Hash copied to clipboard"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:1136
+#: src/findings/quarantine_page/quarantine_entries_page.rs:1046
 msgid "Every quarantined file is still detected or couldn't be checked"
 msgstr ""
 
-#: src/findings/quarantine_page/quarantine_entries_page.rs:1139
+#: src/findings/quarantine_page/quarantine_entries_page.rs:1049
 #, rust-format
 msgid ""
 "{count} quarantined file is no longer detected. Check it before restoring it."
@@ -1392,7 +1282,7 @@ msgstr ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:149
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:133
-#: src/scans/manual_scan_page/scan_run_state.rs:219
+#: src/scans/manual_scan_page/scan_run_state.rs:169
 #, rust-format
 msgid "{count} threat found"
 msgid_plural "{count} threats found"
@@ -1460,6 +1350,18 @@ msgstr ""
 
 #: src/host_services/clamav_programs/false_positive_submission.rs:194
 msgid "the upload took too long"
+msgstr ""
+
+#: src/host_services/clamav_programs/signature_provider_catalogue.rs:37
+msgid "purchase receipt number"
+msgstr ""
+
+#: src/host_services/clamav_programs/signature_provider_catalogue.rs:38
+msgid "customer ID"
+msgstr ""
+
+#: src/host_services/clamav_programs/signature_provider_catalogue.rs:193
+msgid "Other source"
 msgstr ""
 
 #: src/host_services/clamav_scanner/content_verdict.rs:90
@@ -2480,7 +2382,7 @@ msgid "System scan"
 msgstr ""
 
 #: src/scans/manual_scan_page/scan_page_component.rs:848
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:225
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:224
 msgid "Folders scanned"
 msgstr ""
 
@@ -2697,49 +2599,49 @@ msgid_plural "Finding files… {count} found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:64
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:66
 msgid "Trust This File…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:69
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:71
 msgid "Ignore This Detection Everywhere…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:75
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:77
 msgid "Report False Positive…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:81
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:83
 msgid "Skip This Path in Lazaret Scans"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:84
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:86
 msgid "Copy Path"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:148
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:150
 msgid "Critical"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:149
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:151
 msgid "High"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:150
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:152
 msgid "Medium"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:151
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:153
 msgid "Low"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:171
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:173
 #, rust-format
 msgid ""
 "Moved to quarantine: {path}. Check its reputation on the Quarantine page."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:231
+#: src/scans/manual_scan_page/scan_results_section/detected_threat_row.rs:233
 msgid "More Actions"
 msgstr ""
 
@@ -2825,7 +2727,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:75
-#: src/scans/manual_scan_page/scan_run_state.rs:226
+#: src/scans/manual_scan_page/scan_run_state.rs:176
 #, rust-format
 msgid "{count} file scanned"
 msgid_plural "{count} files scanned"
@@ -2868,108 +2770,63 @@ msgstr ""
 msgid "The file could not be read: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:55
-msgid "The ClamAV scanner is not installed or not on the search path."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:61
-#, rust-format
-msgid ""
-"Lazaret refused to run {program}, because your account can replace "
-"{replaceable}. Install ClamAV system-wide so a program planted by malware "
-"can't fake clean results."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:73
-#, rust-format
-msgid "The scanner could not be started: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:77
-#, rust-format
-msgid "Unable to create the private scanner work directory: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:81
-msgid "The scanner output could not be captured."
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:84
-#, rust-format
-msgid ""
-"The scan did not start, because the clamd detection settings could not be "
-"read: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:89
-#, rust-format
-msgid ""
-"The scan did not start, because the scanner programs could not be looked up: "
-"{error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:95
-#, rust-format
-msgid "Unable to safely open scan input {path}: {error}"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_run_state.rs:107
+#: src/scans/manual_scan_page/scan_run_state.rs:57
 msgid "Scan target does not exist or contains an invalid NUL byte"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:110
+#: src/scans/manual_scan_page/scan_run_state.rs:60
 msgid "Scan target is not a regular file or directory"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:115
+#: src/scans/manual_scan_page/scan_run_state.rs:65
 #, rust-format
 msgid "Unable to enumerate scan target {path}: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:122
+#: src/scans/manual_scan_page/scan_run_state.rs:72
 #, rust-format
 msgid "Unable to write private clamd file list: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:126
+#: src/scans/manual_scan_page/scan_run_state.rs:76
 msgid "Listing the scan target stopped unexpectedly."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:134
+#: src/scans/manual_scan_page/scan_run_state.rs:84
 msgid "No files could be scanned"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:157
+#: src/scans/manual_scan_page/scan_run_state.rs:107
 #, rust-format
 msgid "{count} file was not scanned"
 msgid_plural "{count} files were not scanned"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:167
+#: src/scans/manual_scan_page/scan_run_state.rs:117
 msgid "The connection to clamd was lost during the scan."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:170
+#: src/scans/manual_scan_page/scan_run_state.rs:120
 msgid "The scanner did not report a result for these files."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:192
-#: src/scans/manual_scan_page/scan_run_state.rs:292
+#: src/scans/manual_scan_page/scan_run_state.rs:142
+#: src/scans/manual_scan_page/scan_run_state.rs:242
 #, rust-format
 msgid "{count} file could not be accessed"
 msgid_plural "{count} files could not be accessed"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:198
+#: src/scans/manual_scan_page/scan_run_state.rs:148
 #, rust-format
 msgid "{count} file could not be read"
 msgid_plural "{count} files could not be read"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:204
+#: src/scans/manual_scan_page/scan_run_state.rs:154
 #, rust-format
 msgid ""
 "{count} non-fatal warning during scan; some files may have been only "
@@ -2980,11 +2837,11 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:297
+#: src/scans/manual_scan_page/scan_run_state.rs:247
 msgid "ClamAV could not open these files."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_run_state.rs:310
+#: src/scans/manual_scan_page/scan_run_state.rs:260
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:48
 msgid "The scanner reported a threat without naming the file."
 msgstr ""
@@ -3001,7 +2858,7 @@ msgid ""
 msgstr ""
 
 #: src/scans/manual_scan_page/system_scan_run.rs:153
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:132
+#: src/shared_widgets/step_timeline/step_evidence_builders.rs:49
 msgid "Needs the daemon, see Scan Engine"
 msgstr ""
 
@@ -3066,133 +2923,133 @@ msgstr ""
 msgid "Checking on-access scanning…"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:65
+#: src/scans/on_access_page/on_access_presentation.rs:64
 msgid "No readable clamd.conf was found"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:67
+#: src/scans/on_access_page/on_access_presentation.rs:66
 msgid "Reading clamd.conf stopped before it finished"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:76
+#: src/scans/on_access_page/on_access_presentation.rs:75
 #, rust-format
 msgid "{path} (whole mount)"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:83
+#: src/scans/on_access_page/on_access_presentation.rs:82
 msgid "None configured"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:95
+#: src/scans/on_access_page/on_access_presentation.rs:94
 msgid "The ClamAV default"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:107
+#: src/scans/on_access_page/on_access_presentation.rs:106
 msgid "Configuration"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:117
+#: src/scans/on_access_page/on_access_presentation.rs:116
 msgid "Watched folders"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:122
+#: src/scans/on_access_page/on_access_presentation.rs:121
 msgid "Largest file scanned"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:139
+#: src/scans/on_access_page/on_access_presentation.rs:138
 msgid "neither /proc/config.gz nor the kernel's config file in /boot exists"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:142
+#: src/scans/on_access_page/on_access_presentation.rs:141
 msgid "the kernel configuration could not be read"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:145
+#: src/scans/on_access_page/on_access_presentation.rs:144
 msgid "/proc/config.gz could not be decompressed"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:148
+#: src/scans/on_access_page/on_access_presentation.rs:147
 msgid "the running kernel release could not be read"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:151
+#: src/scans/on_access_page/on_access_presentation.rs:150
 msgid "reading the kernel configuration stopped before it finished"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:160
+#: src/scans/on_access_page/on_access_presentation.rs:159
 msgid "Detected files are blocked"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:165
+#: src/scans/on_access_page/on_access_presentation.rs:164
 msgid "Files are checked, but detected files are not blocked"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:171
+#: src/scans/on_access_page/on_access_presentation.rs:170
 msgid ""
 "Files are checked, but detected files are not blocked, because "
 "OnAccessPrevention doesn't work with OnAccessMountPath"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:179
+#: src/scans/on_access_page/on_access_presentation.rs:178
 msgid ""
 "Files are checked, but this kernel can't block detected files, because it "
 "was built without CONFIG_FANOTIFY_ACCESS_PERMISSIONS"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:187
+#: src/scans/on_access_page/on_access_presentation.rs:186
 #, rust-format
 msgid ""
 "Files are checked, but whether the kernel can block detected files is "
 "unknown, because {reason}"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:204
+#: src/scans/on_access_page/on_access_presentation.rs:203
 msgid ""
 "Running, but clamd.conf could not be read, so what is checked and whether "
 "detected files are blocked is unknown"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:215
+#: src/scans/on_access_page/on_access_presentation.rs:214
 msgid "Running, but no folders or mounts are watched"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:225
+#: src/scans/on_access_page/on_access_presentation.rs:224
 msgid ""
 "Running, but no folders or mounts are watched, and detected files would not "
 "be blocked"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:254
+#: src/scans/on_access_page/on_access_presentation.rs:253
 msgid ""
 "Unknown whether on-access scanning runs, because systemd could not report it"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:260
+#: src/scans/on_access_page/on_access_presentation.rs:259
 msgid "On-access scanning is not set up"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:270
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:159
+#: src/scans/on_access_page/on_access_presentation.rs:269
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:152
 #, rust-format
 msgid "{unit} is not running"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:303
+#: src/scans/on_access_page/on_access_presentation.rs:302
 msgid "On-access blocking"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:305
+#: src/scans/on_access_page/on_access_presentation.rs:304
 msgid ""
 "clamonacc checks files in the watched folders as they are opened. With "
 "prevention on, the kernel refuses access to a detected file, which is why "
 "such a file can't be opened even though it is still there."
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:350
+#: src/scans/on_access_page/on_access_presentation.rs:349
 msgid "Mount watching"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:352
+#: src/scans/on_access_page/on_access_presentation.rs:351
 msgid ""
 "OnAccessMountPath watches a whole mount through fanotify. ClamAV documents "
 "it as incompatible with OnAccessPrevention, OnAccessIncludePath, "
@@ -3201,60 +3058,60 @@ msgid ""
 "block."
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:357
+#: src/scans/on_access_page/on_access_presentation.rs:356
 #, rust-format
 msgid "OnAccessMountPath can't be combined with {options}"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:361
+#: src/scans/on_access_page/on_access_presentation.rs:360
 msgid "Scan loop protection"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:363
+#: src/scans/on_access_page/on_access_presentation.rs:362
 msgid ""
 "clamd opens every file it is asked to scan. Unless OnAccessExcludeUname or "
 "OnAccessExcludeUID names the user clamd runs as, clamonacc sees those reads "
 "and asks clamd to scan the same files again."
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:367
+#: src/scans/on_access_page/on_access_presentation.rs:366
 msgid "clamd isn't excluded, so clamonacc can scan its own reads endlessly"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:370
+#: src/scans/on_access_page/on_access_presentation.rs:369
 msgid "Watching the whole file system"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:372
+#: src/scans/on_access_page/on_access_presentation.rs:371
 msgid ""
 "clamonacc refuses OnAccessIncludePath /. Include the folders that receive "
 "files, such as home directories, or watch a mount with OnAccessMountPath."
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:375
+#: src/scans/on_access_page/on_access_presentation.rs:374
 msgid "OnAccessIncludePath / is rejected by clamonacc"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:381
-#: src/scans/on_access_page/on_access_presentation.rs:393
+#: src/scans/on_access_page/on_access_presentation.rs:380
+#: src/scans/on_access_page/on_access_presentation.rs:392
 msgid "Folder watch limit"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:384
+#: src/scans/on_access_page/on_access_presentation.rs:383
 #, rust-format
 msgid ""
 "{path} is watched, but fs.inotify.max_user_watches is only {limit}, so "
 "folders past the limit go unchecked"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:396
+#: src/scans/on_access_page/on_access_presentation.rs:395
 #, rust-format
 msgid ""
 "Unknown whether {path} fits the folder watch limit, because "
 "fs.inotify.max_user_watches could not be read"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_presentation.rs:412
+#: src/scans/on_access_page/on_access_presentation.rs:411
 msgid ""
 "clamonacc watches every folder below an included path with inotify, one "
 "watch per folder. A whole home directory or larger tree can need more "
@@ -3284,124 +3141,124 @@ msgstr ""
 msgid "Checking the scan engine…"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:50
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:51
 #, rust-format
 msgid "clamscan could not be started: {error}"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:53
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:54
 msgid "clamscan did not answer in time"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:70
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:71
 #, rust-format
 msgid "refused {path}, because your account can replace it"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:74
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:75
 msgid "ClamAV was not found on this computer"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:100
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:101
 msgid "ClamAV installed"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:102
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:103
 msgid ""
 "ClamAV is the engine that recognizes malware. Lazaret uses the copy "
 "installed on this computer and never bundles its own."
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:147
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:140
 #, rust-format
 msgid "clamd still uses signatures {loaded}, but {disk} is on disk"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:150
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:143
 msgid "clamd is answering"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:152
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:145
 #, rust-format
 msgid ""
 "{unit} is running, but clamd does not answer. It may still be loading "
 "signatures."
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:156
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:149
 msgid "clamd does not answer, and systemd could not report its state"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:162
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:155
 msgid "clamd is not set up, so scans fall back to the slower clamscan"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:171
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:164
 msgid "The same version as on disk"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:178
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:171
 #, rust-format
 msgid "{loaded}, while {disk} is on disk"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:183
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:176
 msgid "Unknown, the loaded and stored versions could not be compared"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:189
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:182
 msgid "Loaded signatures"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:213
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:206
 msgid "Daemon running"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:215
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:208
 msgid ""
 "clamd keeps the signatures loaded in memory. On-access blocking and "
 "scheduled scans both send their files to it."
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:254
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:247
 #, rust-format
 msgid "Only the system can replace {path}"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:261
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:254
 #, rust-format
 msgid ""
 "Your account can replace {replaceable}, so a program running as you could "
 "put a fake clamd at {path} that reports every file as clean"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:267
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:260
 #, rust-format
 msgid "No clamd socket at {path}, so clamd isn't running or listens elsewhere"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:271
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:264
 msgid "The Flatpak sandbox can't see who owns the clamd socket"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:277
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:270
 msgid "clamd socket protected"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:282
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:275
 msgid ""
 "Scans reach clamd through its socket. Let clamd create it in a directory "
 "that only root or the clamav user can write, such as /run/clamav, so no "
 "program running as you can put a fake clamd in its place."
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_presentation.rs:293
+#: src/scans/scan_engine_page/scan_engine_presentation.rs:286
 msgid "Checking who can replace the clamd socket…"
 msgstr ""
 
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:74
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:71
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:78
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:70
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:77
 msgid "Not scheduled"
 msgstr ""
 
@@ -3576,67 +3433,67 @@ msgstr ""
 msgid "Checking the schedule…"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:81
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:215
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:80
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:214
 msgid "Next scan"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:96
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:95
 msgid "threats found"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:100
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:99
 msgid "nothing found"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:101
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:100
 msgid "Not run yet"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:105
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:104
 msgid "Last scan"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:123
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:122
 #: src/shared_widgets/audit_sections/audit_check_results.rs:28
 #: src/shared_widgets/step_timeline/runtime_reduction_steps.rs:65
 msgid "Unknown"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:180
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:179
 msgid "The system timer is not active"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:189
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:188
 msgid "The last scan ended with an error"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:192
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:191
 #, rust-format
 msgid "Next scan: {time}"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:195
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:194
 msgid "The timer starts a scan service that is not installed"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:198
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:197
 msgid "The scan service could not be read from systemd"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:202
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:201
 msgid "No scan is scheduled"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:216
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:215
 msgid "Not scheduled, because the timer is not active"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:262
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:261
 msgid "Scheduled scan"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:264
+#: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:263
 msgid ""
 "A scheduled scan catches files that were not opened, or that only became "
 "detectable after a signature update."
@@ -4170,6 +4027,116 @@ msgstr ""
 msgid "Reading the system journal stopped: {error}"
 msgstr ""
 
+#: src/shared_widgets/quarantine_failure_text.rs:11
+msgid "File hash mismatch — file may be corrupted"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:14
+msgid ""
+"This quarantine record has no usable hash, so the file cannot be verified "
+"and is not restored. You can still delete it."
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:18
+msgid ""
+"On-access scanning blocks this file and it is on another filesystem, so it "
+"cannot be moved to quarantine. You can delete it instead."
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:22
+#, rust-format
+msgid "Quarantine entry not found: {id}"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:25
+msgid ""
+"Failed to record quarantine entry in database. File has been restored to "
+"original location."
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:33
+#, rust-format
+msgid ""
+"Failed to record quarantine entry in database. Rollback also failed: "
+"{error}. File may be orphaned at: {path}"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:42
+msgid ""
+"The file was moved, but its quarantine record could not be removed. It may "
+"still appear in the list."
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:46
+#, rust-format
+msgid "A system call failed: {error}"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:54
+#, rust-format
+msgid "The quarantine database operation failed: {error}"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:61
+msgid "The path contains a NUL byte"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:62
+msgid "The path has no parent folder"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:63
+msgid "The path has no file name"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:65
+msgid "The quarantine database path is not valid UTF-8"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:68
+msgid "The quarantine database is not a regular file"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:71
+msgid "On-access scanning blocks reading the file"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:74
+msgid "The blocked file is still unreadable after moving it to quarantine"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:76
+msgid "The file is not a regular file"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:78
+msgid "The quarantined file is not a regular file"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:81
+msgid "There is not enough free space to quarantine the file"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:84
+msgid "The file was replaced while it was being moved, so it was not removed"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:87
+msgid "The path is not inside the quarantine folder"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:89
+msgid "The restore path is not valid"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:91
+msgid "Restoring into a protected system folder is not allowed"
+msgstr ""
+
+#: src/shared_widgets/quarantine_failure_text.rs:94
+msgid "A path stored in the quarantine database could not be read"
+msgstr ""
+
 #: src/shared_widgets/scanner_exit_text.rs:8
 #, rust-format
 msgid "The scanner stopped with error code {code}."
@@ -4189,6 +4156,51 @@ msgstr ""
 #: src/shared_widgets/scanner_exit_text.rs:20
 #, rust-format
 msgid "Lazaret lost track of the scanner process: {error}."
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:10
+msgid "The ClamAV scanner is not installed or not on the search path."
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:16
+#, rust-format
+msgid ""
+"Lazaret refused to run {program}, because your account can replace "
+"{replaceable}. Install ClamAV system-wide so a program planted by malware "
+"can't fake clean results."
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:28
+#, rust-format
+msgid "The scanner could not be started: {error}"
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:32
+#, rust-format
+msgid "Unable to create the private scanner work directory: {error}"
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:36
+msgid "The scanner output could not be captured."
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:39
+#, rust-format
+msgid ""
+"The scan did not start, because the clamd detection settings could not be "
+"read: {error}"
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:44
+#, rust-format
+msgid ""
+"The scan did not start, because the scanner programs could not be looked up: "
+"{error}"
+msgstr ""
+
+#: src/shared_widgets/scanner_start_failure_text.rs:50
+#, rust-format
+msgid "Unable to safely open scan input {path}: {error}"
 msgstr ""
 
 #: src/shared_widgets/service_log/service_log_group.rs:145
@@ -4350,10 +4362,10 @@ msgstr ""
 msgid "{changed} now"
 msgstr ""
 
-#: src/shared_widgets/step_timeline/step_evidence_builders.rs:103
+#: src/shared_widgets/step_timeline/step_evidence_builders.rs:107
 #: src/signatures/database_updates_page/database_updates_presentation.rs:266
 #: src/signatures/database_updates_page/signature_update_run/signature_update_session.rs:378
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:351
+#: src/signatures/signature_sources_page/signature_source_checks.rs:149
 #, rust-format
 msgid "Unknown. {reason}"
 msgstr ""
@@ -4833,19 +4845,7 @@ msgstr ""
 msgid "Install freshclam before requesting database updates."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:49
-msgid "purchase receipt number"
-msgstr ""
-
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:50
-msgid "customer ID"
-msgstr ""
-
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:205
-msgid "Other source"
-msgstr ""
-
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:234
+#: src/signatures/signature_sources_page/signature_source_checks.rs:32
 #, rust-format
 msgid ""
 "{provider} needs a {credential}, and fangfrisch only reads it from its "
@@ -4855,7 +4855,7 @@ msgid ""
 "file kept outside the Nix store, such as an agenix or sops-nix secret."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:248
+#: src/signatures/signature_sources_page/signature_source_checks.rs:46
 #, rust-format
 msgid ""
 "{provider} needs a {credential} from its website. fangfrisch reads it from "
@@ -4864,16 +4864,16 @@ msgid ""
 "so other users can't see it."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:272
+#: src/signatures/signature_sources_page/signature_source_checks.rs:70
 msgid "Not in use"
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:292
+#: src/signatures/signature_sources_page/signature_source_checks.rs:90
 #, rust-format
 msgid "Add these lines to fangfrisch's settings file, usually {path}."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:299
+#: src/signatures/signature_sources_page/signature_source_checks.rs:97
 #, rust-format
 msgid ""
 "{provider} needs a free abuse.ch Auth-Key. Add these lines to fangfrisch's "
@@ -4881,6 +4881,6 @@ msgid ""
 "make the file readable by root only, so other users can't see it."
 msgstr ""
 
-#: src/signatures/signature_sources_page/signature_provider_catalogue.rs:332
+#: src/signatures/signature_sources_page/signature_source_checks.rs:130
 msgid "In use"
 msgstr ""

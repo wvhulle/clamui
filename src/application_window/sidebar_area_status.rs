@@ -6,6 +6,9 @@ use jiff::Timestamp;
 use crate::{
     findings::quarantine_page::quarantine_page_state::QuarantineEntryCount,
     host_services::{
+        clamav_programs::signature_provider_catalogue::{
+            provider_of_signature_file, signature_file_source_name,
+        },
         desktop::locale_formatting::MomentFormatters,
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::{
@@ -15,6 +18,7 @@ use crate::{
                 OnAccessConfig, OnAccessEvidence, OnAccessScanner, ProtectionEvidence,
                 ScanServiceEvidence, ScheduledScanEvidence, SignatureEvidence,
                 ThirdPartySignatureListing, TimerState, WatchScope, WatchedLocation,
+                daemon_is_answering,
             },
             on_access_setup_review::{
                 OnAccessBlocking, OnAccessSetupFinding, on_access_blocking,
@@ -32,9 +36,7 @@ use crate::{
     },
     scans::{
         on_access_page::on_access_presentation::on_access_condition,
-        scan_engine_page::scan_engine_presentation::{
-            daemon_condition, daemon_is_answering, engine_condition,
-        },
+        scan_engine_page::scan_engine_presentation::{daemon_condition, engine_condition},
         scheduled_scans_page::scheduled_scans_presentation::scheduled_scan_condition,
     },
     shared_widgets::step_timeline::{
@@ -45,13 +47,8 @@ use crate::{
     sharing::analysis_page::trusted_detections_page::trust_list_contents::{
         LazaretListReading, TrustListReading,
     },
-    signatures::{
-        database_updates_page::database_updates_presentation::{
-            database_update_condition, third_party_source_condition, updater_failed,
-        },
-        signature_sources_page::signature_provider_catalogue::{
-            provider_of_signature_file, signature_file_source_name,
-        },
+    signatures::database_updates_page::database_updates_presentation::{
+        database_update_condition, third_party_source_condition, updater_failed,
     },
 };
 

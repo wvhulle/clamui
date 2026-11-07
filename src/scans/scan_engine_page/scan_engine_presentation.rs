@@ -10,6 +10,7 @@ use crate::{
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         protection_evidence::host_protection_evidence::{
             DaemonEvidence, EngineInstallation, LoadedSignatures, ProtectionEvidence,
+            daemon_is_answering,
         },
     },
     scans::scan_engine_page::{
@@ -126,14 +127,6 @@ pub const fn daemon_condition(daemon_evidence: &DaemonEvidence) -> CheckedCondit
         DaemonEvidence::UnitStateUnknown => CheckedCondition::EvidenceUnknown,
         DaemonEvidence::NeverSetUp => CheckedCondition::SetupSuggested,
     }
-}
-
-pub fn daemon_awaited_text() -> String {
-    gettext("Needs the daemon, see Scan Engine")
-}
-
-pub const fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
-    matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
 }
 
 fn daemon_status_text(daemon_evidence: &DaemonEvidence) -> String {

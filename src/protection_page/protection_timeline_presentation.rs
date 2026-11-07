@@ -12,7 +12,7 @@ use crate::{
             host_protection_evidence::{
                 AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
                 OnAccessScanner, ProtectionEvidence, ScanServiceEvidence, ScheduledScanEvidence,
-                SignatureEvidence, TimerState, WatchScope, WatchedLocation,
+                SignatureEvidence, TimerState, WatchScope, WatchedLocation, daemon_is_answering,
             },
             on_access_setup_review::{OnAccessBlocking, on_access_blocking},
         },
@@ -23,7 +23,7 @@ use crate::{
             OnAccessStepControls, on_access_condition, on_access_step,
         },
         scan_engine_page::scan_engine_presentation::{
-            daemon_condition, daemon_is_answering, daemon_step, engine_condition, engine_step,
+            daemon_condition, daemon_step, engine_condition, engine_step,
         },
         scheduled_scans_page::scheduled_scans_presentation::{
             last_scheduled_run_failed, scheduled_scan_condition, scheduled_scan_step,

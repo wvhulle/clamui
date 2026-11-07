@@ -27,7 +27,6 @@ use crate::{
         },
         window_close_behavior::{CloseAction, CloseAnswer, present_close_confirmation},
     },
-    findings::quarantine_page::quarantine_entries_page::describe_quarantine_failure,
     host_services::{
         desktop::{
             file_process_lock::{ProcessFileLock, wait_for_file_lock},
@@ -42,6 +41,7 @@ use crate::{
     preferences_dialog::preferences_dialog_component::{
         PreferencesDialog, PreferencesDialogInput, PreferencesPageName,
     },
+    shared_widgets::quarantine_failure_text::describe_quarantine_failure,
 };
 
 enum WindowContent {
