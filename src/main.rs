@@ -41,10 +41,7 @@ pub(crate) const TRAY_ATTENTION_ICON_NAME: &str =
 pub(crate) const APPLICATION_ID: &str = RELEASE_APPLICATION_ID;
 #[cfg(debug_assertions)]
 pub(crate) const APPLICATION_ID: &str = "page.codeberg.wvhulle.Lazaret.Devel";
-#[cfg(not(debug_assertions))]
 pub(crate) const APPLICATION_DATA_NAME: &str = "lazaret";
-#[cfg(debug_assertions)]
-pub(crate) const APPLICATION_DATA_NAME: &str = "lazaret-devel";
 const TRANSLATION_DOMAIN: &str = "lazaret";
 const INSTALLED_LOCALE_DIRECTORY: &str = match option_env!("LAZARET_LOCALE_DIRECTORY") {
     Some(locale_directory) => locale_directory,
