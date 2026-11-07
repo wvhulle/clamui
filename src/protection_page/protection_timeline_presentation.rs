@@ -3,11 +3,12 @@ use jiff::Timestamp;
 
 use crate::{
     application_window::settings_navigation::SettingsSubpage,
-    hardening_page::suggested_audit_commands::SuggestedRemedy,
+    findings::detections_page::alert_delivery_presentation::{
+        AlertReadiness, alerts_condition, alerts_status_step,
+    },
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
         desktop::locale_formatting::MomentFormatters,
-        detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::{
             host_protection_evidence::{
                 AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
@@ -16,7 +17,7 @@ use crate::{
             },
             on_access_setup_review::{OnAccessBlocking, on_access_blocking},
         },
-        systemd_bus::host_systemd_units::{UnitActivity, UnitState},
+        systemd_bus::host_systemd_units::UnitState,
     },
     scans::{
         on_access_page::on_access_presentation::{
@@ -29,20 +30,13 @@ use crate::{
             last_scheduled_run_failed, scheduled_scan_condition, scheduled_scan_step,
         },
     },
-    shared_widgets::{
-        journal_follow_failure_text::journal_follow_failure_text,
-        step_timeline::{
-            program_trust_steps::{TrustedProgramGroup, program_trust_step},
-            runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
-            step_evidence_builders::{
-                CheckedCondition, MomentContext, evidence_row, no_guidance_step, plain_rows,
-                remedy_commands,
-            },
-            timeline_step_contents::{
-                ActionConsequence, EvidenceRowControl, OfferedAction, SettledNodeState,
-                SettledStep, StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState,
-                TimelineStep,
-            },
+    shared_widgets::step_timeline::{
+        program_trust_steps::{TrustedProgramGroup, program_trust_step},
+        runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
+        step_evidence_builders::{CheckedCondition, MomentContext, evidence_row, plain_rows},
+        timeline_step_contents::{
+            ActionConsequence, EvidenceRowControl, OfferedAction, SettledNodeState, SettledStep,
+            StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
         },
     },
     sharing::analysis_page::trusted_detections_page::{
@@ -64,6 +58,7 @@ pub enum ProtectionStepAction {
     OpenOnAccessScanning,
     OpenScheduledScans,
     OpenManualScan,
+    OpenDetections,
     ReviewSettingsSubpage(SettingsSubpage),
 }
 
@@ -75,6 +70,7 @@ impl StepActionButton for ProtectionStepAction {
             Self::OpenOnAccessScanning => gettext("Open On-Access Scanning"),
             Self::OpenScheduledScans => gettext("Open Scheduled Scans"),
             Self::OpenManualScan => gettext("Open Manual Scan"),
+            Self::OpenDetections => gettext("Open Detections"),
             Self::ReviewSettingsSubpage(_) => gettext("Review"),
         }
     }
@@ -86,18 +82,13 @@ impl StepActionButton for ProtectionStepAction {
             | Self::OpenOnAccessScanning
             | Self::OpenScheduledScans
             | Self::OpenManualScan
+            | Self::OpenDetections
             | Self::ReviewSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
         }
     }
 }
 
 pub type ProtectionStep = TimelineStep<ProtectionStepAction>;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AlertReadiness {
-    pub journal_access: JournalAccess,
-    pub notifications_enabled: bool,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectionTimeline {
@@ -380,66 +371,17 @@ fn signature_overview_step(
     )
 }
 
-pub fn alerts_condition(
+fn alerts_overview_step(
     alert_readiness: &AlertReadiness,
     background_service_state: UnitState,
-) -> CheckedCondition {
-    match &alert_readiness.journal_access {
-        JournalAccess::JournalUnreadable | JournalAccess::FollowingFailed(_) => {
-            CheckedCondition::ConditionFailed
-        }
-        JournalAccess::FollowingJournal
-            if !alert_readiness.notifications_enabled
-                || background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive) =>
-        {
-            CheckedCondition::ReviewSuggested
-        }
-        JournalAccess::FollowingJournal => CheckedCondition::ConditionMet,
-    }
-}
-
-fn alerts_step(
-    alert_readiness: &AlertReadiness,
-    background_service_state: UnitState,
-    distribution_family: DistributionFamily,
 ) -> ProtectionStep {
-    let step_title = gettext("Alerts");
-    let mechanism_details = gettext(
-        "Lazaret follows the system journal and notifies you when something is detected. It can \
-         only do that while it is running, so it should run in the background.",
-    );
-    let node_state = alerts_condition(alert_readiness, background_service_state).node_state();
-    let status_text = match &alert_readiness.journal_access {
-        JournalAccess::JournalUnreadable => {
-            gettext("The system journal can't be read. Add your user to the systemd-journal group.")
-        }
-        JournalAccess::FollowingFailed(follow_failure) => {
-            journal_follow_failure_text(follow_failure)
-        }
-        JournalAccess::FollowingJournal if !alert_readiness.notifications_enabled => {
-            gettext("Notifications are turned off in the preferences")
-        }
-        JournalAccess::FollowingJournal
-            if background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive) =>
-        {
-            gettext(
-                "Alerts stop when you quit Lazaret, because it isn't set up to run in the \
-                 background",
-            )
-        }
-        JournalAccess::FollowingJournal => {
-            gettext("Running in the background and following the journal")
-        }
-    };
-    no_guidance_step(step_title, mechanism_details, node_state, status_text).with_guidance_commands(
-        if alert_readiness.journal_access == JournalAccess::FollowingJournal
-            && alert_readiness.notifications_enabled
-            && background_service_state != UnitState::UnitLoaded(UnitActivity::UnitActive)
-        {
-            remedy_commands(SuggestedRemedy::BackgroundAlertsEnable, distribution_family)
-        } else {
-            Vec::new()
-        },
+    alerts_status_step(
+        alert_readiness,
+        background_service_state,
+        StepActionSlot::ActionOffered(offer_for_condition(
+            alerts_condition(alert_readiness, background_service_state),
+            ProtectionStepAction::OpenDetections,
+        )),
     )
 }
 
@@ -569,10 +511,9 @@ pub fn protection_timeline(
                     daemon_answering,
                 ),
             ),
-            alerts_step(
+            alerts_overview_step(
                 alert_readiness,
                 protection_evidence.background_service_state,
-                distribution_family,
             ),
         ],
         engine_steps: engine_problem
@@ -615,6 +556,7 @@ mod protection_timeline_presentation_tests {
     use super::*;
     use crate::{
         host_services::{
+            detection_journal::detection_journal_follower::JournalAccess,
             protection_evidence::{
                 host_protection_evidence::{
                     ClamdConfigReadFailure, ClamdUserExclusion, ConfiguredPrevention,
@@ -1176,50 +1118,27 @@ mod protection_timeline_presentation_tests {
         );
     }
 
-    fn alert_step_state(
-        alert_readiness: &AlertReadiness,
-        background_service_state: UnitState,
-    ) -> StepNodeState {
-        alerts_step(
-            alert_readiness,
-            background_service_state,
-            DistributionFamily::NixosFamily,
-        )
-        .node_state()
-    }
-
     #[test]
-    fn alerts_are_only_complete_when_they_will_actually_fire() {
+    fn the_alerts_step_is_status_only_and_opens_detections() {
+        let protection_steps = idle_timeline(&ProtectionEvidence {
+            background_service_state: UnitState::UnitNotFound,
+            ..healthy_evidence()
+        })
+        .protection_steps;
+        let alerts_step = step_titled(&protection_steps, "Alerts");
+        assert_eq!(alerts_step.node_state(), StepNodeState::NeedsReview);
+        assert!(alerts_step.guidance_commands.is_empty());
+        assert!(alerts_step.shown_evidence_rows().is_empty());
         assert_eq!(
-            alert_step_state(
-                &ready_alerts(),
-                UnitState::UnitLoaded(UnitActivity::UnitActive)
-            ),
-            StepNodeState::Completed
+            alerts_step.header_offer(),
+            Some(OfferedAction::suggested(
+                ProtectionStepAction::OpenDetections
+            ))
         );
+        let healthy_steps = idle_timeline(&healthy_evidence()).protection_steps;
         assert_eq!(
-            alert_step_state(&ready_alerts(), UnitState::UnitNotFound),
-            StepNodeState::NeedsReview
-        );
-        assert_eq!(
-            alert_step_state(
-                &AlertReadiness {
-                    notifications_enabled: false,
-                    ..ready_alerts()
-                },
-                UnitState::UnitLoaded(UnitActivity::UnitActive)
-            ),
-            StepNodeState::NeedsReview
-        );
-        assert_eq!(
-            alert_step_state(
-                &AlertReadiness {
-                    journal_access: JournalAccess::JournalUnreadable,
-                    ..ready_alerts()
-                },
-                UnitState::UnitLoaded(UnitActivity::UnitActive)
-            ),
-            StepNodeState::HasFailed
+            step_titled(&healthy_steps, "Alerts").header_offer(),
+            Some(OfferedAction::plain(ProtectionStepAction::OpenDetections))
         );
     }
 

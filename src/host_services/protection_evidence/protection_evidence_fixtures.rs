@@ -14,6 +14,7 @@ use crate::{
                 ThirdPartySignatureListing, TimerState, WatchScope, WatchedLocation,
             },
             kernel_on_access_support::{InotifyWatchLimit, KernelBlockingSupport},
+            process_attach_scope::ProcessAttachScope,
             service_run_journal::ScanRunHistory,
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
@@ -87,6 +88,7 @@ pub fn healthy_evidence() -> ProtectionEvidence {
             last_completed_run: ScanRunHistory::NoCompletedScan,
         },
         background_service_state: UnitState::UnitLoaded(UnitActivity::UnitActive),
+        process_attach_scope: ProcessAttachScope::AttachRestricted,
     }
 }
 

@@ -11,6 +11,7 @@ use crate::{
         protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
         settings_navigation::{SettingsSubpage, system_settings_group},
     },
+    findings::detections_page::alert_delivery_presentation::AlertReadiness,
     host_services::{
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
@@ -20,7 +21,7 @@ use crate::{
         protection_evidence::host_protection_evidence::detection_notifications_are_enabled,
     },
     protection_page::protection_timeline_presentation::{
-        AlertReadiness, ProtectionActivity, ProtectionStepAction, protection_timeline,
+        ProtectionActivity, ProtectionStepAction, protection_timeline,
     },
     shared_widgets::{
         loading_indicators::{
@@ -168,6 +169,9 @@ impl ProtectionTimelinePage {
             }
             ProtectionStepAction::OpenManualScan => {
                 show_application_page(root, ApplicationPage::Scan);
+            }
+            ProtectionStepAction::OpenDetections => {
+                show_application_page(root, ApplicationPage::Detections);
             }
             ProtectionStepAction::ReviewSettingsSubpage(settings_subpage) => {
                 let _action_missing = root.activate_action(

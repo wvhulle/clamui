@@ -4,13 +4,18 @@ use futures::{Stream, StreamExt, stream};
 use gettextrs::gettext;
 use jiff::Timestamp;
 use relm4::{
-    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
-    prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
+    adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 use tokio::task::spawn_blocking;
 
 use crate::{
+    application_window::{
+        application_actions::PreferencesAction,
+        protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
+    },
     findings::detections_page::{
+        alert_delivery_presentation::{AlertReadiness, AlertStepAction, alert_group_steps},
         detected_file_state::{DetectedFileState, FileOwner, OpeningCheck, inspect_detected_file},
         detection_alerts::{
             DetectionAlert, JournalReplay, JournalResume, plan_detection_alerts,
@@ -38,6 +43,7 @@ use crate::{
             detection_journal_follower::{JournalAccess, detection_journal_events},
             detection_journal_records::JournalDetectionRecord,
         },
+        protection_evidence::host_protection_evidence::detection_notifications_are_enabled,
         quarantine_vault::{
             quarantine_entry_database::QuarantineVault,
             quarantine_file_moves::QuarantineMoveFailure,
@@ -50,11 +56,11 @@ use crate::{
     shared_widgets::{
         component_streams::{RunningStream, run_stream},
         journal_follow_failure_text::journal_follow_failure_text,
-        loading_indicators::FirstLoad,
+        loading_indicators::{BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, busy_page_name},
         quarantine_failure_text::describe_quarantine_failure,
         step_timeline::{
             timeline_step_contents::TimelineStepRowOutput,
-            timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
+            timeline_step_row::{TimelineStepRow, TimelineStepRowInput, show_timeline_steps},
         },
     },
 };
@@ -74,6 +80,9 @@ pub struct BackgroundDetectionsPage {
     first_load: FirstLoad,
     detection_list_rows: FactoryVecDeque<DetectionListRow>,
     incident_rows: FactoryVecDeque<TimelineStepRow<IncidentStepAction>>,
+    alert_rows: FactoryVecDeque<TimelineStepRow<AlertStepAction>>,
+    evidence_refresh: EvidenceRefresh,
+    gathered_evidence: GatheredEvidence,
     toaster: Toaster,
     _journal_follow: RunningStream,
 }
@@ -90,6 +99,10 @@ pub enum BackgroundDetectionsPageInput {
     IncidentRequestedForFile(PathBuf),
     BackToListRequested,
     StepRequested(TimelineStepRowOutput<IncidentStepAction>),
+    AlertsRefreshRequested,
+    EvidenceRefreshChanged(EvidenceRefresh),
+    EvidenceGathered(GatheredEvidence),
+    AlertStepRequested(TimelineStepRowOutput<AlertStepAction>),
 }
 
 #[derive(Debug)]
@@ -97,6 +110,7 @@ pub enum BackgroundDetectionsPageOutput {
     UnresolvedCountChanged(usize),
     QuarantineReloadNeeded,
     JournalAccessChanged(JournalAccess),
+    EvidenceRefreshRequested,
 }
 
 #[derive(Debug)]
@@ -420,6 +434,35 @@ impl BackgroundDetectionsPage {
             });
     }
 
+    fn show_alert_steps(&mut self) {
+        let GatheredEvidence::Gathered {
+            protection_evidence,
+            ..
+        } = &self.gathered_evidence
+        else {
+            return;
+        };
+        show_timeline_steps(
+            &mut self.alert_rows,
+            alert_group_steps(
+                protection_evidence,
+                &AlertReadiness {
+                    journal_access: self.journal_access.clone(),
+                    notifications_enabled: detection_notifications_are_enabled(),
+                },
+                self.distribution_family,
+            ),
+        );
+    }
+
+    fn run_alert_action(chosen_action: AlertStepAction, root: &adw::ToastOverlay) {
+        match chosen_action {
+            AlertStepAction::OpenPreferences => {
+                let _action_missing = root.activate_action(&PreferencesAction::action_name(), None);
+            }
+        }
+    }
+
     fn opened_incident_steps(&self) -> Vec<IncidentStep> {
         let IncidentView::IncidentOpen {
             deletion_prompt,
@@ -629,6 +672,30 @@ impl Component for BackgroundDetectionsPage {
                                 set_visible: model.first_load == FirstLoad::StillLoading,
                             },
                         },
+
+                        #[local_ref]
+                        add = alert_group -> adw::PreferencesGroup {
+                            set_title: &gettext("Alerts"),
+                            set_description: Some(&gettext(
+                                "How detections reach you, and what keeps other programs from \
+                                 hiding them.",
+                            )),
+                            #[wrap(Some)]
+                            set_header_suffix = &gtk::Stack {
+                                add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
+                                    set_icon_name: "view-refresh-symbolic",
+                                    set_tooltip_text: Some(&gettext("Check again")),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => BackgroundDetectionsPageInput::AlertsRefreshRequested,
+                                },
+                                add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                                    set_tooltip_text: Some(&gettext("Checking")),
+                                },
+                                #[watch]
+                                set_visible_child_name: busy_page_name(model.evidence_refresh.is_running()),
+                            },
+                        },
                     },
 
                     add_named[Some(INCIDENT_VIEW_NAME)] = &adw::PreferencesPage {
@@ -672,6 +739,14 @@ impl Component for BackgroundDetectionsPage {
                     sender.input_sender(),
                     BackgroundDetectionsPageInput::StepRequested,
                 ),
+            alert_rows: FactoryVecDeque::builder()
+                .launch(adw::PreferencesGroup::default())
+                .forward(
+                    sender.input_sender(),
+                    BackgroundDetectionsPageInput::AlertStepRequested,
+                ),
+            evidence_refresh: EvidenceRefresh::NothingRunning,
+            gathered_evidence: GatheredEvidence::NotGatheredYet,
             toaster: Toaster::new(&root),
             _journal_follow: run_stream(
                 &sender,
@@ -680,6 +755,7 @@ impl Component for BackgroundDetectionsPage {
         };
         let detection_list_group = model.detection_list_rows.widget();
         let incident_group = model.incident_rows.widget();
+        let alert_group = model.alert_rows.widget();
         let widgets = view_output!();
         model.start_reload(&sender, IncidentRequest::KeepShownIncident);
         ComponentParts { model, widgets }
@@ -713,6 +789,26 @@ impl Component for BackgroundDetectionsPage {
             BackgroundDetectionsPageInput::StepRequested(TimelineStepRowOutput::ActionChosen(
                 chosen_action,
             )) => self.run_incident_action(chosen_action, &sender),
+            BackgroundDetectionsPageInput::AlertsRefreshRequested => {
+                let _shell_closed =
+                    sender.output(BackgroundDetectionsPageOutput::EvidenceRefreshRequested);
+            }
+            BackgroundDetectionsPageInput::EvidenceRefreshChanged(evidence_refresh) => {
+                self.evidence_refresh = evidence_refresh;
+            }
+            BackgroundDetectionsPageInput::EvidenceGathered(gathered_evidence) => {
+                self.gathered_evidence = gathered_evidence;
+                self.show_alert_steps();
+            }
+            BackgroundDetectionsPageInput::AlertStepRequested(
+                TimelineStepRowOutput::ActionChosen(chosen_action),
+            ) => Self::run_alert_action(chosen_action, root),
+            BackgroundDetectionsPageInput::AlertStepRequested(
+                TimelineStepRowOutput::CopyRequested(copied_command),
+            ) => {
+                root.clipboard().set_text(&copied_command);
+                self.toaster.toast(&gettext("Command copied to clipboard"));
+            }
         }
     }
 
@@ -736,6 +832,7 @@ impl Component for BackgroundDetectionsPage {
             }
             BackgroundDetectionsPageCommand::JournalAccessChanged(journal_access) => {
                 self.journal_access = journal_access.clone();
+                self.show_alert_steps();
                 let _shell_closed = sender.output(
                     BackgroundDetectionsPageOutput::JournalAccessChanged(journal_access),
                 );

@@ -34,9 +34,12 @@ use crate::{
         },
     },
     findings::{
-        detections_page::background_detections_page::{
-            BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageInput,
-            BackgroundDetectionsPageOutput,
+        detections_page::{
+            alert_delivery_presentation::AlertReadiness,
+            background_detections_page::{
+                BackgroundDetectionsPage, BackgroundDetectionsPageInit,
+                BackgroundDetectionsPageInput, BackgroundDetectionsPageOutput,
+            },
         },
         quarantine_page::{
             quarantine_entries_page::{
@@ -60,11 +63,8 @@ use crate::{
         systemd_bus::host_systemd_units::watched_unit_changes,
     },
     logs_page::activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
-    protection_page::{
-        protection_timeline_page::{
-            ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
-        },
-        protection_timeline_presentation::AlertReadiness,
+    protection_page::protection_timeline_page::{
+        ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
     },
     scans::{
         manual_scan_page::{
@@ -398,6 +398,9 @@ fn forwarded_detections_output(
         BackgroundDetectionsPageOutput::JournalAccessChanged(journal_access) => {
             PageNavigationInput::JournalAccessChanged(journal_access)
         }
+        BackgroundDetectionsPageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
     }
 }
 
@@ -570,6 +573,10 @@ impl PageNavigation {
             .emit(OnAccessPageInput::EvidenceRefreshChanged(next_refresh));
         self.scheduled_scans_page
             .emit(ScheduledScansPageInput::EvidenceRefreshChanged(
+                next_refresh,
+            ));
+        self.detections_page
+            .emit(BackgroundDetectionsPageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
         match gathering_start {
@@ -1177,6 +1184,10 @@ impl Component for PageNavigation {
                 self.scan_page.emit(ScanPageInput::EvidenceGathered(
                     self.gathered_evidence.clone(),
                 ));
+                self.detections_page
+                    .emit(BackgroundDetectionsPageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);
             }
             PageNavigationCommand::WatchedUnitChanged => {

@@ -19,9 +19,8 @@ use crate::{
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, probe_unit_state},
     },
-    shared_widgets::audit_sections::{
-        audit_check_results::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
-        process_isolation_checks::process_isolation_checks,
+    shared_widgets::audit_sections::audit_check_results::{
+        AuditCategory, AuditCheck, AuditSection, AuditStatus,
     },
     signatures::signature_sources_page::signature_source_checks::{
         signature_source_checks, unreadable_source_checks,
@@ -381,9 +380,6 @@ pub async fn gather_audit_section(
                 apparmor_state_from_reading(read_host_text(APPARMOR_ENABLED_PATH).await);
             let selinux_probe = run_command_probe("getenforce", &[]).await;
             access_control_checks(apparmor_state, inspect_selinux_probe(&selinux_probe))
-                .into_iter()
-                .chain(process_isolation_checks(distribution_family).await)
-                .collect()
         }
         AuditCategory::IntrusionDetection => intrusion_detection_checks(
             inspect_tool_presence(IntrusionDetectionTool::Fail2banTool).await,

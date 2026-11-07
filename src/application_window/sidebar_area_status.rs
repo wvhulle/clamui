@@ -4,7 +4,12 @@ use gettextrs::{gettext, ngettext};
 use jiff::Timestamp;
 
 use crate::{
-    findings::quarantine_page::quarantine_page_state::QuarantineEntryCount,
+    findings::{
+        detections_page::alert_delivery_presentation::{
+            AlertReadiness, alerts_condition, process_attach_condition,
+        },
+        quarantine_page::quarantine_page_state::QuarantineEntryCount,
+    },
     host_services::{
         clamav_programs::signature_provider_catalogue::{
             provider_of_signature_file, signature_file_source_name,
@@ -24,15 +29,14 @@ use crate::{
                 OnAccessBlocking, OnAccessSetupFinding, on_access_blocking,
                 on_access_setup_findings,
             },
+            process_attach_scope::ProcessAttachScope,
             service_run_journal::UpdaterRunHistory,
         },
         systemd_bus::host_systemd_units::UnitTimestamp,
     },
     protection_page::{
         protection_timeline_page::shown_coverage_text,
-        protection_timeline_presentation::{
-            AlertReadiness, alerts_condition, trust_list_condition,
-        },
+        protection_timeline_presentation::trust_list_condition,
     },
     scans::{
         on_access_page::on_access_presentation::on_access_condition,
@@ -725,6 +729,20 @@ fn alerts_summary(
     Some(condition_summary(alert_condition, live_state_text))
 }
 
+fn process_attach_summary(process_attach_scope: ProcessAttachScope) -> Option<AreaSummary> {
+    let attach_condition = process_attach_condition(process_attach_scope);
+    match process_attach_scope {
+        ProcessAttachScope::AttachRestricted => None,
+        ProcessAttachScope::AnyProgramMayAttach | ProcessAttachScope::YamaNotLoaded => {
+            Some(gettext("Other programs can attach to Lazaret"))
+        }
+        ProcessAttachScope::ScopeUnreadable(_) => {
+            Some(gettext("Unknown whether programs can attach"))
+        }
+    }
+    .map(|live_state_text| condition_summary(attach_condition, live_state_text))
+}
+
 fn detections_summary(
     protection_evidence: &ProtectionEvidence,
     area_context: &AreaSummaryContext,
@@ -745,10 +763,10 @@ fn detections_summary(
     };
     worst_summary(
         decision_summary,
-        [alerts_summary(
-            protection_evidence,
-            &area_context.alert_readiness,
-        )],
+        [
+            alerts_summary(protection_evidence, &area_context.alert_readiness),
+            process_attach_summary(protection_evidence.process_attach_scope),
+        ],
     )
 }
 
@@ -1267,6 +1285,35 @@ mod sidebar_area_status_tests {
             )
             .area_status,
             AreaStatus::AreaFailing
+        );
+    }
+
+    #[test]
+    fn the_process_attach_check_counts_toward_detections() {
+        let attach_open = ProtectionEvidence {
+            process_attach_scope: ProcessAttachScope::AnyProgramMayAttach,
+            ..healthy_evidence()
+        };
+        assert_eq!(
+            summary_for(SidebarArea::Detections, &attach_open),
+            AreaSummary {
+                area_status: AreaStatus::AreaNeedsReview,
+                live_state_text: "Other programs can attach to Lazaret".to_owned(),
+            }
+        );
+        let attach_unreadable = ProtectionEvidence {
+            process_attach_scope: ProcessAttachScope::ScopeUnreadable(
+                crate::host_services::protection_evidence::process_attach_scope::ProcessAttachReadFailure::ReadingTaskInterrupted,
+            ),
+            ..healthy_evidence()
+        };
+        assert_eq!(
+            status_for(SidebarArea::Detections, &attach_unreadable),
+            AreaStatus::AreaUnknown
+        );
+        assert_eq!(
+            status_for(SidebarArea::Detections, &healthy_evidence()),
+            AreaStatus::AreaHealthy
         );
     }
 
