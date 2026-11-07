@@ -12,31 +12,22 @@ use crate::{
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
+        protection_evidence::{
+            clamav_engine_evidence::DatabaseEvidence,
+            host_protection_evidence::{
+                AccountSettingFinding, ClamdConfigReadFailure, DaemonEvidence, EngineInstallation,
+                LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessResponse,
+                OnAccessScanner, OnAccessSizeLimit, OverridesChangeTime, OverridesReadFailure,
+                ProgramTrustFinding, ProgramTrustInspection, ProtectionEvidence, ReducedSetting,
+                RuntimeReductions, ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence,
+                SignatureEvidence, SignatureLineCount, ThirdPartySignatureFile,
+                ThirdPartySignatureListing, TimerState, UpdaterEvidence, UpdaterUnitResult,
+                WatchScope, WatchedLocation,
+            },
+            service_run_journal::{ScanRunFindings, ScanRunHistory, UpdaterRunHistory},
+        },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
         systemd_journal::unit_journal_reader::UnitJournalReadFailure,
-    },
-    protection_page::{
-        clamav_engine_evidence::DatabaseEvidence,
-        protection_evidence::{
-            AccountSettingFinding, ClamdConfigReadFailure, DaemonEvidence, EngineInstallation,
-            LoadedSignatures, OnAccessConfig, OnAccessEvidence, OnAccessResponse, OnAccessScanner,
-            OnAccessSizeLimit, OverridesChangeTime, OverridesReadFailure, ProgramTrustFinding,
-            ProgramTrustInspection, ProtectionEvidence, ReducedSetting, RuntimeReductions,
-            ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence, SignatureEvidence,
-            SignatureLineCount, ThirdPartySignatureFile, ThirdPartySignatureListing, TimerState,
-            UpdaterEvidence, UpdaterUnitResult, WatchScope, WatchedLocation,
-        },
-        service_run_journal::{ScanRunFindings, ScanRunHistory, UpdaterRunHistory},
-        signature_update_run::signature_update_session::{
-            LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
-        },
-        trusted_detections_page::{
-            trust_list_contents::{
-                AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListContents,
-                TrustListReading,
-            },
-            trusted_detections_component::trust_list_failure_text,
-        },
     },
     shared_widgets::{
         host_read_failure_text::{database_folder_failure_text, unit_journal_failure_text},
@@ -48,8 +39,20 @@ use crate::{
             moment_value_text,
         },
     },
-    signatures_page::signature_provider_catalogue::{
-        provider_of_signature_file, signature_file_source_name,
+    sharing::analysis_page::trusted_detections_page::{
+        trust_list_contents::{
+            AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListContents,
+            TrustListReading,
+        },
+        trusted_detections_component::trust_list_failure_text,
+    },
+    signatures::{
+        database_updates_page::signature_update_run::signature_update_session::{
+            LastManualUpdate, SignatureUpdateProgress, SignatureUpdateView,
+        },
+        signature_sources_page::signature_provider_catalogue::{
+            provider_of_signature_file, signature_file_source_name,
+        },
     },
 };
 
@@ -1670,11 +1673,9 @@ mod protection_timeline_presentation_tests {
             clamav_programs::database_directory_status::DatabaseFolderReadFailure,
             systemd_bus::host_systemd_units::ServiceFailureKind,
         },
-        protection_page::{
-            signature_update_run::updater_exit_status::SignatureUpdaterProgram,
-            trusted_detections_page::trust_list_contents::TrustListReadFailure,
-        },
         shared_widgets::step_timeline::timeline_step_contents::StepPhase,
+        sharing::analysis_page::trusted_detections_page::trust_list_contents::TrustListReadFailure,
+        signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
     };
 
     const REFERENCE_MOMENT: Timestamp = Timestamp::constant(1_794_200_000, 0);
@@ -1693,7 +1694,7 @@ mod protection_timeline_presentation_tests {
 
     fn known_update_host(update_progress: SignatureUpdateProgress) -> SignatureUpdateView {
         SignatureUpdateView::HostStatusKnown(
-            crate::protection_page::signature_update_run::signature_update_session::KnownUpdateHost {
+            crate::signatures::database_updates_page::signature_update_run::signature_update_session::KnownUpdateHost {
                 update_progress,
                 last_manual_update: LastManualUpdate::NotRunThisSession,
                 update_service_text: "Active".to_owned(),
@@ -1856,7 +1857,7 @@ mod protection_timeline_presentation_tests {
     #[ignore = "reads the real host"]
     async fn host_timeline_reports_the_real_backend() {
         let host_timeline = protection_timeline(
-            &crate::protection_page::protection_evidence::gather_protection_evidence(false).await,
+            &crate::host_services::protection_evidence::host_protection_evidence::gather_protection_evidence(false).await,
             &ready_alerts(),
             &idle_activity(),
             crate::host_services::clamav_programs::distribution_install_guides::detect_distribution_family(),
@@ -2219,7 +2220,7 @@ mod protection_timeline_presentation_tests {
                     changed_at: REFERENCE_MOMENT,
                 },
                 reduced_settings: vec![
-                    crate::protection_page::protection_evidence::ReducedSetting {
+                    crate::host_services::protection_evidence::host_protection_evidence::ReducedSetting {
                         setting_key: "OnAccessPrevention".to_owned(),
                         base_value: "yes".to_owned(),
                         changed_value: "no".to_owned(),

@@ -6,7 +6,7 @@ use relm4::{
 
 use crate::{
     application_window::settings_navigation::OPEN_SETTINGS_ACTION_NAME,
-    detections_page::detection_alerts::{OPEN_DETECTION_ACTION, OPEN_DETECTIONS_ACTION},
+    findings::detections_page::detection_alerts::{OPEN_DETECTION_ACTION, OPEN_DETECTIONS_ACTION},
     host_services::desktop::running_instance_forwarding::{SCAN_PATHS_ACTION, SHOW_WINDOW_ACTION},
 };
 

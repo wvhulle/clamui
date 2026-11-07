@@ -11,7 +11,7 @@ use crate::{
         FileManagerKind, file_manager_action_installed, install_file_manager_action,
         remove_file_manager_action,
     },
-    scan_page::scan_schedule_page::scan_schedule_units::current_launcher_path,
+    scans::scheduled_scans_page::scan_schedule_units::current_launcher_path,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

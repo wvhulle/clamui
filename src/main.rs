@@ -1,5 +1,5 @@
 mod application_window;
-mod detections_page;
+mod findings;
 mod hardening_page;
 mod headless_modes;
 mod host_services;
@@ -8,10 +8,10 @@ mod host_verification_tests;
 mod logs_page;
 mod preferences_dialog;
 mod protection_page;
-mod quarantine_page;
-mod scan_page;
+mod scans;
 mod shared_widgets;
-mod signatures_page;
+mod sharing;
+mod signatures;
 
 use std::{path::PathBuf, process::ExitCode};
 

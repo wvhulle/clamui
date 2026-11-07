@@ -4,7 +4,7 @@ use relm4::gtk::{gio::prelude::ActionGroupExt, glib};
 
 use crate::{
     APPLICATION_ID, TRAY_ATTENTION_ICON_NAME, TRAY_ICON_NAME,
-    detections_page::detection_alerts::OPEN_DETECTIONS_ACTION,
+    findings::detections_page::detection_alerts::OPEN_DETECTIONS_ACTION,
 };
 
 #[derive(Default)]

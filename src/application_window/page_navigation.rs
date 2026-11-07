@@ -21,9 +21,14 @@ use crate::{
         application_pages::{ALL_APPLICATION_PAGES, ApplicationPage},
         settings_navigation::{SettingsSubpage, settings_subpage_frame},
     },
-    detections_page::background_detections_page::{
-        BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageInput,
-        BackgroundDetectionsPageOutput,
+    findings::{
+        detections_page::background_detections_page::{
+            BackgroundDetectionsPage, BackgroundDetectionsPageInit, BackgroundDetectionsPageInput,
+            BackgroundDetectionsPageOutput,
+        },
+        quarantine_page::quarantine_entries_page::{
+            QuarantineEntriesPage, QuarantineEntriesPageInput,
+        },
     },
     host_services::{
         activity_history::activity_history_database::ActivityHistory,
@@ -32,19 +37,17 @@ use crate::{
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
     logs_page::activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
-    protection_page::{
-        protection_timeline_page::{
-            ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
-        },
-        trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
+    protection_page::protection_timeline_page::{
+        ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
     },
-    quarantine_page::quarantine_entries_page::{QuarantineEntriesPage, QuarantineEntriesPageInput},
-    scan_page::{
-        device_auto_scan_page::device_scan_page::DeviceScanPage,
-        exclusions_page::scan_exclusions_page::ScanExclusionsPage,
-        scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
-        scan_profiles_dialog::scan_profile_store::ScanProfileStore,
-        scan_schedule_page::scan_schedule_component::ScanSchedulePage,
+    scans::{
+        manual_scan_page::{
+            device_auto_scan_page::device_scan_page::DeviceScanPage,
+            exclusions_page::scan_exclusions_page::ScanExclusionsPage,
+            scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
+            scan_profiles_dialog::scan_profile_store::ScanProfileStore,
+        },
+        scheduled_scans_page::scan_schedule_component::ScanSchedulePage,
     },
     shared_widgets::{
         audit_sections::{
@@ -53,6 +56,7 @@ use crate::{
         },
         engine_settings::engine_settings_page::{EngineSettingsPage, EngineSettingsSection},
     },
+    sharing::analysis_page::trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
 };
 
 pub struct PageNavigationInit {

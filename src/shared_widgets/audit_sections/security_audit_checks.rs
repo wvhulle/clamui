@@ -23,7 +23,7 @@ use crate::{
         audit_check_results::{AuditCategory, AuditCheck, AuditSection, AuditStatus},
         process_isolation_checks::process_isolation_checks,
     },
-    signatures_page::signature_provider_catalogue::{
+    signatures::signature_sources_page::signature_provider_catalogue::{
         signature_source_checks, unreadable_source_checks,
     },
 };

@@ -9,7 +9,7 @@ use std::{
 use futures::{StreamExt, future::ready, stream};
 
 use crate::{
-    detections_page::{
+    findings::detections_page::{
         background_detections_page::load_displayed_detections,
         detected_file_state::{
             DetectedFileState, FileAccess, FileOwner, OpeningCheck, inspect_detected_file,
@@ -38,7 +38,7 @@ use crate::{
         },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
-    scan_page::eicar_test_file::eicar_test_bytes,
+    scans::manual_scan_page::eicar_test_file::eicar_test_bytes,
 };
 
 fn host_scan_request(
@@ -321,7 +321,7 @@ async fn host_status_probes_read_the_real_system() {
     println!("database directory: {directory_status:#?}");
     println!(
         "update plan: {:?}",
-        crate::protection_page::signature_update_run::database_update_events::plan_database_update(
+        crate::signatures::database_updates_page::signature_update_run::database_update_events::plan_database_update(
             service_state
         )
     );

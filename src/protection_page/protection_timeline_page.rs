@@ -22,27 +22,19 @@ use crate::{
             locale_formatting::host_moment_formatters,
         },
         detection_journal::detection_journal_follower::JournalAccess,
+        protection_evidence::host_protection_evidence::{
+            ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, WATCHED_SERVICE_UNITS,
+            detection_notifications_are_enabled, gather_protection_evidence,
+            lazaret_schedule_is_enabled, scan_service_evidence,
+        },
         systemd_bus::host_systemd_units::{
             SystemdBusFailure, UnitStartOutcome, service_unit_snapshot, start_system_unit,
             watched_unit_changes,
         },
     },
-    protection_page::{
-        protection_evidence::{
-            ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, WATCHED_SERVICE_UNITS,
-            detection_notifications_are_enabled, gather_protection_evidence,
-            lazaret_schedule_is_enabled, scan_service_evidence,
-        },
-        protection_timeline_presentation::{
-            AlertReadiness, ProtectionActivity, ProtectionStep, ProtectionStepAction,
-            protection_timeline,
-        },
-        signature_update_run::{
-            database_update_events::{DatabaseUpdateEvent, database_update_events},
-            signature_update_session::{
-                DatabaseHostStatus, SignatureUpdateSession, UpdateStreamEnding, load_host_status,
-            },
-        },
+    protection_page::protection_timeline_presentation::{
+        AlertReadiness, ProtectionActivity, ProtectionStep, ProtectionStepAction,
+        protection_timeline,
     },
     shared_widgets::{
         component_streams::{RunningStream, run_stream, run_stream_then},
@@ -53,6 +45,12 @@ use crate::{
         step_timeline::{
             timeline_step_contents::TimelineStepRowOutput,
             timeline_step_row::{TimelineStepRow, TimelineStepRowInput},
+        },
+    },
+    signatures::database_updates_page::signature_update_run::{
+        database_update_events::{DatabaseUpdateEvent, database_update_events},
+        signature_update_session::{
+            DatabaseHostStatus, SignatureUpdateSession, UpdateStreamEnding, load_host_status,
         },
     },
 };

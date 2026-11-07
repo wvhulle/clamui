@@ -1,0 +1,13 @@
+pub mod device_auto_scan_page;
+pub mod eicar_test_file;
+pub mod exclusions_page;
+pub mod found_threat_row;
+pub mod scan_options_section;
+pub mod scan_page_component;
+pub mod scan_page_state;
+pub mod scan_profile_selection;
+pub mod scan_profiles_dialog;
+pub mod scan_progress_view;
+pub mod scan_results_section;
+pub mod scan_run_state;
+pub mod scan_target_row;

@@ -5,6 +5,7 @@ pub mod clamav_programs;
 pub mod clamav_scanner;
 pub mod desktop;
 pub mod detection_journal;
+pub mod protection_evidence;
 pub mod quarantine_vault;
 pub mod settings_helper;
 pub mod systemd_bus;
