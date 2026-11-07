@@ -271,4 +271,14 @@ mod trust_list_contents_tests {
             TrustListReading::FolderMissing
         );
     }
+
+    #[test]
+    fn pinned_and_unpinned_ignore_entries_are_both_listed_by_name() {
+        assert_eq!(
+            parse_ignored_signatures(
+                "Win.Test.Pinned:44d88612fea8a8f36de82e1278abb02f\nWin.Test.Unpinned\n"
+            ),
+            vec!["Win.Test.Pinned", "Win.Test.Unpinned"]
+        );
+    }
 }

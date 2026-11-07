@@ -11,6 +11,7 @@ pub const TRUSTED_FILES_NAME: &str = "lazaret-local.sfp";
 pub const IGNORED_SIGNATURES_NAME: &str = "lazaret-local.ign2";
 const TRUSTED_FILE_LABEL: &str = "Lazaret.TrustedFile";
 const SHA256_HEX_LENGTH: usize = 64;
+const PINNED_ENTRY_MD5_LENGTH: usize = 32;
 const SIGNATURE_NAME_LENGTHS: std::ops::RangeInclusive<usize> = 3..=200;
 const UNOFFICIAL_SUFFIX: &str = ".UNOFFICIAL";
 const ENGINE_HEURISTIC_PREFIXES: [&str; 2] = ["Heuristics.", "Heuristic."];
@@ -168,14 +169,30 @@ fn is_trusted_file_line(list_line: &str) -> bool {
     )
 }
 
+fn is_entry_md5(md5_text: &str) -> bool {
+    md5_text.len() == PINNED_ENTRY_MD5_LENGTH
+        && md5_text
+            .bytes()
+            .all(|md5_byte| md5_byte.is_ascii_hexdigit())
+}
+
+fn ignored_name_of_line(list_line: &str) -> Option<&str> {
+    let (name_field, pinned_md5) = match list_line.split_once(':') {
+        Some((name_field, pinned_md5)) => (name_field, Some(pinned_md5)),
+        None => (list_line, None),
+    };
+    let name_is_valid = validated_signature_name(name_field)
+        .is_ok_and(|signature_name| signature_name == name_field);
+    (name_is_valid && pinned_md5.is_none_or(is_entry_md5)).then_some(name_field)
+}
+
 fn line_fits_list(list_line: &str, trust_request: &TrustRequest) -> bool {
     match trust_request {
         TrustRequest::TrustFile { .. } | TrustRequest::ForgetTrustedFile { .. } => {
             is_trusted_file_line(list_line)
         }
         TrustRequest::IgnoreSignature { .. } | TrustRequest::StopIgnoringSignature { .. } => {
-            validated_signature_name(list_line)
-                .is_ok_and(|signature_name| signature_name == list_line)
+            ignored_name_of_line(list_line).is_some()
         }
     }
 }
@@ -189,7 +206,9 @@ fn lines_after_request(list_text: &str, trust_request: &TrustRequest) -> String 
                 !trusted_hash_of_line(list_line).eq_ignore_ascii_case(sha256_hex)
             }
             TrustRequest::IgnoreSignature { signature_name }
-            | TrustRequest::StopIgnoringSignature { signature_name } => list_line != signature_name,
+            | TrustRequest::StopIgnoringSignature { signature_name } => {
+                ignored_name_of_line(list_line) != Some(signature_name.as_str())
+            }
         });
     let added_line = match trust_request {
         TrustRequest::TrustFile {
@@ -429,6 +448,40 @@ mod detection_trust_files_tests {
         .unwrap();
         assert_eq!(
             fs::read_to_string(database_directory.path().join(IGNORED_SIGNATURES_NAME)).unwrap(),
+            "Win.Test.Kept\nWin.Test.Added\n"
+        );
+    }
+
+    #[test]
+    fn pinned_ignore_entries_are_kept_and_removed_by_their_name() {
+        let database_directory = tempfile::tempdir().unwrap();
+        let ignore_list = database_directory.path().join(IGNORED_SIGNATURES_NAME);
+        fs::write(
+            &ignore_list,
+            "Win.Test.Pinned:44d88612fea8a8f36de82e1278abb02f\nWin.Test.Kept\nWin.Test.BadPin:\
+             not-an-md5\n",
+        )
+        .unwrap();
+        apply_trust_request(
+            database_directory.path(),
+            &TrustRequest::IgnoreSignature {
+                signature_name: "Win.Test.Added".to_owned(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(&ignore_list).unwrap(),
+            "Win.Test.Pinned:44d88612fea8a8f36de82e1278abb02f\nWin.Test.Kept\nWin.Test.Added\n"
+        );
+        apply_trust_request(
+            database_directory.path(),
+            &TrustRequest::StopIgnoringSignature {
+                signature_name: "Win.Test.Pinned".to_owned(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(&ignore_list).unwrap(),
             "Win.Test.Kept\nWin.Test.Added\n"
         );
     }
