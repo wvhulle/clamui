@@ -27,7 +27,7 @@ use crate::{
             GatheringStart,
         },
         scan_slot_arbiter::{ScanSlot, ScanSlotEvent, ScanSlotReply, ScanSlotTransition},
-        settings_navigation::{SettingsSubpage, SubpagePlacement, settings_subpage_frame},
+        settings_navigation::SettingsSubpage,
         sidebar_area_status::{
             AreaSummaryContext, SidebarAreaSummary, StatusIndicator, all_area_summaries,
             attention_summary_text, worst_area_status,
@@ -68,7 +68,6 @@ use crate::{
     },
     scans::{
         manual_scan_page::{
-            exclusions_page::scan_exclusions_page::ScanExclusionsSection,
             scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
             scan_profiles_dialog::scan_profile_store::ScanProfileStore,
         },
@@ -77,7 +76,6 @@ use crate::{
             on_access_state::OnAccessPageOutput,
         },
         removable_drives_page::{
-            device_auto_scan_section::DeviceAutoScanSection,
             drive_mount_checks::DeviceAutoScanSettings,
             removable_drives_component::{
                 RemovableDrivesPage, RemovableDrivesPageInit, RemovableDrivesPageInput,
@@ -91,7 +89,6 @@ use crate::{
             scan_engine_state::ScanEnginePageOutput,
         },
         scheduled_scans_page::{
-            scan_schedule_component::ScanScheduleSection,
             scheduled_scans_component::{ScheduledScansPage, ScheduledScansPageInput},
             scheduled_scans_state::ScheduledScansPageOutput,
         },
@@ -102,13 +99,13 @@ use crate::{
             audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
         },
         component_streams::{RunningStream, run_stream},
-        engine_settings::{
-            engine_settings_sections::EngineSettingsSection,
-            engine_settings_subpage::EngineSettingsSubpage,
-        },
+        engine_settings::engine_settings_sections::EngineSettingsSection,
         scan_runs::scan_run_progress::PageScanActivity,
     },
-    sharing::analysis_page::trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
+    sharing::analysis_page::{
+        analysis_component::{AnalysisPage, AnalysisPageInput},
+        analysis_state::AnalysisPageOutput,
+    },
     signatures::database_updates_page::{
         database_updates_component::{DatabaseUpdatesPage, DatabaseUpdatesPageInput},
         database_updates_state::DatabaseUpdatesPageOutput,
@@ -123,92 +120,14 @@ pub struct PageNavigationInit {
     pub startup_scan_targets: Vec<PathBuf>,
 }
 
-enum SettingsSubpageContent {
-    EngineSettings(Controller<EngineSettingsSubpage>),
-    ScanExclusions(Controller<ScanExclusionsSection>),
-    DeviceAutoScan(Controller<DeviceAutoScanSection>),
-    ScanSchedule(Controller<ScanScheduleSection>),
-    TrustedDetections(Controller<TrustedDetectionsPage>),
-}
-
-impl SettingsSubpageContent {
-    fn launched_for(settings_subpage: SettingsSubpage) -> Self {
-        match settings_subpage {
-            SettingsSubpage::ScannerEngine => Self::EngineSettings(
-                EngineSettingsSubpage::builder()
-                    .launch(EngineSettingsSection::ScannerEngine)
-                    .detach(),
-            ),
-            SettingsSubpage::DetectionChoices => Self::EngineSettings(
-                EngineSettingsSubpage::builder()
-                    .launch(EngineSettingsSection::DetectionChoices)
-                    .detach(),
-            ),
-            SettingsSubpage::OnAccessScanning => Self::EngineSettings(
-                EngineSettingsSubpage::builder()
-                    .launch(EngineSettingsSection::OnAccessScanning)
-                    .detach(),
-            ),
-            SettingsSubpage::SignatureUpdates => Self::EngineSettings(
-                EngineSettingsSubpage::builder()
-                    .launch(EngineSettingsSection::SignatureUpdates)
-                    .detach(),
-            ),
-            SettingsSubpage::ScanExclusions => {
-                Self::ScanExclusions(ScanExclusionsSection::builder().launch(()).detach())
-            }
-            SettingsSubpage::DeviceAutoScan => {
-                Self::DeviceAutoScan(DeviceAutoScanSection::builder().launch(()).detach())
-            }
-            SettingsSubpage::ScanSchedule => {
-                Self::ScanSchedule(ScanScheduleSection::builder().launch(()).detach())
-            }
-            SettingsSubpage::TrustedDetections => {
-                Self::TrustedDetections(TrustedDetectionsPage::builder().launch(()).detach())
-            }
-        }
-    }
-
-    fn content_widget(&self) -> gtk::Widget {
-        match self {
-            Self::EngineSettings(engine_subpage) => engine_subpage.widget().clone().upcast(),
-            Self::ScanExclusions(exclusions_page) => exclusions_page.widget().clone().upcast(),
-            Self::DeviceAutoScan(device_page) => device_page.widget().clone().upcast(),
-            Self::ScanSchedule(schedule_page) => schedule_page.widget().clone().upcast(),
-            Self::TrustedDetections(trusted_page) => trusted_page.widget().clone().upcast(),
-        }
-    }
-}
-
 enum AreaSummaries {
     SummariesPending,
     SummariesComputed(Vec<SidebarAreaSummary>),
 }
 
-struct OpenedSettingsSubpage {
-    settings_subpage: SettingsSubpage,
-    subpage_frame: adw::NavigationPage,
-    _subpage_content: SettingsSubpageContent,
-}
-
-impl OpenedSettingsSubpage {
-    fn opened(settings_subpage: SettingsSubpage) -> Self {
-        let subpage_content = SettingsSubpageContent::launched_for(settings_subpage);
-        Self {
-            settings_subpage,
-            subpage_frame: settings_subpage_frame(
-                settings_subpage,
-                &subpage_content.content_widget(),
-            ),
-            _subpage_content: subpage_content,
-        }
-    }
-}
-
 pub struct PageNavigation {
     visible_page: ApplicationPage,
     shows_content_when_narrow: bool,
-    opened_settings_subpages: Vec<OpenedSettingsSubpage>,
     scan_page: Controller<ScanPage>,
     removable_drives_page: Controller<RemovableDrivesPage>,
     scan_slot: ScanSlot,
@@ -224,6 +143,7 @@ pub struct PageNavigation {
     on_access_page: Controller<OnAccessPage>,
     scheduled_scans_page: Controller<ScheduledScansPage>,
     detections_page: Controller<BackgroundDetectionsPage>,
+    analysis_page: Controller<AnalysisPage>,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
     journal_access: JournalAccess,
@@ -238,7 +158,6 @@ pub enum PageNavigationInput {
     PageShown(ApplicationPage),
     NarrowContentToggled(bool),
     SettingsSubpageOpened(SettingsSubpage),
-    SettingsSubpagePopped(String),
     QuickScanRequested,
     SignatureUpdateRequested,
     ScanTargetsReceived(Vec<PathBuf>),
@@ -271,38 +190,6 @@ pub enum PageNavigationCommand {
 pub enum PageNavigationOutput {
     WindowPresentRequested,
     UnresolvedDetectionsChanged(usize),
-}
-
-trait SettingsSubpageStack {
-    fn show_settings_subpages(&self, root_tag: &str, subpage_frames: &[adw::NavigationPage]);
-}
-
-impl SettingsSubpageStack for adw::NavigationView {
-    fn show_settings_subpages(&self, root_tag: &str, subpage_frames: &[adw::NavigationPage]) {
-        let shown_frames = (0..self.navigation_stack().n_items())
-            .filter_map(|stack_position| self.navigation_stack().item(stack_position))
-            .filter_map(|stack_item| stack_item.downcast::<adw::NavigationPage>().ok())
-            .skip(1)
-            .collect::<Vec<_>>();
-        let kept_frames = shown_frames
-            .iter()
-            .zip(subpage_frames)
-            .take_while(|(shown_frame, wanted_frame)| shown_frame == wanted_frame)
-            .count();
-        if kept_frames < shown_frames.len() {
-            let _popped = match kept_frames
-                .checked_sub(1)
-                .and_then(|kept_position| shown_frames.get(kept_position))
-            {
-                Some(newest_kept_frame) => self.pop_to_page(newest_kept_frame),
-                None => self.pop_to_tag(root_tag),
-            };
-        }
-        subpage_frames
-            .iter()
-            .skip(kept_frames)
-            .for_each(|subpage_frame| self.push(subpage_frame));
-    }
 }
 
 fn page_root(
@@ -413,6 +300,14 @@ const fn forwarded_database_updates_output(
         }
         DatabaseUpdatesPageOutput::SignaturesUpdated => PageNavigationInput::SignaturesUpdated,
         DatabaseUpdatesPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+    }
+}
+
+const fn forwarded_analysis_output(analysis_output: AnalysisPageOutput) -> PageNavigationInput {
+    match analysis_output {
+        AnalysisPageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
     }
 }
 
@@ -579,6 +474,8 @@ impl PageNavigation {
             .emit(BackgroundDetectionsPageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
+        self.analysis_page
+            .emit(AnalysisPageInput::EvidenceRefreshChanged(next_refresh));
         match gathering_start {
             GatheringStart::StartGathering => {
                 let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
@@ -593,16 +490,6 @@ impl PageNavigation {
             }
             GatheringStart::KeepWaiting => {}
         }
-    }
-
-    fn subpage_frames_of(&self, application_page: ApplicationPage) -> Vec<adw::NavigationPage> {
-        self.opened_settings_subpages
-            .iter()
-            .filter(|opened_subpage| {
-                opened_subpage.settings_subpage.owning_page() == application_page
-            })
-            .map(|opened_subpage| opened_subpage.subpage_frame.clone())
-            .collect()
     }
 
     fn show_page(&mut self, application_page: ApplicationPage) {
@@ -668,25 +555,8 @@ impl PageNavigation {
     }
 
     fn open_settings_subpage(&mut self, settings_subpage: SettingsSubpage) {
-        let owning_page = match settings_subpage.subpage_placement() {
-            SubpagePlacement::StackedOnPage(owning_page) => owning_page,
-            SubpagePlacement::EmbeddedInPage(embedding_page) => {
-                self.show_page(embedding_page);
-                self.reveal_embedded_settings(settings_subpage);
-                return;
-            }
-        };
-        self.show_page(owning_page);
-        let newest_subpage_of_page = self
-            .opened_settings_subpages
-            .iter()
-            .rev()
-            .find(|opened_subpage| opened_subpage.settings_subpage.owning_page() == owning_page)
-            .map(|opened_subpage| opened_subpage.settings_subpage);
-        if newest_subpage_of_page != Some(settings_subpage) {
-            self.opened_settings_subpages
-                .push(OpenedSettingsSubpage::opened(settings_subpage));
-        }
+        self.show_page(settings_subpage.owning_page());
+        self.reveal_embedded_settings(settings_subpage);
     }
 }
 
@@ -783,6 +653,7 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::RemovableDrives),
                                     append: &navigation_row(ApplicationPage::Logs),
                                     append: &navigation_row(ApplicationPage::Quarantine),
+                                    append: &navigation_row(ApplicationPage::Analysis),
                                     append: &navigation_row(ApplicationPage::Signatures),
                                     append: &navigation_row(ApplicationPage::DatabaseUpdates),
                                     append: &navigation_row(ApplicationPage::ScanEngine),
@@ -804,26 +675,12 @@ impl Component for PageNavigation {
 
                             add_titled[Some(ApplicationPage::Protection.page_name()), &ApplicationPage::Protection.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Protection, model.protection_page.widget()),
-                                #[watch]
-                                show_settings_subpages: (ApplicationPage::Protection.page_name(), &model.subpage_frames_of(ApplicationPage::Protection)),
-                                connect_popped[sender] => move |_navigation_view, popped_page| {
-                                    if let Some(popped_tag) = popped_page.tag() {
-                                        sender.input(PageNavigationInput::SettingsSubpagePopped(popped_tag.to_string()));
-                                    }
-                                },
                             },
                             add_titled[Some(ApplicationPage::Detections.page_name()), &ApplicationPage::Detections.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Detections, model.detections_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Scan.page_name()), &ApplicationPage::Scan.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Scan, model.scan_page.widget()),
-                                #[watch]
-                                show_settings_subpages: (ApplicationPage::Scan.page_name(), &model.subpage_frames_of(ApplicationPage::Scan)),
-                                connect_popped[sender] => move |_navigation_view, popped_page| {
-                                    if let Some(popped_tag) = popped_page.tag() {
-                                        sender.input(PageNavigationInput::SettingsSubpagePopped(popped_tag.to_string()));
-                                    }
-                                },
                             },
                             add_titled[Some(ApplicationPage::RemovableDrives.page_name()), &ApplicationPage::RemovableDrives.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::RemovableDrives, model.removable_drives_page.widget()),
@@ -834,15 +691,11 @@ impl Component for PageNavigation {
                             add_titled[Some(ApplicationPage::Quarantine.page_name()), &ApplicationPage::Quarantine.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Quarantine, model.quarantine_page.widget()),
                             },
+                            add_titled[Some(ApplicationPage::Analysis.page_name()), &ApplicationPage::Analysis.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::Analysis, model.analysis_page.widget()),
+                            },
                             add_titled[Some(ApplicationPage::Signatures.page_name()), &ApplicationPage::Signatures.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Signatures, model.signatures_page.widget()),
-                                #[watch]
-                                show_settings_subpages: (ApplicationPage::Signatures.page_name(), &model.subpage_frames_of(ApplicationPage::Signatures)),
-                                connect_popped[sender] => move |_navigation_view, popped_page| {
-                                    if let Some(popped_tag) = popped_page.tag() {
-                                        sender.input(PageNavigationInput::SettingsSubpagePopped(popped_tag.to_string()));
-                                    }
-                                },
                             },
                             add_titled[Some(ApplicationPage::DatabaseUpdates.page_name()), &ApplicationPage::DatabaseUpdates.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::DatabaseUpdates, model.database_updates_page.widget()),
@@ -948,6 +801,9 @@ impl Component for PageNavigation {
                 quarantine_vault,
             })
             .forward(sender.input_sender(), forwarded_detections_output);
+        let analysis_page = AnalysisPage::builder()
+            .launch(())
+            .forward(sender.input_sender(), forwarded_analysis_output);
         let signatures_page = AuditSectionsPage::builder()
             .launch(AuditSectionsPageInit {
                 page_title: gettext("Signatures"),
@@ -973,7 +829,6 @@ impl Component for PageNavigation {
         let mut model = Self {
             visible_page: navigation_init.startup_page,
             shows_content_when_narrow: false,
-            opened_settings_subpages: Vec::new(),
             scan_page,
             removable_drives_page,
             scan_slot: ScanSlot::SlotFree,
@@ -992,6 +847,7 @@ impl Component for PageNavigation {
             on_access_page,
             scheduled_scans_page,
             detections_page,
+            analysis_page,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
             journal_access: JournalAccess::FollowingJournal,
@@ -1035,17 +891,6 @@ impl Component for PageNavigation {
             }
             PageNavigationInput::SettingsSubpageOpened(settings_subpage) => {
                 self.open_settings_subpage(settings_subpage);
-            }
-            PageNavigationInput::SettingsSubpagePopped(popped_tag) => {
-                if let Some(popped_position) =
-                    self.opened_settings_subpages
-                        .iter()
-                        .rposition(|opened_subpage| {
-                            opened_subpage.settings_subpage.action_target() == popped_tag
-                        })
-                {
-                    self.opened_settings_subpages.remove(popped_position);
-                }
             }
             PageNavigationInput::QuickScanRequested => {
                 self.show_page(ApplicationPage::Scan);
@@ -1188,6 +1033,9 @@ impl Component for PageNavigation {
                     .emit(BackgroundDetectionsPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
+                self.analysis_page.emit(AnalysisPageInput::EvidenceGathered(
+                    self.gathered_evidence.clone(),
+                ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);
             }
             PageNavigationCommand::WatchedUnitChanged => {

@@ -173,6 +173,9 @@ impl ProtectionTimelinePage {
             ProtectionStepAction::OpenDetections => {
                 show_application_page(root, ApplicationPage::Detections);
             }
+            ProtectionStepAction::OpenAnalysis => {
+                show_application_page(root, ApplicationPage::Analysis);
+            }
             ProtectionStepAction::ReviewSettingsSubpage(settings_subpage) => {
                 let _action_missing = root.activate_action(
                     &OpenSettingsAction::action_name(),

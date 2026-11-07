@@ -6,12 +6,6 @@ use crate::application_window::application_pages::ApplicationPage;
 pub const OPEN_SETTINGS_ACTION_NAME: &str = "open-settings";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SubpagePlacement {
-    StackedOnPage(ApplicationPage),
-    EmbeddedInPage(ApplicationPage),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingsSubpage {
     ScanExclusions,
     ScanSchedule,
@@ -54,30 +48,15 @@ impl SettingsSubpage {
             .find(|settings_subpage| settings_subpage.action_target() == action_target)
     }
 
-    pub const fn subpage_placement(self) -> SubpagePlacement {
-        match self {
-            Self::ScanExclusions => SubpagePlacement::EmbeddedInPage(ApplicationPage::Scan),
-            Self::DeviceAutoScan => {
-                SubpagePlacement::EmbeddedInPage(ApplicationPage::RemovableDrives)
-            }
-            Self::ScanSchedule => SubpagePlacement::EmbeddedInPage(ApplicationPage::ScheduledScans),
-            Self::ScannerEngine | Self::DetectionChoices => {
-                SubpagePlacement::EmbeddedInPage(ApplicationPage::ScanEngine)
-            }
-            Self::OnAccessScanning => {
-                SubpagePlacement::EmbeddedInPage(ApplicationPage::OnAccessScanning)
-            }
-            Self::TrustedDetections => SubpagePlacement::StackedOnPage(ApplicationPage::Protection),
-            Self::SignatureUpdates => {
-                SubpagePlacement::EmbeddedInPage(ApplicationPage::DatabaseUpdates)
-            }
-        }
-    }
-
     pub const fn owning_page(self) -> ApplicationPage {
-        match self.subpage_placement() {
-            SubpagePlacement::StackedOnPage(owning_page)
-            | SubpagePlacement::EmbeddedInPage(owning_page) => owning_page,
+        match self {
+            Self::ScanExclusions => ApplicationPage::Scan,
+            Self::DeviceAutoScan => ApplicationPage::RemovableDrives,
+            Self::ScanSchedule => ApplicationPage::ScheduledScans,
+            Self::ScannerEngine | Self::DetectionChoices => ApplicationPage::ScanEngine,
+            Self::OnAccessScanning => ApplicationPage::OnAccessScanning,
+            Self::TrustedDetections => ApplicationPage::Analysis,
+            Self::SignatureUpdates => ApplicationPage::DatabaseUpdates,
         }
     }
 
@@ -155,20 +134,6 @@ pub fn settings_link_group(
     link_group
 }
 
-pub fn settings_subpage_frame(
-    settings_subpage: SettingsSubpage,
-    subpage_content: &impl IsA<gtk::Widget>,
-) -> adw::NavigationPage {
-    let subpage_view = adw::ToolbarView::new();
-    subpage_view.add_top_bar(&adw::HeaderBar::new());
-    subpage_view.set_content(Some(subpage_content));
-    adw::NavigationPage::builder()
-        .title(settings_subpage.subpage_title())
-        .tag(settings_subpage.action_target())
-        .child(&subpage_view)
-        .build()
-}
-
 #[cfg(test)]
 mod settings_navigation_tests {
     use super::*;
@@ -187,34 +152,30 @@ mod settings_navigation_tests {
     }
 
     #[test]
-    fn scan_settings_open_on_the_scan_page() {
+    fn every_settings_link_opens_the_page_that_owns_it() {
         assert_eq!(
             SettingsSubpage::ScanSchedule.owning_page(),
             ApplicationPage::ScheduledScans
         );
         assert_eq!(
-            SettingsSubpage::ScanExclusions.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::Scan)
+            SettingsSubpage::ScanExclusions.owning_page(),
+            ApplicationPage::Scan
         );
         assert_eq!(
-            SettingsSubpage::DeviceAutoScan.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::RemovableDrives)
+            SettingsSubpage::DeviceAutoScan.owning_page(),
+            ApplicationPage::RemovableDrives
         );
         assert_eq!(
-            SettingsSubpage::SignatureUpdates.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::DatabaseUpdates)
-        );
-        assert_eq!(
-            SettingsSubpage::ScannerEngine.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::ScanEngine)
+            SettingsSubpage::ScannerEngine.owning_page(),
+            ApplicationPage::ScanEngine
         );
         assert_eq!(
             SettingsSubpage::DetectionChoices.owning_page(),
             ApplicationPage::ScanEngine
         );
         assert_eq!(
-            SettingsSubpage::OnAccessScanning.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::OnAccessScanning)
+            SettingsSubpage::OnAccessScanning.owning_page(),
+            ApplicationPage::OnAccessScanning
         );
         assert_eq!(
             SettingsSubpage::SignatureUpdates.owning_page(),
@@ -223,17 +184,11 @@ mod settings_navigation_tests {
     }
 
     #[test]
-    fn the_device_auto_scan_link_reveals_its_group_on_removable_drives() {
-        let device_settings = SettingsSubpage::from_action_target("device-auto-scan")
+    fn the_trusted_detections_link_opens_the_analysis_page() {
+        let trusted_link = SettingsSubpage::from_action_target("trusted-detections")
             .expect("the deep link target is known");
-        assert_eq!(device_settings, SettingsSubpage::DeviceAutoScan);
-        assert_eq!(
-            device_settings.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::RemovableDrives)
-        );
-        assert_eq!(
-            device_settings.owning_page().page_name(),
-            "removable-drives"
-        );
+        assert_eq!(trusted_link, SettingsSubpage::TrustedDetections);
+        assert_eq!(trusted_link.owning_page(), ApplicationPage::Analysis);
+        assert_eq!(trusted_link.owning_page().page_name(), "analysis");
     }
 }

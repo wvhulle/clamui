@@ -54,7 +54,7 @@ use crate::{
         scan_schedule_settings::StoredScheduleSettings,
         scan_schedule_units::changed_units_of_current_schedule,
     },
-    sharing::analysis_page::trusted_detections_page::trust_list_contents::{
+    sharing::analysis_page::trusted_detections_section::trust_list_contents::{
         TrustListReading, read_configured_trust_list,
     },
     signatures::database_updates_page::signature_update_run::updater_exit_status::{

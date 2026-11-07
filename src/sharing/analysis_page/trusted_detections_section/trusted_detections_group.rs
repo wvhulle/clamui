@@ -1,7 +1,6 @@
 use gettextrs::{gettext, ngettext};
 use relm4::{
-    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
-    prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, adw, adw::prelude::*, gtk, prelude::FactoryVecDeque,
 };
 
 use crate::{
@@ -20,7 +19,7 @@ use crate::{
         host_read_failure_text::unit_journal_failure_text,
         trust_confirmation_dialog::present_trust_confirmation,
     },
-    sharing::analysis_page::trusted_detections_page::{
+    sharing::analysis_page::trusted_detections_section::{
         trust_list_contents::{
             AllowlistEntries, ForeignAllowlistFile, LazaretListReading, TrustListReadFailure,
             TrustListReading, TrustedFileEntry, read_configured_trust_list,
@@ -106,28 +105,34 @@ fn added_text(audit_history: &AuditHistoryReading, adding_action: &AuditedAction
     }
 }
 
-pub struct TrustedDetectionsPage {
+pub struct TrustedDetectionsSection {
     trusted_detections_state: TrustedDetectionsState,
     trusted_file_rows: FactoryVecDeque<TrustListRow>,
     ignored_signature_rows: FactoryVecDeque<TrustListRow>,
     foreign_allowlist_rows: FactoryVecDeque<TrustListRow>,
-    toaster: Toaster,
 }
 
 #[derive(Debug)]
-pub enum TrustedDetectionsPageInput {
+pub enum TrustedDetectionsSectionInput {
+    ReloadRequested,
     RemovalRequested(TrustChoice),
     RemovalConfirmed(TrustChoice),
 }
 
 #[derive(Debug)]
-pub enum TrustedDetectionsPageCommand {
+pub enum TrustedDetectionsSectionOutput {
+    ToastRequested(String),
+    TrustListChanged,
+}
+
+#[derive(Debug)]
+pub enum TrustedDetectionsSectionCommand {
     SnapshotLoaded(TrustedDetectionsSnapshot),
     RemovalFinished(TrustOutcome),
 }
 
 fn trust_list_rows(
-    sender: &ComponentSender<TrustedDetectionsPage>,
+    sender: &ComponentSender<TrustedDetectionsSection>,
 ) -> FactoryVecDeque<TrustListRow> {
     FactoryVecDeque::builder()
         .launch(
@@ -138,7 +143,7 @@ fn trust_list_rows(
         )
         .forward(sender.input_sender(), |row_output| match row_output {
             TrustListRowOutput::RemovalRequested(removal_choice) => {
-                TrustedDetectionsPageInput::RemovalRequested(removal_choice)
+                TrustedDetectionsSectionInput::RemovalRequested(removal_choice)
             }
         })
 }
@@ -303,7 +308,7 @@ fn replace_rows(shown_rows: &mut FactoryVecDeque<TrustListRow>, listed_rows: Vec
     });
 }
 
-impl TrustedDetectionsPage {
+impl TrustedDetectionsSection {
     fn show_snapshot(&mut self, snapshot: TrustedDetectionsSnapshot) {
         let TrustListGroupRows {
             trusted_file_rows,
@@ -318,29 +323,33 @@ impl TrustedDetectionsPage {
 
     fn reload_snapshot(sender: &ComponentSender<Self>) {
         sender.oneshot_command(async {
-            TrustedDetectionsPageCommand::SnapshotLoaded(load_trusted_detections().await)
+            TrustedDetectionsSectionCommand::SnapshotLoaded(load_trusted_detections().await)
         });
     }
 }
 
 #[relm4::component(pub)]
-impl Component for TrustedDetectionsPage {
+impl Component for TrustedDetectionsSection {
     type Init = ();
-    type Input = TrustedDetectionsPageInput;
-    type Output = ();
-    type CommandOutput = TrustedDetectionsPageCommand;
+    type Input = TrustedDetectionsSectionInput;
+    type Output = TrustedDetectionsSectionOutput;
+    type CommandOutput = TrustedDetectionsSectionCommand;
 
     view! {
-        adw::ToastOverlay {
-            #[wrap(Some)]
-            set_child = &adw::PreferencesPage {
-                set_description: &gettext(
-                    "ClamAV never reports what is listed here, in any scan on this computer. \
-                     Every change needs your administrator password and is recorded in the \
-                     system journal, where software running as you can't remove the record.",
-                ),
+        adw::PreferencesGroup {
+            set_title: &gettext("Trusted Detections"),
+            set_description: Some(&gettext(
+                "ClamAV never reports what is listed here, in any scan on this computer. Every \
+                 change needs your administrator password and is recorded in the system journal, \
+                 where software running as you can't remove the record.",
+            )),
+            connect_map => TrustedDetectionsSectionInput::ReloadRequested,
 
-                add = &adw::PreferencesGroup {
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 24,
+
+                adw::PreferencesGroup {
                     set_title: &gettext("Trusted Files"),
                     set_description: Some(&gettext(
                         "Files trusted by their SHA-256 hash. Any change to such a file makes \
@@ -350,7 +359,7 @@ impl Component for TrustedDetectionsPage {
                     trusted_file_list -> gtk::ListBox {},
                 },
 
-                add = &adw::PreferencesGroup {
+                adw::PreferencesGroup {
                     set_title: &gettext("Ignored Detections"),
                     set_description: Some(&gettext(
                         "Detection names that ClamAV ignores in every file.",
@@ -359,7 +368,7 @@ impl Component for TrustedDetectionsPage {
                     ignored_signature_list -> gtk::ListBox {},
                 },
 
-                add = &adw::PreferencesGroup {
+                adw::PreferencesGroup {
                     set_title: &gettext("Other Allowlists"),
                     set_description: Some(&gettext(
                         "Allowlist files in the signature folder that Lazaret didn't write. \
@@ -384,34 +393,33 @@ impl Component for TrustedDetectionsPage {
             trusted_file_rows: trust_list_rows(&sender),
             ignored_signature_rows: trust_list_rows(&sender),
             foreign_allowlist_rows: trust_list_rows(&sender),
-            toaster: Toaster::new(&root),
         };
         let trusted_file_list = model.trusted_file_rows.widget();
         let ignored_signature_list = model.ignored_signature_rows.widget();
         let foreign_allowlist_list = model.foreign_allowlist_rows.widget();
         let widgets = view_output!();
-        Self::reload_snapshot(&sender);
         ComponentParts { model, widgets }
     }
 
     fn update(
         &mut self,
-        page_input: TrustedDetectionsPageInput,
+        page_input: TrustedDetectionsSectionInput,
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
         match page_input {
-            TrustedDetectionsPageInput::RemovalRequested(removal_choice) => {
+            TrustedDetectionsSectionInput::ReloadRequested => Self::reload_snapshot(&sender),
+            TrustedDetectionsSectionInput::RemovalRequested(removal_choice) => {
                 present_trust_confirmation(
                     root,
                     removal_choice,
                     sender.input_sender().clone(),
-                    TrustedDetectionsPageInput::RemovalConfirmed,
+                    TrustedDetectionsSectionInput::RemovalConfirmed,
                 );
             }
-            TrustedDetectionsPageInput::RemovalConfirmed(confirmed_choice) => {
+            TrustedDetectionsSectionInput::RemovalConfirmed(confirmed_choice) => {
                 sender.oneshot_command(async move {
-                    TrustedDetectionsPageCommand::RemovalFinished(
+                    TrustedDetectionsSectionCommand::RemovalFinished(
                         request_trust_change(confirmed_choice).await,
                     )
                 });
@@ -421,19 +429,19 @@ impl Component for TrustedDetectionsPage {
 
     fn update_cmd(
         &mut self,
-        page_command: TrustedDetectionsPageCommand,
+        page_command: TrustedDetectionsSectionCommand,
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match page_command {
-            TrustedDetectionsPageCommand::SnapshotLoaded(snapshot) => self.show_snapshot(snapshot),
-            TrustedDetectionsPageCommand::RemovalFinished(trust_outcome) => {
-                self.toaster.add_toast(
-                    adw::Toast::builder()
-                        .title(trust_outcome_text(&trust_outcome))
-                        .use_markup(false)
-                        .build(),
-                );
+            TrustedDetectionsSectionCommand::SnapshotLoaded(snapshot) => {
+                self.show_snapshot(snapshot)
+            }
+            TrustedDetectionsSectionCommand::RemovalFinished(trust_outcome) => {
+                let _page_closed = sender.output(TrustedDetectionsSectionOutput::ToastRequested(
+                    trust_outcome_text(&trust_outcome),
+                ));
+                let _page_closed = sender.output(TrustedDetectionsSectionOutput::TrustListChanged);
                 Self::reload_snapshot(&sender);
             }
         }
@@ -441,7 +449,7 @@ impl Component for TrustedDetectionsPage {
 }
 
 #[cfg(test)]
-mod trusted_detections_component_tests {
+mod trusted_detections_group_tests {
     use super::*;
 
     #[test]

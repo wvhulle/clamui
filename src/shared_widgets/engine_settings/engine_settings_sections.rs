@@ -67,24 +67,6 @@ pub enum EngineSettingsSection {
 }
 
 impl EngineSettingsSection {
-    pub fn page_title(self) -> String {
-        match self {
-            Self::ScannerEngine => gettext("Scanner Engine"),
-            Self::DetectionChoices => gettext("Detection"),
-            Self::OnAccessScanning => gettext("On-Access Scanning"),
-            Self::SignatureUpdates => gettext("Signature Updates"),
-        }
-    }
-
-    pub const fn page_icon(self) -> &'static str {
-        match self {
-            Self::ScannerEngine => "system-search-symbolic",
-            Self::DetectionChoices => "security-medium-symbolic",
-            Self::OnAccessScanning => "security-high-symbolic",
-            Self::SignatureUpdates => "drive-harddisk-symbolic",
-        }
-    }
-
     fn group_title(self) -> String {
         match self {
             Self::ScannerEngine | Self::DetectionChoices => gettext("clamd settings"),

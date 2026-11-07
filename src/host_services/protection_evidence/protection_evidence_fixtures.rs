@@ -19,7 +19,7 @@ use crate::{
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
     },
-    sharing::analysis_page::trusted_detections_page::trust_list_contents::{
+    sharing::analysis_page::trusted_detections_section::trust_list_contents::{
         LazaretListReading, TrustListContents, TrustListReading,
     },
 };

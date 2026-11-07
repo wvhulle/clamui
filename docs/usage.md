@@ -38,7 +38,7 @@ When you are sure a detection is wrong, trust the file instead of excluding its 
 
 To get the detection fixed for everyone, choose **Report False Positive…** or press **Report…** on a quarantined file. This uploads the file, with your name and email address, to the ClamAV team.
 
-Both ask for your administrator password. Review and remove trusted files under **Protection → Trusted Detections**, and see who changed what on the **System Changes** tab of the Logs page. Trusting files is not available in the Flatpak.
+Both ask for your administrator password. Review and remove trusted files on the **Analysis & False Positives** page, and see who changed what on the **System Changes** tab of the Logs page. Trusting files is not available in the Flatpak.
 
 ## Reputation lookups
 

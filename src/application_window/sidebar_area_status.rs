@@ -34,10 +34,7 @@ use crate::{
         },
         systemd_bus::host_systemd_units::UnitTimestamp,
     },
-    protection_page::{
-        protection_timeline_page::shown_coverage_text,
-        protection_timeline_presentation::trust_list_condition,
-    },
+    protection_page::protection_timeline_page::shown_coverage_text,
     scans::{
         on_access_page::on_access_presentation::on_access_condition,
         removable_drives_page::{
@@ -55,8 +52,9 @@ use crate::{
             step_evidence_builders::CheckedCondition,
         },
     },
-    sharing::analysis_page::trusted_detections_page::trust_list_contents::{
-        LazaretListReading, TrustListReading,
+    sharing::analysis_page::{
+        analysis_presentation::trust_list_condition,
+        trusted_detections_section::trust_list_contents::{LazaretListReading, TrustListReading},
     },
     signatures::database_updates_page::database_updates_presentation::{
         database_update_condition, third_party_source_condition, updater_failed,
