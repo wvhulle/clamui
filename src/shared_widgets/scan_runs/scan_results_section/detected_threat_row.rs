@@ -11,7 +11,7 @@ use relm4::{
 
 use crate::{
     host_services::{
-        clamav_programs::false_positive_submission::SubmittedContent,
+        clamav_programs::clamav_report_submission::{ClamavReportKind, SubmittedContent},
         clamav_scanner::scanner_output_parser::{
             DetectedThreat, ThreatIdentity, ThreatSeverity, displayed_threat_name,
             sanitize_scanner_line,
@@ -22,8 +22,8 @@ use crate::{
         },
     },
     shared_widgets::{
-        false_positive_report_dialog::ReportedDetection,
         quarantine_failure_text::describe_quarantine_failure,
+        submission_confirm_dialog::ClamavReportProposal,
     },
 };
 
@@ -47,13 +47,15 @@ pub fn ignore_signature_choice(threat_identity: &ThreatIdentity) -> Option<Trust
         })
 }
 
-pub fn false_positive_detection(detected_threat: &DetectedThreat) -> Option<ReportedDetection> {
+pub fn false_positive_detection(detected_threat: &DetectedThreat) -> Option<ClamavReportProposal> {
     detected_threat
         .threat_identity
         .matched_signature_name()
-        .map(|signature_name| ReportedDetection {
-            detection_name: signature_name.to_owned(),
-            submitted_content: SubmittedContent::DetectedFile {
+        .map(|signature_name| ClamavReportProposal {
+            report_kind: ClamavReportKind::FalsePositive {
+                detection_name: signature_name.to_owned(),
+            },
+            submitted_content: SubmittedContent::FileOnDisk {
                 file_path: detected_threat.file_path.clone(),
             },
             shown_path: sanitize_scanner_line(&detected_threat.file_path.to_string_lossy()),
@@ -142,7 +144,7 @@ pub enum DetectedThreatRowOutput {
     ExclusionRequested(DynamicIndex),
     TrustFileRequested(DynamicIndex),
     IgnoreSignatureRequested(TrustChoice),
-    FalsePositiveReportRequested(ReportedDetection),
+    FalsePositiveReportRequested(ClamavReportProposal),
 }
 
 fn severity_badge_text(threat_severity: ThreatSeverity) -> String {
@@ -338,8 +340,10 @@ mod detected_threat_row_tests {
         );
         assert_eq!(
             false_positive_detection(&detected_threat)
-                .map(|reported_detection| reported_detection.detection_name),
-            Some("Sanesecurity.Foo.UNOFFICIAL".to_owned())
+                .map(|report_proposal| report_proposal.report_kind),
+            Some(ClamavReportKind::FalsePositive {
+                detection_name: "Sanesecurity.Foo.UNOFFICIAL".to_owned(),
+            })
         );
     }
 

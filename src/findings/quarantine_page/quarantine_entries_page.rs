@@ -17,12 +17,9 @@ use crate::{
         },
     },
     host_services::{
+        activity_history::activity_history_database::{ActivityHistory, ActivityHistoryFailure},
         clamav_programs::{
-            false_positive_submission::{
-                FalsePositiveReport, SubmissionOutcome, SubmittedContent, submission_outcome_text,
-                submit_false_positive,
-            },
-            trusted_program_lookup::ProgramRefusal,
+            clamav_report_submission::ClamavReportRequest, trusted_program_lookup::ProgramRefusal,
         },
         clamav_scanner::{
             content_verdict::{
@@ -37,6 +34,10 @@ use crate::{
             },
             quarantine_file_moves::QuarantineMoveFailure,
         },
+        sample_submissions::{
+            clamav_report_flow::{ClamavReportAttempt, send_clamav_report},
+            clamav_report_review::{current_database_version, settle_clamav_reviews},
+        },
         settings_helper::trust_requests::{
             TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
         },
@@ -49,11 +50,12 @@ use crate::{
             deliver_local_outcome,
         },
         component_streams::{run_stream, run_stream_to_completion},
-        false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
         page_widget_templates::ClampedPage,
         quarantine_failure_text::describe_quarantine_failure,
         scanner_exit_text::abnormal_scanner_exit_text,
+        submission_confirm_dialog::{ClamavReportProposal, present_clamav_report_confirmation},
+        submission_outcome_text::{clamav_report_attempt_text, history_failure_text},
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -134,8 +136,14 @@ fn add_deletion_choices(confirmation_dialog: &adw::AlertDialog) {
     );
 }
 
+pub struct QuarantineEntriesPageInit {
+    pub quarantine_vault: QuarantineVault,
+    pub activity_history: ActivityHistory,
+}
+
 pub struct QuarantineEntriesPage {
     quarantine_vault: QuarantineVault,
+    activity_history: ActivityHistory,
     page_state: QuarantinePageState,
     search_text: String,
     entry_rows: FactoryVecDeque<QuarantineEntryRow>,
@@ -163,13 +171,14 @@ pub enum QuarantineEntriesPageInput {
     ReportLinkRequested(String),
     TrustRequested(TrustChoice),
     TrustConfirmed(TrustChoice),
-    FalsePositiveReportRequested(ReportedDetection),
-    FalsePositiveReportConfirmed(FalsePositiveReport),
+    FalsePositiveReportRequested(ClamavReportProposal),
+    FalsePositiveReportConfirmed(ClamavReportRequest),
 }
 
 #[derive(Debug)]
 pub enum QuarantineEntriesPageOutput {
     EntriesCounted(QuarantineEntryCount),
+    SubmissionsChanged,
 }
 
 #[derive(Debug)]
@@ -184,7 +193,7 @@ pub enum QuarantineEntriesPageCommand {
         reputation_answers: ReputationAnswers,
     },
     TrustChangeFinished(TrustOutcome),
-    FalsePositiveReportFinished(QuarantinedEntryReportAttempt),
+    FalsePositiveReportFinished(ClamavReportAttempt),
     RestoreCheckFinished {
         entry_id: i64,
         content_verdict: ContentVerdict,
@@ -194,30 +203,7 @@ pub enum QuarantineEntriesPageCommand {
         content_verdict: ContentVerdict,
     },
     RecheckFinished,
-}
-
-#[derive(Debug)]
-pub enum QuarantinedEntryReportAttempt {
-    ReportSubmitted(SubmissionOutcome),
-    PayloadUnreadable(QuarantineMoveFailure),
-    DetectedFileReportedElsewhere,
-}
-
-fn report_attempt_text(report_attempt: &QuarantinedEntryReportAttempt) -> String {
-    let report_not_sent = |failure_reason: String| {
-        gettext("The report was not sent: {error}").replace("{error}", &failure_reason)
-    };
-    match report_attempt {
-        QuarantinedEntryReportAttempt::ReportSubmitted(submission_outcome) => {
-            submission_outcome_text(submission_outcome)
-        }
-        QuarantinedEntryReportAttempt::PayloadUnreadable(read_failure) => {
-            report_not_sent(describe_quarantine_failure(read_failure))
-        }
-        QuarantinedEntryReportAttempt::DetectedFileReportedElsewhere => {
-            report_not_sent(gettext("report it from the scan results"))
-        }
-    }
+    ClamavReviewsSettled(Result<usize, ActivityHistoryFailure>),
 }
 
 async fn verdict_for_entry(quarantine_vault: &QuarantineVault, entry_id: i64) -> ContentVerdict {
@@ -591,7 +577,7 @@ impl QuarantineEntriesPage {
 
 #[relm4::component(pub)]
 impl Component for QuarantineEntriesPage {
-    type Init = QuarantineVault;
+    type Init = QuarantineEntriesPageInit;
     type Input = QuarantineEntriesPageInput;
     type Output = QuarantineEntriesPageOutput;
     type CommandOutput = QuarantineEntriesPageCommand;
@@ -757,7 +743,10 @@ impl Component for QuarantineEntriesPage {
     }
 
     fn init(
-        quarantine_vault: QuarantineVault,
+        QuarantineEntriesPageInit {
+            quarantine_vault,
+            activity_history,
+        }: QuarantineEntriesPageInit,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -795,6 +784,7 @@ impl Component for QuarantineEntriesPage {
             });
         let model = Self {
             quarantine_vault,
+            activity_history,
             page_state: QuarantinePageState::new(),
             search_text: String::new(),
             entry_rows,
@@ -860,39 +850,21 @@ impl Component for QuarantineEntriesPage {
                     )
                 });
             }
-            QuarantineEntriesPageInput::FalsePositiveReportRequested(reported_detection) => {
-                present_false_positive_report(
+            QuarantineEntriesPageInput::FalsePositiveReportRequested(report_proposal) => {
+                present_clamav_report_confirmation(
                     root,
-                    reported_detection,
+                    report_proposal,
                     sender.input_sender().clone(),
                     QuarantineEntriesPageInput::FalsePositiveReportConfirmed,
                 );
             }
-            QuarantineEntriesPageInput::FalsePositiveReportConfirmed(false_positive_report) => {
-                let quarantine_vault = self.quarantine_vault.clone();
+            QuarantineEntriesPageInput::FalsePositiveReportConfirmed(report_request) => {
+                let activity_history = self.activity_history.clone();
                 sender.oneshot_command(async move {
-                    let report_attempt = match &false_positive_report.submitted_content {
-                        SubmittedContent::QuarantinedEntry { entry_id } => {
-                            match quarantine_vault.read_payload_plaintext(*entry_id).await {
-                                Ok(payload_plaintext) => {
-                                    QuarantinedEntryReportAttempt::ReportSubmitted(
-                                        submit_false_positive(
-                                            false_positive_report,
-                                            payload_plaintext,
-                                        )
-                                        .await,
-                                    )
-                                }
-                                Err(read_failure) => {
-                                    QuarantinedEntryReportAttempt::PayloadUnreadable(read_failure)
-                                }
-                            }
-                        }
-                        SubmittedContent::DetectedFile { .. } => {
-                            QuarantinedEntryReportAttempt::DetectedFileReportedElsewhere
-                        }
-                    };
-                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(report_attempt)
+                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(
+                        send_clamav_report(&activity_history, &quarantine_vault, report_request)
+                            .await,
+                    )
                 });
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
@@ -1040,6 +1012,18 @@ impl Component for QuarantineEntriesPage {
                 self.send_row_states();
             }
             QuarantineEntriesPageCommand::RecheckFinished => {
+                let rechecked_contents = self.page_state.rechecked_contents();
+                let activity_history = self.activity_history.clone();
+                sender.oneshot_command(async move {
+                    QuarantineEntriesPageCommand::ClamavReviewsSettled(
+                        settle_clamav_reviews(
+                            &activity_history,
+                            &rechecked_contents,
+                            current_database_version().await,
+                        )
+                        .await,
+                    )
+                });
                 let cleared_count = self.page_state.finish_recheck_run();
                 self.toaster
                     .add_toast(plain_text_toast(&if cleared_count == 0 {
@@ -1055,9 +1039,31 @@ impl Component for QuarantineEntriesPage {
                         .replace("{count}", &cleared_count.to_string())
                     }));
             }
-            QuarantineEntriesPageCommand::FalsePositiveReportFinished(report_attempt) => {
+            QuarantineEntriesPageCommand::ClamavReviewsSettled(Ok(0)) => {}
+            QuarantineEntriesPageCommand::ClamavReviewsSettled(Ok(settled_count)) => {
+                self.toaster.add_toast(plain_text_toast(
+                    &ngettext(
+                        "{count} report to ClamAV is settled by the new signatures",
+                        "{count} reports to ClamAV are settled by the new signatures",
+                        u32::try_from(settled_count).unwrap_or(u32::MAX),
+                    )
+                    .replace("{count}", &settled_count.to_string()),
+                ));
+                let _shell_closed = sender.output(QuarantineEntriesPageOutput::SubmissionsChanged);
+            }
+            QuarantineEntriesPageCommand::ClamavReviewsSettled(Err(history_failure)) => {
                 self.toaster
-                    .add_toast(plain_text_toast(&report_attempt_text(&report_attempt)));
+                    .add_toast(plain_text_toast(&history_failure_text(&history_failure)));
+            }
+            QuarantineEntriesPageCommand::FalsePositiveReportFinished(report_attempt) => {
+                if matches!(report_attempt, ClamavReportAttempt::ReportRecorded(_)) {
+                    let _shell_closed =
+                        sender.output(QuarantineEntriesPageOutput::SubmissionsChanged);
+                }
+                self.toaster
+                    .add_toast(plain_text_toast(&clamav_report_attempt_text(
+                        &report_attempt,
+                    )));
             }
             QuarantineEntriesPageCommand::TrustChangeFinished(trust_outcome) => {
                 self.toaster

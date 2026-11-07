@@ -894,6 +894,7 @@ impl Component for ScanPage {
             scan_results_section: ScanResultsSection::builder()
                 .launch(ScanResultsSectionInit {
                     quarantine_vault: page_init.quarantine_vault,
+                    activity_history: page_init.activity_history.clone(),
                     dismiss_label: gettext("New Scan"),
                 })
                 .forward(

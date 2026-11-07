@@ -71,6 +71,10 @@ pub enum QuarantineMoveFailure {
     FileHashMismatch,
     #[error("the quarantine record has no usable hash, so the file cannot be verified")]
     RestoreRefusedIntegrityUnknown,
+    #[error("the quarantine record has no usable hash, so the file cannot be verified and sent")]
+    UploadRefusedIntegrityUnknown,
+    #[error("the quarantined file is larger than {maximum_size}, the most Lazaret sends")]
+    PayloadTooLargeToSend { maximum_size: ByteSize },
     #[error("the path is not inside the quarantine directory")]
     PathOutsideQuarantine,
     #[error("the restore path is invalid")]
@@ -757,6 +761,25 @@ pub fn open_payload_plaintext(
         return Err(QuarantineMoveFailure::PayloadNotRegularFile);
     }
     Ok(open_plaintext_reader(payload_file)?)
+}
+
+pub fn read_verified_payload_bytes(
+    quarantine_directory: &Path,
+    payload_path: &Path,
+    expected_sha256_hex: &str,
+    maximum_size: ByteSize,
+) -> Result<Vec<u8>, QuarantineMoveFailure> {
+    let mut payload_bytes = Vec::new();
+    open_payload_plaintext(quarantine_directory, payload_path)?
+        .take(maximum_size.as_u64().saturating_add(1))
+        .read_to_end(&mut payload_bytes)?;
+    if payload_bytes.len() as u64 > maximum_size.as_u64() {
+        return Err(QuarantineMoveFailure::PayloadTooLargeToSend { maximum_size });
+    }
+    if format!("{:x}", Sha256::digest(&payload_bytes)) != expected_sha256_hex {
+        return Err(QuarantineMoveFailure::FileHashMismatch);
+    }
+    Ok(payload_bytes)
 }
 
 pub const NEUTRALIZING_NAME_PREFIX: &str = ".neutralizing-";

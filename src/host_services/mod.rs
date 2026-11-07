@@ -7,6 +7,7 @@ pub mod desktop;
 pub mod detection_journal;
 pub mod protection_evidence;
 pub mod quarantine_vault;
+pub mod sample_submissions;
 pub mod settings_helper;
 pub mod systemd_bus;
 pub mod systemd_journal;

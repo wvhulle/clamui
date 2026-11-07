@@ -113,6 +113,26 @@ pub async fn chosen_folders_to_open(dialog_title: String) -> Vec<PathBuf> {
         .collect()
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ChosenSubmissionFile {
+    FileChosen(PathBuf),
+    ChoiceCancelled,
+}
+
+pub async fn chosen_file_to_submit(dialog_title: String) -> ChosenSubmissionFile {
+    gtk::FileDialog::builder()
+        .title(dialog_title)
+        .build()
+        .open_future(active_application_window().as_ref())
+        .await
+        .ok()
+        .and_then(|chosen_file| chosen_file.path())
+        .map_or(
+            ChosenSubmissionFile::ChoiceCancelled,
+            ChosenSubmissionFile::FileChosen,
+        )
+}
+
 pub async fn imported_file(dialog_title: String) -> ImportedFileOutcome {
     let chosen_file = gtk::FileDialog::builder()
         .title(dialog_title)

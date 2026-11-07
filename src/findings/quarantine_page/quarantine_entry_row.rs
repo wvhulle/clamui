@@ -11,7 +11,7 @@ use crate::{
         EntryRowState, QuarantineRowInit, RowActivity, RowRecheckState, RowReputation,
     },
     host_services::{
-        clamav_programs::false_positive_submission::SubmittedContent,
+        clamav_programs::clamav_report_submission::{ClamavReportKind, SubmittedContent},
         clamav_scanner::{
             content_verdict::ContentVerdict,
             scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
@@ -24,17 +24,19 @@ use crate::{
         settings_helper::trust_requests::{FileFingerprint, TrustChoice},
         threat_intel::file_reputation_check::{ReputationAnswers, SourceAnswer},
     },
-    shared_widgets::false_positive_report_dialog::ReportedDetection,
+    shared_widgets::submission_confirm_dialog::ClamavReportProposal,
 };
 
 pub fn quarantined_false_positive_detection(
     entry_record: &QuarantineEntryRecord,
-) -> Option<ReportedDetection> {
+) -> Option<ClamavReportProposal> {
     entry_record
         .threat_identity
         .matched_signature_name()
-        .map(|signature_name| ReportedDetection {
-            detection_name: signature_name.to_owned(),
+        .map(|signature_name| ClamavReportProposal {
+            report_kind: ClamavReportKind::FalsePositive {
+                detection_name: signature_name.to_owned(),
+            },
             submitted_content: SubmittedContent::QuarantinedEntry {
                 entry_id: entry_record.entry_id,
             },
@@ -64,7 +66,7 @@ pub enum QuarantineEntryRowOutput {
     ReputationCheckRequested { entry_id: i64, content_hash: String },
     DeletionRequested { entry_id: i64 },
     TrustRequested(TrustChoice),
-    FalsePositiveReportRequested(ReportedDetection),
+    FalsePositiveReportRequested(ClamavReportProposal),
     HashCopyRequested(String),
     OnlineLookupsRequested,
     ReportLinkRequested(String),
@@ -451,8 +453,10 @@ mod quarantine_entry_row_tests {
             quarantined_false_positive_detection(&quarantined_entry(ThreatIdentity::Signature {
                 signature_name: "Win.Test.EICAR_HDB-1".to_owned(),
             }))
-            .map(|reported_detection| reported_detection.detection_name),
-            Some("Win.Test.EICAR_HDB-1".to_owned())
+            .map(|report_proposal| report_proposal.report_kind),
+            Some(ClamavReportKind::FalsePositive {
+                detection_name: "Win.Test.EICAR_HDB-1".to_owned(),
+            })
         );
     }
 }

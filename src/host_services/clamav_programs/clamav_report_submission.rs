@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{self, Read},
+    io::{self, Cursor},
     os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     process::Stdio,
@@ -29,14 +29,25 @@ pub struct ReporterContact {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SubmittedContent {
-    DetectedFile { file_path: PathBuf },
+    FileOnDisk { file_path: PathBuf },
     QuarantinedEntry { entry_id: i64 },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FalsePositiveReport {
+pub enum ClamavReportKind {
+    FalsePositive { detection_name: String },
+    MissedMalware,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClamavReport {
     pub reporter_contact: ReporterContact,
-    pub detection_name: String,
+    pub report_kind: ClamavReportKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClamavReportRequest {
+    pub clamav_report: ClamavReport,
     pub submitted_content: SubmittedContent,
 }
 
@@ -47,17 +58,14 @@ pub fn open_detected_file(file_path: &Path) -> io::Result<File> {
         .open(file_path)
 }
 
-#[derive(Debug)]
-pub enum SubmissionOutcome {
-    ReportSent,
-    ContactIncomplete,
-    SubmitterMissing,
-    SubmitterReplaceable,
-    SubmissionFailed(SubmissionFailure),
-}
-
 #[derive(Debug, thiserror::Error)]
-pub enum SubmissionFailure {
+pub enum ClamsubmitFailure {
+    #[error("the reporter's name or email address is incomplete")]
+    ContactIncomplete,
+    #[error("clamsubmit is not installed")]
+    SubmitterMissing,
+    #[error("clamsubmit can be replaced by your account")]
+    SubmitterReplaceable,
     #[error("the content could not be handed to clamsubmit: {0}")]
     ContentPipeFailed(#[source] io::Error),
     #[error("clamsubmit could not be run: {0}")]
@@ -87,51 +95,55 @@ pub fn contact_is_complete(reporter_contact: &ReporterContact) -> bool {
             })
 }
 
-pub fn submission_arguments(false_positive_report: &FalsePositiveReport) -> Vec<String> {
-    vec![
+pub fn submission_arguments(clamav_report: &ClamavReport) -> Vec<String> {
+    let contact_arguments = [
         "-e".to_owned(),
-        false_positive_report
+        clamav_report
             .reporter_contact
             .reporter_email
             .trim()
             .to_owned(),
         "-N".to_owned(),
-        false_positive_report
+        clamav_report
             .reporter_contact
             .reporter_name
             .trim()
             .to_owned(),
-        "-V".to_owned(),
-        false_positive_report.detection_name.clone(),
-        "-p".to_owned(),
-        "-".to_owned(),
-    ]
+    ];
+    let kind_arguments = match &clamav_report.report_kind {
+        ClamavReportKind::FalsePositive { detection_name } => vec![
+            "-V".to_owned(),
+            detection_name.clone(),
+            "-p".to_owned(),
+            "-".to_owned(),
+        ],
+        ClamavReportKind::MissedMalware => vec!["-n".to_owned(), "-".to_owned()],
+    };
+    contact_arguments
+        .into_iter()
+        .chain(kind_arguments)
+        .collect()
 }
 
-pub async fn submit_false_positive(
-    false_positive_report: FalsePositiveReport,
-    plaintext_source: impl Read + Send + 'static,
-) -> SubmissionOutcome {
-    if !contact_is_complete(&false_positive_report.reporter_contact) {
-        return SubmissionOutcome::ContactIncomplete;
+pub async fn submit_clamav_report(
+    clamav_report: &ClamavReport,
+    sample_bytes: Vec<u8>,
+) -> Result<(), ClamsubmitFailure> {
+    if !contact_is_complete(&clamav_report.reporter_contact) {
+        return Err(ClamsubmitFailure::ContactIncomplete);
     }
     let submitter_location =
         tokio::task::spawn_blocking(|| locate_trusted_program(ClamavProgram::SampleSubmitter))
-            .await;
-    let Ok(submitter_location) = submitter_location else {
-        return SubmissionOutcome::SubmitterMissing;
-    };
+            .await
+            .map_err(|_lookup_interrupted| ClamsubmitFailure::SubmitterMissing)?;
     let submitter_path = match submitter_location.runnable_path() {
         Ok(submitter_path) => submitter_path.to_path_buf(),
-        Err(ProgramRefusal::ProgramMissing) => return SubmissionOutcome::SubmitterMissing,
+        Err(ProgramRefusal::ProgramMissing) => return Err(ClamsubmitFailure::SubmitterMissing),
         Err(ProgramRefusal::ProgramReplaceable { .. }) => {
-            return SubmissionOutcome::SubmitterReplaceable;
+            return Err(ClamsubmitFailure::SubmitterReplaceable);
         }
     };
-    match run_submitter(&submitter_path, &false_positive_report, plaintext_source).await {
-        Ok(()) => SubmissionOutcome::ReportSent,
-        Err(submission_failure) => SubmissionOutcome::SubmissionFailed(submission_failure),
-    }
+    run_submitter(&submitter_path, clamav_report, sample_bytes).await
 }
 
 fn first_printed_line(submission_output: &std::process::Output) -> String {
@@ -145,61 +157,57 @@ fn first_printed_line(submission_output: &std::process::Output) -> String {
 
 async fn run_submitter(
     submitter_path: &Path,
-    false_positive_report: &FalsePositiveReport,
-    plaintext_source: impl Read + Send + 'static,
-) -> Result<(), SubmissionFailure> {
-    let content_pipe =
-        pipe_content_for_child(plaintext_source).map_err(SubmissionFailure::ContentPipeFailed)?;
+    clamav_report: &ClamavReport,
+    sample_bytes: Vec<u8>,
+) -> Result<(), ClamsubmitFailure> {
+    let content_pipe = pipe_content_for_child(Cursor::new(sample_bytes))
+        .map_err(ClamsubmitFailure::ContentPipeFailed)?;
     let mut submission_command = host_program_async_command(submitter_path, &[]);
     submission_command
-        .args(submission_arguments(false_positive_report))
+        .args(submission_arguments(clamav_report))
         .stdin(Stdio::from(content_pipe))
         .kill_on_drop(true);
     let submission_output = timeout(SUBMISSION_TIMEOUT, submission_command.output())
         .await?
-        .map_err(SubmissionFailure::SubmitterRunFailed)?;
+        .map_err(ClamsubmitFailure::SubmitterRunFailed)?;
     if submission_output.status.success() {
         return Ok(());
     }
-    Err(SubmissionFailure::ReportedBySubmitter {
+    Err(ClamsubmitFailure::ReportedBySubmitter {
         submitter_output: first_printed_line(&submission_output),
     })
 }
 
-pub fn submission_outcome_text(submission_outcome: &SubmissionOutcome) -> String {
-    match submission_outcome {
-        SubmissionOutcome::ReportSent => gettext(
-            "Report sent. If the ClamAV team agrees, a later signature update stops the detection.",
-        ),
-        SubmissionOutcome::ContactIncomplete => {
+pub fn clamsubmit_failure_text(clamsubmit_failure: &ClamsubmitFailure) -> String {
+    match clamsubmit_failure {
+        ClamsubmitFailure::ContactIncomplete => {
             gettext("Enter your name and a valid email address to send a report")
         }
-        SubmissionOutcome::SubmitterMissing => {
+        ClamsubmitFailure::SubmitterMissing => {
             gettext("Reporting needs clamsubmit, which comes with ClamAV but isn't installed here")
         }
-        SubmissionOutcome::SubmitterReplaceable => {
+        ClamsubmitFailure::SubmitterReplaceable => {
             gettext("Lazaret refused to run clamsubmit, because your account can replace it")
         }
-        SubmissionOutcome::SubmissionFailed(submission_failure) => {
+        ClamsubmitFailure::ContentPipeFailed(pipe_failure) => {
             gettext("The report was not sent: {error}")
-                .replace("{error}", &submission_failure_text(submission_failure))
+                .replace("{error}", &pipe_failure.to_string())
         }
-    }
-}
-
-fn submission_failure_text(submission_failure: &SubmissionFailure) -> String {
-    match submission_failure {
-        SubmissionFailure::ContentPipeFailed(pipe_failure) => pipe_failure.to_string(),
-        SubmissionFailure::SubmitterRunFailed(run_failure) => run_failure.to_string(),
-        SubmissionFailure::UploadTimedOut(_elapsed) => gettext("the upload took too long"),
-        SubmissionFailure::ReportedBySubmitter { submitter_output } => {
-            sanitize_scanner_line(submitter_output)
+        ClamsubmitFailure::SubmitterRunFailed(run_failure) => {
+            gettext("The report was not sent: {error}").replace("{error}", &run_failure.to_string())
+        }
+        ClamsubmitFailure::UploadTimedOut(_elapsed) => {
+            gettext("The report was not sent: the upload took too long")
+        }
+        ClamsubmitFailure::ReportedBySubmitter { submitter_output } => {
+            gettext("The report was not sent: {error}")
+                .replace("{error}", &sanitize_scanner_line(submitter_output))
         }
     }
 }
 
 #[cfg(test)]
-mod false_positive_submission_tests {
+mod clamav_report_submission_tests {
     use super::*;
 
     fn contact(reporter_name: &str, reporter_email: &str) -> ReporterContact {
@@ -227,16 +235,14 @@ mod false_positive_submission_tests {
     }
 
     #[test]
-    fn the_file_is_sent_on_standard_input_never_as_an_argument() {
-        let submitted_arguments = submission_arguments(&FalsePositiveReport {
-            reporter_contact: contact("Alex Doe", " alex@example.org "),
-            detection_name: "Win.Test.EICAR_HDB-1".to_owned(),
-            submitted_content: SubmittedContent::DetectedFile {
-                file_path: PathBuf::from("/home/alex/-rf"),
-            },
-        });
+    fn a_false_positive_names_its_detection_and_sends_the_file_on_standard_input() {
         assert_eq!(
-            submitted_arguments,
+            submission_arguments(&ClamavReport {
+                reporter_contact: contact("Alex Doe", " alex@example.org "),
+                report_kind: ClamavReportKind::FalsePositive {
+                    detection_name: "Win.Test.EICAR_HDB-1".to_owned(),
+                },
+            }),
             [
                 "-e",
                 "alex@example.org",
@@ -248,5 +254,34 @@ mod false_positive_submission_tests {
                 "-"
             ]
         );
+    }
+
+    #[test]
+    fn missed_malware_is_reported_with_n_and_without_a_detection_name() {
+        let submitted_arguments = submission_arguments(&ClamavReport {
+            reporter_contact: contact("Alex Doe", "alex@example.org"),
+            report_kind: ClamavReportKind::MissedMalware,
+        });
+        assert_eq!(
+            submitted_arguments,
+            ["-e", "alex@example.org", "-N", "Alex Doe", "-n", "-"]
+        );
+        assert!(!submitted_arguments.iter().any(|argument| argument == "-V"));
+        assert!(!submitted_arguments.iter().any(|argument| argument == "-p"));
+    }
+
+    #[tokio::test]
+    async fn an_incomplete_contact_is_refused_before_anything_runs() {
+        assert!(matches!(
+            submit_clamav_report(
+                &ClamavReport {
+                    reporter_contact: contact("", "alex@example.org"),
+                    report_kind: ClamavReportKind::MissedMalware,
+                },
+                b"sample".to_vec(),
+            )
+            .await,
+            Err(ClamsubmitFailure::ContactIncomplete)
+        ));
     }
 }

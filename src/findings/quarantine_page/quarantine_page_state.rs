@@ -6,8 +6,9 @@ use crate::{
         clamav_scanner::content_verdict::ContentVerdict,
         quarantine_vault::{
             quarantine_entry_database::QuarantineEntryRecord,
-            quarantine_file_moves::QuarantineMoveFailure,
+            quarantine_file_moves::{QuarantineMoveFailure, RecordedPayloadHash},
         },
+        sample_submissions::clamav_report_review::RecheckedContent,
         threat_intel::file_reputation_check::ReputationAnswers,
     },
     shared_widgets::{
@@ -325,6 +326,27 @@ impl QuarantinePageState {
                 })
                 .count(),
         }
+    }
+
+    pub fn rechecked_contents(&self) -> Vec<RecheckedContent> {
+        self.listed_entries()
+            .iter()
+            .filter_map(|listed_entry| {
+                let RecordedPayloadHash::KnownSha256 { sha256_hex } = &listed_entry.payload_hash
+                else {
+                    return None;
+                };
+                match self.recheck_states.get(&listed_entry.entry_id) {
+                    Some(RowRecheckState::Rechecked(content_verdict)) => Some(RecheckedContent {
+                        content_sha256: sha256_hex.clone(),
+                        content_verdict: content_verdict.clone(),
+                    }),
+                    Some(RowRecheckState::Rechecking | RowRecheckState::NotRechecked) | None => {
+                        None
+                    }
+                }
+            })
+            .collect()
     }
 
     pub fn begin_reputation_check(&mut self, entry_id: i64) -> Result<(), EntryActionRefusal> {

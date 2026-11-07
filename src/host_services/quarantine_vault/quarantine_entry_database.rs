@@ -19,8 +19,9 @@ use crate::host_services::{
             delete_payload_file, discard_copied_payload, ensure_quarantine_directory,
             lexically_normalized_path, neutralize_payload_in_place, open_payload_plaintext,
             parsed_sha256_hex, payload_content_hash, pin_database_file, plan_blocked_file_rename,
-            remove_quarantined_source, remove_stale_neutralizing_copies,
-            rename_blocked_file_into_quarantine, restore_payload_file, secure_database_files,
+            read_verified_payload_bytes, remove_quarantined_source,
+            remove_stale_neutralizing_copies, rename_blocked_file_into_quarantine,
+            restore_payload_file, secure_database_files,
         },
         quarantine_payload_format::PlaintextReader,
     },
@@ -152,6 +153,23 @@ struct PendingMove {
     original_permissions: u32,
 }
 
+pub struct VerifiedPayload {
+    pub entry_record: QuarantineEntryRecord,
+    pub content_sha256: String,
+    pub payload_bytes: Vec<u8>,
+}
+
+impl std::fmt::Debug for VerifiedPayload {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("VerifiedPayload")
+            .field("entry_record", &self.entry_record)
+            .field("content_sha256", &self.content_sha256)
+            .field("payload_size", &self.payload_bytes.len())
+            .finish()
+    }
+}
+
 #[derive(Clone)]
 pub struct QuarantineVault {
     entry_database: Database,
@@ -277,6 +295,39 @@ impl QuarantineVault {
             open_payload_plaintext(&quarantine_directory, &entry_record.quarantine_path)
         })
         .await?
+    }
+
+    pub async fn read_verified_payload(
+        &self,
+        entry_id: i64,
+        maximum_size: ByteSize,
+    ) -> Result<VerifiedPayload, QuarantineMoveFailure> {
+        let database_connection = self.open_connection().await?;
+        let entry_record = self
+            .find_quarantine_entry(&database_connection, entry_id)
+            .await?;
+        drop(database_connection);
+        let RecordedPayloadHash::KnownSha256 { sha256_hex } = entry_record.payload_hash.clone()
+        else {
+            return Err(QuarantineMoveFailure::UploadRefusedIntegrityUnknown);
+        };
+        let quarantine_directory = self.quarantine_directory.clone();
+        let payload_path = entry_record.quarantine_path.clone();
+        let verified_sha256 = sha256_hex.clone();
+        let payload_bytes = spawn_blocking(move || {
+            read_verified_payload_bytes(
+                &quarantine_directory,
+                &payload_path,
+                &verified_sha256,
+                maximum_size,
+            )
+        })
+        .await??;
+        Ok(VerifiedPayload {
+            entry_record,
+            content_sha256: sha256_hex,
+            payload_bytes,
+        })
     }
 
     async fn open_connection(&self) -> Result<Connection, QuarantineMoveFailure> {
@@ -1046,6 +1097,88 @@ mod quarantine_entry_database_tests {
                 .expect("listed"),
             vec![entry_record]
         );
+    }
+
+    #[tokio::test]
+    async fn verified_reads_return_the_original_bytes_and_leave_the_entry_in_place() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let source_path = vault_fixture.source_file("sample.bin", b"sample payload");
+        let entry_record = vault_fixture
+            .quarantine_vault
+            .move_file_into_quarantine(&source_path, &signature_identity("Test.Signature"))
+            .await
+            .expect("quarantined");
+        let verified_payload = vault_fixture
+            .quarantine_vault
+            .read_verified_payload(entry_record.entry_id, ByteSize::mib(1))
+            .await
+            .expect("verified read");
+        assert_eq!(verified_payload.payload_bytes, b"sample payload");
+        assert_eq!(
+            verified_payload.content_sha256,
+            sha256_text(b"sample payload")
+        );
+        assert!(entry_record.quarantine_path.exists());
+        assert!(!source_path.exists());
+        assert!(matches!(
+            vault_fixture
+                .quarantine_vault
+                .read_verified_payload(entry_record.entry_id, ByteSize::b(4))
+                .await,
+            Err(QuarantineMoveFailure::PayloadTooLargeToSend { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn verified_reads_refuse_tampered_and_unhashed_payloads() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let source_path = vault_fixture.source_file("tampered.bin", b"original payload");
+        let entry_record = vault_fixture
+            .quarantine_vault
+            .move_file_into_quarantine(&source_path, &signature_identity("Test.Signature"))
+            .await
+            .expect("quarantined");
+        fs::set_permissions(
+            &entry_record.quarantine_path,
+            fs::Permissions::from_mode(0o600),
+        )
+        .expect("payload mode");
+        fs::write(&entry_record.quarantine_path, b"tampered payload").expect("tamper");
+        assert!(matches!(
+            vault_fixture
+                .quarantine_vault
+                .read_verified_payload(entry_record.entry_id, ByteSize::mib(1))
+                .await,
+            Err(QuarantineMoveFailure::FileHashMismatch)
+        ));
+
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        drop(open_fixture_vault(&temporary_root).await);
+        let payload_path =
+            VaultFixture::quarantine_directory(&temporary_root).join("unhashed-payload");
+        fs::write(&payload_path, b"unhashed payload").expect("payload");
+        rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
+            .expect("sqlite connection")
+            .execute(
+                "INSERT INTO quarantine (original_path, quarantine_path, threat_name, \
+                 detection_date, file_size, file_hash, original_permissions) VALUES \
+                 ('/home/user/unhashed.bin', ?1, 'Legacy.Test', '2020-01-01T00:00:00Z', 16, '', \
+                 420)",
+                params![payload_path.as_os_str().as_bytes()],
+            )
+            .expect("legacy row");
+        let unhashed_vault = open_fixture_vault(&temporary_root).await;
+        let unhashed_entry = unhashed_vault
+            .list_quarantine_entries()
+            .await
+            .expect("listed")
+            .remove(0);
+        assert!(matches!(
+            unhashed_vault
+                .read_verified_payload(unhashed_entry.entry_id, ByteSize::mib(1))
+                .await,
+            Err(QuarantineMoveFailure::UploadRefusedIntegrityUnknown)
+        ));
     }
 
     #[tokio::test]

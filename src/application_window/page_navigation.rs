@@ -42,7 +42,8 @@ use crate::{
         },
         quarantine_page::{
             quarantine_entries_page::{
-                QuarantineEntriesPage, QuarantineEntriesPageInput, QuarantineEntriesPageOutput,
+                QuarantineEntriesPage, QuarantineEntriesPageInit, QuarantineEntriesPageInput,
+                QuarantineEntriesPageOutput,
             },
             quarantine_page_state::QuarantineEntryCount,
         },
@@ -172,6 +173,7 @@ pub enum PageNavigationInput {
     DeviceScanSlotRequested { drive_name: String },
     DeviceScanEnded,
     RemovableDrivesStatusChanged(RemovableDrivesStatus),
+    SubmissionsChanged,
 }
 
 #[derive(Debug)]
@@ -689,12 +691,18 @@ impl Component for PageNavigation {
         let data_directory = navigation_init.data_directory;
         let activity_history = ActivityHistory::at_database_path(data_directory.join("history.db"));
         let quarantine_page = QuarantineEntriesPage::builder()
-            .launch(quarantine_vault.clone())
+            .launch(QuarantineEntriesPageInit {
+                quarantine_vault: quarantine_vault.clone(),
+                activity_history: activity_history.clone(),
+            })
             .forward(
                 sender.input_sender(),
                 |quarantine_output| match quarantine_output {
                     QuarantineEntriesPageOutput::EntriesCounted(quarantine_entry_count) => {
                         PageNavigationInput::QuarantineEntriesCounted(quarantine_entry_count)
+                    }
+                    QuarantineEntriesPageOutput::SubmissionsChanged => {
+                        PageNavigationInput::SubmissionsChanged
                     }
                 },
             );
@@ -933,6 +941,7 @@ impl Component for PageNavigation {
                 self.removable_drives_status = removable_drives_status;
                 self.refresh_area_summaries();
             }
+            PageNavigationInput::SubmissionsChanged => {}
         }
     }
 

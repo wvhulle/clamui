@@ -2,6 +2,7 @@ use gettextrs::gettext;
 
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+    desktop::locale_formatting::byte_size_text,
     quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
 };
 
@@ -14,6 +15,14 @@ pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> Stri
             "This quarantine record has no usable hash, so the file cannot be verified and is not \
              restored. You can still delete it.",
         ),
+        QuarantineMoveFailure::UploadRefusedIntegrityUnknown => gettext(
+            "This quarantine record has no usable hash, so Lazaret can't prove the file is the \
+             one it quarantined and doesn't send it anywhere.",
+        ),
+        QuarantineMoveFailure::PayloadTooLargeToSend { maximum_size } => {
+            gettext("The file is larger than {size}, the most Lazaret sends.")
+                .replace("{size}", &byte_size_text(*maximum_size))
+        }
         QuarantineMoveFailure::BlockedFileOnOtherFilesystem => gettext(
             "On-access scanning blocks this file and it is on another filesystem, so it cannot be \
              moved to quarantine. You can delete it instead.",

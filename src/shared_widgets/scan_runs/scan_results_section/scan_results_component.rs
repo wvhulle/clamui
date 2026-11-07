@@ -9,10 +9,8 @@ use relm4::{
 
 use crate::{
     host_services::{
-        clamav_programs::false_positive_submission::{
-            FalsePositiveReport, SubmissionOutcome, SubmittedContent, open_detected_file,
-            submission_outcome_text, submit_false_positive,
-        },
+        activity_history::activity_history_database::ActivityHistory,
+        clamav_programs::clamav_report_submission::ClamavReportRequest,
         clamav_scanner::{
             scan_exclusion_rules::exclusion_entry_for_threat,
             scanner_output_parser::{DetectedThreat, sanitize_scanner_line},
@@ -22,6 +20,7 @@ use crate::{
             quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
             quarantine_file_moves::QuarantineMoveFailure,
         },
+        sample_submissions::clamav_report_flow::{ClamavReportAttempt, send_clamav_report},
         settings_helper::trust_requests::{
             FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file, request_trust_change,
             trust_outcome_text,
@@ -33,7 +32,6 @@ use crate::{
             deliver_local_outcome, describe_export_failure, exported_text,
         },
         component_streams::run_stream_to_completion,
-        false_positive_report_dialog::{ReportedDetection, present_false_positive_report},
         scan_runs::scan_results_section::{
             detected_threat_row::{
                 DetectedThreatRow, DetectedThreatRowInput, DetectedThreatRowOutput,
@@ -45,6 +43,8 @@ use crate::{
                 status_style_class,
             },
         },
+        submission_confirm_dialog::{ClamavReportProposal, present_clamav_report_confirmation},
+        submission_outcome_text::clamav_report_attempt_text,
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -71,6 +71,7 @@ impl AlertChoice for QuarantineDialogChoice {
 
 pub struct ScanResultsSectionInit {
     pub quarantine_vault: QuarantineVault,
+    pub activity_history: ActivityHistory,
     pub dismiss_label: String,
 }
 
@@ -79,6 +80,7 @@ pub struct ScanResultsSection {
     results_view: ScanResultsView,
     results_generation: u64,
     quarantine_vault: QuarantineVault,
+    activity_history: ActivityHistory,
     threat_rows: FactoryVecDeque<DetectedThreatRow>,
     problem_rows: FactoryVecDeque<ScanProblemRow>,
 }
@@ -94,8 +96,8 @@ pub enum ScanResultsSectionInput {
     TrustFileRequested(DynamicIndex),
     IgnoreSignatureRequested(TrustChoice),
     TrustChangeConfirmed(TrustChoice),
-    FalsePositiveReportRequested(ReportedDetection),
-    FalsePositiveReportConfirmed(FalsePositiveReport),
+    FalsePositiveReportRequested(ClamavReportProposal),
+    FalsePositiveReportConfirmed(ClamavReportRequest),
     CopyReportRequested,
     ExportReportRequested,
     ResultsDismissRequested,
@@ -121,31 +123,7 @@ pub enum ScanResultsSectionCommand {
         fingerprint_outcome: std::io::Result<FileFingerprint>,
     },
     TrustChangeFinished(TrustOutcome),
-    FalsePositiveReportFinished(DetectedFileReportAttempt),
-}
-
-#[derive(Debug)]
-pub enum DetectedFileReportAttempt {
-    ReportSubmitted(SubmissionOutcome),
-    DetectedFileUnreadable(std::io::Error),
-    QuarantinedEntryReportedElsewhere,
-}
-
-fn report_attempt_text(report_attempt: &DetectedFileReportAttempt) -> String {
-    let report_not_sent = |failure_reason: String| {
-        gettext("The report was not sent: {error}").replace("{error}", &failure_reason)
-    };
-    match report_attempt {
-        DetectedFileReportAttempt::ReportSubmitted(submission_outcome) => {
-            submission_outcome_text(submission_outcome)
-        }
-        DetectedFileReportAttempt::DetectedFileUnreadable(open_failure) => {
-            report_not_sent(fingerprint_failure_text(open_failure))
-        }
-        DetectedFileReportAttempt::QuarantinedEntryReportedElsewhere => {
-            report_not_sent(gettext("report it from the Quarantine page"))
-        }
-    }
+    FalsePositiveReportFinished(ClamavReportAttempt),
 }
 
 struct PendingThreatMove {
@@ -398,6 +376,7 @@ impl Component for ScanResultsSection {
     ) -> ComponentParts<Self> {
         let ScanResultsSectionInit {
             quarantine_vault,
+            activity_history,
             dismiss_label,
         } = section_init;
         let model = Self {
@@ -405,6 +384,7 @@ impl Component for ScanResultsSection {
             results_view: ScanResultsView::empty_results(),
             results_generation: 0,
             quarantine_vault,
+            activity_history,
             threat_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
                 .forward(sender.input_sender(), forwarded_threat_output),
@@ -513,33 +493,22 @@ impl Component for ScanResultsSection {
                     )
                 });
             }
-            ScanResultsSectionInput::FalsePositiveReportRequested(reported_detection) => {
-                present_false_positive_report(
+            ScanResultsSectionInput::FalsePositiveReportRequested(report_proposal) => {
+                present_clamav_report_confirmation(
                     root,
-                    reported_detection,
+                    report_proposal,
                     sender.input_sender().clone(),
                     ScanResultsSectionInput::FalsePositiveReportConfirmed,
                 );
             }
-            ScanResultsSectionInput::FalsePositiveReportConfirmed(false_positive_report) => {
+            ScanResultsSectionInput::FalsePositiveReportConfirmed(report_request) => {
+                let activity_history = self.activity_history.clone();
+                let quarantine_vault = self.quarantine_vault.clone();
                 sender.oneshot_command(async move {
-                    let report_attempt = match &false_positive_report.submitted_content {
-                        SubmittedContent::DetectedFile { file_path } => {
-                            match open_detected_file(file_path) {
-                                Ok(detected_file) => DetectedFileReportAttempt::ReportSubmitted(
-                                    submit_false_positive(false_positive_report, detected_file)
-                                        .await,
-                                ),
-                                Err(open_failure) => {
-                                    DetectedFileReportAttempt::DetectedFileUnreadable(open_failure)
-                                }
-                            }
-                        }
-                        SubmittedContent::QuarantinedEntry { .. } => {
-                            DetectedFileReportAttempt::QuarantinedEntryReportedElsewhere
-                        }
-                    };
-                    ScanResultsSectionCommand::FalsePositiveReportFinished(report_attempt)
+                    ScanResultsSectionCommand::FalsePositiveReportFinished(
+                        send_clamav_report(&activity_history, &quarantine_vault, report_request)
+                            .await,
+                    )
                 });
             }
             ScanResultsSectionInput::CopyReportRequested => {
@@ -598,7 +567,7 @@ impl Component for ScanResultsSection {
             }
             ScanResultsSectionCommand::FalsePositiveReportFinished(report_attempt) => {
                 let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
-                    report_attempt_text(&report_attempt),
+                    clamav_report_attempt_text(&report_attempt),
                 ));
             }
             ScanResultsSectionCommand::TrustChangeFinished(trust_outcome) => {
