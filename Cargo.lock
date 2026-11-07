@@ -2610,6 +2610,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazaret-clamd-configuration"
+version = "0.1.0"
+dependencies = [
+ "bytesize",
+ "jiff",
+ "serde",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "lazaret-settings-helper"
 version = "0.1.0"
 dependencies = [

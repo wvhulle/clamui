@@ -1,0 +1,19 @@
+[package]
+name = "lazaret-clamd-configuration"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+name = "clamd_configuration"
+
+[lints.clippy]
+enum_variant_names = "allow"
+
+[dependencies]
+bytesize = "2.7"
+jiff = { version = "0.2.39", default-features = false, features = ["serde", "std"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+toml = "1.1"

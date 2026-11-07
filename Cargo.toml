@@ -1,5 +1,5 @@
 [workspace]
-members = ["gtk_scene_capture", "settings_helper", "xtask"]
+members = ["clamd_configuration", "gtk_scene_capture", "settings_helper", "xtask"]
 
 [package]
 name = "lazaret"
