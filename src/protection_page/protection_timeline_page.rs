@@ -1,6 +1,5 @@
 use futures::StreamExt;
 use gettextrs::{gettext, ngettext};
-use jiff::Timestamp;
 use relm4::{
     Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
     adw::prelude::*, gtk, prelude::FactoryVecDeque,
@@ -9,6 +8,7 @@ use relm4::{
 use crate::{
     application_window::{
         application_actions::OpenSettingsAction,
+        protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
         settings_navigation::{SettingsSubpage, system_settings_group},
     },
     host_services::{
@@ -23,13 +23,11 @@ use crate::{
         },
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::host_protection_evidence::{
-            ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, WATCHED_SERVICE_UNITS,
-            detection_notifications_are_enabled, gather_protection_evidence,
-            lazaret_schedule_is_enabled, scan_service_evidence,
+            ScanServiceEvidence, ScanUnitResult, detection_notifications_are_enabled,
+            scan_service_evidence,
         },
         systemd_bus::host_systemd_units::{
             SystemdBusFailure, UnitStartOutcome, service_unit_snapshot, start_system_unit,
-            watched_unit_changes,
         },
     },
     protection_page::protection_timeline_presentation::{
@@ -37,7 +35,7 @@ use crate::{
         protection_timeline,
     },
     shared_widgets::{
-        component_streams::{RunningStream, run_stream, run_stream_then},
+        component_streams::run_stream_then,
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
             busy_page_name, loading_status_page,
@@ -58,13 +56,6 @@ use crate::{
 const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
 const UPDATE_BATCH_SIZE: usize = 64;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum EvidenceRefresh {
-    NothingRunning,
-    GatheringOnce,
-    GatheringThenAgain,
-}
-
 pub struct ProtectionTimelinePage {
     toaster: Toaster,
     protection_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
@@ -80,20 +71,13 @@ pub struct ProtectionTimelinePage {
     unresolved_detections: usize,
     journal_access: JournalAccess,
     gathered_evidence: GatheredEvidence,
-    _unit_watch: RunningStream,
-}
-
-enum GatheredEvidence {
-    NotGatheredYet,
-    Gathered {
-        protection_evidence: Box<ProtectionEvidence>,
-        gathered_at: Timestamp,
-    },
 }
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageInput {
     RefreshRequested,
+    EvidenceRefreshChanged(EvidenceRefresh),
+    EvidenceGathered(GatheredEvidence),
     SignatureUpdateRequested,
     UnresolvedDetectionsChanged(usize),
     JournalAccessChanged(JournalAccess),
@@ -104,15 +88,11 @@ pub enum ProtectionTimelinePageInput {
 pub enum ProtectionTimelinePageOutput {
     SignaturesUpdated,
     ActivityRecorded,
+    EvidenceRefreshRequested,
 }
 
 #[derive(Debug)]
 pub enum ProtectionTimelinePageCommand {
-    EvidenceGathered {
-        protection_evidence: Box<ProtectionEvidence>,
-        gathered_at: Timestamp,
-    },
-    WatchedUnitChanged,
     UnitRunFinished {
         start_outcome: UnitStartOutcome,
         scan_service: ScanServiceEvidence,
@@ -263,21 +243,8 @@ impl ProtectionTimelinePage {
         }
     }
 
-    fn start_evidence_refresh(&mut self, sender: &ComponentSender<Self>) {
-        if self.evidence_refresh != EvidenceRefresh::NothingRunning {
-            self.evidence_refresh = EvidenceRefresh::GatheringThenAgain;
-            return;
-        }
-        self.evidence_refresh = EvidenceRefresh::GatheringOnce;
-        let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
-        sender.oneshot_command(async move {
-            let protection_evidence =
-                Box::new(gather_protection_evidence(lazaret_schedule_enabled).await);
-            ProtectionTimelinePageCommand::EvidenceGathered {
-                protection_evidence,
-                gathered_at: Timestamp::now(),
-            }
-        });
+    fn request_evidence_refresh(sender: &ComponentSender<Self>) {
+        let _shell_closed = sender.output(ProtectionTimelinePageOutput::EvidenceRefreshRequested);
     }
 
     fn show_timeline(&mut self) {
@@ -366,7 +333,7 @@ impl ProtectionTimelinePage {
         });
         Self::refresh_signature_host_status(sender);
         self.show_timeline();
-        self.start_evidence_refresh(sender);
+        Self::request_evidence_refresh(sender);
     }
 
     fn run_step_action(
@@ -432,7 +399,7 @@ impl Component for ProtectionTimelinePage {
                         set_tooltip_text: Some(&gettext("Checking")),
                     },
                     #[watch]
-                    set_visible_child_name: busy_page_name(model.evidence_refresh != EvidenceRefresh::NothingRunning),
+                    set_visible_child_name: busy_page_name(model.evidence_refresh.is_running()),
                 },
             },
 
@@ -488,7 +455,7 @@ impl Component for ProtectionTimelinePage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let mut model = Self {
+        let model = Self {
             toaster: Toaster::new(&root),
             protection_rows: launched_step_group(
                 titled_group(&gettext("Checks on your files")),
@@ -512,18 +479,12 @@ impl Component for ProtectionTimelinePage {
             unresolved_detections: 0,
             journal_access: JournalAccess::FollowingJournal,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
-            _unit_watch: run_stream(
-                &sender,
-                watched_unit_changes(&WATCHED_SERVICE_UNITS)
-                    .map(|()| ProtectionTimelinePageCommand::WatchedUnitChanged),
-            ),
         };
         let protection_group = &model.protection_rows.widget().clone();
         let engine_group = &model.engine_rows.widget().clone();
         let review_group = &model.review_rows.widget().clone();
         let protection_loading_page = &loading_status_page(&gettext("Checking your protection…"));
         let widgets = view_output!();
-        model.start_evidence_refresh(&sender);
         Self::refresh_signature_host_status(&sender);
         ComponentParts { model, widgets }
     }
@@ -543,7 +504,14 @@ impl Component for ProtectionTimelinePage {
                 self.show_timeline();
             }
             ProtectionTimelinePageInput::RefreshRequested => {
-                self.start_evidence_refresh(&sender);
+                Self::request_evidence_refresh(&sender);
+            }
+            ProtectionTimelinePageInput::EvidenceRefreshChanged(evidence_refresh) => {
+                self.evidence_refresh = evidence_refresh;
+            }
+            ProtectionTimelinePageInput::EvidenceGathered(gathered_evidence) => {
+                self.gathered_evidence = gathered_evidence;
+                self.show_timeline();
             }
             ProtectionTimelinePageInput::SignatureUpdateRequested => {
                 if self.signature_update_session.host_status_known() {
@@ -572,24 +540,6 @@ impl Component for ProtectionTimelinePage {
         _root: &Self::Root,
     ) {
         match page_command {
-            ProtectionTimelinePageCommand::EvidenceGathered {
-                protection_evidence,
-                gathered_at,
-            } => {
-                self.gathered_evidence = GatheredEvidence::Gathered {
-                    protection_evidence,
-                    gathered_at,
-                };
-                self.show_timeline();
-                let refresh_again = self.evidence_refresh == EvidenceRefresh::GatheringThenAgain;
-                self.evidence_refresh = EvidenceRefresh::NothingRunning;
-                if refresh_again {
-                    self.start_evidence_refresh(&sender);
-                }
-            }
-            ProtectionTimelinePageCommand::WatchedUnitChanged => {
-                self.start_evidence_refresh(&sender);
-            }
             ProtectionTimelinePageCommand::UnitRunFinished {
                 start_outcome,
                 scan_service,
@@ -598,7 +548,7 @@ impl Component for ProtectionTimelinePage {
                 self.toaster
                     .add_toast(unit_run_toast(&start_outcome, &scan_service));
                 self.show_timeline();
-                self.start_evidence_refresh(&sender);
+                Self::request_evidence_refresh(&sender);
             }
             ProtectionTimelinePageCommand::SignatureHostStatusLoaded(host_status) => {
                 self.signature_update_session

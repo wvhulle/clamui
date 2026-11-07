@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
+use futures::StreamExt;
 use gettextrs::gettext;
+use jiff::Timestamp;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller,
     actions::RelmAction,
@@ -19,6 +21,10 @@ use crate::{
             register_window_action,
         },
         application_pages::{ALL_APPLICATION_PAGES, ApplicationPage},
+        protection_evidence_refresh::{
+            EvidenceRefresh, EvidenceRefreshTransition, EvidenceRefreshTrigger, GatheredEvidence,
+            GatheringStart,
+        },
         settings_navigation::{SettingsSubpage, settings_subpage_frame},
     },
     findings::{
@@ -34,7 +40,12 @@ use crate::{
         activity_history::activity_history_database::ActivityHistory,
         desktop::running_instance_forwarding::paths_from_bytes,
         detection_journal::detection_journal_follower::JournalAccess,
+        protection_evidence::host_protection_evidence::{
+            ProtectionEvidence, WATCHED_SERVICE_UNITS, gather_protection_evidence,
+            lazaret_schedule_is_enabled,
+        },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
+        systemd_bus::host_systemd_units::watched_unit_changes,
     },
     logs_page::activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
     protection_page::protection_timeline_page::{
@@ -54,6 +65,7 @@ use crate::{
             audit_check_results::{HARDENING_AUDIT_CATEGORIES, SIGNATURE_AUDIT_CATEGORIES},
             audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
         },
+        component_streams::{RunningStream, run_stream},
         engine_settings::engine_settings_page::{EngineSettingsPage, EngineSettingsSection},
     },
     sharing::analysis_page::trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
@@ -155,6 +167,9 @@ pub struct PageNavigation {
     hardening_page: Controller<AuditSectionsPage>,
     protection_page: Controller<ProtectionTimelinePage>,
     detections_page: Controller<BackgroundDetectionsPage>,
+    evidence_refresh: EvidenceRefresh,
+    gathered_evidence: GatheredEvidence,
+    _unit_watch: RunningStream,
 }
 
 #[derive(Debug)]
@@ -174,6 +189,16 @@ pub enum PageNavigationInput {
     SignaturesUpdated,
     JournalAccessChanged(JournalAccess),
     UnresolvedDetectionsChanged(usize),
+    EvidenceRefreshRequested,
+}
+
+#[derive(Debug)]
+pub enum PageNavigationCommand {
+    EvidenceGathered {
+        protection_evidence: Box<ProtectionEvidence>,
+        gathered_at: Timestamp,
+    },
+    WatchedUnitChanged,
 }
 
 #[derive(Debug)]
@@ -344,6 +369,36 @@ fn register_page_actions(
 }
 
 impl PageNavigation {
+    fn advance_evidence_refresh(
+        &mut self,
+        refresh_trigger: EvidenceRefreshTrigger,
+        sender: &ComponentSender<Self>,
+    ) {
+        let EvidenceRefreshTransition {
+            next_refresh,
+            gathering_start,
+        } = self.evidence_refresh.after_trigger(refresh_trigger);
+        self.evidence_refresh = next_refresh;
+        self.protection_page
+            .emit(ProtectionTimelinePageInput::EvidenceRefreshChanged(
+                next_refresh,
+            ));
+        match gathering_start {
+            GatheringStart::StartGathering => {
+                let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
+                sender.oneshot_command(async move {
+                    let protection_evidence =
+                        Box::new(gather_protection_evidence(lazaret_schedule_enabled).await);
+                    PageNavigationCommand::EvidenceGathered {
+                        protection_evidence,
+                        gathered_at: Timestamp::now(),
+                    }
+                });
+            }
+            GatheringStart::KeepWaiting => {}
+        }
+    }
+
     fn subpage_frames_of(&self, application_page: ApplicationPage) -> Vec<adw::NavigationPage> {
         self.opened_settings_subpages
             .iter()
@@ -380,7 +435,7 @@ impl Component for PageNavigation {
     type Init = PageNavigationInit;
     type Input = PageNavigationInput;
     type Output = PageNavigationOutput;
-    type CommandOutput = ();
+    type CommandOutput = PageNavigationCommand;
 
     view! {
         adw::BreakpointBin {
@@ -549,6 +604,9 @@ impl Component for PageNavigation {
                     ProtectionTimelinePageOutput::ActivityRecorded => {
                         PageNavigationInput::ActivityRecorded
                     }
+                    ProtectionTimelinePageOutput::EvidenceRefreshRequested => {
+                        PageNavigationInput::EvidenceRefreshRequested
+                    }
                 },
             );
         let detections_page = BackgroundDetectionsPage::builder()
@@ -579,7 +637,7 @@ impl Component for PageNavigation {
                 settings_subpages: &[],
             })
             .detach();
-        let model = Self {
+        let mut model = Self {
             visible_page: navigation_init.startup_page,
             shows_content_when_narrow: false,
             opened_settings_subpages: Vec::new(),
@@ -590,7 +648,15 @@ impl Component for PageNavigation {
             hardening_page,
             protection_page,
             detections_page,
+            evidence_refresh: EvidenceRefresh::NothingRunning,
+            gathered_evidence: GatheredEvidence::NotGatheredYet,
+            _unit_watch: run_stream(
+                &sender,
+                watched_unit_changes(&WATCHED_SERVICE_UNITS)
+                    .map(|()| PageNavigationCommand::WatchedUnitChanged),
+            ),
         };
+        model.advance_evidence_refresh(EvidenceRefreshTrigger::RefreshRequested, &sender);
         let widgets = view_output!();
         ALL_APPLICATION_PAGES
             .into_iter()
@@ -696,6 +762,36 @@ impl Component for PageNavigation {
                 let _window_closed = sender.output(
                     PageNavigationOutput::UnresolvedDetectionsChanged(unresolved_detections),
                 );
+            }
+            PageNavigationInput::EvidenceRefreshRequested => {
+                self.advance_evidence_refresh(EvidenceRefreshTrigger::RefreshRequested, &sender);
+            }
+        }
+    }
+
+    fn update_cmd(
+        &mut self,
+        navigation_command: PageNavigationCommand,
+        sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match navigation_command {
+            PageNavigationCommand::EvidenceGathered {
+                protection_evidence,
+                gathered_at,
+            } => {
+                self.gathered_evidence = GatheredEvidence::Gathered {
+                    protection_evidence,
+                    gathered_at,
+                };
+                self.protection_page
+                    .emit(ProtectionTimelinePageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
+                self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);
+            }
+            PageNavigationCommand::WatchedUnitChanged => {
+                self.advance_evidence_refresh(EvidenceRefreshTrigger::WatchedUnitChanged, &sender);
             }
         }
     }
