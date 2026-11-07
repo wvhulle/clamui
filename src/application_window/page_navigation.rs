@@ -256,7 +256,6 @@ fn forwarded_scan_output(scan_output: ScanPageOutput) -> PageNavigationInput {
         }
         ScanPageOutput::QuarantineEntriesChanged => PageNavigationInput::QuarantineEntriesChanged,
         ScanPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
-        ScanPageOutput::EvidenceRefreshRequested => PageNavigationInput::EvidenceRefreshRequested,
         ScanPageOutput::ClamavReportConfirmed(report_request) => {
             PageNavigationInput::ClamavReportConfirmed(report_request)
         }
@@ -1084,9 +1083,6 @@ impl Component for PageNavigation {
                     .emit(ScheduledScansPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
-                self.scan_page.emit(ScanPageInput::EvidenceGathered(
-                    self.gathered_evidence.clone(),
-                ));
                 self.detections_page
                     .emit(BackgroundDetectionsPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),

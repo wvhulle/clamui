@@ -14,8 +14,7 @@ use tempfile::NamedTempFile;
 
 use crate::{
     application_window::{
-        application_pages::ApplicationPage, protection_evidence_refresh::GatheredEvidence,
-        scan_slot_arbiter::DeviceScanActivity,
+        application_pages::ApplicationPage, scan_slot_arbiter::DeviceScanActivity,
     },
     host_services::{
         activity_history::activity_history_database::{
@@ -31,13 +30,7 @@ use crate::{
             scanner_output_parser::sanitize_scanner_line,
         },
         desktop::stored_settings::{application_settings, scanner_backend_preference},
-        protection_evidence::host_protection_evidence::{
-            ScanServiceEvidence, scan_service_evidence,
-        },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
-        systemd_bus::host_systemd_units::{
-            UnitStartOutcome, service_unit_snapshot, start_system_unit,
-        },
     },
     scans::manual_scan_page::{
         eicar_test_file::{EicarTestFileFailure, written_eicar_test_file},
@@ -55,9 +48,6 @@ use crate::{
         },
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
         scanner_program_trust::{ScannerProgramTrust, scanner_program_trust},
-        system_scan_run::{
-            SystemScanControl, SystemScanStart, scan_found_threats, unit_run_toast_text,
-        },
     },
     shared_widgets::{
         activity_entries::{
@@ -68,7 +58,6 @@ use crate::{
         },
         awaited_dialogs::{chosen_files_to_open, chosen_folders_to_open, deliver_local_outcome},
         database_migration_failure_text::describe_history_failure,
-        loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
         scan_runs::{
             found_threat_row::FoundThreatRow,
             scan_outcome_text::scan_target_name,
@@ -88,8 +77,6 @@ use crate::{
         },
     },
 };
-
-const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
 
 enum ProfileManagerView {
     ManagerClosed,
@@ -155,7 +142,6 @@ pub struct ScanPage {
     scan_options_section: Controller<ScanOptionsSection>,
     device_scan_activity: DeviceScanActivity,
     reported_scan_activity: PageScanActivity,
-    system_scan_control: SystemScanControl,
     recent_scans_group: Controller<ActivityHistoryGroup>,
     exclusions_section: Controller<ScanExclusionsSection>,
     toaster: Toaster,
@@ -183,8 +169,6 @@ pub enum ScanPageInput {
     ToastRequested(String),
     QuarantineEntriesChanged,
     ClamavReportConfirmed(ClamavReportRequest),
-    EvidenceGathered(GatheredEvidence),
-    SystemScanRequested,
     HistoryReloadRequested,
 }
 
@@ -193,7 +177,6 @@ pub enum ScanPageOutput {
     ScanActivityChanged(PageScanActivity),
     QuarantineEntriesChanged,
     ActivityRecorded,
-    EvidenceRefreshRequested,
     ClamavReportConfirmed(ClamavReportRequest),
 }
 
@@ -214,28 +197,6 @@ pub enum ScanPageCommand {
     ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
     ProfilesLoaded(Result<Vec<ScanProfile>, ProfileStoreFailure>),
     EicarTestFileWritten(Result<NamedTempFile, EicarTestFileFailure>),
-    SystemScanFinished {
-        start_outcome: UnitStartOutcome,
-        scan_service: ScanServiceEvidence,
-    },
-}
-
-fn system_scan_toast(
-    start_outcome: &UnitStartOutcome,
-    scan_service: &ScanServiceEvidence,
-) -> adw::Toast {
-    let run_toast = adw::Toast::builder()
-        .title(unit_run_toast_text(start_outcome, scan_service))
-        .use_markup(false)
-        .build();
-    if scan_found_threats(start_outcome, scan_service) {
-        run_toast.set_button_label(Some(&gettext("Review")));
-        run_toast.set_action_name(Some("win.show-page"));
-        run_toast
-            .set_action_target_value(Some(&ApplicationPage::Detections.page_name().to_variant()));
-        run_toast.set_timeout(FOUND_THREATS_TOAST_SECONDS);
-    }
-    run_toast
 }
 
 fn close_enclosing_popover(clicked_button: &gtk::Button) {
@@ -767,36 +728,6 @@ impl Component for ScanPage {
                         },
 
                         adw::PreferencesGroup {
-                            set_title: &gettext("System scan"),
-                            #[watch]
-                            set_description: Some(&gtk::glib::markup_escape_text(&model.system_scan_control.group_description())),
-                            #[watch]
-                            set_visible: model.scan_page_state.shows_scan_settings() && model.system_scan_control.shows_system_scan(),
-
-                            adw::ActionRow {
-                                set_use_markup: false,
-                                set_title: &gettext("Folders scanned"),
-                                #[watch]
-                                set_subtitle: &model.system_scan_control.scanned_folders_text(),
-
-                                add_suffix = &gtk::Stack {
-                                    add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
-                                        set_label: &gettext("Run Now"),
-                                        set_valign: gtk::Align::Center,
-                                        #[watch]
-                                        set_sensitive: model.system_scan_control.accepts_run(),
-                                        connect_clicked => ScanPageInput::SystemScanRequested,
-                                    },
-                                    add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
-                                        set_tooltip_text: Some(&gettext("Starting the scan…")),
-                                    },
-                                    #[watch]
-                                    set_visible_child_name: busy_page_name(model.system_scan_control.run_is_starting()),
-                                },
-                            },
-                        },
-
-                        adw::PreferencesGroup {
                             set_title: &gettext("Found so far"),
                             set_margin_top: 12,
                             #[watch]
@@ -924,7 +855,6 @@ impl Component for ScanPage {
             scan_options_section: ScanOptionsSection::builder().launch(()).detach(),
             device_scan_activity: DeviceScanActivity::DeviceScanIdle,
             reported_scan_activity: PageScanActivity::PageScanIdle,
-            system_scan_control: SystemScanControl::new(),
             recent_scans_group: ActivityHistoryGroup::builder()
                 .launch(ActivityHistoryGroupInit {
                     activity_history: page_init.activity_history,
@@ -1042,31 +972,10 @@ impl Component for ScanPage {
                 let _shell_closed =
                     sender.output(ScanPageOutput::ClamavReportConfirmed(report_request));
             }
-            ScanPageInput::EvidenceGathered(GatheredEvidence::Gathered {
-                protection_evidence,
-                ..
-            }) => self
-                .system_scan_control
-                .evidence_gathered(&protection_evidence),
-            ScanPageInput::EvidenceGathered(GatheredEvidence::NotGatheredYet) => {}
             ScanPageInput::HistoryReloadRequested => {
                 self.recent_scans_group
                     .emit(ActivityHistoryGroupInput::ReloadRequested);
             }
-            ScanPageInput::SystemScanRequested => match self.system_scan_control.run_requested() {
-                SystemScanStart::StartServiceUnit { service_unit } => {
-                    sender.oneshot_command(async move {
-                        let start_outcome = start_system_unit(service_unit).await;
-                        ScanPageCommand::SystemScanFinished {
-                            start_outcome,
-                            scan_service: scan_service_evidence(
-                                service_unit_snapshot(service_unit).await,
-                            ),
-                        }
-                    });
-                }
-                SystemScanStart::NothingToStart => {}
-            },
         }
         self.report_scan_activity(&sender);
     }
@@ -1167,15 +1076,6 @@ impl Component for ScanPage {
             }
             ScanPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
                 self.page_notice = ScanPageNotice::ScanNotRecorded(recording_failure);
-            }
-            ScanPageCommand::SystemScanFinished {
-                start_outcome,
-                scan_service,
-            } => {
-                self.system_scan_control.run_finished();
-                self.toaster
-                    .add_toast(system_scan_toast(&start_outcome, &scan_service));
-                let _shell_closed = sender.output(ScanPageOutput::EvidenceRefreshRequested);
             }
         }
         self.report_scan_activity(&sender);

@@ -51,13 +51,13 @@ On-Access Scanning shows whether clamonacc runs, which folders and mounts it wat
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scheduled-scans.webp" width="800" alt="Recording of the Scheduled Scans page with the schedule and its next run">
 
-When the system has a scan timer, Scheduled Scans shows it, its next run and how the last one ended. Otherwise choose how often Lazaret scans (hourly, daily, weekly or monthly), which targets, and whether to skip the scan on battery or quarantine detections automatically. Scans run even when Lazaret is closed, and a scan missed while the computer was off runs once it is back on. Below, the history lists every scheduled run.
+When the system has a scan timer, Scheduled Scans shows it, its next run and how the last one ended, and **Run Now** starts its scan service on demand. Otherwise choose how often Lazaret scans (hourly, daily, weekly or monthly), which targets, and whether to skip the scan on battery or quarantine detections automatically. Scans run even when Lazaret is closed, and a scan missed while the computer was off runs once it is back on. Below, the history lists every scheduled run.
 
 ## Manual Scan
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/manual-scan.webp" width="800" alt="Recording of the Manual Scan page, then the profile manager opened with Manage Profiles">
 
-Drop files or folders on Manual Scan, or add them with the buttons, and press **Start Scan**. You can also pass paths on the command line, `lazaret /path/to/folder`, or use the context-menu action of your file manager (Nautilus, Dolphin and Nemo, turned on under **Preferences**). Lazaret scans with clamd when it is running, which is faster because its signatures are already loaded, and uses the standalone scanner otherwise. When the system has a scan service, **Run Now** starts it on demand.
+Drop files or folders on Manual Scan, or add them with the buttons, and press **Start Scan**. You can also pass paths on the command line, `lazaret /path/to/folder`, or use the context-menu action of your file manager (Nautilus, Dolphin and Nemo, turned on under **Preferences**). Lazaret scans with clamd when it is running, which is faster because its signatures are already loaded, and uses the standalone scanner otherwise.
 
 A profile picks targets and exclusions in one go. Manage them with **Manage Profiles**. Exclusions skip folders and patterns in every scan; home scans skip package and toolchain caches by default:
 

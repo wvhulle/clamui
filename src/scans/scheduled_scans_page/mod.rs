@@ -4,3 +4,4 @@ pub mod scan_schedule_units;
 pub mod scheduled_scans_component;
 pub mod scheduled_scans_presentation;
 pub mod scheduled_scans_state;
+pub mod system_scan_run;

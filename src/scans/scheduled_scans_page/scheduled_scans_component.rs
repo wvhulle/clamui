@@ -5,18 +5,30 @@ use relm4::{
 };
 
 use crate::{
-    application_window::protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
+    application_window::{
+        application_pages::ApplicationPage,
+        protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
+    },
     host_services::{
         activity_history::activity_history_database::ActivityHistory,
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
         },
         desktop::locale_formatting::host_moment_formatters,
+        protection_evidence::host_protection_evidence::{
+            ScanServiceEvidence, scan_service_evidence,
+        },
+        systemd_bus::host_systemd_units::{
+            UnitStartOutcome, service_unit_snapshot, start_system_unit,
+        },
     },
     scans::scheduled_scans_page::{
         scan_schedule_component::ScanScheduleSection,
         scheduled_scans_presentation::{ScheduledScanAction, scheduled_scans_page_steps},
         scheduled_scans_state::ScheduledScansPageOutput,
+        system_scan_run::{
+            SystemScanControl, SystemScanStart, scan_found_threats, unit_run_toast_text,
+        },
     },
     shared_widgets::{
         activity_entries::{
@@ -45,6 +57,7 @@ pub struct ScheduledScansPage {
     gathered_evidence: GatheredEvidence,
     schedule_section: Controller<ScanScheduleSection>,
     history_group: Controller<ActivityHistoryGroup>,
+    system_scan_control: SystemScanControl,
 }
 
 #[derive(Debug)]
@@ -54,6 +67,35 @@ pub enum ScheduledScansPageInput {
     EvidenceGathered(GatheredEvidence),
     HistoryReloadRequested,
     StepRequested(TimelineStepRowOutput<ScheduledScanAction>),
+    SystemScanRequested,
+}
+
+#[derive(Debug)]
+pub enum ScheduledScansPageCommand {
+    SystemScanFinished {
+        start_outcome: UnitStartOutcome,
+        scan_service: ScanServiceEvidence,
+    },
+}
+
+const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
+
+fn system_scan_toast(
+    start_outcome: &UnitStartOutcome,
+    scan_service: &ScanServiceEvidence,
+) -> adw::Toast {
+    let run_toast = adw::Toast::builder()
+        .title(unit_run_toast_text(start_outcome, scan_service))
+        .use_markup(false)
+        .build();
+    if scan_found_threats(start_outcome, scan_service) {
+        run_toast.set_button_label(Some(&gettext("Review")));
+        run_toast.set_action_name(Some("win.show-page"));
+        run_toast
+            .set_action_target_value(Some(&ApplicationPage::Detections.page_name().to_variant()));
+        run_toast.set_timeout(FOUND_THREATS_TOAST_SECONDS);
+    }
+    run_toast
 }
 
 impl ScheduledScansPage {
@@ -91,7 +133,7 @@ impl Component for ScheduledScansPage {
     type Init = ActivityHistory;
     type Input = ScheduledScansPageInput;
     type Output = ScheduledScansPageOutput;
-    type CommandOutput = ();
+    type CommandOutput = ScheduledScansPageCommand;
 
     view! {
         adw::ToastOverlay {
@@ -118,6 +160,37 @@ impl Component for ScheduledScansPage {
                     add_named[Some(LOADING_PAGE_NAME)] = status_loading_page -> adw::StatusPage {},
                     add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
                         add: status_group,
+
+                    adw::PreferencesGroup {
+                        set_title: &gettext("System scan"),
+                        #[watch]
+                        set_description: Some(&gtk::glib::markup_escape_text(&model.system_scan_control.group_description())),
+                        #[watch]
+                        set_visible: model.system_scan_control.shows_system_scan(),
+
+                        adw::ActionRow {
+                            set_use_markup: false,
+                            set_title: &gettext("Folders scanned"),
+                            #[watch]
+                            set_subtitle: &model.system_scan_control.scanned_folders_text(),
+
+                            add_suffix = &gtk::Stack {
+                                add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
+                                    set_label: &gettext("Run Now"),
+                                    set_valign: gtk::Align::Center,
+                                    #[watch]
+                                    set_sensitive: model.system_scan_control.accepts_run(),
+                                    connect_clicked => ScheduledScansPageInput::SystemScanRequested,
+                                },
+                                add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                                    set_tooltip_text: Some(&gettext("Starting the scan…")),
+                                },
+                                #[watch]
+                                set_visible_child_name: busy_page_name(model.system_scan_control.run_is_starting()),
+                            },
+                        },
+                    },
+
                         add: model.schedule_section.widget(),
                         add: model.history_group.widget(),
                     },
@@ -160,6 +233,7 @@ impl Component for ScheduledScansPage {
                     ),
                 })
                 .detach(),
+            system_scan_control: SystemScanControl::new(),
         };
         let status_group = &model.status_rows.widget().clone();
         let status_loading_page = &loading_status_page(&gettext("Checking the schedule…"));
@@ -182,6 +256,14 @@ impl Component for ScheduledScansPage {
                 self.evidence_refresh = evidence_refresh;
             }
             ScheduledScansPageInput::EvidenceGathered(gathered_evidence) => {
+                if let GatheredEvidence::Gathered {
+                    protection_evidence,
+                    ..
+                } = &gathered_evidence
+                {
+                    self.system_scan_control
+                        .evidence_gathered(protection_evidence);
+                }
                 self.gathered_evidence = gathered_evidence;
                 self.show_status_steps();
                 self.history_group
@@ -200,6 +282,42 @@ impl Component for ScheduledScansPage {
                 root.clipboard().set_text(&copied_command);
                 self.toaster
                     .add_toast(adw::Toast::new(&gettext("Command copied to clipboard")));
+            }
+            ScheduledScansPageInput::SystemScanRequested => {
+                match self.system_scan_control.run_requested() {
+                    SystemScanStart::StartServiceUnit { service_unit } => {
+                        sender.oneshot_command(async move {
+                            let start_outcome = start_system_unit(service_unit).await;
+                            ScheduledScansPageCommand::SystemScanFinished {
+                                start_outcome,
+                                scan_service: scan_service_evidence(
+                                    service_unit_snapshot(service_unit).await,
+                                ),
+                            }
+                        });
+                    }
+                    SystemScanStart::NothingToStart => {}
+                }
+            }
+        }
+    }
+
+    fn update_cmd(
+        &mut self,
+        page_command: ScheduledScansPageCommand,
+        sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match page_command {
+            ScheduledScansPageCommand::SystemScanFinished {
+                start_outcome,
+                scan_service,
+            } => {
+                self.system_scan_control.run_finished();
+                self.toaster
+                    .add_toast(system_scan_toast(&start_outcome, &scan_service));
+                let _shell_closed =
+                    sender.output(ScheduledScansPageOutput::EvidenceRefreshRequested);
             }
         }
     }

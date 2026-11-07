@@ -7,4 +7,3 @@ pub mod scan_profile_selection;
 pub mod scan_profiles_dialog;
 pub mod scan_target_row;
 pub mod scanner_program_trust;
-pub mod system_scan_run;

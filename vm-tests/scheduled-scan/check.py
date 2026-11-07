@@ -17,7 +17,7 @@ with subtest("the window opens on the first area that needs attention"):
     machine.screenshot("start_page")
 
 with subtest("Run Now asks for a password and runs the system scan"):
-    activate_window_action("show-page", "manual-scan")
+    activate_window_action("show-page", "scheduled-scans")
     time.sleep(2)
     click_on_text("Run Now")
     time.sleep(3)
