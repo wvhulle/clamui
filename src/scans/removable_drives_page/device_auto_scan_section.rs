@@ -15,7 +15,8 @@ use crate::{
         DEVICE_SCAN_SKIP_BATTERY_KEY, DeviceAutoScanSettings,
     },
     shared_widgets::settings_group_reveal::{
-        ContentReadiness, GroupVisibility, SettingsGroupReveal,
+        ContentReadiness, GroupVisibility, ScrollAlignment, ScrollGroupIntoView,
+        SettingsGroupReveal,
     },
 };
 
@@ -61,7 +62,7 @@ impl Component for DeviceAutoScanSection {
                 connect_map => DeviceAutoScanSectionInput::VisibilityChanged(GroupVisibility::GroupMapped),
                 connect_unmap => DeviceAutoScanSectionInput::VisibilityChanged(GroupVisibility::GroupHidden),
                 #[track(model.group_reveal.reveals_now(DeviceSettingsGroup::AutoScanGroup))]
-                child_focus: gtk::DirectionType::TabForward,
+                scroll_group_into_view: ScrollAlignment::GroupAtTop,
 
                 adw::SwitchRow {
                     set_title: &gettext("Enable Device Auto-Scan"),

@@ -1,3 +1,56 @@
+use relm4::{
+    gtk,
+    gtk::{glib, graphene, prelude::*},
+};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScrollAlignment {
+    GroupAtTop,
+}
+
+pub trait ScrollGroupIntoView {
+    fn scroll_group_into_view(&self, scroll_alignment: ScrollAlignment);
+}
+
+struct ScrolledGroupPosition {
+    scrolled_window: gtk::ScrolledWindow,
+    group_offset: f64,
+}
+
+fn scrolled_position_of(group_widget: &gtk::Widget) -> Option<ScrolledGroupPosition> {
+    let scrolled_window = group_widget
+        .ancestor(gtk::ScrolledWindow::static_type())?
+        .downcast::<gtk::ScrolledWindow>()
+        .ok()?;
+    let scrolled_content = scrolled_window.child()?;
+    let group_origin = group_widget.compute_point(&scrolled_content, &graphene::Point::zero())?;
+    Some(ScrolledGroupPosition {
+        scrolled_window,
+        group_offset: f64::from(group_origin.y()),
+    })
+}
+
+impl<GroupWidget: IsA<gtk::Widget>> ScrollGroupIntoView for GroupWidget {
+    fn scroll_group_into_view(&self, scroll_alignment: ScrollAlignment) {
+        let weak_group = self.upcast_ref::<gtk::Widget>().downgrade();
+        glib::idle_add_local_once(move || {
+            let Some(group_widget) = weak_group.upgrade() else {
+                return;
+            };
+            let _focus_moved = group_widget.child_focus(gtk::DirectionType::TabForward);
+            let Some(group_position) = scrolled_position_of(&group_widget) else {
+                return;
+            };
+            match scroll_alignment {
+                ScrollAlignment::GroupAtTop => group_position
+                    .scrolled_window
+                    .vadjustment()
+                    .set_value(group_position.group_offset),
+            }
+        });
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GroupVisibility {
     GroupHidden,

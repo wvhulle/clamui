@@ -22,7 +22,8 @@ use crate::{
         },
     },
     shared_widgets::settings_group_reveal::{
-        ContentReadiness, GroupVisibility, SettingsGroupReveal,
+        ContentReadiness, GroupVisibility, ScrollAlignment, ScrollGroupIntoView,
+        SettingsGroupReveal,
     },
 };
 
@@ -262,7 +263,7 @@ impl Component for ScanScheduleSection {
             adw::PreferencesGroup {
                 set_title: &gettext("Schedule"),
                 #[track(model.group_reveal.reveals_now(ScheduleSettingsGroup::ScheduleGroup))]
-                child_focus: gtk::DirectionType::TabForward,
+                scroll_group_into_view: ScrollAlignment::GroupAtTop,
                 #[watch]
                 set_sensitive: allows_applying_schedule(&model.system_schedule_owner),
                 #[watch]

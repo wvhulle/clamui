@@ -49,7 +49,10 @@ use crate::{
                 DetectionSwitchState, SwitchAvailability,
             },
         },
-        settings_group_reveal::{ContentReadiness, GroupVisibility, SettingsGroupReveal},
+        settings_group_reveal::{
+            ContentReadiness, GroupVisibility, ScrollAlignment, ScrollGroupIntoView,
+            SettingsGroupReveal,
+        },
     },
 };
 
@@ -811,7 +814,7 @@ impl Component for EngineSettingsSections {
                     #[watch]
                     set_visible: model.shows_detection_switches(),
                     #[track(model.reveals_group(RevealedGroup::DetectionSwitchGroup))]
-                    child_focus: gtk::DirectionType::TabForward,
+                    scroll_group_into_view: ScrollAlignment::GroupAtTop,
                 },
 
                 #[local_ref]
@@ -824,7 +827,7 @@ impl Component for EngineSettingsSections {
                     )),
 
                     #[track(model.reveals_group(RevealedGroup::ConfigRowsGroup))]
-                    child_focus: gtk::DirectionType::TabForward,
+                    scroll_group_into_view: ScrollAlignment::GroupAtTop,
 
                     adw::ActionRow {
                         set_title: &gettext("No settings in this section"),
