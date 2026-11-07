@@ -7,11 +7,11 @@ Lazaret is a desktop front-end for the ClamAV that is already installed on the h
 ```mermaid
 flowchart LR
     subgraph gui["lazaret (desktop user)"]
-        scan["scan_page"]
-        quarantine["quarantine_page"]
+        scan["scans/manual_scan_page"]
+        quarantine["findings/quarantine_page"]
         protection["protection_page"]
-        detections["detections_page"]
-        schedules["scan_page/scan_schedule_page"]
+        detections["findings/detections_page"]
+        schedules["scans/scheduled_scans_page"]
         lookups["host_services/threat_intel"]
         settings["shared_widgets/engine_settings"]
     end
@@ -44,7 +44,7 @@ flowchart LR
     helper -->|restarts| systemd
 ```
 
-The source follows the window as you see it. Each sidebar page has a directory under `src/` (`protection_page/`, `detections_page/`, `scan_page/`, `logs_page/`, `quarantine_page/`, `signatures_page/`, `hardening_page/`). The subpages and dialogs you open from a page sit in directories inside it, for example `scan_page/exclusions_page/`. `application_window/` holds the window, sidebar, tray and actions, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the settings helper and online lookups. `headless_modes/` holds the scheduled scan that runs without a window. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots and recordings, packaging and releases.
+The source follows the window as you see it. Sidebar groups have a directory under `src/` with one directory per page: `signatures/` (`signature_sources_page/`, `database_updates_page/`), `scans/` (`manual_scan_page/`, `scheduled_scans_page/`), `findings/` (`detections_page/`, `quarantine_page/`) and `sharing/` (`analysis_page/`). The remaining pages have their own directory: `protection_page/`, `logs_page/` and `hardening_page/`. The subpages and dialogs you open from a page sit in directories inside it, for example `scans/manual_scan_page/exclusions_page/`. `application_window/` holds the window, sidebar, tray and actions, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the settings helper and online lookups, with the protection evidence the status timeline reads in `host_services/protection_evidence/`. `headless_modes/` holds the scheduled scan that runs without a window. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots and recordings, packaging and releases.
 
 The interface follows the Elm architecture through Relm4. The window shell owns startup, the tray and the close behaviour. A page navigation component owns the sidebar, the page stack and the settings subpages. Every page and dialog keeps its state in a plain model that only `update` changes, in answer to messages from widgets, child components, GTK actions and finished commands. Settings stored in GSettings are mirrored into the models that show them: a change sends a message, and `update` writes it back. Work that waits on the host runs as a command, and its outcome returns as a message, so no state is shared between widgets.
 
