@@ -2,11 +2,8 @@ use std::time::Duration;
 
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentParts, ComponentSender, adw,
-    adw::prelude::*,
-    gtk,
-    gtk::glib,
-    prelude::{DynamicIndex, FactoryVecDeque},
+    Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
+    adw::prelude::*, gtk, gtk::glib, prelude::FactoryVecDeque,
 };
 
 use crate::{
@@ -20,9 +17,8 @@ use crate::{
                 DETECTION_OPTIONS, DetectionOption, configured_values, effective_switch,
             },
             setting_provenance::{
-                ClamavConfigKind, ConfigFileOwner, change_snippet, drift_snippet_text,
-                inspect_config_file_owner, managed_config_description, setting_lock_for_key,
-                values_with_edit,
+                ClamavConfigKind, ConfigFileOwner, drift_snippet_text, inspect_config_file_owner,
+                managed_config_description, setting_lock_for_key, values_with_edit,
             },
         },
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
@@ -40,13 +36,17 @@ use crate::{
             deliver_local_outcome,
         },
         engine_settings::{
+            config_line_copy_dialog::{
+                ConfigLineCopyDialog, ConfigLineCopyDialogOutput, ConfigLineCopyInit,
+            },
             config_setting_row::{
                 ConfigSettingRow, ConfigSettingRowInit, ConfigSettingRowInput,
-                ConfigSettingRowOutput, RowChangeActivity,
+                ConfigSettingRowOutput, RowChangeActivity, SettingAvailability, SettingEditorDraft,
+                config_row_presentation,
             },
             detection_switch_row::{
                 DetectionSwitchRow, DetectionSwitchRowInput, DetectionSwitchRowOutput,
-                DetectionSwitchState, SwitchAvailability,
+                DetectionSwitchState,
             },
         },
     },
@@ -139,14 +139,58 @@ enum UnlockState {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChangedRow {
-    ConfigRow(DynamicIndex),
+    ConfigRow {
+        setting_key: String,
+        value_position: usize,
+    },
     DetectionSwitch(DetectionOption),
+}
+
+enum CopyDialogState {
+    NoCopyDialog,
+    CopyDialogOpen(Controller<ConfigLineCopyDialog>),
 }
 
 #[derive(Debug)]
 enum ChangeProgress {
     NoChangeRunning,
     ChangeRunning { changed_row: ChangedRow },
+}
+
+impl ChangedRow {
+    fn is_config_row(&self, setting_key: &str, value_position: usize) -> bool {
+        match self {
+            Self::ConfigRow {
+                setting_key: changed_key,
+                value_position: changed_position,
+            } => changed_key == setting_key && *changed_position == value_position,
+            Self::DetectionSwitch(_) => false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SettingTunability {
+    TunableAtRuntime,
+    NotTunableAtRuntime,
+}
+
+const fn setting_availability_for(
+    setting_tunability: SettingTunability,
+    unlock_state: &UnlockState,
+) -> SettingAvailability {
+    match (setting_tunability, unlock_state) {
+        (SettingTunability::TunableAtRuntime, UnlockState::Unlocked { .. }) => {
+            SettingAvailability::ChangeableNow
+        }
+        (SettingTunability::TunableAtRuntime, UnlockState::Locked) => {
+            SettingAvailability::LockedUntilUnlocked
+        }
+        (
+            SettingTunability::NotTunableAtRuntime,
+            UnlockState::Locked | UnlockState::Unlocked { .. },
+        ) => SettingAvailability::NotAllowedAtRuntime,
+    }
 }
 
 impl ChangeProgress {
@@ -222,6 +266,7 @@ pub struct EngineSettingsSections {
     setting_rows: FactoryVecDeque<ConfigSettingRow>,
     detection_switches: FactoryVecDeque<DetectionSwitchRow>,
     configured_settings: Vec<ConfigSetting>,
+    copy_dialog: CopyDialogState,
 }
 
 #[derive(Debug)]
@@ -240,12 +285,19 @@ pub enum EngineSettingsSectionsOutput {
 pub enum EngineSettingsSectionsInput {
     UnlockToggled(bool),
     ValueApplied {
-        row_index: DynamicIndex,
         setting_key: String,
         sibling_values: Vec<String>,
         value_position: usize,
-        edited_text: String,
+        config_value: String,
     },
+    LineCopyRequested {
+        setting_key: String,
+        sibling_values: Vec<String>,
+        value_position: usize,
+        editor_draft: SettingEditorDraft,
+    },
+    ConfigLineCopied(String),
+    CopyDialogClosed,
     LiveChangeConfirmed {
         unlock_generation: u64,
         changed_row: ChangedRow,
@@ -333,7 +385,7 @@ fn live_change_failure_text(change_failure: &LiveChangeFailure) -> String {
 fn live_tunable_config_description(config_path: &str) -> String {
     gettext(
         "{path} combines your system configuration with the changes made here. While locked, \
-         editing a value and pressing the check mark copies the line for your configuration. \
+         settings are read-only: use Copy configuration line to copy one for your configuration. \
          After unlocking, the allowed settings change directly.",
     )
     .replace("{path}", config_path)
@@ -424,6 +476,8 @@ fn present_live_change_confirmation(
 fn setting_row_inits(
     config_settings: &[ConfigSetting],
     settings_section: EngineSettingsSection,
+    setting_availability: impl Fn(&str) -> SettingAvailability,
+    change_activity: impl Fn(&str, usize) -> RowChangeActivity,
 ) -> Vec<ConfigSettingRowInit> {
     let shown_settings = config_settings
         .iter()
@@ -436,18 +490,27 @@ fn setting_row_inits(
                 .iter()
                 .filter(|other_setting| other_setting.setting_key == config_setting.setting_key)
                 .collect::<Vec<_>>();
+            let setting_key = sanitize_scanner_line(&config_setting.setting_key);
+            let setting_value = sanitize_scanner_line(&config_setting.setting_value);
+            let value_position = same_key_settings
+                .iter()
+                .position(|same_key_setting| std::ptr::eq(**same_key_setting, *config_setting))
+                .unwrap_or_default();
             ConfigSettingRowInit {
-                setting_key: sanitize_scanner_line(&config_setting.setting_key),
-                setting_value: sanitize_scanner_line(&config_setting.setting_value),
-                setting_lock: setting_lock_for_key(&config_setting.setting_key),
+                row_presentation: config_row_presentation(
+                    &setting_key,
+                    &setting_value,
+                    setting_lock_for_key(&config_setting.setting_key),
+                    setting_availability(&config_setting.setting_key),
+                ),
+                change_activity: change_activity(&setting_key, value_position),
                 sibling_values: same_key_settings
                     .iter()
                     .map(|same_key_setting| sanitize_scanner_line(&same_key_setting.setting_value))
                     .collect(),
-                value_position: same_key_settings
-                    .iter()
-                    .position(|same_key_setting| std::ptr::eq(**same_key_setting, *config_setting))
-                    .unwrap_or_default(),
+                setting_key,
+                setting_value,
+                value_position,
             }
         })
         .collect()
@@ -598,20 +661,26 @@ impl EngineSettingsSections {
         )
     }
 
+    fn setting_tunability(&self, setting_key: &str) -> SettingTunability {
+        if self.offers_live_changes() && self.setting_is_tunable(setting_key) {
+            SettingTunability::TunableAtRuntime
+        } else {
+            SettingTunability::NotTunableAtRuntime
+        }
+    }
+
+    fn setting_availability(&self, setting_key: &str) -> SettingAvailability {
+        setting_availability_for(self.setting_tunability(setting_key), &self.unlock_state)
+    }
+
     fn detection_switch_state(&self, detection_option: DetectionOption) -> DetectionSwitchState {
-        let setting_key = detection_option.setting_key();
-        let tunable = self.offers_live_changes() && self.setting_is_tunable(setting_key);
         DetectionSwitchState {
             detection_option,
             switched_on: effective_switch(
                 &self.detection_values(detection_option),
                 detection_option,
             ),
-            switch_availability: match (tunable, self.is_unlocked()) {
-                (true, true) => SwitchAvailability::ChangeableNow,
-                (true, false) => SwitchAvailability::LockedUntilUnlocked,
-                (false, _not_tunable) => SwitchAvailability::NotAllowedAtRuntime,
-            },
+            switch_availability: self.setting_availability(detection_option.setting_key()),
             change_activity: self.change_progress.row_change_activity(|changed_row| {
                 *changed_row == ChangedRow::DetectionSwitch(detection_option)
             }),
@@ -632,21 +701,50 @@ impl EngineSettingsSections {
             });
     }
 
+    fn config_row_activity(&self, setting_key: &str, value_position: usize) -> RowChangeActivity {
+        self.change_progress.row_change_activity(|changed_row| {
+            changed_row.is_config_row(setting_key, value_position)
+        })
+    }
+
     fn refresh_setting_rows(&self) {
-        (0..self.setting_rows.len()).for_each(|row_position| {
-            self.setting_rows.send(
-                row_position,
-                ConfigSettingRowInput::ChangeActivityChanged(
-                    self.change_progress.row_change_activity(|changed_row| {
-                        matches!(
-                            changed_row,
-                            ChangedRow::ConfigRow(running_index)
-                                if running_index.current_index() == row_position
-                        )
-                    }),
-                ),
-            );
+        self.setting_rows
+            .iter()
+            .enumerate()
+            .for_each(|(row_position, setting_row)| {
+                self.setting_rows.send(
+                    row_position,
+                    ConfigSettingRowInput::ChangeActivityChanged(
+                        self.change_progress
+                            .row_change_activity(|changed_row| match changed_row {
+                                ChangedRow::ConfigRow {
+                                    setting_key,
+                                    value_position,
+                                } => setting_row.is_changed_row(setting_key, *value_position),
+                                ChangedRow::DetectionSwitch(_) => false,
+                            }),
+                    ),
+                );
+            });
+    }
+
+    fn rebuild_setting_rows(&mut self) {
+        let row_inits = setting_row_inits(
+            &self.configured_settings,
+            self.settings_section,
+            |setting_key| self.setting_availability(setting_key),
+            |setting_key, value_position| self.config_row_activity(setting_key, value_position),
+        );
+        let mut row_guard = self.setting_rows.guard();
+        row_guard.clear();
+        row_inits.into_iter().for_each(|row_init| {
+            row_guard.push_back(row_init);
         });
+    }
+
+    fn refresh_lockable_rows(&mut self) {
+        self.refresh_detection_switches();
+        self.rebuild_setting_rows();
     }
 
     fn refresh_changeable_rows(&self) {
@@ -661,6 +759,31 @@ impl EngineSettingsSections {
             gettext("Unlock")
         }
     }
+}
+
+fn load_section_config(
+    sender: &ComponentSender<EngineSettingsSections>,
+    settings_section: EngineSettingsSection,
+) {
+    sender.oneshot_command(async move {
+        let host_config = settings_section.read_host_config();
+        let config_file_owner = match &host_config {
+            HostConfigView::ConfigFound { config_path, .. } => {
+                inspect_config_file_owner(std::path::Path::new(config_path))
+            }
+            HostConfigView::ConfigNotFound => ConfigFileOwner::SystemPackage,
+        };
+        let tuning_load = if settings_section.offers_live_tuning() {
+            LiveTuningLoad::TuningRead(read_live_tuning().await)
+        } else {
+            LiveTuningLoad::TuningNotOffered
+        };
+        EngineSettingsSectionsCommand::ConfigLoaded {
+            host_config,
+            config_file_owner,
+            tuning_load,
+        }
+    });
 }
 
 #[relm4::component(pub)]
@@ -762,17 +885,26 @@ impl Component for EngineSettingsSections {
             .launch(adw::PreferencesGroup::default())
             .forward(sender.input_sender(), |row_output| match row_output {
                 ConfigSettingRowOutput::ValueApplied {
-                    row_index,
                     setting_key,
                     sibling_values,
                     value_position,
-                    edited_text,
+                    config_value,
                 } => EngineSettingsSectionsInput::ValueApplied {
-                    row_index,
                     setting_key,
                     sibling_values,
                     value_position,
-                    edited_text,
+                    config_value,
+                },
+                ConfigSettingRowOutput::LineCopyRequested {
+                    setting_key,
+                    sibling_values,
+                    value_position,
+                    editor_draft,
+                } => EngineSettingsSectionsInput::LineCopyRequested {
+                    setting_key,
+                    sibling_values,
+                    value_position,
+                    editor_draft,
                 },
             });
         let detection_switches = FactoryVecDeque::builder()
@@ -801,29 +933,12 @@ impl Component for EngineSettingsSections {
             setting_rows,
             detection_switches,
             configured_settings: Vec::new(),
+            copy_dialog: CopyDialogState::NoCopyDialog,
         };
         let setting_rows_group = model.setting_rows.widget();
         let detection_switch_group = model.detection_switches.widget();
         let widgets = view_output!();
-        sender.oneshot_command(async move {
-            let host_config = settings_section.read_host_config();
-            let config_file_owner = match &host_config {
-                HostConfigView::ConfigFound { config_path, .. } => {
-                    inspect_config_file_owner(std::path::Path::new(config_path))
-                }
-                HostConfigView::ConfigNotFound => ConfigFileOwner::SystemPackage,
-            };
-            let tuning_load = if settings_section.offers_live_tuning() {
-                LiveTuningLoad::TuningRead(read_live_tuning().await)
-            } else {
-                LiveTuningLoad::TuningNotOffered
-            };
-            EngineSettingsSectionsCommand::ConfigLoaded {
-                host_config,
-                config_file_owner,
-                tuning_load,
-            }
-        });
+        load_section_config(&sender, settings_section);
         ComponentParts { model, widgets }
     }
 
@@ -838,7 +953,7 @@ impl Component for EngineSettingsSections {
                 self.unlock_count += 1;
                 let relock_generation = self.unlock_count;
                 self.unlock_state = UnlockState::Unlocked { relock_generation };
-                self.refresh_detection_switches();
+                self.refresh_lockable_rows();
                 sender.oneshot_command(async move {
                     tokio::time::sleep(UNLOCK_DURATION).await;
                     EngineSettingsSectionsCommand::RelockDue { relock_generation }
@@ -846,7 +961,7 @@ impl Component for EngineSettingsSections {
             }
             EngineSettingsSectionsInput::UnlockToggled(false) => {
                 self.unlock_state = UnlockState::Locked;
-                self.refresh_detection_switches();
+                self.refresh_lockable_rows();
             }
             EngineSettingsSectionsInput::DetectionSwitchRequested {
                 detection_option,
@@ -883,42 +998,77 @@ impl Component for EngineSettingsSections {
                 self.refresh_detection_switches();
             }
             EngineSettingsSectionsInput::ValueApplied {
-                row_index,
                 setting_key,
                 sibling_values,
                 value_position,
-                edited_text,
-            } => {
-                let edited_text = sanitize_scanner_line(&edited_text);
-                match self.live_change_readiness_for(&setting_key) {
-                    LiveChangeReadiness::ReadyToChange { unlock_generation } => {
-                        let current_values =
-                            self.current_setting_values(&setting_key, &sibling_values);
-                        let new_values =
-                            values_with_edit(&current_values, value_position, edited_text);
-                        present_live_change_confirmation(
-                            root,
-                            ProposedLiveChange {
-                                unlock_generation,
-                                changed_row: ChangedRow::ConfigRow(row_index),
-                                setting_key,
-                                new_values,
+                config_value,
+            } => match self.live_change_readiness_for(&setting_key) {
+                LiveChangeReadiness::ReadyToChange { unlock_generation } => {
+                    let current_values = self.current_setting_values(&setting_key, &sibling_values);
+                    let new_values = values_with_edit(
+                        &current_values,
+                        value_position,
+                        sanitize_scanner_line(&config_value),
+                    );
+                    present_live_change_confirmation(
+                        root,
+                        ProposedLiveChange {
+                            unlock_generation,
+                            changed_row: ChangedRow::ConfigRow {
+                                setting_key: setting_key.clone(),
+                                value_position,
                             },
-                            &current_values,
-                            &sender,
-                        );
-                    }
-                    LiveChangeReadiness::ChangesLocked => {
-                        root.clipboard().set_text(&change_snippet(
-                            self.config_file_owner(),
-                            self.settings_section.config_kind(),
-                            &setting_key,
-                            &values_with_edit(&sibling_values, value_position, edited_text),
-                        ));
-                        Self::report_notice(&sender, EngineSettingsNotice::ChangeSnippetCopied);
-                    }
-                    LiveChangeReadiness::ChangeAlreadyRunning => {}
+                            setting_key,
+                            new_values,
+                        },
+                        &current_values,
+                        &sender,
+                    );
                 }
+                LiveChangeReadiness::ChangesLocked => {
+                    Self::report_notice(&sender, EngineSettingsNotice::StaleConfirmationDropped);
+                    self.rebuild_setting_rows();
+                }
+                LiveChangeReadiness::ChangeAlreadyRunning => {}
+            },
+            EngineSettingsSectionsInput::LineCopyRequested {
+                setting_key,
+                sibling_values,
+                value_position,
+                editor_draft,
+            } => {
+                let copy_dialog = ConfigLineCopyDialog::builder()
+                    .launch(ConfigLineCopyInit {
+                        setting_key,
+                        sibling_values,
+                        value_position,
+                        editor_draft,
+                        config_file_owner: self.config_file_owner(),
+                        config_kind: self.settings_section.config_kind(),
+                    })
+                    .forward(sender.input_sender(), |dialog_output| match dialog_output {
+                        ConfigLineCopyDialogOutput::ConfigLineCopied(config_line) => {
+                            EngineSettingsSectionsInput::ConfigLineCopied(config_line)
+                        }
+                        ConfigLineCopyDialogOutput::CopyDialogClosed => {
+                            EngineSettingsSectionsInput::CopyDialogClosed
+                        }
+                    });
+                copy_dialog.widget().present(Some(root));
+                self.copy_dialog = CopyDialogState::CopyDialogOpen(copy_dialog);
+            }
+            EngineSettingsSectionsInput::ConfigLineCopied(config_line) => {
+                root.clipboard().set_text(&config_line);
+                Self::report_notice(&sender, EngineSettingsNotice::ChangeSnippetCopied);
+                match &self.copy_dialog {
+                    CopyDialogState::CopyDialogOpen(copy_dialog) => {
+                        let _dialog_closed = copy_dialog.widget().close();
+                    }
+                    CopyDialogState::NoCopyDialog => {}
+                }
+            }
+            EngineSettingsSectionsInput::CopyDialogClosed => {
+                self.copy_dialog = CopyDialogState::NoCopyDialog;
             }
             EngineSettingsSectionsInput::LiveChangeConfirmed {
                 unlock_generation,
@@ -973,17 +1123,7 @@ impl Component for EngineSettingsSections {
                         config_path,
                         config_settings,
                     } => {
-                        let mut switch_guard = self.detection_switches.guard();
-                        switch_guard.clear();
-                        drop(switch_guard);
-                        self.configured_settings.clone_from(&config_settings);
-                        let mut row_guard = self.setting_rows.guard();
-                        setting_row_inits(&config_settings, self.settings_section)
-                            .into_iter()
-                            .for_each(|row_init| {
-                                row_guard.push_back(row_init);
-                            });
-                        drop(row_guard);
+                        self.configured_settings = config_settings;
                         self.config_load = ConfigLoad::ConfigShown {
                             config_path,
                             config_file_owner,
@@ -991,11 +1131,12 @@ impl Component for EngineSettingsSections {
                         let switch_states = DETECTION_OPTIONS
                             .map(|detection_option| self.detection_switch_state(detection_option));
                         let mut switch_guard = self.detection_switches.guard();
+                        switch_guard.clear();
                         switch_states.into_iter().for_each(|switch_state| {
                             switch_guard.push_back(switch_state);
                         });
                         drop(switch_guard);
-                        self.refresh_setting_rows();
+                        self.rebuild_setting_rows();
                     }
                     HostConfigView::ConfigNotFound => self.config_load = ConfigLoad::ConfigMissing,
                 }
@@ -1007,7 +1148,7 @@ impl Component for EngineSettingsSections {
                         if unlocked_generation == relock_generation
                 ) {
                     self.unlock_state = UnlockState::Locked;
-                    self.refresh_detection_switches();
+                    self.refresh_lockable_rows();
                 }
             }
             EngineSettingsSectionsCommand::LiveChangeFinished {
@@ -1021,6 +1162,7 @@ impl Component for EngineSettingsSections {
                 );
                 self.tuning_load = LiveTuningLoad::TuningRead(live_tuning);
                 self.refresh_changeable_rows();
+                load_section_config(&sender, self.settings_section);
             }
         }
     }
@@ -1047,6 +1189,7 @@ pub const fn settings_change_follow_up(
 #[cfg(test)]
 mod engine_settings_sections_tests {
     use super::*;
+    use crate::shared_widgets::engine_settings::config_setting_row::ConfigRowPresentation;
 
     #[test]
     fn a_live_change_reloads_the_audit_and_the_evidence() {
@@ -1176,6 +1319,111 @@ mod engine_settings_sections_tests {
         assert_eq!(
             ChangeProgress::NoChangeRunning.row_change_activity(|_changed_row| true),
             RowChangeActivity::ChangesAllowed
+        );
+    }
+
+    fn config_setting_of(setting_key: &str, setting_value: &str) -> ConfigSetting {
+        ConfigSetting {
+            setting_key: setting_key.to_owned(),
+            setting_value: setting_value.to_owned(),
+        }
+    }
+
+    #[test]
+    fn only_tunable_settings_become_changeable_and_only_after_unlocking() {
+        let unlocked_state = UnlockState::Unlocked {
+            relock_generation: 1,
+        };
+        assert_eq!(
+            setting_availability_for(SettingTunability::TunableAtRuntime, &unlocked_state),
+            SettingAvailability::ChangeableNow
+        );
+        assert_eq!(
+            setting_availability_for(SettingTunability::TunableAtRuntime, &UnlockState::Locked),
+            SettingAvailability::LockedUntilUnlocked
+        );
+        assert_eq!(
+            setting_availability_for(SettingTunability::NotTunableAtRuntime, &unlocked_state),
+            SettingAvailability::NotAllowedAtRuntime
+        );
+    }
+
+    #[test]
+    fn unlocked_rows_get_editors_and_locked_rows_stay_read_only() {
+        let config_settings = [
+            config_setting_of("MaxThreads", "4"),
+            config_setting_of("LogFile", "/var/log/clamd.log"),
+        ];
+        let row_presentations = |setting_availability| {
+            setting_row_inits(
+                &config_settings,
+                EngineSettingsSection::ScannerEngine,
+                |_setting_key| setting_availability,
+                |_setting_key, _value_position| RowChangeActivity::ChangesAllowed,
+            )
+            .into_iter()
+            .map(|row_init| row_init.row_presentation)
+            .collect::<Vec<_>>()
+        };
+        assert!(matches!(
+            row_presentations(SettingAvailability::ChangeableNow).as_slice(),
+            [
+                ConfigRowPresentation::EditableSettingRow(SettingEditorDraft::CountDraft {
+                    count_value: 4,
+                    ..
+                }),
+                ConfigRowPresentation::ProtectedSettingRow
+            ]
+        ));
+        assert!(matches!(
+            row_presentations(SettingAvailability::LockedUntilUnlocked).as_slice(),
+            [
+                ConfigRowPresentation::LockedSettingRow { .. },
+                ConfigRowPresentation::ProtectedSettingRow
+            ]
+        ));
+    }
+
+    #[test]
+    fn an_unlocked_edit_still_goes_through_the_confirmed_change() {
+        let unlock_state = UnlockState::Unlocked {
+            relock_generation: 4,
+        };
+        let change_readiness =
+            live_change_readiness(&unlock_state, &ChangeProgress::NoChangeRunning);
+        assert_eq!(
+            change_readiness,
+            LiveChangeReadiness::ReadyToChange {
+                unlock_generation: 4
+            }
+        );
+        assert_eq!(
+            confirmation_verdict(change_readiness, 4),
+            ConfirmationVerdict::StartConfirmedChange
+        );
+        let running_change = ChangeProgress::ChangeRunning {
+            changed_row: ChangedRow::ConfigRow {
+                setting_key: "MaxThreads".to_owned(),
+                value_position: 0,
+            },
+        };
+        assert_eq!(
+            running_change
+                .row_change_activity(|changed_row| changed_row.is_config_row("MaxThreads", 0)),
+            RowChangeActivity::ApplyingThisRow
+        );
+        assert_eq!(
+            running_change
+                .row_change_activity(|changed_row| changed_row.is_config_row("MaxThreads", 1)),
+            RowChangeActivity::ApplyingOtherRow
+        );
+    }
+
+    #[test]
+    fn copying_a_line_reports_a_copy_and_never_a_change() {
+        assert_eq!(
+            settings_change_follow_up(&EngineSettingsNotice::ChangeSnippetCopied),
+            SettingsChangeFollowUp::NothingToReload
         );
     }
 

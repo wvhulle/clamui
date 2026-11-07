@@ -2,6 +2,8 @@ CHANGE_SETTINGS_TITLE = "Change Settings"
 UNLOCK_LABEL = "Unlock"
 CONFIRM_APPLY_LABEL = "Apply"
 MAX_THREADS_TITLE = "MaxThreads"
+COPY_DIALOG_NOTICE = "Nothing is applied"
+COPY_LINE_LABEL = "Copy Line"
 LIVE_CONFIG_DESCRIPTION = "combines your system configuration"
 MERGED_CONFIG = "/run/lazaret/clamd.conf"
 OVERRIDES_FILE = "/var/lib/lazaret/clamd-overrides.conf"
@@ -39,11 +41,24 @@ def show_scan_engine_page():
     time.sleep(3)
 
 
+def enter_max_threads(new_value):
+    machine.send_key("ctrl-a")
+    machine.send_chars(f"{new_value}\n")
+
+
+def copy_max_threads_line(new_value):
+    move_focus_until(lambda: text_is_shown(MAX_THREADS_TITLE), "tab")
+    click_on_text(MAX_THREADS_TITLE)
+    machine.wait_for_text(COPY_DIALOG_NOTICE, timeout=timedelta(seconds=30))
+    enter_max_threads(new_value)
+    time.sleep(1)
+    click_on_text(COPY_LINE_LABEL)
+
+
 def edit_max_threads(new_value):
     move_focus_until(lambda: text_is_shown(MAX_THREADS_TITLE), "tab")
     click_on_text(MAX_THREADS_TITLE)
-    machine.send_key("ctrl-a")
-    machine.send_chars(f"{new_value}\n")
+    enter_max_threads(new_value)
 
 
 def wait_for_clamd():
@@ -107,10 +122,10 @@ with subtest("the Scanner Engine settings offer to unlock allowed settings"):
     move_focus_until(lambda: text_is_shown(CHANGE_SETTINGS_TITLE), "shift-tab")
     machine.wait_for_text(UNLOCK_LABEL, timeout=timedelta(seconds=30))
 
-with subtest("while locked, editing a setting only copies a snippet"):
-    edit_max_threads(3)
+with subtest("while locked, Copy configuration line only copies the line"):
+    copy_max_threads_line(3)
     time.sleep(3)
-    machine.screenshot("locked_edit")
+    machine.screenshot("locked_copy")
     machine.wait_for_text("Copied", timeout=timedelta(seconds=60))
     assert "MaxThreads 3" not in machine.succeed(f"cat {MERGED_CONFIG}"), "a locked edit changed clamd"
     assert "MaxThreads 3" not in machine.succeed(f"cat {OVERRIDES_FILE}"), "a locked edit changed clamd"

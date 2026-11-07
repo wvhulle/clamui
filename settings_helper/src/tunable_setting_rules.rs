@@ -1,5 +1,8 @@
+use crate::protection_change_rules::{
+    SettingValueKind, setting_value_kind, value_fits_setting_kind, value_has_only_safe_characters,
+};
+
 const PROTECTED_SETTINGS_LIST: &str = include_str!("../../data/protected-clamav-settings.txt");
-const MAXIMUM_VALUE_LENGTH: usize = 4096;
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum SettingRefusal {
@@ -11,15 +14,6 @@ pub enum SettingRefusal {
     InvalidValue { setting_key: String },
     #[error("no changes were given")]
     NoChanges,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SettingValueKind {
-    TrueOrFalse,
-    SizeInBytes,
-    PlainNumber,
-    AbsolutePath,
-    RestrictedText,
 }
 
 pub fn setting_is_protected(setting_key: &str) -> bool {
@@ -39,76 +33,21 @@ pub fn parse_tunable_settings(allowlist_text: &str) -> Vec<String> {
         .collect()
 }
 
-fn value_kind_of_setting(setting_key: &str) -> SettingValueKind {
-    if matches!(
-        setting_key,
-        "OnAccessPrevention"
-            | "OnAccessExtraScanning"
-            | "OnAccessDisableDDD"
-            | "ScanPE"
-            | "ScanELF"
-            | "ScanOLE2"
-            | "ScanPDF"
-            | "ScanHTML"
-            | "ScanMail"
-            | "ScanArchive"
-            | "AlertBrokenExecutables"
-            | "AlertEncrypted"
-            | "AlertEncryptedArchive"
-            | "AlertEncryptedDoc"
-            | "AlertOLE2Macros"
-            | "AlertExceedsMax"
-            | "DetectPUA"
-            | "HeuristicAlerts"
-            | "Bytecode"
-            | "ExtendedDetectionInfo"
-    ) {
-        SettingValueKind::TrueOrFalse
-    } else if setting_key.ends_with("Size") {
-        SettingValueKind::SizeInBytes
-    } else if matches!(
-        setting_key,
-        "MaxThreads" | "MaxDirectoryRecursion" | "MaxScanTime" | "OnAccessMaxThreads" | "Checks"
-    ) {
-        SettingValueKind::PlainNumber
-    } else if setting_key.ends_with("Path") {
-        SettingValueKind::AbsolutePath
-    } else {
-        SettingValueKind::RestrictedText
-    }
-}
-
-fn value_has_only_safe_characters(setting_value: &str) -> bool {
-    !setting_value.is_empty()
-        && setting_value.len() <= MAXIMUM_VALUE_LENGTH
-        && setting_value == setting_value.trim()
-        && setting_value.chars().all(|value_character| {
-            value_character.is_alphanumeric() || " ._/:+@=,-".contains(value_character)
-        })
-}
-
-fn value_matches_kind(setting_value: &str, value_kind: SettingValueKind) -> bool {
-    match value_kind {
-        SettingValueKind::TrueOrFalse => matches!(setting_value, "true" | "false" | "yes" | "no"),
-        SettingValueKind::SizeInBytes => {
-            let digits = setting_value
-                .strip_suffix(['k', 'K', 'm', 'M'])
-                .unwrap_or(setting_value);
-            !digits.is_empty()
-                && digits
-                    .chars()
-                    .all(|value_character| value_character.is_ascii_digit())
+fn value_kind_for_change(setting_key: &str) -> SettingValueKind {
+    match setting_value_kind(setting_key) {
+        SettingValueKind::UnknownSetting if setting_key.ends_with("Size") => {
+            SettingValueKind::SizeSetting
         }
-        SettingValueKind::PlainNumber => setting_value
-            .chars()
-            .all(|value_character| value_character.is_ascii_digit()),
-        SettingValueKind::AbsolutePath => {
-            setting_value.starts_with('/')
-                && !setting_value
-                    .split('/')
-                    .any(|path_segment| path_segment == "..")
+        SettingValueKind::UnknownSetting if setting_key.ends_with("Path") => {
+            SettingValueKind::PathSetting
         }
-        SettingValueKind::RestrictedText => true,
+        SettingValueKind::UnknownSetting => SettingValueKind::TextSetting,
+        known_kind @ (SettingValueKind::BooleanSetting
+        | SettingValueKind::CountSetting { .. }
+        | SettingValueKind::SizeSetting
+        | SettingValueKind::PathSetting
+        | SettingValueKind::PathListSetting
+        | SettingValueKind::TextSetting) => known_kind,
     }
 }
 
@@ -131,7 +70,7 @@ pub fn check_setting_change(
         });
     }
     if value_has_only_safe_characters(setting_value)
-        && value_matches_kind(setting_value, value_kind_of_setting(setting_key))
+        && value_fits_setting_kind(setting_value, value_kind_for_change(setting_key))
     {
         Ok(())
     } else {
@@ -231,6 +170,12 @@ mod tunable_setting_rules_tests {
         assert!(!value_is_accepted("OnAccessIncludePath", "/home/../etc"));
         assert!(value_is_accepted("MaxThreads", "8"));
         assert!(!value_is_accepted("MaxThreads", "eight"));
+        assert!(!value_is_accepted("MaxThreads", "100000"));
+        assert!(!value_is_accepted("ScanSWF", "maybe"));
+        assert!(value_is_accepted("NotARealClamdOption", "rejected"));
+        assert!(value_is_accepted("SomeUnlistedSize", "2M"));
+        assert!(!value_is_accepted("SomeUnlistedSize", "lots"));
+        assert!(!value_is_accepted("ExcludePath", "relative"));
     }
 
     #[test]

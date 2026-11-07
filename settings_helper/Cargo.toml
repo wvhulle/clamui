@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT"
 publish = false
 
+[lints.clippy]
+enum_variant_names = "allow"
+
 [dependencies]
 rustix = { version = "1", features = ["fs"] }
 tempfile = "3"

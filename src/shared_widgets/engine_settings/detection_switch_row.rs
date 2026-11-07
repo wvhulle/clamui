@@ -2,26 +2,22 @@ use gettextrs::gettext;
 use relm4::{
     FactorySender, adw,
     adw::prelude::*,
+    gtk,
     prelude::{DynamicIndex, FactoryComponent},
 };
 
 use crate::{
     host_services::clamav_config::detection_options::DetectionOption,
-    shared_widgets::engine_settings::config_setting_row::RowChangeActivity,
+    shared_widgets::engine_settings::config_setting_row::{
+        RowChangeActivity, SettingAvailability, SettingLockReason, setting_lock_tooltip,
+    },
 };
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SwitchAvailability {
-    ChangeableNow,
-    LockedUntilUnlocked,
-    NotAllowedAtRuntime,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DetectionSwitchState {
     pub detection_option: DetectionOption,
     pub switched_on: bool,
-    pub switch_availability: SwitchAvailability,
+    pub switch_availability: SettingAvailability,
     pub change_activity: RowChangeActivity,
 }
 
@@ -83,9 +79,9 @@ fn option_description(detection_option: DetectionOption) -> String {
 impl DetectionSwitchRow {
     fn availability_note(&self) -> String {
         match self.switch_state.switch_availability {
-            SwitchAvailability::ChangeableNow => String::new(),
-            SwitchAvailability::LockedUntilUnlocked => gettext("Unlock to change this setting."),
-            SwitchAvailability::NotAllowedAtRuntime => {
+            SettingAvailability::ChangeableNow => String::new(),
+            SettingAvailability::LockedUntilUnlocked => gettext("Unlock to change this setting."),
+            SettingAvailability::NotAllowedAtRuntime => {
                 gettext("Your administrator doesn't allow changing this setting from Lazaret.")
             }
         }
@@ -102,8 +98,24 @@ impl DetectionSwitchRow {
         .join(" ")
     }
 
+    const fn lock_reason(&self) -> Option<SettingLockReason> {
+        match self.switch_state.switch_availability {
+            SettingAvailability::ChangeableNow => None,
+            SettingAvailability::LockedUntilUnlocked => Some(SettingLockReason::UnlockRequired),
+            SettingAvailability::NotAllowedAtRuntime => {
+                Some(SettingLockReason::NotAllowedAtRuntime)
+            }
+        }
+    }
+
+    fn lock_tooltip(&self) -> String {
+        self.lock_reason()
+            .map(setting_lock_tooltip)
+            .unwrap_or_default()
+    }
+
     fn accepts_toggles(&self) -> bool {
-        self.switch_state.switch_availability == SwitchAvailability::ChangeableNow
+        self.switch_state.switch_availability == SettingAvailability::ChangeableNow
             && self.switch_state.change_activity.accepts_changes()
     }
 }
@@ -130,6 +142,16 @@ impl FactoryComponent for DetectionSwitchRow {
             connect_active_notify[sender] => move |toggled_row| {
                 sender.input(DetectionSwitchRowInput::ToggleRequested(toggled_row.is_active()));
             } @switch_toggled_handler,
+
+            add_prefix = &gtk::Image {
+                set_icon_name: Some("changes-prevent-symbolic"),
+                set_valign: gtk::Align::Center,
+                add_css_class: "dim-label",
+                #[watch]
+                set_visible: self.lock_reason().is_some(),
+                #[watch]
+                set_tooltip_text: Some(&self.lock_tooltip()),
+            },
         }
     }
 
