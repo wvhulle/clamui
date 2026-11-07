@@ -5,6 +5,7 @@ use tokio::task::spawn_blocking;
 use turso::{Builder, Connection, Row, Value};
 
 use crate::host_services::{
+    activity_history::submission_history_store::SUBMISSION_SCHEMA,
     clamav_scanner::{
         scan_progress_events::ThreatFindings, scanner_output_parser::sanitize_scanner_line,
     },
@@ -46,6 +47,7 @@ const HISTORY_SCHEMA: &str = "
         journal_cursor TEXT NOT NULL
     );
 ";
+const HISTORY_CONNECTION_PRAGMAS: &str = "PRAGMA foreign_keys=ON;";
 const ENTRY_COLUMNS: &str = "entry_id, started_at_unix, activity_status, activity_targets, \
                              inspected_file_count, threat_count, duration_millis, \
                              activity_output, scan_origin";
@@ -67,6 +69,8 @@ pub enum ActivityHistoryFailure {
     StoredStatusUnknown,
     #[error("a stored history entry has an unknown scan origin")]
     StoredOriginUnknown,
+    #[error("a stored submission has an unknown service, kind or status")]
+    StoredSubmissionUnreadable,
     #[error("a stored history entry has an impossible time: {0}")]
     StoredTimeInvalid(#[from] jiff::Error),
     #[error("the history lock is unavailable: {0}")]
@@ -443,7 +447,11 @@ impl ActivityHistory {
         let history_database = Builder::new_local(database_text_path).build().await?;
         let database_connection = history_database.connect()?;
         database_connection.busy_timeout(DATABASE_BUSY_TIMEOUT)?;
+        database_connection
+            .execute_batch(HISTORY_CONNECTION_PRAGMAS)
+            .await?;
         database_connection.execute_batch(HISTORY_SCHEMA).await?;
+        database_connection.execute_batch(SUBMISSION_SCHEMA).await?;
         add_scan_origin_column(&database_connection).await?;
         secure_database_files(&self.database_path);
         Ok(database_connection)
