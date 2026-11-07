@@ -18,9 +18,9 @@ use crate::{
     },
     shared_widgets::{
         engine_settings::engine_settings_sections::{
-            EngineSettingsNotice, EngineSettingsSection, EngineSettingsSections,
-            EngineSettingsSectionsOutput, SettingsChangeFollowUp, engine_settings_notice_toast,
-            settings_change_follow_up,
+            EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSection,
+            EngineSettingsSections, EngineSettingsSectionsInput, EngineSettingsSectionsOutput,
+            SettingsChangeFollowUp, engine_settings_notice_toast, settings_change_follow_up,
         },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
@@ -40,6 +40,9 @@ use crate::{
     },
 };
 
+pub const SCAN_ENGINE_SETTINGS_LAYOUT: EngineSettingsLayout =
+    EngineSettingsLayout::EngineWithDetection;
+
 pub struct ScanEnginePage {
     toaster: Toaster,
     status_rows: FactoryVecDeque<TimelineStepRow<ScanEngineAction>>,
@@ -48,7 +51,6 @@ pub struct ScanEnginePage {
     gathered_evidence: GatheredEvidence,
     clamd_socket_view: ClamdSocketView,
     engine_settings_sections: Controller<EngineSettingsSections>,
-    detection_settings_sections: Controller<EngineSettingsSections>,
     system_changes_group: Controller<SystemChangesGroup>,
     daemon_log_group: Controller<ServiceLogGroup>,
 }
@@ -58,6 +60,7 @@ pub enum ScanEnginePageInput {
     RefreshRequested,
     EvidenceRefreshChanged(EvidenceRefresh),
     EvidenceGathered(GatheredEvidence),
+    SettingsRevealRequested(EngineSettingsSection),
     SettingsNoticeReceived(EngineSettingsNotice),
     StepRequested(TimelineStepRowOutput<ScanEngineAction>),
     LogToastRequested(String),
@@ -162,7 +165,6 @@ impl Component for ScanEnginePage {
                     add_named[Some(LOADING_PAGE_NAME)] = status_loading_page -> adw::StatusPage {},
                     add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
                         add: status_group,
-                        add: model.detection_settings_sections.widget(),
                         add: model.engine_settings_sections.widget(),
                         add: model.system_changes_group.widget(),
                         add: model.daemon_log_group.widget(),
@@ -193,10 +195,7 @@ impl Component for ScanEnginePage {
             gathered_evidence: GatheredEvidence::NotGatheredYet,
             clamd_socket_view: ClamdSocketView::SocketInspecting,
             engine_settings_sections: EngineSettingsSections::builder()
-                .launch(EngineSettingsSection::ScannerEngine)
-                .forward(sender.input_sender(), page_input_for_settings_output),
-            detection_settings_sections: EngineSettingsSections::builder()
-                .launch(EngineSettingsSection::DetectionChoices)
+                .launch(SCAN_ENGINE_SETTINGS_LAYOUT)
                 .forward(sender.input_sender(), page_input_for_settings_output),
             system_changes_group: SystemChangesGroup::builder()
                 .launch(SystemChangesGroupInit {
@@ -243,6 +242,12 @@ impl Component for ScanEnginePage {
                 self.gathered_evidence = gathered_evidence;
                 self.show_status_steps();
                 Self::inspect_socket(&sender);
+            }
+            ScanEnginePageInput::SettingsRevealRequested(requested_section) => {
+                self.engine_settings_sections
+                    .emit(EngineSettingsSectionsInput::RevealRequested(
+                        requested_section,
+                    ));
             }
             ScanEnginePageInput::SettingsNoticeReceived(settings_notice) => {
                 self.toaster
@@ -306,5 +311,11 @@ mod scan_engine_component_tests {
             page_input_for_log_output(ServiceLogGroupOutput::ToastRequested("Exported.".to_owned())),
             ScanEnginePageInput::LogToastRequested(toast_text) if toast_text == "Exported."
         ));
+    }
+
+    #[test]
+    fn one_settings_component_and_so_one_unlock_shows_both_engine_groups() {
+        assert!(SCAN_ENGINE_SETTINGS_LAYOUT.shows_detection_switches());
+        assert!(SCAN_ENGINE_SETTINGS_LAYOUT.shows_config_rows());
     }
 }

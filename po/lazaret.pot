@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 10:59+0100\n"
+"POT-Creation-Date: 2026-11-07 11:06+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -51,7 +51,7 @@ msgid "Quarantine"
 msgstr ""
 
 #: src/application_window/application_pages.rs:62
-#: src/application_window/page_navigation.rs:821
+#: src/application_window/page_navigation.rs:851
 msgid "Signatures"
 msgstr ""
 
@@ -68,7 +68,7 @@ msgstr ""
 #: src/application_window/application_pages.rs:65
 #: src/application_window/settings_navigation.rs:90
 #: src/application_window/sidebar_area_status.rs:88
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:70
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:71
 msgid "On-Access Scanning"
 msgstr ""
 
@@ -79,7 +79,7 @@ msgid "Scheduled Scans"
 msgstr ""
 
 #: src/application_window/application_pages.rs:67
-#: src/application_window/page_navigation.rs:832
+#: src/application_window/page_navigation.rs:862
 msgid "Hardening"
 msgstr ""
 
@@ -122,17 +122,17 @@ msgstr ""
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:607
+#: src/application_window/page_navigation.rs:637
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:823
+#: src/application_window/page_navigation.rs:853
 msgid ""
 "Where ClamAV's malware signatures come from, and which other sources you "
 "could add."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:834
+#: src/application_window/page_navigation.rs:864
 msgid ""
 "Protections outside ClamAV that make exploits harder. They are listed for "
 "reference and don't affect the Protection summary."
@@ -150,19 +150,19 @@ msgid "Device Auto-Scan"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:88
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:68
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:69
 msgid "Scanner Engine"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:89
 #: src/findings/detections_page/background_detections_page.rs:635
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:69
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:742
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:70
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:806
 msgid "Detection"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:91
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:71
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:72
 msgid "Signature Updates"
 msgstr ""
 
@@ -580,7 +580,7 @@ msgstr ""
 #: src/scans/manual_scan_page/scan_page_component.rs:707
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
 #: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:205
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:396
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:449
 #: src/shared_widgets/false_positive_report_dialog.rs:76
 #: src/shared_widgets/trust_confirmation_dialog.rs:113
 #: src/signatures/database_updates_page/database_updates_presentation.rs:57
@@ -1181,7 +1181,7 @@ msgstr[1] ""
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:206
 #: src/protection_page/protection_timeline_page.rs:281
 #: src/scans/manual_scan_page/scan_page_component.rs:314
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:103
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:114
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
 #: src/shared_widgets/service_log/service_log_state.rs:51
 msgid "Checking…"
@@ -1499,7 +1499,7 @@ msgid ""
 msgstr ""
 
 #: src/host_services/settings_helper/trust_requests.rs:164
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:327
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:380
 msgid "Nothing changed without your password"
 msgstr ""
 
@@ -1655,7 +1655,7 @@ msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:149
 #: src/shared_widgets/activity_entries/activity_history_group.rs:59
-#: src/signatures/database_updates_page/database_updates_component.rs:130
+#: src/signatures/database_updates_page/database_updates_component.rs:132
 #, rust-format
 msgid "Failed to load historical logs: {error}"
 msgstr ""
@@ -1698,7 +1698,7 @@ msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:341
 #: src/shared_widgets/activity_entries/activity_history_group.rs:112
-#: src/signatures/database_updates_page/database_updates_component.rs:285
+#: src/signatures/database_updates_page/database_updates_component.rs:287
 msgid "Historical logs can't be read"
 msgstr ""
 
@@ -1709,7 +1709,7 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:368
 #: src/shared_widgets/activity_entries/activity_transcript_dialog.rs:54
 #: src/shared_widgets/audit_sections/audit_check_row.rs:60
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:732
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:796
 #: src/shared_widgets/service_log/service_log_group.rs:73
 #: src/shared_widgets/step_timeline/timeline_detail_row.rs:183
 msgid "Copy"
@@ -1738,7 +1738,7 @@ msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:498
 #: src/shared_widgets/activity_entries/activity_history_group.rs:146
-#: src/signatures/database_updates_page/database_updates_component.rs:341
+#: src/signatures/database_updates_page/database_updates_component.rs:345
 msgid "Loading history…"
 msgstr ""
 
@@ -1912,22 +1912,22 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/protection_page/protection_timeline_page.rs:202
-#: src/scans/on_access_page/on_access_component.rs:133
-#: src/scans/scan_engine_page/scan_engine_component.rs:148
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:104
+#: src/scans/on_access_page/on_access_component.rs:134
+#: src/scans/scan_engine_page/scan_engine_component.rs:151
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:105
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:118
-#: src/signatures/database_updates_page/database_updates_component.rs:252
+#: src/signatures/database_updates_page/database_updates_component.rs:254
 msgid "Check again"
 msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:206
-#: src/scans/on_access_page/on_access_component.rs:137
-#: src/scans/scan_engine_page/scan_engine_component.rs:152
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:108
+#: src/scans/on_access_page/on_access_component.rs:138
+#: src/scans/scan_engine_page/scan_engine_component.rs:155
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:109
 #: src/shared_widgets/audit_sections/audit_category_section.rs:101
 #: src/shared_widgets/audit_sections/audit_check_results.rs:30
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:122
-#: src/signatures/database_updates_page/database_updates_component.rs:256
+#: src/signatures/database_updates_page/database_updates_component.rs:258
 msgid "Checking"
 msgstr ""
 
@@ -1958,11 +1958,11 @@ msgid "Checking your protection…"
 msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:326
-#: src/scans/on_access_page/on_access_component.rs:243
-#: src/scans/scan_engine_page/scan_engine_component.rs:270
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:204
+#: src/scans/on_access_page/on_access_component.rs:253
+#: src/scans/scan_engine_page/scan_engine_component.rs:275
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:209
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:187
-#: src/signatures/database_updates_page/database_updates_component.rs:397
+#: src/signatures/database_updates_page/database_updates_component.rs:407
 msgid "Command copied to clipboard"
 msgstr ""
 
@@ -2153,7 +2153,7 @@ msgid "0 means no size limit."
 msgstr ""
 
 #: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:69
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:331
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:347
 msgid "Skip on Battery"
 msgstr ""
 
@@ -2893,33 +2893,33 @@ msgstr ""
 msgid "The scan could not be started: {error}"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_component.rs:171
-#: src/scans/scan_engine_page/scan_engine_component.rs:187
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:141
+#: src/scans/on_access_page/on_access_component.rs:172
+#: src/scans/scan_engine_page/scan_engine_component.rs:189
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:142
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:180
-#: src/signatures/database_updates_page/database_updates_component.rs:317
+#: src/signatures/database_updates_page/database_updates_component.rs:319
 msgid "Status"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_component.rs:185
+#: src/scans/on_access_page/on_access_component.rs:188
 msgid ""
 "On-access settings changed through Lazaret, as recorded by the system. "
 "Software running as you can't remove these records."
 msgstr ""
 
-#: src/scans/on_access_page/on_access_component.rs:188
+#: src/scans/on_access_page/on_access_component.rs:191
 msgid "No on-access settings were changed through Lazaret"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_component.rs:193
+#: src/scans/on_access_page/on_access_component.rs:196
 msgid "clamonacc log"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_component.rs:194
+#: src/scans/on_access_page/on_access_component.rs:197
 msgid "clamonacc has not written to the journal"
 msgstr ""
 
-#: src/scans/on_access_page/on_access_component.rs:201
+#: src/scans/on_access_page/on_access_component.rs:204
 msgid "Checking on-access scanning…"
 msgstr ""
 
@@ -3119,25 +3119,25 @@ msgid ""
 "fs.inotify.max_user_watches with sysctl."
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_component.rs:205
+#: src/scans/scan_engine_page/scan_engine_component.rs:204
 msgid ""
 "Engine and detection settings changed through Lazaret, as recorded by the "
 "system. Software running as you can't remove these records."
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_component.rs:209
+#: src/scans/scan_engine_page/scan_engine_component.rs:208
 msgid "No engine or detection settings were changed through Lazaret"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_component.rs:215
+#: src/scans/scan_engine_page/scan_engine_component.rs:214
 msgid "clamd log"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_component.rs:216
+#: src/scans/scan_engine_page/scan_engine_component.rs:215
 msgid "No clamd log was found"
 msgstr ""
 
-#: src/scans/scan_engine_page/scan_engine_component.rs:223
+#: src/scans/scan_engine_page/scan_engine_component.rs:222
 msgid "Checking the scan engine…"
 msgstr ""
 
@@ -3256,26 +3256,26 @@ msgstr ""
 msgid "Checking who can replace the clamd socket…"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:74
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:85
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:70
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:77
 msgid "Not scheduled"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:77
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:88
 #, rust-format
 msgid "Next run: {time}"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:80
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:91
 msgid "Scheduled. The time of the next run is not known yet."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:82
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:93
 msgid "Scheduled scans need a systemd user session, which is not available."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:90
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:101
 #, rust-format
 msgid ""
 "Your system already runs scheduled scans, so these settings are locked to "
@@ -3283,153 +3283,153 @@ msgid ""
 "configuration."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:95
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:106
 msgid ""
 "Your system has a scan timer, so these settings are locked to avoid a second "
 "schedule. Change it in your system configuration."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:114
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:125
 msgid ""
 "Checking whether your system already runs scheduled scans. These settings "
 "stay locked until then."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:120
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:131
 #, rust-format
 msgid ""
 "Lazaret could not check whether your system already runs scheduled scans, so "
 "these settings are locked to avoid a second schedule: {error}"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:131
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:142
 msgid "Enter the scan time as HH:MM, for example 02:00."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:146
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:157
 #, rust-format
 msgid "Error creating systemd files: {error}"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:150
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:161
 #, rust-format
 msgid "The timer could not be applied: {error}"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:158
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:169
 msgid "Hourly"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:159
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:170
 msgid "Daily"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:160
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:171
 msgid "Weekly"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:161
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:172
 msgid "Monthly"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:168
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:179
 msgid "Monday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:169
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:180
 msgid "Tuesday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:170
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:181
 msgid "Wednesday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:171
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:182
 msgid "Thursday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:172
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:183
 msgid "Friday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:173
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:184
 msgid "Saturday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:174
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:185
 msgid "Sunday"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:249
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:263
 msgid "Schedule"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:259
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:403
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:275
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:456
 msgid "Apply"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:266
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:282
 msgid "Enable Scheduled Scans"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:276
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:292
 msgid "Scan Frequency"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:287
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:303
 msgid "Scan Time (24-hour)"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:297
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:313
 msgid "Day of Week"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:298
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:314
 msgid "Used for weekly scans."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:309
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:325
 msgid "Day of Month"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:310
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:326
 msgid "Used for monthly scans."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:321
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:337
 msgid "Scan Targets (separated by commas; empty scans your home folder)"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:332
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:348
 msgid "Do not start scheduled scans while on battery power."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:342
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:358
 msgid "Auto-Quarantine"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:343
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:359
 msgid ""
 "Automatically quarantine threats found by scheduled scans. While Lazaret is "
 "open, threats are only reported."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:156
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:157
 msgid "Scheduled runs"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:158
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:159
 msgid ""
 "Scans Lazaret's schedule ran, newest first. Select one to read its "
 "transcript."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:161
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:162
 msgid "Lazaret's schedule has not run a scan yet"
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:167
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:168
 msgid "Checking the schedule…"
 msgstr ""
 
@@ -3862,50 +3862,50 @@ msgstr ""
 msgid "Your administrator doesn't allow changing this setting from Lazaret."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:86
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:87
 msgid "clamd settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:87
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:88
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:88
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:89
 msgid "Update settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:288
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:341
 msgid "Copied. Add it to your configuration to apply it."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:291
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:344
 msgid ""
 "The change was not made: the settings locked again or another change started "
 "first."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:309
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:362
 msgid "Applied, but not yet in your system configuration."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:312
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:365
 msgid ""
 "ClamAV didn't come back healthy with that value, so the previous settings "
 "were restored."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:323
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:376
 #, rust-format
 msgid "The change was not made: {error}"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:329
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:382
 msgid ""
 "This installation has no settings helper, so ClamAV's settings can't be "
 "changed from Lazaret"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:342
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:395
 #, rust-format
 msgid ""
 "{path} combines your system configuration with the changes made here. While "
@@ -3913,58 +3913,58 @@ msgid ""
 "configuration. After unlocking, the allowed settings change directly."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:388
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:441
 msgid "Change this setting?"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:401
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:454
 msgid "Reduce Protection"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:570
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:623
 msgid ""
 "Settings can't be changed here right now: the Lazaret settings helper could "
 "not be reached."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:578
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:631
 msgid "Reading the configuration…"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:579
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:632
 msgid "Configuration file not found"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:675
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:736
 msgid "Lock"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:677
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:738
 msgid "Unlock"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:696
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:760
 msgid "Change Settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:698
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:762
 msgid ""
 "Unlock to change the settings your system allows at runtime. Unlocking "
 "grants nothing by itself: each change shows what will happen and asks for "
 "administrator authorization. It locks again after two minutes."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:722
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:786
 msgid "Changes your system configuration doesn't know about"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:744
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:808
 msgid ""
 "What ClamAV reports in every scan on this computer. Lazaret passes the same "
 "choices to clamscan, so both scanners agree."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_sections.rs:761
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:830
 msgid "No settings in this section"
 msgstr ""
 
@@ -4567,29 +4567,29 @@ msgid ""
 "that you or your administrator added them on purpose."
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:203
+#: src/signatures/database_updates_page/database_updates_component.rs:205
 msgid "Database update finished"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:272
+#: src/signatures/database_updates_page/database_updates_component.rs:274
 msgid "Update history"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:273
+#: src/signatures/database_updates_page/database_updates_component.rs:275
 msgid ""
 "Updates started from Lazaret, newest first. Select one to read its "
 "transcript."
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:345
+#: src/signatures/database_updates_page/database_updates_component.rs:349
 msgid "No updates were started from Lazaret yet"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:348
+#: src/signatures/database_updates_page/database_updates_component.rs:352
 msgid "Checking the signatures…"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:427
+#: src/signatures/database_updates_page/database_updates_component.rs:437
 #, rust-format
 msgid "The update could not be added to the history: {error}"
 msgstr ""

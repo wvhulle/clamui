@@ -14,7 +14,7 @@ use crate::{
         desktop::locale_formatting::host_moment_formatters,
     },
     scans::scheduled_scans_page::{
-        scan_schedule_component::ScanScheduleSection,
+        scan_schedule_component::{ScanScheduleSection, ScanScheduleSectionInput},
         scheduled_scans_presentation::{ScheduledScanAction, scheduled_scans_page_steps},
         scheduled_scans_state::ScheduledScansPageOutput,
     },
@@ -53,6 +53,7 @@ pub enum ScheduledScansPageInput {
     EvidenceRefreshChanged(EvidenceRefresh),
     EvidenceGathered(GatheredEvidence),
     HistoryReloadRequested,
+    SettingsRevealRequested,
     StepRequested(TimelineStepRowOutput<ScheduledScanAction>),
 }
 
@@ -179,6 +180,10 @@ impl Component for ScheduledScansPage {
             ScheduledScansPageInput::RefreshRequested => {
                 let _shell_closed =
                     sender.output(ScheduledScansPageOutput::EvidenceRefreshRequested);
+            }
+            ScheduledScansPageInput::SettingsRevealRequested => {
+                self.schedule_section
+                    .emit(ScanScheduleSectionInput::RevealRequested);
             }
             ScheduledScansPageInput::EvidenceRefreshChanged(evidence_refresh) => {
                 self.evidence_refresh = evidence_refresh;

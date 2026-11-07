@@ -26,8 +26,9 @@ use crate::{
         },
         component_streams::run_stream_then,
         engine_settings::engine_settings_sections::{
-            EngineSettingsNotice, EngineSettingsSection, EngineSettingsSections,
-            EngineSettingsSectionsOutput, engine_settings_notice_toast,
+            EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSection,
+            EngineSettingsSections, EngineSettingsSectionsInput, EngineSettingsSectionsOutput,
+            engine_settings_notice_toast,
         },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME,
@@ -81,6 +82,7 @@ pub enum DatabaseUpdatesPageInput {
     EvidenceRefreshChanged(EvidenceRefresh),
     EvidenceGathered(GatheredEvidence),
     SignatureUpdateRequested,
+    SettingsRevealRequested,
     SettingsNoticeReceived(EngineSettingsNotice),
     StepRequested(TimelineStepRowOutput<DatabaseUpdateAction>),
     HistoryEntryActivated { row_position: usize },
@@ -332,7 +334,9 @@ impl Component for DatabaseUpdatesPage {
             gathered_evidence: GatheredEvidence::NotGatheredYet,
             transcript_dialog: TranscriptDialogView::DialogClosed,
             update_settings_sections: EngineSettingsSections::builder()
-                .launch(EngineSettingsSection::SignatureUpdates)
+                .launch(EngineSettingsLayout::SingleSection(
+                    EngineSettingsSection::SignatureUpdates,
+                ))
                 .forward(sender.input_sender(), page_input_for_settings_output),
         };
         let status_group = &model.status_rows.widget().clone();
@@ -361,6 +365,12 @@ impl Component for DatabaseUpdatesPage {
         match page_input {
             DatabaseUpdatesPageInput::RefreshRequested => {
                 Self::report_output(&sender, DatabaseUpdatesPageOutput::EvidenceRefreshRequested);
+            }
+            DatabaseUpdatesPageInput::SettingsRevealRequested => {
+                self.update_settings_sections
+                    .emit(EngineSettingsSectionsInput::RevealRequested(
+                        EngineSettingsSection::SignatureUpdates,
+                    ));
             }
             DatabaseUpdatesPageInput::EvidenceRefreshChanged(evidence_refresh) => {
                 self.evidence_refresh = evidence_refresh;

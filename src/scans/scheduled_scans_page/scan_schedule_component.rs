@@ -21,6 +21,9 @@ use crate::{
             read_schedule_timer_state, systemd_user_unit_directory,
         },
     },
+    shared_widgets::settings_group_reveal::{
+        ContentReadiness, GroupVisibility, SettingsGroupReveal,
+    },
 };
 
 const SYSTEM_SCAN_TIMER: &str = "clamdscan.timer";
@@ -33,6 +36,12 @@ pub struct ScanScheduleSection {
     user_timer_view: UserTimerView,
     system_schedule_owner: SystemScheduleOwner,
     page_notice: ScheduleSectionNotice,
+    group_reveal: SettingsGroupReveal<ScheduleSettingsGroup>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScheduleSettingsGroup {
+    ScheduleGroup,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,6 +69,8 @@ pub enum ScanScheduleSectionInput {
     AutoQuarantineToggled(bool),
     StoredSettingChanged,
     ApplyRequested,
+    RevealRequested,
+    VisibilityChanged(GroupVisibility),
 }
 
 #[derive(Debug)]
@@ -241,12 +252,17 @@ impl Component for ScanScheduleSection {
 
     view! {
         adw::PreferencesGroup {
+            connect_map => ScanScheduleSectionInput::VisibilityChanged(GroupVisibility::GroupMapped),
+            connect_unmap => ScanScheduleSectionInput::VisibilityChanged(GroupVisibility::GroupHidden),
+
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 12,
 
             adw::PreferencesGroup {
                 set_title: &gettext("Schedule"),
+                #[track(model.group_reveal.reveals_now(ScheduleSettingsGroup::ScheduleGroup))]
+                child_focus: gtk::DirectionType::TabForward,
                 #[watch]
                 set_sensitive: allows_applying_schedule(&model.system_schedule_owner),
                 #[watch]
@@ -373,6 +389,7 @@ impl Component for ScanScheduleSection {
         );
         let schedule_settings = StoredScheduleSettings::read_from(&stored_settings);
         let model = Self {
+            group_reveal: SettingsGroupReveal::while_hidden(),
             scan_targets_text: joined_scan_targets(&schedule_settings.scan_targets),
             entry_texts_replaced: true,
             schedule_settings,
@@ -393,7 +410,18 @@ impl Component for ScanScheduleSection {
         _root: &Self::Root,
     ) {
         self.entry_texts_replaced = false;
+        self.group_reveal.begin_update();
         match page_input {
+            ScanScheduleSectionInput::RevealRequested => {
+                self.group_reveal.reveal_requested(
+                    ScheduleSettingsGroup::ScheduleGroup,
+                    ContentReadiness::ContentReady,
+                );
+            }
+            ScanScheduleSectionInput::VisibilityChanged(group_visibility) => {
+                self.group_reveal
+                    .visibility_changed(group_visibility, ContentReadiness::ContentReady);
+            }
             ScanScheduleSectionInput::ScheduleToggled(schedule_enabled) => {
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.schedule_enabled = schedule_enabled;
@@ -473,6 +501,7 @@ impl Component for ScanScheduleSection {
         _root: &Self::Root,
     ) {
         self.entry_texts_replaced = false;
+        self.group_reveal.begin_update();
         match page_command {
             ScanScheduleSectionCommand::TimerStateLoaded(timer_state) => {
                 self.user_timer_view = UserTimerView::UserTimerRead(timer_state);

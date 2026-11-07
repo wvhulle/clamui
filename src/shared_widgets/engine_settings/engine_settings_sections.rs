@@ -49,6 +49,7 @@ use crate::{
                 DetectionSwitchState, SwitchAvailability,
             },
         },
+        settings_group_reveal::{ContentReadiness, GroupVisibility, SettingsGroupReveal},
     },
 };
 
@@ -122,6 +123,54 @@ impl EngineSettingsSection {
             Self::SignatureUpdates => true,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EngineSettingsLayout {
+    SingleSection(EngineSettingsSection),
+    EngineWithDetection,
+}
+
+impl EngineSettingsLayout {
+    const fn config_section(self) -> EngineSettingsSection {
+        match self {
+            Self::SingleSection(settings_section) => settings_section,
+            Self::EngineWithDetection => EngineSettingsSection::ScannerEngine,
+        }
+    }
+
+    pub const fn shows_detection_switches(self) -> bool {
+        matches!(
+            self,
+            Self::EngineWithDetection
+                | Self::SingleSection(EngineSettingsSection::DetectionChoices)
+        )
+    }
+
+    pub const fn shows_config_rows(self) -> bool {
+        !matches!(
+            self,
+            Self::SingleSection(EngineSettingsSection::DetectionChoices)
+        )
+    }
+
+    const fn revealed_group_for(self, requested_section: EngineSettingsSection) -> RevealedGroup {
+        match requested_section {
+            EngineSettingsSection::DetectionChoices if self.shows_detection_switches() => {
+                RevealedGroup::DetectionSwitchGroup
+            }
+            EngineSettingsSection::DetectionChoices
+            | EngineSettingsSection::ScannerEngine
+            | EngineSettingsSection::OnAccessScanning
+            | EngineSettingsSection::SignatureUpdates => RevealedGroup::ConfigRowsGroup,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RevealedGroup {
+    DetectionSwitchGroup,
+    ConfigRowsGroup,
 }
 
 enum ConfigLoad {
@@ -220,7 +269,9 @@ const fn confirmation_verdict(
 }
 
 pub struct EngineSettingsSections {
+    settings_layout: EngineSettingsLayout,
     settings_section: EngineSettingsSection,
+    group_reveal: SettingsGroupReveal<RevealedGroup>,
     config_load: ConfigLoad,
     tuning_load: LiveTuningLoad,
     unlock_state: UnlockState,
@@ -246,6 +297,8 @@ pub enum EngineSettingsSectionsOutput {
 #[derive(Debug)]
 pub enum EngineSettingsSectionsInput {
     UnlockToggled(bool),
+    RevealRequested(EngineSettingsSection),
+    VisibilityChanged(GroupVisibility),
     ValueApplied {
         row_index: DynamicIndex,
         setting_key: String,
@@ -594,17 +647,25 @@ impl EngineSettingsSections {
     }
 
     const fn shows_detection_switches(&self) -> bool {
-        matches!(
-            self.settings_section,
-            EngineSettingsSection::DetectionChoices
-        ) && matches!(self.config_load, ConfigLoad::ConfigShown { .. })
+        self.settings_layout.shows_detection_switches()
+            && matches!(self.config_load, ConfigLoad::ConfigShown { .. })
     }
 
     const fn shows_config_rows(&self) -> bool {
-        !matches!(
-            self.settings_section,
-            EngineSettingsSection::DetectionChoices
-        )
+        self.settings_layout.shows_config_rows()
+    }
+
+    const fn content_readiness(&self) -> ContentReadiness {
+        match self.config_load {
+            ConfigLoad::LoadingConfig => ContentReadiness::ContentLoading,
+            ConfigLoad::ConfigShown { .. } | ConfigLoad::ConfigMissing => {
+                ContentReadiness::ContentReady
+            }
+        }
+    }
+
+    fn reveals_group(&self, revealed_group: RevealedGroup) -> bool {
+        self.group_reveal.reveals_now(revealed_group)
     }
 
     fn detection_values(&self, detection_option: DetectionOption) -> Vec<String> {
@@ -681,13 +742,16 @@ impl EngineSettingsSections {
 
 #[relm4::component(pub)]
 impl Component for EngineSettingsSections {
-    type Init = EngineSettingsSection;
+    type Init = EngineSettingsLayout;
     type Input = EngineSettingsSectionsInput;
     type Output = EngineSettingsSectionsOutput;
     type CommandOutput = EngineSettingsSectionsCommand;
 
     view! {
         adw::PreferencesGroup {
+            connect_map => EngineSettingsSectionsInput::VisibilityChanged(GroupVisibility::GroupMapped),
+            connect_unmap => EngineSettingsSectionsInput::VisibilityChanged(GroupVisibility::GroupHidden),
+
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 24,
@@ -746,6 +810,8 @@ impl Component for EngineSettingsSections {
                     )),
                     #[watch]
                     set_visible: model.shows_detection_switches(),
+                    #[track(model.reveals_group(RevealedGroup::DetectionSwitchGroup))]
+                    child_focus: gtk::DirectionType::TabForward,
                 },
 
                 #[local_ref]
@@ -756,6 +822,9 @@ impl Component for EngineSettingsSections {
                     set_description: Some(&glib::markup_escape_text(
                         &model.config_group_description(),
                     )),
+
+                    #[track(model.reveals_group(RevealedGroup::ConfigRowsGroup))]
+                    child_focus: gtk::DirectionType::TabForward,
 
                     adw::ActionRow {
                         set_title: &gettext("No settings in this section"),
@@ -768,10 +837,11 @@ impl Component for EngineSettingsSections {
     }
 
     fn init(
-        settings_section: Self::Init,
+        settings_layout: Self::Init,
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let settings_section = settings_layout.config_section();
         let setting_rows = FactoryVecDeque::builder()
             .launch(adw::PreferencesGroup::default())
             .forward(sender.input_sender(), |row_output| match row_output {
@@ -801,7 +871,9 @@ impl Component for EngineSettingsSections {
                 },
             });
         let model = Self {
+            settings_layout,
             settings_section,
+            group_reveal: SettingsGroupReveal::while_hidden(),
             config_load: ConfigLoad::LoadingConfig,
             tuning_load: if settings_section.offers_live_tuning() {
                 LiveTuningLoad::LoadingTuning
@@ -846,7 +918,20 @@ impl Component for EngineSettingsSections {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
+        self.group_reveal.begin_update();
         match page_input {
+            EngineSettingsSectionsInput::RevealRequested(requested_section) => {
+                let content_readiness = self.content_readiness();
+                self.group_reveal.reveal_requested(
+                    self.settings_layout.revealed_group_for(requested_section),
+                    content_readiness,
+                );
+            }
+            EngineSettingsSectionsInput::VisibilityChanged(group_visibility) => {
+                let content_readiness = self.content_readiness();
+                self.group_reveal
+                    .visibility_changed(group_visibility, content_readiness);
+            }
             EngineSettingsSectionsInput::UnlockToggled(true) => {
                 self.unlock_count += 1;
                 let relock_generation = self.unlock_count;
@@ -974,6 +1059,7 @@ impl Component for EngineSettingsSections {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        self.group_reveal.begin_update();
         match page_command {
             EngineSettingsSectionsCommand::ConfigLoaded {
                 host_config,
@@ -1012,6 +1098,8 @@ impl Component for EngineSettingsSections {
                     }
                     HostConfigView::ConfigNotFound => self.config_load = ConfigLoad::ConfigMissing,
                 }
+                let content_readiness = self.content_readiness();
+                self.group_reveal.reveal_when_ready(content_readiness);
             }
             EngineSettingsSectionsCommand::RelockDue { relock_generation } => {
                 if matches!(
@@ -1189,6 +1277,22 @@ mod engine_settings_sections_tests {
         assert_eq!(
             ChangeProgress::NoChangeRunning.row_change_activity(|_changed_row| true),
             RowChangeActivity::ChangesAllowed
+        );
+    }
+
+    #[test]
+    fn the_scan_engine_layout_shows_both_sections_under_one_unlock() {
+        assert!(EngineSettingsLayout::EngineWithDetection.shows_detection_switches());
+        assert!(EngineSettingsLayout::EngineWithDetection.shows_config_rows());
+        assert_eq!(
+            EngineSettingsLayout::EngineWithDetection
+                .revealed_group_for(EngineSettingsSection::DetectionChoices),
+            RevealedGroup::DetectionSwitchGroup
+        );
+        assert_eq!(
+            EngineSettingsLayout::EngineWithDetection
+                .revealed_group_for(EngineSettingsSection::ScannerEngine),
+            RevealedGroup::ConfigRowsGroup
         );
     }
 }

@@ -4,7 +4,7 @@ use relm4::{
 };
 
 use crate::shared_widgets::engine_settings::engine_settings_sections::{
-    EngineSettingsNotice, EngineSettingsSection, EngineSettingsSections,
+    EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSection, EngineSettingsSections,
     EngineSettingsSectionsOutput, engine_settings_notice_toast,
 };
 
@@ -53,7 +53,7 @@ impl Component for EngineSettingsSubpage {
         let model = Self {
             toaster: Toaster::new(&root),
             settings_sections: EngineSettingsSections::builder()
-                .launch(settings_section)
+                .launch(EngineSettingsLayout::SingleSection(settings_section))
                 .forward(sender.input_sender(), subpage_input_for_sections_output),
         };
         let widgets = view_output!();

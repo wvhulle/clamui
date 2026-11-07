@@ -548,11 +548,41 @@ impl PageNavigation {
         self.shows_content_when_narrow = true;
     }
 
+    fn reveal_embedded_settings(&self, settings_subpage: SettingsSubpage) {
+        match settings_subpage {
+            SettingsSubpage::ScannerEngine => {
+                self.scan_engine_page
+                    .emit(ScanEnginePageInput::SettingsRevealRequested(
+                        EngineSettingsSection::ScannerEngine,
+                    ))
+            }
+            SettingsSubpage::DetectionChoices => {
+                self.scan_engine_page
+                    .emit(ScanEnginePageInput::SettingsRevealRequested(
+                        EngineSettingsSection::DetectionChoices,
+                    ));
+            }
+            SettingsSubpage::OnAccessScanning => self
+                .on_access_page
+                .emit(OnAccessPageInput::SettingsRevealRequested),
+            SettingsSubpage::SignatureUpdates => self
+                .database_updates_page
+                .emit(DatabaseUpdatesPageInput::SettingsRevealRequested),
+            SettingsSubpage::ScanSchedule => self
+                .scheduled_scans_page
+                .emit(ScheduledScansPageInput::SettingsRevealRequested),
+            SettingsSubpage::ScanExclusions
+            | SettingsSubpage::DeviceAutoScan
+            | SettingsSubpage::TrustedDetections => {}
+        }
+    }
+
     fn open_settings_subpage(&mut self, settings_subpage: SettingsSubpage) {
         let owning_page = match settings_subpage.subpage_placement() {
             SubpagePlacement::StackedOnPage(owning_page) => owning_page,
             SubpagePlacement::EmbeddedInPage(embedding_page) => {
                 self.show_page(embedding_page);
+                self.reveal_embedded_settings(settings_subpage);
                 return;
             }
         };
