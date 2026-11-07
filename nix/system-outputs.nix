@@ -225,6 +225,19 @@ let
       exec treefmt "$@"
     '';
   };
+  developmentSchemas =
+    pkgs.runCommand "lazaret-development-schemas"
+      {
+        nativeBuildInputs = [ pkgs.glib ];
+      }
+      ''
+        mkdir -p "$out"
+        cp ${../data/page.codeberg.wvhulle.Lazaret.gschema.xml} "$out/page.codeberg.wvhulle.Lazaret.gschema.xml"
+        cp ${pkgs.glib.getSchemaPath pkgs.gtk4}/*.gschema.xml "$out"/
+        cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.gschema.xml "$out"/
+        cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.enums.xml "$out"/
+        glib-compile-schemas --strict "$out"
+      '';
 in
 {
   packages = {
@@ -294,10 +307,6 @@ in
       pkgs.nixfmt
       pkgs.sqlite
     ];
-    shellHook = ''
-      export GSETTINGS_SCHEMA_DIR="$PWD/target/gschemas"
-      mkdir -p "$GSETTINGS_SCHEMA_DIR"
-      glib-compile-schemas --targetdir="$GSETTINGS_SCHEMA_DIR" data
-    '';
+    GSETTINGS_SCHEMA_DIR = developmentSchemas;
   };
 }
