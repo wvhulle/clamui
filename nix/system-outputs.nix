@@ -31,6 +31,7 @@ let
       ../gtk_scene_capture/assets
       ../po
       ../data
+      ../migrations
     ];
   };
 

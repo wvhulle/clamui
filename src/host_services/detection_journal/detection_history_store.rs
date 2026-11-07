@@ -269,7 +269,6 @@ impl ActivityHistory {
         detection_records: &[JournalDetectionRecord],
         journal_cursor: &str,
     ) -> Result<Vec<JournalDetectionRecord>, ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let mut database_connection = self.open_connection().await?;
         let batch_transaction = database_connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -294,7 +293,6 @@ impl ActivityHistory {
     }
 
     pub async fn saved_journal_cursor(&self) -> Result<Option<String>, ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         let mut cursor_rows = database_connection
             .query("SELECT journal_cursor FROM detection_journal_position", ())
@@ -306,7 +304,6 @@ impl ActivityHistory {
     }
 
     pub async fn list_detections(&self) -> Result<Vec<StoredDetection>, ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         let mut detection_rows = database_connection
             .query(
@@ -330,7 +327,6 @@ impl ActivityHistory {
         resolution_kind: ResolutionKind,
         resolved_at: Timestamp,
     ) -> Result<(), ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         self.open_connection()
             .await?
             .execute(
@@ -366,7 +362,7 @@ mod detection_history_store_tests {
     fn temporary_history() -> (tempfile::TempDir, ActivityHistory) {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let activity_history =
-            ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+            ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         (temporary_root, activity_history)
     }
 
@@ -591,7 +587,7 @@ mod detection_history_store_tests {
     }
 
     fn raw_count(activity_history_root: &tempfile::TempDir, count_query: &str) -> i64 {
-        rusqlite::Connection::open(activity_history_root.path().join("history.db"))
+        rusqlite::Connection::open(activity_history_root.path().join("lazaret.db"))
             .expect("database")
             .query_row(count_query, [], |count_row| count_row.get(0))
             .expect("count")
@@ -677,11 +673,15 @@ mod detection_history_store_tests {
     #[tokio::test]
     async fn the_screenshot_fixture_loads_as_typed_detections() {
         let (temporary_root, activity_history) = temporary_history();
+        assert!(
+            activity_history
+                .list_detections()
+                .await
+                .expect("created")
+                .is_empty()
+        );
         let fixture_connection =
-            rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("database");
-        fixture_connection
-            .execute_batch(include_str!("../../../data/database-schemas/history.sql"))
-            .expect("schema");
+            rusqlite::Connection::open(temporary_root.path().join("lazaret.db")).expect("database");
         fixture_connection
             .execute_batch(
                 &include_str!("../../../xtask/assets/detections-seed.sql")
@@ -718,7 +718,7 @@ mod detection_history_store_tests {
         let (temporary_root, activity_history) = temporary_history();
         activity_history.list_detections().await.expect("created");
         let checked_connection =
-            rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("database");
+            rusqlite::Connection::open(temporary_root.path().join("lazaret.db")).expect("database");
         checked_connection
             .execute_batch(
                 "PRAGMA foreign_keys = ON;

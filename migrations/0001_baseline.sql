@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS activity_entries (
+CREATE TABLE activity_entries (
     entry_id INTEGER PRIMARY KEY,
     started_at_unix INTEGER NOT NULL,
     activity_status TEXT NOT NULL CHECK (activity_status IN (
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS activity_entries (
     activity_output TEXT NOT NULL,
     UNIQUE (entry_id, activity_status)
 );
-CREATE TABLE IF NOT EXISTS scan_activities (
+CREATE TABLE scan_activities (
     entry_id INTEGER PRIMARY KEY,
     activity_status TEXT NOT NULL CHECK (activity_status IN (
         'scan_clean', 'scan_infected', 'scan_failed', 'scan_cancelled', 'scan_skipped'
@@ -22,13 +22,13 @@ CREATE TABLE IF NOT EXISTS scan_activities (
     FOREIGN KEY (entry_id, activity_status)
         REFERENCES activity_entries (entry_id, activity_status) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS scan_activity_targets (
+CREATE TABLE scan_activity_targets (
     entry_id INTEGER NOT NULL REFERENCES scan_activities (entry_id) ON DELETE CASCADE,
     target_position INTEGER NOT NULL CHECK (target_position >= 0),
     target_path TEXT NOT NULL CHECK (target_path <> ''),
     PRIMARY KEY (entry_id, target_position)
 );
-CREATE TABLE IF NOT EXISTS scan_inspections (
+CREATE TABLE scan_inspections (
     entry_id INTEGER PRIMARY KEY,
     activity_status TEXT NOT NULL CHECK (activity_status IN (
         'scan_clean', 'scan_infected', 'scan_failed', 'scan_cancelled'
@@ -38,14 +38,14 @@ CREATE TABLE IF NOT EXISTS scan_inspections (
     FOREIGN KEY (entry_id, activity_status)
         REFERENCES scan_activities (entry_id, activity_status) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS scan_threat_counts (
+CREATE TABLE scan_threat_counts (
     entry_id INTEGER PRIMARY KEY,
     activity_status TEXT NOT NULL CHECK (activity_status = 'scan_infected'),
     threat_count INTEGER NOT NULL CHECK (threat_count > 0),
     FOREIGN KEY (entry_id, activity_status)
         REFERENCES scan_inspections (entry_id, activity_status) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS background_detections (
+CREATE TABLE background_detections (
     file_path BLOB NOT NULL,
     signature_name TEXT NOT NULL,
     detection_id INTEGER NOT NULL UNIQUE,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS background_detections (
     sighting_count INTEGER NOT NULL CHECK (sighting_count > 0),
     PRIMARY KEY (file_path, signature_name)
 );
-CREATE TABLE IF NOT EXISTS detection_resolutions (
+CREATE TABLE detection_resolutions (
     file_path BLOB NOT NULL,
     signature_name TEXT NOT NULL,
     resolution_kind TEXT NOT NULL
@@ -67,11 +67,11 @@ CREATE TABLE IF NOT EXISTS detection_resolutions (
     FOREIGN KEY (file_path, signature_name)
         REFERENCES background_detections (file_path, signature_name) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS detection_journal_position (
+CREATE TABLE detection_journal_position (
     position_row INTEGER PRIMARY KEY CHECK (position_row = 1),
     journal_cursor TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS submissions (
+CREATE TABLE submissions (
     content_sha256 TEXT NOT NULL
         CHECK (length(content_sha256) = 64 AND content_sha256 NOT GLOB '*[^0-9a-f]*'),
     submission_service TEXT NOT NULL,
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     PRIMARY KEY (content_sha256, submission_service, submission_kind),
     UNIQUE (content_sha256, submission_service, submission_kind, submission_status)
 );
-CREATE TABLE IF NOT EXISTS false_positive_signatures (
+CREATE TABLE false_positive_signatures (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL CHECK (submission_service = 'clamav'),
     submission_kind TEXT NOT NULL CHECK (submission_kind = 'false_positive'),
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS false_positive_signatures (
             submission_status)
         ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS clamav_review_settlements (
+CREATE TABLE clamav_review_settlements (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL CHECK (submission_service = 'clamav'),
     submission_kind TEXT NOT NULL
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS clamav_review_settlements (
             submission_status)
         ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS settled_database_versions (
+CREATE TABLE settled_database_versions (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL,
     submission_kind TEXT NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS settled_database_versions (
             submission_kind)
         ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS virustotal_analyses (
+CREATE TABLE virustotal_analyses (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL CHECK (submission_service = 'virustotal'),
     submission_kind TEXT NOT NULL CHECK (submission_kind = 'malware_sample'),
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS virustotal_analyses (
             submission_status)
         ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS virustotal_verdicts (
+CREATE TABLE virustotal_verdicts (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL,
     submission_kind TEXT NOT NULL,
@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS virustotal_verdicts (
             submission_status)
         ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS upload_refusals (
+CREATE TABLE upload_refusals (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL
         CHECK (submission_service IN ('malware_bazaar', 'virustotal')),
@@ -168,4 +168,42 @@ CREATE TABLE IF NOT EXISTS upload_refusals (
         REFERENCES submissions (content_sha256, submission_service, submission_kind,
             submission_status)
         ON DELETE CASCADE
+);
+CREATE TABLE file_contents (
+    content_sha256 TEXT PRIMARY KEY
+        CHECK (length(content_sha256) = 64 AND content_sha256 NOT GLOB '*[^0-9a-f]*'),
+    byte_size INTEGER NOT NULL CHECK (byte_size >= 0)
+);
+CREATE TABLE quarantine (
+    entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_path BLOB NOT NULL,
+    quarantine_path BLOB NOT NULL UNIQUE,
+    content_sha256 TEXT NOT NULL REFERENCES file_contents (content_sha256),
+    detection_date TEXT NOT NULL CHECK (detection_date GLOB
+        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]*Z'),
+    original_permissions INTEGER NOT NULL CHECK (original_permissions BETWEEN 0 AND 511)
+);
+CREATE INDEX idx_quarantine_detection_date ON quarantine (detection_date);
+CREATE INDEX idx_quarantine_original_path ON quarantine (original_path);
+CREATE INDEX idx_quarantine_content_sha256 ON quarantine (content_sha256);
+CREATE TABLE quarantine_signatures (
+    entry_id INTEGER PRIMARY KEY REFERENCES quarantine (entry_id) ON DELETE CASCADE,
+    signature_name TEXT NOT NULL
+);
+CREATE TABLE quarantine_pending (
+    quarantine_path BLOB PRIMARY KEY,
+    original_path BLOB NOT NULL,
+    byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+    original_permissions INTEGER NOT NULL CHECK (original_permissions BETWEEN 0 AND 511)
+);
+CREATE TABLE pending_payload_hashes (
+    quarantine_path BLOB PRIMARY KEY
+        REFERENCES quarantine_pending (quarantine_path) ON DELETE CASCADE,
+    content_sha256 TEXT NOT NULL
+        CHECK (length(content_sha256) = 64 AND content_sha256 NOT GLOB '*[^0-9a-f]*')
+);
+CREATE TABLE pending_signatures (
+    quarantine_path BLOB PRIMARY KEY
+        REFERENCES quarantine_pending (quarantine_path) ON DELETE CASCADE,
+    signature_name TEXT NOT NULL
 );

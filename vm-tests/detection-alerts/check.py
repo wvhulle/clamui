@@ -66,12 +66,12 @@ with subtest("quarantining from the timeline clears the blocked file"):
     machine.wait_until_fails(f"test -e {BLOCKED_FILE}", timeout=timedelta(seconds=30))
     machine.screenshot("incident_after_quarantine")
     wait_as_user(
-        f"sqlite3 -readonly {HISTORY_DATABASE} "
+        f"sqlite3 -readonly {LAZARET_DATABASE} "
         "\"select resolution_kind from detection_resolutions\" | grep -q quarantined"
     )
     wait_for_tray_status("Active")
     quarantined = as_user(
-        f"sqlite3 -readonly /home/{SAMPLE_USER}/.local/share/lazaret/quarantine.db "
+        f"sqlite3 -readonly {LAZARET_DATABASE} "
         "\"select signature_name from quarantine_signatures\""
     )
     assert "Win.Fixture.Agent-1" in quarantined, f"lost the signature: {quarantined}"

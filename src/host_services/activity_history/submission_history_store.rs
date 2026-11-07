@@ -783,7 +783,6 @@ impl ActivityHistory {
         content_sha256: &str,
         submission_target: SubmissionTarget,
     ) -> Result<EarlierSubmission, ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         Ok(
             match submission_with_key(&database_connection, content_sha256, submission_target)
@@ -811,7 +810,6 @@ impl ActivityHistory {
             .submitted_file
             .content_sha256
             .to_ascii_lowercase();
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         if let EarlierSubmission::SubmittedBefore(earlier_submission) =
             submission_with_key(&database_connection, &content_sha256, submission_target).await?
@@ -868,7 +866,6 @@ impl ActivityHistory {
     }
 
     pub async fn list_submissions(&self) -> Result<Vec<SubmissionRecord>, ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         submissions_from_query(
             &database_connection,
@@ -887,7 +884,6 @@ impl ActivityHistory {
         submission_state: SubmissionState,
     ) -> Result<(), ActivityHistoryFailure> {
         let submission_target = submission_state.submission_target();
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         in_transaction(&database_connection, async {
             delete_status_details(&database_connection, content_sha256, submission_target).await?;
@@ -993,12 +989,12 @@ mod submission_history_store_tests {
     }
 
     fn fixture_history(temporary_root: &tempfile::TempDir) -> ActivityHistory {
-        ActivityHistory::at_database_path(temporary_root.path().join("history.db"))
+        ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"))
     }
 
     fn detail_row_count(temporary_root: &tempfile::TempDir) -> i64 {
         let sqlite_connection =
-            rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("sqlite");
+            rusqlite::Connection::open(temporary_root.path().join("lazaret.db")).expect("sqlite");
         DETAIL_TABLES
             .iter()
             .map(|detail_table| {
@@ -1213,7 +1209,7 @@ mod submission_history_store_tests {
         let history = fixture_history(&temporary_root);
         drop(history.list_submissions().await.expect("schema created"));
         let sqlite_connection =
-            rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("sqlite");
+            rusqlite::Connection::open(temporary_root.path().join("lazaret.db")).expect("sqlite");
         sqlite_connection
             .execute_batch(&format!(
                 "PRAGMA foreign_keys=ON;
@@ -1298,7 +1294,7 @@ mod submission_history_store_tests {
             .await
             .expect("recorded");
         let version_rows: i64 =
-            rusqlite::Connection::open(temporary_root.path().join("history.db"))
+            rusqlite::Connection::open(temporary_root.path().join("lazaret.db"))
                 .expect("sqlite")
                 .query_row(
                     "SELECT COUNT(*) FROM settled_database_versions",
@@ -1314,7 +1310,7 @@ mod submission_history_store_tests {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let history = fixture_history(&temporary_root);
         drop(history.list_submissions().await.expect("schema created"));
-        rusqlite::Connection::open(temporary_root.path().join("history.db"))
+        rusqlite::Connection::open(temporary_root.path().join("lazaret.db"))
             .expect("sqlite")
             .execute(
                 &format!(

@@ -219,7 +219,7 @@ mod remote_status_refresh_tests {
     async fn nothing_to_refresh_contacts_no_service() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let refresh_summary = refresh_remote_statuses(&ActivityHistory::at_database_path(
-            temporary_root.path().join("history.db"),
+            temporary_root.path().join("lazaret.db"),
         ))
         .await;
         assert_eq!(refresh_summary.updated_count, 0);

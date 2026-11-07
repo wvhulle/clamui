@@ -14,6 +14,7 @@ use crate::{
             activity_history_filter::{ActivityHistoryFilter, FilteredHistoryView},
             activity_transcript_dialog::ActivityTranscriptDialog,
         },
+        database_migration_failure_text::describe_history_failure,
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
     },
 };
@@ -57,7 +58,7 @@ fn history_failure_text(history_view: &FilteredHistoryView) -> String {
     match history_view {
         FilteredHistoryView::HistoryLoadFailed(load_failure) => {
             gettext("Failed to load historical logs: {error}")
-                .replace("{error}", &load_failure.to_string())
+                .replace("{error}", &describe_history_failure(load_failure))
         }
         FilteredHistoryView::HistoryLoading | FilteredHistoryView::HistoryLoaded(_) => {
             String::new()

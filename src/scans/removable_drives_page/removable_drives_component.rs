@@ -43,6 +43,7 @@ use crate::{
                 ActivityHistoryGroup, ActivityHistoryGroupInit, ActivityHistoryGroupInput,
             },
         },
+        database_migration_failure_text::describe_history_failure,
         scan_runs::{
             found_threat_row::FoundThreatRow,
             scan_progress_view::{ScanProgressBar, ScanProgressView},
@@ -76,7 +77,7 @@ fn describe_page_notice(page_notice: &DrivesPageNotice) -> String {
         DrivesPageNotice::NoNoticeShown => String::new(),
         DrivesPageNotice::ScanNotRecorded(recording_failure) => {
             gettext("The drive scan could not be added to the history: {error}")
-                .replace("{error}", &recording_failure.to_string())
+                .replace("{error}", &describe_history_failure(recording_failure))
         }
     }
 }

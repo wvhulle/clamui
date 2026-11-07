@@ -25,6 +25,7 @@ use crate::{
             activity_transcript_dialog::ActivityTranscriptDialog,
         },
         component_streams::run_stream_then,
+        database_migration_failure_text::describe_history_failure,
         engine_settings::engine_settings_sections::{
             EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSection,
             EngineSettingsSections, EngineSettingsSectionsOutput, engine_settings_notice_toast,
@@ -129,7 +130,7 @@ impl DatabaseUpdatesPage {
         match &self.update_history {
             UpdateHistoryView::HistoryLoadFailed(load_failure) => {
                 gettext("Failed to load historical logs: {error}")
-                    .replace("{error}", &load_failure.to_string())
+                    .replace("{error}", &describe_history_failure(load_failure))
             }
             UpdateHistoryView::HistoryLoading | UpdateHistoryView::HistoryLoaded(_) => {
                 String::new()
@@ -429,7 +430,7 @@ impl Component for DatabaseUpdatesPage {
             DatabaseUpdatesPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
                 self.toaster.add_toast(plain_text_toast(
                     &gettext("The update could not be added to the history: {error}")
-                        .replace("{error}", &recording_failure.to_string()),
+                        .replace("{error}", &describe_history_failure(&recording_failure)),
                 ));
             }
             DatabaseUpdatesPageCommand::HistoryLoaded(load_outcome) => {

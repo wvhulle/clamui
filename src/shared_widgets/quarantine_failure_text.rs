@@ -1,9 +1,12 @@
 use gettextrs::gettext;
 
-use crate::host_services::{
-    clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-    desktop::locale_formatting::byte_size_text,
-    quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
+use crate::{
+    host_services::{
+        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
+        desktop::locale_formatting::byte_size_text,
+        quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
+    },
+    shared_widgets::database_migration_failure_text::describe_migration_failure,
 };
 
 pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> String {
@@ -101,6 +104,9 @@ pub fn describe_quarantine_failure(move_failure: &QuarantineMoveFailure) -> Stri
         }
         QuarantineMoveFailure::StoredPathUnreadable { .. } => {
             gettext("A path stored in the quarantine database could not be read")
+        }
+        QuarantineMoveFailure::VaultSchemaUnusable(migration_failure) => {
+            describe_migration_failure(migration_failure)
         }
     }
 }

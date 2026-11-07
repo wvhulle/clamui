@@ -23,14 +23,14 @@ with subtest("a failed update is reported through a real password prompt"):
     if "Authenticat" in machine.get_screen_text():
         answer_password_prompt()
     wait_as_user(
-        f"sqlite3 -readonly {HISTORY_DATABASE} "
+        f"sqlite3 -readonly {LAZARET_DATABASE} "
         "\"select activity_status from activity_entries\" | grep -q update",
         timeout=240,
     )
     time.sleep(2)
     machine.screenshot("update_finished")
     status = as_user(
-        f"sqlite3 -readonly {HISTORY_DATABASE} \"select activity_status from activity_entries\""
+        f"sqlite3 -readonly {LAZARET_DATABASE} \"select activity_status from activity_entries\""
     ).strip()
     print(f"update status: {status}")
     assert "failed" in status, f"a failed update was not recorded as failed: {status}"
@@ -49,7 +49,7 @@ with subtest("fangfrisch ran and logged the address containing the key"):
 
 with subtest("the key never reaches the update log, the history or the screen"):
     stored_output = as_user(
-        f"sqlite3 -readonly {HISTORY_DATABASE} \"select activity_output from activity_entries\""
+        f"sqlite3 -readonly {LAZARET_DATABASE} \"select activity_output from activity_entries\""
     )
     assert "fangfrisch" in stored_output, f"fangfrisch output was not shown:\n{stored_output}"
     assert FIXTURE_KEY not in stored_output, "the update log saved the URLhaus key"

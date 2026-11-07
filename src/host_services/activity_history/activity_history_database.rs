@@ -1,24 +1,23 @@
-use std::{collections::BTreeMap, num::NonZeroU64, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, num::NonZeroU64, path::PathBuf};
 
 use jiff::Timestamp;
-use tokio::task::spawn_blocking;
-use turso::{Builder, Connection, Row, transaction::TransactionBehavior};
+use turso::{Connection, Row, transaction::TransactionBehavior};
 
 use crate::host_services::{
     clamav_scanner::{
         scan_progress_events::ThreatFindings, scanner_output_parser::sanitize_scanner_line,
     },
-    desktop::file_process_lock::{ProcessFileLock, wait_for_file_lock},
-    quarantine_vault::quarantine_file_moves::{
-        QuarantineMoveFailure, pin_database_file, secure_database_files,
+    lazaret_database::{
+        database_migration_runner::DatabaseMigrationFailure,
+        locked_database_connection::{
+            DatabasePathNotUtf8, LockedDatabaseConnection, open_locked_connection,
+        },
     },
+    quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
 };
 
-const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const MAXIMUM_RETAINED_ENTRIES: i64 = 10_000;
 const ENTRIES_KEEPING_OUTPUT: i64 = 200;
-const HISTORY_SCHEMA: &str = include_str!("../../../data/database-schemas/history.sql");
-const HISTORY_CONNECTION_PRAGMAS: &str = "PRAGMA foreign_keys=ON;";
 const ENTRY_QUERY: &str = "
     SELECT activity_entries.entry_id, activity_entries.started_at_unix,
         activity_entries.activity_status, activity_entries.duration_millis,
@@ -58,6 +57,14 @@ pub enum ActivityHistoryFailure {
     StoredTimeInvalid(#[from] jiff::Error),
     #[error("the history lock is unavailable: {0}")]
     HistoryLockUnavailable(#[from] std::io::Error),
+    #[error("the history database could not be prepared: {0}")]
+    HistorySchemaUnusable(#[from] DatabaseMigrationFailure),
+}
+
+impl From<DatabasePathNotUtf8> for ActivityHistoryFailure {
+    fn from(_unreadable_path: DatabasePathNotUtf8) -> Self {
+        Self::DatabasePathNotUtf8
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -549,34 +556,16 @@ impl ActivityHistory {
         Self { database_path }
     }
 
-    pub(crate) async fn lock_history(&self) -> Result<ProcessFileLock, ActivityHistoryFailure> {
-        let lock_path = self.database_path.with_extension("lock");
-        Ok(spawn_blocking(move || wait_for_file_lock(&lock_path)).await??)
-    }
-
-    pub(crate) async fn open_connection(&self) -> Result<Connection, ActivityHistoryFailure> {
-        let pinned_path = self.database_path.clone();
-        spawn_blocking(move || pin_database_file(&pinned_path)).await??;
-        let database_text_path = self
-            .database_path
-            .to_str()
-            .ok_or(ActivityHistoryFailure::DatabasePathNotUtf8)?;
-        let history_database = Builder::new_local(database_text_path).build().await?;
-        let database_connection = history_database.connect()?;
-        database_connection.busy_timeout(DATABASE_BUSY_TIMEOUT)?;
-        database_connection
-            .execute_batch(HISTORY_CONNECTION_PRAGMAS)
-            .await?;
-        database_connection.execute_batch(HISTORY_SCHEMA).await?;
-        secure_database_files(&self.database_path);
-        Ok(database_connection)
+    pub(crate) async fn open_connection(
+        &self,
+    ) -> Result<LockedDatabaseConnection, ActivityHistoryFailure> {
+        open_locked_connection(&self.database_path).await
     }
 
     pub async fn record_activity(
         &self,
         new_entry: NewActivityEntry,
     ) -> Result<(), ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let mut database_connection = self.open_connection().await?;
         let entry_transaction = database_connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -612,13 +601,11 @@ impl ActivityHistory {
     pub async fn list_recent_entries(
         &self,
     ) -> Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         list_activity_entries(&database_connection).await
     }
 
     pub async fn clear_all_entries(&self) -> Result<(), ActivityHistoryFailure> {
-        let _history_lock = self.lock_history().await?;
         self.open_connection()
             .await?
             .execute("DELETE FROM activity_entries", ())
@@ -654,7 +641,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn entries_survive_reopening_and_list_newest_first() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let database_path = temporary_root.path().join("history.db");
+        let database_path = temporary_root.path().join("lazaret.db");
         let writing_history = ActivityHistory::at_database_path(database_path.clone());
         writing_history
             .record_activity(scan_entry(Timestamp::constant(100, 0), "older"))
@@ -689,7 +676,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn a_second_handle_sees_entries_written_by_the_first() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let database_path = temporary_root.path().join("history.db");
+        let database_path = temporary_root.path().join("lazaret.db");
         let viewing_history = ActivityHistory::at_database_path(database_path.clone());
         assert!(
             viewing_history
@@ -715,7 +702,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn clearing_removes_every_entry() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+        let history = ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         history
             .record_activity(scan_entry(Timestamp::constant(100, 0), "entry"))
             .await
@@ -733,7 +720,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn only_recent_entries_keep_their_output() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+        let history = ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         let connection = history.open_connection().await.expect("connection");
         connection
             .execute(
@@ -764,7 +751,7 @@ mod activity_history_database_tests {
 
     async fn recorded_and_listed(activity_record: ActivityRecord) -> ActivityRecord {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+        let history = ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         history
             .record_activity(NewActivityEntry {
                 started_at: Timestamp::constant(100, 0),
@@ -917,7 +904,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn every_activity_variant_round_trips_through_the_tables() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let history = ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+        let history = ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         let recorded_records = every_activity_record();
         for (entry_position, activity_record) in recorded_records.iter().enumerate() {
             history
@@ -941,6 +928,26 @@ mod activity_history_database_tests {
         assert_eq!(listed_records, recorded_records);
     }
 
+    #[tokio::test]
+    async fn concurrent_first_opens_share_one_migrated_history() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let database_path = temporary_root.path().join("lazaret.db");
+        let opened_listings = futures::future::join_all((0..4).map(|_opener_index| {
+            let opening_history = ActivityHistory::at_database_path(database_path.clone());
+            tokio::spawn(async move { opening_history.list_recent_entries().await })
+        }))
+        .await;
+        opened_listings.into_iter().for_each(|opened_listing| {
+            assert!(
+                opened_listing
+                    .expect("opener task")
+                    .expect("listed")
+                    .is_empty()
+            );
+        });
+        assert_eq!(raw_count(&database_path, "PRAGMA user_version"), 1);
+    }
+
     fn raw_count(database_path: &std::path::Path, count_query: &str) -> i64 {
         rusqlite::Connection::open(database_path)
             .expect("database")
@@ -951,7 +958,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn updates_store_no_scan_rows_and_targets_are_ordered_rows() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let database_path = temporary_root.path().join("history.db");
+        let database_path = temporary_root.path().join("lazaret.db");
         let history = ActivityHistory::at_database_path(database_path.clone());
         for activity_record in every_activity_record() {
             history
@@ -1011,7 +1018,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn the_activity_schema_refuses_rows_that_cannot_exist() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let database_path = temporary_root.path().join("history.db");
+        let database_path = temporary_root.path().join("lazaret.db");
         ActivityHistory::at_database_path(database_path.clone())
             .list_recent_entries()
             .await
@@ -1058,7 +1065,7 @@ mod activity_history_database_tests {
     #[tokio::test]
     async fn an_infected_scan_without_its_inspection_row_is_unreadable() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
-        let database_path = temporary_root.path().join("history.db");
+        let database_path = temporary_root.path().join("lazaret.db");
         let history = ActivityHistory::at_database_path(database_path.clone());
         history.list_recent_entries().await.expect("created");
         rusqlite::Connection::open(&database_path)

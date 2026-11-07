@@ -9,7 +9,6 @@ use relm4::{
 };
 
 use crate::{
-    APPLICATION_DATA_NAME,
     application_window::{
         application_actions::{
             ClearHistoryAction, ExportHistoryAction, OpenDetectionAction, OpenDetectionsAction,
@@ -60,10 +59,12 @@ use crate::{
         },
         clamav_programs::clamav_report_submission::ClamavReportRequest,
         desktop::{
+            application_directories::application_config_directory,
             locale_formatting::host_moment_formatters,
             running_instance_forwarding::paths_from_bytes, stored_settings::application_settings,
         },
         detection_journal::detection_journal_follower::JournalAccess,
+        lazaret_database::locked_database_connection::lazaret_database_path,
         protection_evidence::host_protection_evidence::{
             ProtectionEvidence, WATCHED_SERVICE_UNITS, detection_notifications_are_enabled,
             gather_protection_evidence, lazaret_schedule_is_enabled,
@@ -104,6 +105,7 @@ use crate::{
             exported_text,
         },
         component_streams::{RunningStream, run_stream},
+        database_migration_failure_text::describe_history_failure,
         scan_runs::scan_run_progress::PageScanActivity,
     },
     sharing::{
@@ -737,7 +739,8 @@ impl Component for PageNavigation {
     ) -> ComponentParts<Self> {
         let quarantine_vault = navigation_init.quarantine_vault;
         let data_directory = navigation_init.data_directory;
-        let activity_history = ActivityHistory::at_database_path(data_directory.join("history.db"));
+        let activity_history =
+            ActivityHistory::at_database_path(lazaret_database_path(&data_directory));
         let quarantine_page = QuarantineEntriesPage::builder()
             .launch(QuarantineEntriesPageInit {
                 quarantine_vault: quarantine_vault.clone(),
@@ -765,9 +768,7 @@ impl Component for PageNavigation {
                 quarantine_vault: quarantine_vault.clone(),
                 activity_history: activity_history.clone(),
                 profile_store: ScanProfileStore::at_path(
-                    glib::user_config_dir()
-                        .join(APPLICATION_DATA_NAME)
-                        .join("profiles.json"),
+                    application_config_directory().join("profiles.json"),
                     glib::user_special_dir(glib::UserDirectory::Downloads)
                         .unwrap_or_else(|| glib::home_dir().join("Downloads"))
                         .to_string_lossy()
@@ -1107,7 +1108,7 @@ impl Component for PageNavigation {
                 export_format,
                 load_outcome,
             } => match load_outcome
-                .map_err(|load_failure| load_failure.to_string())
+                .map_err(|load_failure| describe_history_failure(&load_failure))
                 .and_then(|activity_entries| {
                     exported_history_file(export_format, &activity_entries)
                         .map_err(|json_failure| json_failure.to_string())
@@ -1141,7 +1142,7 @@ impl Component for PageNavigation {
             PageNavigationCommand::HistoryCleared(Err(clear_failure)) => {
                 self.show_plain_toast(
                     gettext("Could not clear the history: {error}")
-                        .replace("{error}", &clear_failure.to_string()),
+                        .replace("{error}", &describe_history_failure(&clear_failure)),
                 );
             }
         }

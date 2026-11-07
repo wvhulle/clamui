@@ -55,6 +55,7 @@ use crate::{
     },
     shared_widgets::{
         component_streams::{RunningStream, run_stream},
+        database_migration_failure_text::describe_history_failure,
         journal_follow_failure_text::journal_follow_failure_text,
         loading_indicators::{BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, busy_page_name},
         quarantine_failure_text::describe_quarantine_failure,
@@ -203,7 +204,7 @@ fn describe_incident_action_failure(action_failure: &IncidentActionFailure) -> S
         }
         IncidentActionFailure::HistoryNotUpdated(history_failure) => {
             gettext("Your decision could not be saved: {error}")
-                .replace("{error}", &history_failure.to_string())
+                .replace("{error}", &describe_history_failure(history_failure))
         }
     }
 }
@@ -853,7 +854,7 @@ impl Component for BackgroundDetectionsPage {
                         "Detections while Lazaret wasn't running can't be counted, because where \
                          it stopped reading the system journal could not be read: {error}",
                     )
-                    .replace("{error}", &cursor_failure.to_string()),
+                    .replace("{error}", &describe_history_failure(&cursor_failure)),
                 ));
             }
             BackgroundDetectionsPageCommand::DetectionsLoaded {
@@ -875,7 +876,7 @@ impl Component for BackgroundDetectionsPage {
             BackgroundDetectionsPageCommand::LoadingFailed(history_failure) => {
                 self.toaster.add_toast(plain_text_toast(
                     &gettext("Detections could not be read: {error}")
-                        .replace("{error}", &history_failure.to_string()),
+                        .replace("{error}", &describe_history_failure(&history_failure)),
                 ));
             }
             BackgroundDetectionsPageCommand::SignatureLookupFinished {

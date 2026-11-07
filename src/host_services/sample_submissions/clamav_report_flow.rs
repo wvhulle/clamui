@@ -137,9 +137,9 @@ mod clamav_report_flow_tests {
     async fn a_file_already_reported_is_not_sent_again() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let activity_history =
-            ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+            ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         let quarantine_vault = QuarantineVault::open_vault(
-            temporary_root.path().join("quarantine.db"),
+            temporary_root.path().join("lazaret.db"),
             temporary_root.path().join("quarantine"),
         )
         .await

@@ -21,7 +21,10 @@ use crate::{
             service_key_storage::describe_key_failure,
         },
     },
-    shared_widgets::quarantine_failure_text::describe_quarantine_failure,
+    shared_widgets::{
+        database_migration_failure_text::describe_history_failure,
+        quarantine_failure_text::describe_quarantine_failure,
+    },
 };
 
 pub fn sample_read_failure_text(read_failure: &SampleReadFailure) -> String {
@@ -46,7 +49,7 @@ pub fn sample_read_failure_text(read_failure: &SampleReadFailure) -> String {
 
 pub fn history_failure_text(history_failure: &ActivityHistoryFailure) -> String {
     gettext("The submission history could not be read: {error}")
-        .replace("{error}", &history_failure.to_string())
+        .replace("{error}", &describe_history_failure(history_failure))
 }
 
 pub fn earlier_submission_text(earlier_submission: &SubmissionRecord) -> String {
@@ -78,7 +81,7 @@ pub fn clamav_report_attempt_text(report_attempt: &ClamavReportAttempt) -> Strin
         }
         ClamavReportAttempt::ReportSentWithoutRecord(history_failure) => {
             gettext("Report sent, but it could not be added to Submissions: {error}")
-                .replace("{error}", &history_failure.to_string())
+                .replace("{error}", &describe_history_failure(history_failure))
         }
     }
 }
@@ -126,7 +129,7 @@ pub fn bazaar_upload_attempt_text(upload_attempt: &BazaarUploadAttempt) -> Strin
         }
         BazaarUploadAttempt::SentWithoutRecord(history_failure) => {
             gettext("Uploaded, but it could not be added to Submissions: {error}")
-                .replace("{error}", &history_failure.to_string())
+                .replace("{error}", &describe_history_failure(history_failure))
         }
     }
 }
@@ -173,7 +176,7 @@ pub fn virustotal_upload_attempt_text(upload_attempt: &VirusTotalUploadAttempt) 
         }
         VirusTotalUploadAttempt::SentWithoutRecord(history_failure) => {
             gettext("Uploaded, but it could not be added to Submissions: {error}")
-                .replace("{error}", &history_failure.to_string())
+                .replace("{error}", &describe_history_failure(history_failure))
         }
     }
 }

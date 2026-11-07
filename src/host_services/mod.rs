@@ -5,6 +5,7 @@ pub mod clamav_programs;
 pub mod clamav_scanner;
 pub mod desktop;
 pub mod detection_journal;
+pub mod lazaret_database;
 pub mod protection_evidence;
 pub mod quarantine_vault;
 pub mod sample_submissions;

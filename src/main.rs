@@ -10,15 +10,12 @@ mod shared_widgets;
 mod sharing;
 mod signatures;
 
-use std::{path::PathBuf, process::ExitCode};
+use std::process::ExitCode;
 
 use gettextrs::{
     LocaleCategory, bind_textdomain_codeset, bindtextdomain, gettext, setlocale, textdomain,
 };
-use relm4::{
-    adw,
-    gtk::{gio::prelude::SettingsExt, glib},
-};
+use relm4::{adw, gtk::gio::prelude::SettingsExt};
 
 use crate::{
     application_window::{
@@ -53,10 +50,6 @@ const INSTALLED_LOCALE_DIRECTORY: &str = match option_env!("LAZARET_LOCALE_DIREC
     Some(locale_directory) => locale_directory,
     None => "/usr/local/share/locale",
 };
-
-pub(crate) fn application_data_directory() -> PathBuf {
-    glib::user_data_dir().join(APPLICATION_DATA_NAME)
-}
 
 fn initialize_translations() {
     unsafe {

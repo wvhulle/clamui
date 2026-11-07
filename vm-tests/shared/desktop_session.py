@@ -9,7 +9,7 @@ SAMPLE_PASSWORD = "sample-password"
 SESSION_BUS = "unix:path=/run/user/1000/bus"
 EICAR_TEXT = r"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 DOWNLOADS = f"/home/{SAMPLE_USER}/Downloads"
-HISTORY_DATABASE = f"/home/{SAMPLE_USER}/.local/share/lazaret/history.db"
+LAZARET_DATABASE = f"/home/{SAMPLE_USER}/.local/share/lazaret/lazaret.db"
 
 
 def user_command(command):
@@ -73,12 +73,12 @@ def stored_detection(file_path):
         "using (file_path, signature_name) "
         f"where cast(file_path as text) = '{file_path}'"
     )
-    return as_user(f"sqlite3 -readonly {HISTORY_DATABASE} {shlex.quote(query)}").strip()
+    return as_user(f"sqlite3 -readonly {LAZARET_DATABASE} {shlex.quote(query)}").strip()
 
 
 def wait_for_stored_detection(file_path):
     wait_as_user(
-        f"sqlite3 -readonly {HISTORY_DATABASE} "
+        f"sqlite3 -readonly {LAZARET_DATABASE} "
         + shlex.quote(
             f"select 1 from background_detections where cast(file_path as text) = '{file_path}'"
         )

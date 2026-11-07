@@ -17,8 +17,15 @@ use rustix::{
 };
 use sha2::{Digest, Sha256};
 
-use crate::host_services::quarantine_vault::quarantine_payload_format::{
-    PayloadEncoding, PayloadWriter, PlaintextReader, fresh_scrambling_key, open_plaintext_reader,
+use crate::host_services::{
+    lazaret_database::{
+        database_migration_runner::DatabaseMigrationFailure,
+        locked_database_connection::DatabasePathNotUtf8,
+    },
+    quarantine_vault::quarantine_payload_format::{
+        PayloadEncoding, PayloadWriter, PlaintextReader, fresh_scrambling_key,
+        open_plaintext_reader,
+    },
 };
 
 const DATABASE_FILE_MODE: u32 = 0o600;
@@ -100,6 +107,14 @@ pub enum QuarantineMoveFailure {
     },
     #[error("the file was removed from quarantine but its record could not be removed")]
     EntryRecordNotRemoved,
+    #[error("the quarantine database could not be prepared: {0}")]
+    VaultSchemaUnusable(#[from] DatabaseMigrationFailure),
+}
+
+impl From<DatabasePathNotUtf8> for QuarantineMoveFailure {
+    fn from(_unreadable_path: DatabasePathNotUtf8) -> Self {
+        Self::DatabasePathNotUtf8
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

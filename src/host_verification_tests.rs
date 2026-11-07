@@ -69,12 +69,9 @@ async fn complete_scan(scan_request: ScanRequest) -> CompletedScanOutcome {
 }
 
 async fn open_host_vault(vault_root: &Path) -> QuarantineVault {
-    QuarantineVault::open_vault(
-        vault_root.join("quarantine.db"),
-        vault_root.join("quarantine"),
-    )
-    .await
-    .expect("opened vault")
+    QuarantineVault::open_vault(vault_root.join("lazaret.db"), vault_root.join("quarantine"))
+        .await
+        .expect("opened vault")
 }
 
 fn clamav_temporary_entries() -> Vec<String> {
@@ -341,7 +338,7 @@ async fn host_background_detection_flows_from_journal_to_quarantine() {
     let verification_root =
         tempfile::tempdir_in(&home_directory).expect("verification root on the same filesystem");
     let activity_history =
-        ActivityHistory::at_database_path(verification_root.path().join("history.db"));
+        ActivityHistory::at_database_path(verification_root.path().join("lazaret.db"));
 
     let mut journal_events = Box::pin(detection_journal_events(
         JournalStartPosition::FromOldestEntry,
@@ -471,7 +468,7 @@ async fn host_refreshing_after_sightings_does_not_feed_back_into_the_journal() {
     let verification_root =
         tempfile::tempdir_in(&home_directory).expect("verification root on the same filesystem");
     let activity_history =
-        ActivityHistory::at_database_path(verification_root.path().join("history.db"));
+        ActivityHistory::at_database_path(verification_root.path().join("lazaret.db"));
     let mut journal_events = Box::pin(detection_journal_events(
         JournalStartPosition::FromOldestEntry,
     ));

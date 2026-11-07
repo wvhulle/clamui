@@ -3,6 +3,8 @@ mod ci_tool_preparation;
 mod codeberg_bot_account;
 mod debian_package;
 mod dependency_update_pull_request;
+#[path = "../../src/host_services/lazaret_database/embedded_migration_lists.rs"]
+mod embedded_migration_lists;
 mod fixture_clamav_programs;
 mod fixture_systemd_service;
 mod flatpak_bundle;

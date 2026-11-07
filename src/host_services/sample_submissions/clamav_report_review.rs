@@ -205,7 +205,7 @@ mod clamav_report_review_tests {
     async fn rechecked_quarantine_content_settles_matching_reports_only() {
         let temporary_root = tempfile::tempdir().expect("temporary root");
         let activity_history =
-            ActivityHistory::at_database_path(temporary_root.path().join("history.db"));
+            ActivityHistory::at_database_path(temporary_root.path().join("lazaret.db"));
         let reported_hash = "a".repeat(64);
         let other_hash = "b".repeat(64);
         for (content_sha256, submission_state) in [

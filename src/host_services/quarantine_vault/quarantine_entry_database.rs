@@ -2,34 +2,33 @@ use std::{
     ffi::OsString,
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 use bytesize::ByteSize;
 use futures::{TryStreamExt, stream};
 use jiff::Timestamp;
 use tokio::task::spawn_blocking;
-use turso::{Builder, Connection, Database, Row, Value, transaction::TransactionBehavior};
+use turso::{Connection, Row, Value, transaction::TransactionBehavior};
 
 use crate::host_services::{
     clamav_scanner::scanner_output_parser::ThreatIdentity,
+    lazaret_database::locked_database_connection::{
+        LockedDatabaseConnection, open_locked_connection,
+    },
     quarantine_vault::{
         quarantine_file_moves::{
             QuarantineMoveFailure, RecordedPayloadHash, copy_file_into_quarantine,
             delete_payload_file, discard_copied_payload, ensure_quarantine_directory,
             lexically_normalized_path, neutralize_payload_in_place, open_payload_plaintext,
-            parsed_sha256_hex, payload_content_hash, pin_database_file, plan_blocked_file_rename,
+            parsed_sha256_hex, payload_content_hash, plan_blocked_file_rename,
             read_verified_payload_bytes, remove_quarantined_source,
             remove_stale_neutralizing_copies, rename_blocked_file_into_quarantine,
-            restore_payload_file, secure_database_files,
+            restore_payload_file,
         },
         quarantine_payload_format::PlaintextReader,
     },
 };
 
-const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
-const CONNECTION_PRAGMAS: &str = "PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;";
-const QUARANTINE_SCHEMA: &str = include_str!("../../../data/database-schemas/quarantine.sql");
 const ENTRY_QUERY: &str = "
     SELECT quarantine.entry_id, quarantine.original_path, quarantine.quarantine_path,
         quarantine_signatures.signature_name, quarantine.detection_date,
@@ -162,7 +161,6 @@ impl std::fmt::Debug for VerifiedPayload {
 
 #[derive(Clone)]
 pub struct QuarantineVault {
-    entry_database: Database,
     database_path: PathBuf,
     quarantine_directory: PathBuf,
 }
@@ -212,33 +210,18 @@ impl QuarantineVault {
         database_path: PathBuf,
         quarantine_directory: PathBuf,
     ) -> Result<Self, QuarantineMoveFailure> {
-        let prepared_database_path = database_path.clone();
         let prepared_quarantine_directory = quarantine_directory.clone();
-        spawn_blocking(move || {
-            ensure_quarantine_directory(&prepared_quarantine_directory)?;
-            pin_database_file(&prepared_database_path)
-        })
-        .await??;
-        let database_text_path = database_path
-            .to_str()
-            .ok_or(QuarantineMoveFailure::DatabasePathNotUtf8)?;
-        let entry_database = Builder::new_local(database_text_path).build().await?;
+        spawn_blocking(move || ensure_quarantine_directory(&prepared_quarantine_directory))
+            .await??;
         let quarantine_vault = Self {
-            entry_database,
             database_path,
             quarantine_directory,
         };
-        let schema_connection = quarantine_vault.open_connection().await?;
-        schema_connection
-            .query("PRAGMA journal_mode=WAL", ())
-            .await?
-            .next()
-            .await?;
-        schema_connection.execute_batch(QUARANTINE_SCHEMA).await?;
+        let reconciling_connection = quarantine_vault.open_connection().await?;
         quarantine_vault
-            .reconcile_pending_entries(&schema_connection)
+            .reconcile_pending_entries(&reconciling_connection)
             .await?;
-        secure_database_files(&quarantine_vault.database_path);
+        drop(reconciling_connection);
         quarantine_vault.neutralize_listed_payloads().await;
         Ok(quarantine_vault)
     }
@@ -320,14 +303,8 @@ impl QuarantineVault {
         })
     }
 
-    async fn open_connection(&self) -> Result<Connection, QuarantineMoveFailure> {
-        let database_connection = self.entry_database.connect()?;
-        database_connection.busy_timeout(DATABASE_BUSY_TIMEOUT)?;
-        database_connection
-            .execute_batch(CONNECTION_PRAGMAS)
-            .await?;
-        secure_database_files(&self.database_path);
-        Ok(database_connection)
+    async fn open_connection(&self) -> Result<LockedDatabaseConnection, QuarantineMoveFailure> {
+        open_locked_connection(&self.database_path).await
     }
 
     async fn reconcile_pending_entries(
@@ -877,6 +854,15 @@ mod quarantine_entry_database_tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::host_services::{
+        activity_history::activity_history_database::{
+            ActivityHistory, ActivityRecord, NewActivityEntry, UpdateActivityStatus,
+        },
+        lazaret_database::{
+            database_migration_runner::create_migrated_test_database,
+            embedded_migration_lists::LAZARET_MIGRATIONS,
+        },
+    };
 
     fn signature_identity(signature_name: &str) -> ThreatIdentity {
         ThreatIdentity::Signature {
@@ -903,7 +889,7 @@ mod quarantine_entry_database_tests {
 
     impl VaultFixture {
         fn database_path(temporary_root: &TempDir) -> PathBuf {
-            temporary_root.path().join("data/quarantine.db")
+            temporary_root.path().join("data/lazaret.db")
         }
 
         fn quarantine_directory(temporary_root: &TempDir) -> PathBuf {
@@ -945,18 +931,20 @@ mod quarantine_entry_database_tests {
         TamperedHash { stored_text: &'seeded str },
     }
 
-    fn seed_pending_row(
+    async fn seed_pending_row(
         temporary_root: &TempDir,
         payload_path: &Path,
         original_path: &Path,
         seeded_hash: SeededPendingHash<'_>,
     ) {
+        create_migrated_test_database(
+            &VaultFixture::database_path(temporary_root),
+            LAZARET_MIGRATIONS,
+        )
+        .await;
         let sqlite_connection =
             rusqlite::Connection::open(VaultFixture::database_path(temporary_root))
                 .expect("sqlite connection");
-        sqlite_connection
-            .execute_batch(QUARANTINE_SCHEMA)
-            .expect("quarantine schema");
         sqlite_connection
             .execute(
                 "INSERT INTO quarantine_pending VALUES (?1, ?2, 15, 420)",
@@ -1047,14 +1035,18 @@ mod quarantine_entry_database_tests {
         fs::create_dir_all(&quarantine_directory).expect("quarantine directory");
         let payload_path = quarantine_directory.join("0123456789abcdef_invoice.pdf.exe");
         fs::write(&payload_path, b"fixture payload").expect("payload");
+        create_migrated_test_database(
+            &VaultFixture::database_path(&temporary_root),
+            LAZARET_MIGRATIONS,
+        )
+        .await;
         rusqlite::Connection::open(VaultFixture::database_path(&temporary_root))
             .expect("sqlite connection")
             .execute_batch(
-                &(QUARANTINE_SCHEMA.to_owned()
-                    + &include_str!("../../../xtask/assets/quarantine-seed.sql").replace(
-                        "@PAYLOAD_PATH@",
-                        &format!("'{}'", payload_path.to_string_lossy()),
-                    )),
+                &include_str!("../../../xtask/assets/quarantine-seed.sql").replace(
+                    "@PAYLOAD_PATH@",
+                    &format!("'{}'", payload_path.to_string_lossy()),
+                ),
             )
             .expect("fixture rows");
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
@@ -1122,6 +1114,92 @@ mod quarantine_entry_database_tests {
             .await
             .expect("second restored");
         assert_eq!(content_rows().await, 0);
+    }
+
+    #[tokio::test]
+    async fn the_vault_and_the_history_share_one_database_file() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let database_path = VaultFixture::database_path(&vault_fixture.temporary_root);
+        let activity_history = ActivityHistory::at_database_path(database_path.clone());
+        let source_path = vault_fixture.source_file("shared.bin", b"shared database bytes");
+        let shared_threat = signature_identity("Shared.Test");
+        let (quarantine_outcome, history_outcome) = futures::join!(
+            vault_fixture
+                .quarantine_vault
+                .move_file_into_quarantine(&source_path, &shared_threat),
+            activity_history.record_activity(applied_update_entry()),
+        );
+        quarantine_outcome.expect("quarantined");
+        history_outcome.expect("recorded");
+        let shared_connection = rusqlite::Connection::open(&database_path).expect("shared file");
+        let stored_rows: i64 = shared_connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM quarantine) + (SELECT COUNT(*) FROM \
+                 activity_entries)",
+                [],
+                |count_row| count_row.get(0),
+            )
+            .expect("row count");
+        assert_eq!(stored_rows, 2);
+        let stored_version: i64 = shared_connection
+            .query_row("PRAGMA user_version", [], |version_row| version_row.get(0))
+            .expect("version");
+        assert_eq!(stored_version, 1);
+    }
+
+    fn applied_update_entry() -> NewActivityEntry {
+        NewActivityEntry {
+            started_at: Timestamp::constant(100, 0),
+            activity_record: ActivityRecord::UpdateActivity {
+                update_status: UpdateActivityStatus::UpdateApplied,
+            },
+            duration_millis: 0,
+            activity_output: String::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn another_process_records_history_while_the_vault_stays_open() {
+        let vault_fixture = VaultFixture::open_fixture().await;
+        let writer_status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "--ignored",
+                "host_services::quarantine_vault::quarantine_entry_database::quarantine_entry_database_tests::history_writer_in_another_process",
+            ])
+            .env("SHARED_DATABASE_ROOT", vault_fixture.temporary_root.path())
+            .status()
+            .expect("history writer");
+        assert!(
+            writer_status.success(),
+            "the second process could not write"
+        );
+        let recorded_entries = ActivityHistory::at_database_path(VaultFixture::database_path(
+            &vault_fixture.temporary_root,
+        ))
+        .list_recent_entries()
+        .await
+        .expect("listed");
+        assert_eq!(recorded_entries.len(), 1);
+        assert!(
+            vault_fixture
+                .quarantine_vault
+                .list_quarantine_entries()
+                .await
+                .expect("vault still usable")
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "run only as a child of the shared database test"]
+    async fn history_writer_in_another_process() {
+        let shared_root =
+            PathBuf::from(std::env::var_os("SHARED_DATABASE_ROOT").expect("shared root"));
+        ActivityHistory::at_database_path(shared_root.join("data/lazaret.db"))
+            .record_activity(applied_update_entry())
+            .await
+            .expect("recorded from the second process");
     }
 
     #[tokio::test]
@@ -1547,7 +1625,8 @@ mod quarantine_entry_database_tests {
             SeededPendingHash::Hashed {
                 sha256_hex: &sha256_text(b"pending payload"),
             },
-        );
+        )
+        .await;
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
         let listed_entries = quarantine_vault
@@ -1575,7 +1654,8 @@ mod quarantine_entry_database_tests {
             SeededPendingHash::Hashed {
                 sha256_hex: &sha256_text(b"pending payload"),
             },
-        );
+        )
+        .await;
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
         assert!(
@@ -1608,7 +1688,8 @@ mod quarantine_entry_database_tests {
             SeededPendingHash::TamperedHash {
                 stored_text: "not-a-valid-hash",
             },
-        );
+        )
+        .await;
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
         assert!(
@@ -1708,7 +1789,8 @@ mod quarantine_entry_database_tests {
             &payload_path,
             &original_path,
             SeededPendingHash::NotYetHashed,
-        );
+        )
+        .await;
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
         let listed_entries = quarantine_vault
@@ -1797,7 +1879,8 @@ mod quarantine_entry_database_tests {
             &payload_path,
             &original_path,
             SeededPendingHash::NotYetHashed,
-        );
+        )
+        .await;
 
         let quarantine_vault = open_fixture_vault(&temporary_root).await;
         assert!(
@@ -1863,7 +1946,7 @@ mod quarantine_entry_database_tests {
     async fn crash_helper_stops_before_commit() {
         let crash_root = PathBuf::from(std::env::var_os("CRASH_HELPER_ROOT").expect("crash root"));
         let quarantine_vault = QuarantineVault::open_vault(
-            crash_root.join("data/quarantine.db"),
+            crash_root.join("data/lazaret.db"),
             crash_root.join("data/quarantine"),
         )
         .await

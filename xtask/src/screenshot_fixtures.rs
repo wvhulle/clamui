@@ -6,7 +6,11 @@ use std::{
     process::{Command, Stdio},
 };
 
-use crate::{fixture_clamav_programs::FIXTURE_PROGRAM_NAMES, task_failure::TaskFailure};
+use crate::{
+    embedded_migration_lists::{EmbeddedMigration, LAZARET_MIGRATIONS},
+    fixture_clamav_programs::FIXTURE_PROGRAM_NAMES,
+    task_failure::TaskFailure,
+};
 
 const QUARANTINE_FIXTURE_NAME: &str = "0123456789abcdef_invoice.pdf.exe";
 const SCAN_FIXTURE_NAMES: [&str; 3] = [
@@ -20,57 +24,68 @@ pub struct ScreenshotFixtures {
     pub search_path: std::ffi::OsString,
 }
 
-const HISTORY_SCHEMA: &str = include_str!("../../data/database-schemas/history.sql");
-const QUARANTINE_SCHEMA: &str = include_str!("../../data/database-schemas/quarantine.sql");
+fn sql_identifier(identifier_text: &str) -> String {
+    format!("\"{}\"", identifier_text.replace('"', "\"\""))
+}
+
+fn versioned_schema_sql(ordered_migrations: &[EmbeddedMigration]) -> String {
+    ordered_migrations
+        .iter()
+        .zip(1..)
+        .map(|(embedded_migration, reached_version)| {
+            let savepoint_name = sql_identifier(embedded_migration.migration_name);
+            format!(
+                "SAVEPOINT {savepoint_name};\n{}\nPRAGMA user_version = \
+                 {reached_version};\nRELEASE {savepoint_name};\n",
+                embedded_migration.migration_sql
+            )
+        })
+        .collect()
+}
 
 fn sql_text_literal(literal_text: &str) -> String {
     format!("'{}'", literal_text.replace('\'', "''"))
 }
 
-fn quarantine_seed_sql(payload_path: &str) -> String {
-    QUARANTINE_SCHEMA.to_owned()
-        + &include_str!("../assets/quarantine-seed.sql")
-            .replace("@PAYLOAD_PATH@", &sql_text_literal(payload_path))
+struct SeededFixturePaths {
+    payload_path: PathBuf,
+    unresolved_path: PathBuf,
+    scheduled_path: PathBuf,
 }
 
-fn seed_quarantine_database(session_root: &Path) -> Result<(), TaskFailure> {
+fn fixture_database_sql(seeded_paths: &SeededFixturePaths) -> String {
+    versioned_schema_sql(LAZARET_MIGRATIONS)
+        + &include_str!("../assets/quarantine-seed.sql").replace(
+            "@PAYLOAD_PATH@",
+            &sql_text_literal(&seeded_paths.payload_path.to_string_lossy()),
+        )
+        + &include_str!("../assets/detections-seed.sql")
+            .replace(
+                "@UNRESOLVED_PATH@",
+                &sql_text_literal(&seeded_paths.unresolved_path.to_string_lossy()),
+            )
+            .replace(
+                "@SCHEDULED_PATH@",
+                &sql_text_literal(&seeded_paths.scheduled_path.to_string_lossy()),
+            )
+}
+
+fn seed_lazaret_database(session_root: &Path) -> Result<(), TaskFailure> {
     let application_data = session_root.join("data/lazaret");
     let quarantine_directory = application_data.join("quarantine");
     fs::create_dir_all(&quarantine_directory)?;
-    let payload_path = quarantine_directory.join(QUARANTINE_FIXTURE_NAME);
-    fs::write(&payload_path, b"fixture payload")?;
-    let mut sqlite_process = Command::new("sqlite3")
-        .arg(application_data.join("quarantine.db"))
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|start_failure| TaskFailure::ToolNotStarted {
-            tool_name: "sqlite3",
-            start_failure,
-        })?;
-    if let Some(mut sqlite_input) = sqlite_process.stdin.take() {
-        sqlite_input.write_all(quarantine_seed_sql(&payload_path.to_string_lossy()).as_bytes())?;
-    }
-    let exit_status = sqlite_process.wait()?;
-    if exit_status.success() {
-        Ok(())
-    } else {
-        Err(TaskFailure::ToolFailed {
-            tool_name: "sqlite3",
-            exit_status,
-        })
-    }
-}
-
-fn seed_detection_history(session_root: &Path) -> Result<(), TaskFailure> {
-    let application_data = session_root.join("data/lazaret");
     let downloads_directory = session_root.join("home/Downloads");
     fs::create_dir_all(&downloads_directory)?;
-    let unresolved_path = downloads_directory.join("invoice.pdf.exe");
-    let scheduled_path = downloads_directory.join("setup-helper.bin");
-    fs::write(&unresolved_path, b"fixture")?;
-    fs::write(&scheduled_path, b"fixture")?;
+    let seeded_paths = SeededFixturePaths {
+        payload_path: quarantine_directory.join(QUARANTINE_FIXTURE_NAME),
+        unresolved_path: downloads_directory.join("invoice.pdf.exe"),
+        scheduled_path: downloads_directory.join("setup-helper.bin"),
+    };
+    fs::write(&seeded_paths.payload_path, b"fixture payload")?;
+    fs::write(&seeded_paths.unresolved_path, b"fixture")?;
+    fs::write(&seeded_paths.scheduled_path, b"fixture")?;
     let mut sqlite_process = Command::new("sqlite3")
-        .arg(application_data.join("history.db"))
+        .arg(application_data.join("lazaret.db"))
         .stdin(Stdio::piped())
         .spawn()
         .map_err(|start_failure| TaskFailure::ToolNotStarted {
@@ -78,19 +93,7 @@ fn seed_detection_history(session_root: &Path) -> Result<(), TaskFailure> {
             start_failure,
         })?;
     if let Some(mut sqlite_input) = sqlite_process.stdin.take() {
-        sqlite_input.write_all(HISTORY_SCHEMA.as_bytes())?;
-        sqlite_input.write_all(
-            include_str!("../assets/detections-seed.sql")
-                .replace(
-                    "@UNRESOLVED_PATH@",
-                    &sql_text_literal(&unresolved_path.to_string_lossy()),
-                )
-                .replace(
-                    "@SCHEDULED_PATH@",
-                    &sql_text_literal(&scheduled_path.to_string_lossy()),
-                )
-                .as_bytes(),
-        )?;
+        sqlite_input.write_all(fixture_database_sql(&seeded_paths).as_bytes())?;
     }
     let exit_status = sqlite_process.wait()?;
     if exit_status.success() {
@@ -123,8 +126,7 @@ fn install_fixture_programs(session_root: &Path) -> Result<PathBuf, TaskFailure>
 }
 
 pub fn prepare_screenshot_fixtures(session_root: &Path) -> Result<ScreenshotFixtures, TaskFailure> {
-    seed_quarantine_database(session_root)?;
-    seed_detection_history(session_root)?;
+    seed_lazaret_database(session_root)?;
     let scan_directory = session_root.join("scan");
     fs::create_dir_all(&scan_directory)?;
     SCAN_FIXTURE_NAMES
@@ -145,6 +147,22 @@ pub fn prepare_screenshot_fixtures(session_root: &Path) -> Result<ScreenshotFixt
 #[cfg(test)]
 mod screenshot_fixtures_tests {
     use super::*;
+
+    #[test]
+    fn the_fixture_database_reaches_the_latest_migration_version() {
+        let fixture_sql = fixture_database_sql(&SeededFixturePaths {
+            payload_path: PathBuf::from("/data/quarantine/payload"),
+            unresolved_path: PathBuf::from("/home/Downloads/invoice.pdf.exe"),
+            scheduled_path: PathBuf::from("/home/Downloads/setup-helper.bin"),
+        });
+        assert!(fixture_sql.contains("CREATE TABLE activity_entries"));
+        assert!(fixture_sql.contains("CREATE TABLE file_contents"));
+        assert!(fixture_sql.contains(&format!(
+            "PRAGMA user_version = {};\nRELEASE \"0001_baseline\";\n",
+            LAZARET_MIGRATIONS.len()
+        )));
+        assert!(!fixture_sql.contains("@PAYLOAD_PATH@"));
+    }
 
     #[test]
     fn sql_literals_escape_single_quotes() {

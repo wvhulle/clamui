@@ -10,28 +10,29 @@ use gettextrs::{gettext, ngettext};
 use jiff::Timestamp;
 use relm4::gtk::glib;
 
-use crate::{
-    application_data_directory,
-    host_services::{
-        activity_history::activity_history_database::{
-            ActivityHistory, ActivityRecord, FoundThreatCount, NewActivityEntry,
-            ScanActivityStatus, ScanOrigin,
-        },
-        clamav_config::detection_options::host_clamscan_detection_arguments,
-        clamav_scanner::{
-            scan_exclusion_rules::ScanExclusions,
-            scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
-            scanner_command_builder::{ScannerProgramPaths, choose_scanner_backend},
-        },
-        desktop::{
-            desktop_notifications::send_session_notification,
-            file_process_lock::{FileLockAttempt, try_file_lock},
-            stored_settings::{
-                application_settings, read_exclusion_entries, scanner_backend_preference,
-            },
-        },
-        quarantine_vault::quarantine_entry_database::QuarantineVault,
+use crate::host_services::{
+    activity_history::activity_history_database::{
+        ActivityHistory, ActivityRecord, FoundThreatCount, NewActivityEntry, ScanActivityStatus,
+        ScanOrigin,
     },
+    clamav_config::detection_options::host_clamscan_detection_arguments,
+    clamav_scanner::{
+        scan_exclusion_rules::ScanExclusions,
+        scan_progress_events::{CompletedScanOutcome, ScanRequest, scan_progress_events},
+        scanner_command_builder::{ScannerProgramPaths, choose_scanner_backend},
+    },
+    desktop::{
+        application_directories::application_data_directory,
+        desktop_notifications::send_session_notification,
+        file_process_lock::{FileLockAttempt, try_file_lock},
+        stored_settings::{
+            application_settings, read_exclusion_entries, scanner_backend_preference,
+        },
+    },
+    lazaret_database::locked_database_connection::{
+        lazaret_database_path, quarantine_owner_lock_path,
+    },
+    quarantine_vault::quarantine_entry_database::QuarantineVault,
 };
 
 const THREATS_FOUND_EXIT_CODE: u8 = 1;
@@ -110,12 +111,12 @@ async fn quarantine_detected_threats(
     scan_outcome: &CompletedScanOutcome,
     data_directory: &Path,
 ) -> usize {
-    let lock_path = data_directory.join("quarantine.lock");
+    let lock_path = quarantine_owner_lock_path(data_directory);
     let Ok(FileLockAttempt::LockAcquired(_vault_lock)) = try_file_lock(&lock_path) else {
         return 0;
     };
     let Ok(quarantine_vault) = QuarantineVault::open_vault(
-        data_directory.join("quarantine.db"),
+        lazaret_database_path(data_directory),
         data_directory.join("quarantine"),
     )
     .await
@@ -169,7 +170,8 @@ fn finished_scan_notification_body(
 async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCode {
     let settings = application_settings();
     let data_directory = application_data_directory();
-    let activity_history = ActivityHistory::at_database_path(data_directory.join("history.db"));
+    let activity_history =
+        ActivityHistory::at_database_path(lazaret_database_path(&data_directory));
     let scan_targets = if scan_options.scan_targets.is_empty() {
         vec![glib::home_dir()]
     } else {

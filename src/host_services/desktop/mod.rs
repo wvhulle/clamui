@@ -1,3 +1,4 @@
+pub mod application_directories;
 pub mod content_pipe;
 pub mod desktop_notifications;
 pub mod file_manager_actions;

@@ -12,7 +12,7 @@ use relm4::{
 };
 
 use crate::{
-    APPLICATION_ICON_NAME, application_data_directory,
+    APPLICATION_ICON_NAME,
     application_window::{
         application_actions::{
             AboutAction, PreferencesAction, QuitAction, ShowWindowAction,
@@ -29,9 +29,13 @@ use crate::{
     },
     host_services::{
         desktop::{
+            application_directories::application_data_directory,
             file_process_lock::{ProcessFileLock, wait_for_file_lock},
             stored_settings::{CLOSE_ACTION_KEY, application_settings},
             stored_settings_watch::forward_setting_changes,
+        },
+        lazaret_database::locked_database_connection::{
+            lazaret_database_path, quarantine_owner_lock_path,
         },
         quarantine_vault::{
             quarantine_entry_database::QuarantineVault,
@@ -68,10 +72,10 @@ struct LockedQuarantineVault {
 async fn open_locked_vault(
     data_directory: &Path,
 ) -> Result<LockedQuarantineVault, VaultStartupFailure> {
-    let lock_path = data_directory.join("quarantine.lock");
+    let lock_path = quarantine_owner_lock_path(data_directory);
     let vault_lock = relm4::spawn_blocking(move || wait_for_file_lock(&lock_path)).await??;
     let quarantine_vault = QuarantineVault::open_vault(
-        data_directory.join("quarantine.db"),
+        lazaret_database_path(data_directory),
         data_directory.join("quarantine"),
     )
     .await?;

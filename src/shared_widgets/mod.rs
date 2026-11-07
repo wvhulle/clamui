@@ -1,6 +1,7 @@
 pub mod activity_entries;
 pub mod awaited_dialogs;
 pub mod component_streams;
+pub mod database_migration_failure_text;
 pub mod engine_settings;
 pub mod host_read_failure_text;
 pub mod journal_follow_failure_text;

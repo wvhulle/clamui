@@ -67,6 +67,7 @@ use crate::{
             },
         },
         awaited_dialogs::{chosen_files_to_open, chosen_folders_to_open, deliver_local_outcome},
+        database_migration_failure_text::describe_history_failure,
         loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
         scan_runs::{
             found_threat_row::FoundThreatRow,
@@ -127,7 +128,7 @@ fn describe_page_notice(page_notice: &ScanPageNotice) -> String {
         ScanPageNotice::EicarTestFileUnwritable(eicar_failure) => eicar_failure_text(eicar_failure),
         ScanPageNotice::ScanNotRecorded(recording_failure) => {
             gettext("The scan could not be added to the history: {error}")
-                .replace("{error}", &recording_failure.to_string())
+                .replace("{error}", &describe_history_failure(recording_failure))
         }
     }
 }
