@@ -40,12 +40,12 @@
   <launchable type="desktop-id">page.codeberg.wvhulle.Lazaret.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan.png</image>
+      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan-result.png</image>
       <caption>Scan results with a detected test file</caption>
     </screenshot>
     <screenshot>
-      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/protection.png</image>
-      <caption>Protection status of the ClamAV services</caption>
+      <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/start-page.png</image>
+      <caption>The sidebar with the status of each part of ClamAV</caption>
     </screenshot>
     <screenshot>
       <image>https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/quarantine.png</image>

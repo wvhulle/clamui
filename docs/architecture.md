@@ -9,7 +9,8 @@ flowchart LR
     subgraph gui["lazaret (desktop user)"]
         scan["scans/manual_scan_page"]
         quarantine["findings/quarantine_page"]
-        protection["protection_page"]
+        shell["application_window"]
+        updates["signatures/database_updates_page"]
         detections["findings/detections_page"]
         schedules["scans/scheduled_scans_page"]
         lookups["host_services/threat_intel"]
@@ -32,8 +33,8 @@ flowchart LR
 
     scan -->|spawns| clamdscan
     clamdscan --> clamd
-    protection -->|D-Bus| systemd
-    protection -->|spawns| freshclam
+    shell -->|D-Bus| systemd
+    updates -->|spawns| freshclam
     detections -->|reads| journal
     schedules -->|writes timer units, D-Bus| systemd
     quarantine --> database
@@ -44,13 +45,13 @@ flowchart LR
     helper -->|restarts| systemd
 ```
 
-The source follows the window as you see it. Sidebar groups have a directory under `src/` with one directory per page: `signatures/` (`signature_sources_page/`, `database_updates_page/`), `scans/` (`manual_scan_page/`, `scheduled_scans_page/`), `findings/` (`detections_page/`, `quarantine_page/`) and `sharing/` (`analysis_page/`). The remaining pages have their own directory: `protection_page/`, `logs_page/` and `hardening_page/`. The subpages and dialogs you open from a page sit in directories inside it, for example `scans/manual_scan_page/exclusions_page/`. `application_window/` holds the window, sidebar, tray and actions, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the settings helper and online lookups, with the protection evidence the status timeline reads in `host_services/protection_evidence/`. `headless_modes/` holds the scheduled scan that runs without a window. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots and recordings, packaging and releases.
+The source follows the window as you see it. Each sidebar group has a directory under `src/` with one directory per page: `signatures/` (`signature_sources_page/`, `database_updates_page/`), `scans/` (`scan_engine_page/`, `on_access_page/`, `scheduled_scans_page/`, `manual_scan_page/`, `removable_drives_page/`), `findings/` (`detections_page/`, `quarantine_page/`, `trusted_detections_page/`) and `sharing/` (`online_lookups_page/`, `submissions_page/`). The subpages and dialogs you open from a page sit in directories inside it, for example `scans/manual_scan_page/exclusions_page/`. `application_window/` holds the window, the grouped sidebar, page routing, the tray, actions and startup arguments; it owns the protection evidence and passes each page the part it shows, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the settings helper and online lookups, with the protection evidence the sidebar and the pages read in `host_services/protection_evidence/`. `headless_modes/` holds the scheduled scan that runs without a window. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots and recordings, packaging and releases.
 
 The interface follows the Elm architecture through Relm4. The window shell owns startup, the tray and the close behaviour. A page navigation component owns the sidebar, the page stack and the settings subpages. Every page and dialog keeps its state in a plain model that only `update` changes, in answer to messages from widgets, child components, GTK actions and finished commands. Settings stored in GSettings are mirrored into the models that show them: a change sends a message, and `update` writes it back. Work that waits on the host runs as a command, and its outcome returns as a message, so no state is shared between widgets.
 
 Lazaret talks to the host in three ways, and never through shell commands like `systemctl` or `journalctl`:
 
-- It spawns the ClamAV programs found on `PATH`: `clamdscan --fdpass`, `clamscan` and `freshclam`. It only runs a copy that the desktop user can't replace: the file, every directory above it and every symbolic link on the way must be out of the user's control. Copies the user could replace, such as one in `~/.local/bin`, are skipped and reported on the Protection page. That way malware running as the user can't plant a fake `clamdscan` that reports every file as clean.
+- It spawns the ClamAV programs found on `PATH`: `clamdscan --fdpass`, `clamscan` and `freshclam`. It only runs a copy that the desktop user can't replace: the file, every directory above it and every symbolic link on the way must be out of the user's control. Copies the user could replace, such as one in `~/.local/bin`, are skipped and reported on the Scan Engine and Database Updates pages. That way malware running as the user can't plant a fake `clamdscan` that reports every file as clean.
 - It talks to systemd over D-Bus (`src/host_services/systemd_bus/`), for unit states, starting units and installing timers.
 - It reads the journal through libsystemd (`src/host_services/systemd_journal/`).
 
@@ -135,7 +136,7 @@ The Detection settings page maps to `DetectPUA`, `HeuristicAlerts`, `AlertOLE2Ma
 
 The helper also maintains two ClamAV allowlists in the signature directory: `lazaret-local.sfp` (SHA-256 and size of trusted files) and `lazaret-local.ign2` (ignored detection names). Each change has its own polkit action, `page.codeberg.wvhulle.Lazaret.trust-detection`, and the prompt names the exact hash or detection name. Heuristic detections can only be trusted by hash. Ignored names are written unpinned, without the `:md5` of the database entry: `sigtool --find-sigs` matches by regular expression, can return several entries for one name and prints bytecode signatures decoded rather than as stored, so Lazaret can't compute that MD5 reliably. Pinned lines that someone else wrote are kept, and stop ignoring removes them by name. The lists are never read or written through a symbolic link, and lines that don't fit their format are dropped. After a change the helper asks clamd to reload its signatures.
 
-Every settings change and trust request, also refused ones, is written by the helper to the system journal with `LAZARET_ACTION`, `LAZARET_SUBJECT`, `LAZARET_OUTCOME`, `LAZARET_REQUESTER_UID`, `LAZARET_WEAKENS_PROTECTION` and `LAZARET_PROTECTION_REDUCTION`, the kind of reduction. Trust requests also record the exact `LAZARET_SHA256` or `LAZARET_SIGNATURE_NAME`, so Lazaret attributes each trust entry by exact match. When the helper can't read the clamd configuration, it records a change as `current-values-unknown` rather than as harmless. Lazaret reads these records back only from `_SYSTEMD_UNIT=lazaret-settings-helper.service` with `_UID=0`, so software running as the desktop user can neither forge nor erase them. The Protection page warns about allowlists in the signature directory that Lazaret didn't write.
+Every settings change and trust request, also refused ones, is written by the helper to the system journal with `LAZARET_ACTION`, `LAZARET_SUBJECT`, `LAZARET_OUTCOME`, `LAZARET_REQUESTER_UID`, `LAZARET_WEAKENS_PROTECTION` and `LAZARET_PROTECTION_REDUCTION`, the kind of reduction. Trust requests also record the exact `LAZARET_SHA256` or `LAZARET_SIGNATURE_NAME`, so Lazaret attributes each trust entry by exact match. When the helper can't read the clamd configuration, it records a change as `current-values-unknown` rather than as harmless. Lazaret reads these records back only from `_SYSTEMD_UNIT=lazaret-settings-helper.service` with `_UID=0`, so software running as the desktop user can neither forge nor erase them. The Trusted Detections page warns about allowlists in the signature directory that Lazaret didn't write.
 
 ## Background alerts and scheduled scans
 

@@ -37,8 +37,23 @@ pub enum ScanFixtureUse {
     ScansFixtureFolder,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LaunchedPage {
+    StartPage,
+    NamedPage(&'static str),
+}
+
+impl LaunchedPage {
+    fn page_arguments(self) -> Vec<OsString> {
+        match self {
+            Self::StartPage => Vec::new(),
+            Self::NamedPage(page_name) => vec![OsString::from(format!("--page={page_name}"))],
+        }
+    }
+}
+
 pub struct PageScenario {
-    pub page_argument: &'static str,
+    pub launched_page: LaunchedPage,
     pub scan_fixture_use: ScanFixtureUse,
     pub animation_name: &'static str,
     pub user_interactions: Vec<UserInteraction>,
@@ -76,20 +91,81 @@ fn wait_for(widget_target: WidgetTarget) -> Vec<UserInteraction> {
 fn page_scenarios() -> Vec<PageScenario> {
     vec![
         PageScenario {
-            page_argument: "--page=protection",
+            launched_page: LaunchedPage::StartPage,
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "protection",
+            animation_name: "start-page",
+            user_interactions: [shown("start-page"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("signature-sources"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "signature-sources",
             user_interactions: [
-                shown("protection"),
-                point_and_click(WidgetTarget::list_item("Daemon running")),
-                frame(),
-                point_and_click(WidgetTarget::button("Review")),
+                shown("signature-sources"),
+                point_and_click(WidgetTarget::list_item("Sanesecurity")),
                 frame(),
             ]
             .concat(),
         },
         PageScenario {
-            page_argument: "--page=detections",
+            launched_page: LaunchedPage::NamedPage("database-updates"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "database-updates",
+            user_interactions: [
+                shown("database-updates"),
+                point_and_click(WidgetTarget::list_item("Signatures current")),
+                shown("signature-update"),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("scan-engine"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "scan-engine",
+            user_interactions: [shown("scan-engine"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("on-access"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "on-access",
+            user_interactions: [shown("on-access"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("scheduled-scans"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "scheduled-scans",
+            user_interactions: [shown("scheduled-scans"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("manual-scan"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "manual-scan",
+            user_interactions: [
+                shown("manual-scan"),
+                point_and_click(WidgetTarget::button("Manage Profiles")),
+                shown("profile-manager"),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("manual-scan"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "scan-exclusions",
+            user_interactions: [
+                frame(),
+                point_and_click(WidgetTarget::list_item("node_modules")),
+                shown("scan-exclusions"),
+            ]
+            .concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("removable-drives"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "removable-drives",
+            user_interactions: [shown("removable-drives"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("detections"),
             scan_fixture_use: ScanFixtureUse::IdlePage,
             animation_name: "detections",
             user_interactions: [
@@ -100,51 +176,7 @@ fn page_scenarios() -> Vec<PageScenario> {
             .concat(),
         },
         PageScenario {
-            page_argument: "--page=scan",
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "scan",
-            user_interactions: [
-                shown("scan"),
-                point_and_click(WidgetTarget::button("Manage Profiles")),
-                shown("profile-manager"),
-            ]
-            .concat(),
-        },
-        PageScenario {
-            page_argument: "--page=scan",
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "scan-settings",
-            user_interactions: [
-                frame(),
-                point_and_click(WidgetTarget::list_item("node_modules")),
-                shown("scan-exclusions"),
-            ]
-            .concat(),
-        },
-        PageScenario {
-            page_argument: "--page=database-updates",
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "signature-update",
-            user_interactions: [
-                shown("database-updates"),
-                point_and_click(WidgetTarget::list_item("Signatures current")),
-                shown("signature-update"),
-            ]
-            .concat(),
-        },
-        PageScenario {
-            page_argument: "--page=signatures",
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "signatures",
-            user_interactions: [
-                shown("signatures"),
-                point_and_click(WidgetTarget::list_item("Sanesecurity")),
-                frame(),
-            ]
-            .concat(),
-        },
-        PageScenario {
-            page_argument: "--page=quarantine",
+            launched_page: LaunchedPage::NamedPage("quarantine"),
             scan_fixture_use: ScanFixtureUse::IdlePage,
             animation_name: "quarantine",
             user_interactions: [
@@ -155,7 +187,25 @@ fn page_scenarios() -> Vec<PageScenario> {
             .concat(),
         },
         PageScenario {
-            page_argument: "--page=scan",
+            launched_page: LaunchedPage::NamedPage("trusted-detections"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "trusted-detections",
+            user_interactions: [shown("trusted-detections"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("online-lookups"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "online-lookups",
+            user_interactions: [shown("online-lookups"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("submissions"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "submissions",
+            user_interactions: [shown("submissions"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("manual-scan"),
             scan_fixture_use: ScanFixtureUse::ScansFixtureFolder,
             animation_name: "scan-results",
             user_interactions: [
@@ -175,31 +225,7 @@ fn page_scenarios() -> Vec<PageScenario> {
             .concat(),
         },
         PageScenario {
-            page_argument: "--page=logs",
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "logs",
-            user_interactions: [
-                shown("logs"),
-                point_and_click(WidgetTarget::list_item("Found 2 threats")),
-                shown("logs-entry-selected"),
-                point_and_click(WidgetTarget::page_tab("System Changes")),
-                frame(),
-            ]
-            .concat(),
-        },
-        PageScenario {
-            page_argument: "--page=hardening",
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "hardening",
-            user_interactions: [
-                shown("hardening"),
-                point_and_click(WidgetTarget::list_item("Firewall Service")),
-                frame(),
-            ]
-            .concat(),
-        },
-        PageScenario {
-            page_argument: "--page=preferences",
+            launched_page: LaunchedPage::NamedPage("preferences"),
             scan_fixture_use: ScanFixtureUse::IdlePage,
             animation_name: "preferences",
             user_interactions: [shown("preferences"), frame()].concat(),
@@ -208,28 +234,26 @@ fn page_scenarios() -> Vec<PageScenario> {
 }
 
 fn application_arguments(
-    page_argument: &str,
+    page_arguments: Vec<OsString>,
     scan_fixture_use: ScanFixtureUse,
     screenshot_fixtures: &ScreenshotFixtures,
 ) -> Vec<OsString> {
     let scan_target = (scan_fixture_use == ScanFixtureUse::ScansFixtureFolder)
         .then(|| screenshot_fixtures.scan_directory.clone().into_os_string());
-    std::iter::once(OsString::from(page_argument))
-        .chain(scan_target)
-        .collect()
+    page_arguments.into_iter().chain(scan_target).collect()
 }
 
 fn launch_application(
     headless_session: &HeadlessSwaySession,
     screenshot_fixtures: &ScreenshotFixtures,
-    page_argument: &str,
+    page_arguments: Vec<OsString>,
     scan_fixture_use: ScanFixtureUse,
 ) -> Result<Child, TaskFailure> {
     let application_process = headless_session
         .session_command("lazaret")
         .env("PATH", &screenshot_fixtures.search_path)
         .args(application_arguments(
-            page_argument,
+            page_arguments,
             scan_fixture_use,
             screenshot_fixtures,
         ))
@@ -258,7 +282,7 @@ fn run_page_scenario(
     let application_process = launch_application(
         headless_session,
         screenshot_fixtures,
-        page_scenario.page_argument,
+        page_scenario.launched_page.page_arguments(),
         page_scenario.scan_fixture_use,
     )?;
     let scenario_outcome =
@@ -330,7 +354,7 @@ pub fn list_visible_widgets(page_argument: &str) -> Result<Vec<String>, TaskFail
     let application_process = launch_application(
         &prepared_session.headless_session,
         &prepared_session.screenshot_fixtures,
-        page_argument,
+        vec![OsString::from(page_argument)],
         ScanFixtureUse::IdlePage,
     )?;
     let async_runtime = tokio::runtime::Builder::new_current_thread()
