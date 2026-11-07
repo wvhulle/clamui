@@ -6,8 +6,7 @@ use relm4::{
 
 use crate::{
     application_window::{
-        application_pages::ApplicationPage,
-        page_links::{SHOW_PAGE_ACTION, page_target},
+        application_actions::ONLINE_SERVICES_ACTION,
         protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
     },
     host_services::{
@@ -159,8 +158,7 @@ impl Component for SignatureSourcesPage {
                             #[watch]
                             set_subtitle: &abuse_ch_key_subtitle(&model.gathered_evidence),
                             set_activatable: true,
-                            set_action_name: Some(SHOW_PAGE_ACTION),
-                            set_action_target_value: Some(&page_target(ApplicationPage::Submissions)),
+                            set_action_name: Some(ONLINE_SERVICES_ACTION),
                             add_suffix = &gtk::Image {
                                 set_icon_name: Some("dialog-warning-symbolic"),
                                 add_css_class: "warning",

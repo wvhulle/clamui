@@ -12,11 +12,10 @@ pub enum ApplicationPage {
     Detections,
     Quarantine,
     TrustedDetections,
-    OnlineLookups,
-    Submissions,
+    SentSamples,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 12] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 11] = [
     ApplicationPage::SignatureSources,
     ApplicationPage::DatabaseUpdates,
     ApplicationPage::ScanEngine,
@@ -27,8 +26,7 @@ pub const ALL_APPLICATION_PAGES: [ApplicationPage; 12] = [
     ApplicationPage::Detections,
     ApplicationPage::Quarantine,
     ApplicationPage::TrustedDetections,
-    ApplicationPage::OnlineLookups,
-    ApplicationPage::Submissions,
+    ApplicationPage::SentSamples,
 ];
 
 impl ApplicationPage {
@@ -44,8 +42,7 @@ impl ApplicationPage {
             Self::Detections => "detections",
             Self::Quarantine => "quarantine",
             Self::TrustedDetections => "trusted-detections",
-            Self::OnlineLookups => "online-lookups",
-            Self::Submissions => "submissions",
+            Self::SentSamples => "sent-samples",
         }
     }
 
@@ -67,8 +64,7 @@ impl ApplicationPage {
             Self::Detections => gettext("Detections"),
             Self::Quarantine => gettext("Quarantine"),
             Self::TrustedDetections => gettext("Trusted Detections"),
-            Self::OnlineLookups => gettext("Online Lookups"),
-            Self::Submissions => gettext("Submissions"),
+            Self::SentSamples => gettext("Sent Samples"),
         }
     }
 
@@ -84,8 +80,7 @@ impl ApplicationPage {
             Self::Detections => "dialog-warning-symbolic",
             Self::Quarantine => "folder-symbolic",
             Self::TrustedDetections => "security-medium-symbolic",
-            Self::OnlineLookups => "edit-find-symbolic",
-            Self::Submissions => "document-send-symbolic",
+            Self::SentSamples => "document-send-symbolic",
         }
     }
 
@@ -139,7 +134,6 @@ mod application_pages_tests {
         assert_eq!(accelerators[8], ["<Control>9"]);
         assert_eq!(accelerators[9], ["<Control>0"]);
         assert!(accelerators[10].is_empty());
-        assert!(accelerators[11].is_empty());
         assert_eq!(
             ApplicationPage::Detections.keyboard_accelerators(),
             ["<Control>8"]

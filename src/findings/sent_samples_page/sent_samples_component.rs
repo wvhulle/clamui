@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use futures::stream;
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentController, ComponentParts, ComponentSender, Controller,
+    Component, ComponentParts, ComponentSender,
     abstractions::Toaster,
     actions::{RelmAction, RelmActionGroup},
     adw,
@@ -14,6 +14,22 @@ use relm4::{
 };
 
 use crate::{
+    application_window::application_actions::ONLINE_SERVICES_ACTION,
+    findings::sent_samples_page::{
+        quarantined_candidate_row::{QuarantinedCandidateRow, QuarantinedCandidateRowOutput},
+        sent_samples_presentation::{
+            candidate_row_view, empty_candidates_text, empty_submissions_text, filter_summary_text,
+            progress_filter_label, refresh_summary_text, service_filter_label, submitted_row_view,
+        },
+        sent_samples_state::{
+            CandidateListing, PROGRESS_FILTER_CHOICES, SERVICE_FILTER_CHOICES,
+            SentSamplesPageOutput, SubmissionFilters, SubmissionListing, choice_at,
+            choice_position, entry_upload_key, offered_target_activities,
+        },
+        submission_target_dialog::{ChosenTarget, TargetChoiceRequest, present_target_choice},
+        submitted_entry_row::{SubmittedEntryRow, SubmittedEntryRowOutput},
+        uploads_in_flight::{UploadKey, UploadsInFlight, upload_refusal_text},
+    },
     host_services::{
         activity_history::{
             activity_history_database::{ActivityHistory, ActivityHistoryFailure},
@@ -41,7 +57,6 @@ use crate::{
             submission_samples::{SampleReadFailure, SubmissionSample, shown_file_name},
             virustotal_sample_upload::{VirusTotalUploadAttempt, upload_to_virustotal},
         },
-        threat_intel::service_key_storage::ThreatIntelService,
     },
     shared_widgets::{
         awaited_dialogs::{ChosenSubmissionFile, chosen_file_to_submit, deliver_local_outcome},
@@ -57,25 +72,9 @@ use crate::{
             bazaar_upload_attempt_text, clamav_report_attempt_text, virustotal_upload_attempt_text,
         },
     },
-    sharing::submissions_page::{
-        quarantined_candidate_row::{QuarantinedCandidateRow, QuarantinedCandidateRowOutput},
-        service_key_section::{ServiceKeySection, ServiceKeySectionOutput},
-        submission_target_dialog::{ChosenTarget, TargetChoiceRequest, present_target_choice},
-        submissions_presentation::{
-            candidate_row_view, empty_candidates_text, empty_submissions_text, filter_summary_text,
-            progress_filter_label, refresh_summary_text, service_filter_label, submitted_row_view,
-        },
-        submissions_state::{
-            CandidateListing, PROGRESS_FILTER_CHOICES, SERVICE_FILTER_CHOICES, SubmissionFilters,
-            SubmissionListing, SubmissionsPageOutput, choice_at, choice_position, entry_upload_key,
-            offered_target_activities,
-        },
-        submitted_entry_row::{SubmittedEntryRow, SubmittedEntryRowOutput},
-        uploads_in_flight::{UploadKey, UploadsInFlight, upload_refusal_text},
-    },
 };
 
-pub struct SubmissionsPageInit {
+pub struct SentSamplesPageInit {
     pub activity_history: ActivityHistory,
     pub quarantine_vault: QuarantineVault,
 }
@@ -85,7 +84,7 @@ enum RemoteRefreshRun {
     RefreshRunning { _refresh_stream: RunningStream },
 }
 
-pub struct SubmissionsPage {
+pub struct SentSamplesPage {
     activity_history: ActivityHistory,
     quarantine_vault: QuarantineVault,
     toaster: Toaster,
@@ -96,12 +95,10 @@ pub struct SubmissionsPage {
     uploads_in_flight: UploadsInFlight,
     submitted_rows: FactoryVecDeque<SubmittedEntryRow>,
     candidate_rows: FactoryVecDeque<QuarantinedCandidateRow>,
-    abuse_ch_section: Controller<ServiceKeySection>,
-    virustotal_section: Controller<ServiceKeySection>,
 }
 
 #[derive(Debug)]
-pub enum SubmissionsPageInput {
+pub enum SentSamplesPageInput {
     PageShown,
     SubmissionsChanged,
     QuarantineEntriesChanged,
@@ -116,17 +113,10 @@ pub enum SubmissionsPageInput {
     MissedMalwareReportRequested,
     MissedMalwareFileChosen(PathBuf),
     RemoteEntryRequested(String),
-    StoredKeyChanged,
-}
-
-const fn page_input_for_key_output(key_output: ServiceKeySectionOutput) -> SubmissionsPageInput {
-    match key_output {
-        ServiceKeySectionOutput::StoredKeyChanged => SubmissionsPageInput::StoredKeyChanged,
-    }
 }
 
 #[derive(Debug)]
-pub enum SubmissionsPageCommand {
+pub enum SentSamplesPageCommand {
     SubmissionsLoaded(Result<Vec<SubmissionRecord>, ActivityHistoryFailure>),
     CandidatesLoaded(Result<Vec<QuarantineEntryRecord>, QuarantineMoveFailure>),
     ClamavSampleRead {
@@ -207,7 +197,7 @@ fn submission_filter_menu() -> gio::Menu {
 
 fn register_filter_actions(
     page_root: &adw::ToastOverlay,
-    sender: &ComponentSender<SubmissionsPage>,
+    sender: &ComponentSender<SentSamplesPage>,
 ) {
     let mut filter_actions = RelmActionGroup::<SubmissionFilterActionGroup>::new();
     let service_sender = sender.clone();
@@ -219,7 +209,7 @@ fn register_filter_actions(
             ),
             move |_action, chosen_state, chosen_position| {
                 *chosen_state = chosen_position;
-                service_sender.input(SubmissionsPageInput::ServiceFilterChosen(chosen_position));
+                service_sender.input(SentSamplesPageInput::ServiceFilterChosen(chosen_position));
             },
         ),
     );
@@ -232,7 +222,7 @@ fn register_filter_actions(
             ),
             move |_action, chosen_state, chosen_position| {
                 *chosen_state = chosen_position;
-                progress_sender.input(SubmissionsPageInput::ProgressFilterChosen(chosen_position));
+                progress_sender.input(SentSamplesPageInput::ProgressFilterChosen(chosen_position));
             },
         ),
     );
@@ -243,18 +233,18 @@ fn shown_path(entry_record: &QuarantineEntryRecord) -> String {
     sanitize_scanner_line(&entry_record.original_path.to_string_lossy())
 }
 
-impl SubmissionsPage {
+impl SentSamplesPage {
     fn reload_submissions(&self, sender: &ComponentSender<Self>) {
         let activity_history = self.activity_history.clone();
         sender.oneshot_command(async move {
-            SubmissionsPageCommand::SubmissionsLoaded(activity_history.list_submissions().await)
+            SentSamplesPageCommand::SubmissionsLoaded(activity_history.list_submissions().await)
         });
     }
 
     fn reload_candidates(&self, sender: &ComponentSender<Self>) {
         let quarantine_vault = self.quarantine_vault.clone();
         sender.oneshot_command(async move {
-            SubmissionsPageCommand::CandidatesLoaded(
+            SentSamplesPageCommand::CandidatesLoaded(
                 quarantine_vault.list_quarantine_entries().await,
             )
         });
@@ -294,7 +284,7 @@ impl SubmissionsPage {
     }
 
     fn report_tally(&self, sender: &ComponentSender<Self>) {
-        let _shell_closed = sender.output(SubmissionsPageOutput::TallyChanged(
+        let _shell_closed = sender.output(SentSamplesPageOutput::TallyChanged(
             self.submission_listing.submission_tally(),
         ));
     }
@@ -320,7 +310,7 @@ impl SubmissionsPage {
                 offered_targets: entry_targets,
             },
             sender.input_sender().clone(),
-            SubmissionsPageInput::TargetChosen,
+            SentSamplesPageInput::TargetChosen,
         );
     }
 
@@ -365,7 +355,7 @@ impl SubmissionsPage {
                             detection_name: signature_name.to_owned(),
                         }),
                         sender.input_sender().clone(),
-                        SubmissionsPageInput::ClamavReportConfirmed,
+                        SentSamplesPageInput::ClamavReportConfirmed,
                     ),
                     None => unsendable_toast(),
                 }
@@ -374,7 +364,7 @@ impl SubmissionsPage {
                 root,
                 clamav_report_proposal(ClamavReportKind::MissedMalware),
                 sender.input_sender().clone(),
-                SubmissionsPageInput::ClamavReportConfirmed,
+                SentSamplesPageInput::ClamavReportConfirmed,
             ),
             SubmissionTarget::MalwareBazaarSample => {
                 match bazaar_eligibility(&entry_record.threat_identity) {
@@ -385,7 +375,7 @@ impl SubmissionsPage {
                                 signature_name,
                             }),
                             sender.input_sender().clone(),
-                            SubmissionsPageInput::SampleUploadConfirmed,
+                            SentSamplesPageInput::SampleUploadConfirmed,
                         );
                     }
                     BazaarEligibility::NotDetectedByClamav
@@ -396,13 +386,13 @@ impl SubmissionsPage {
                 root,
                 sample_upload_proposal(UploadService::VirusTotalUpload),
                 sender.input_sender().clone(),
-                SubmissionsPageInput::SampleUploadConfirmed,
+                SentSamplesPageInput::SampleUploadConfirmed,
             ),
         }
     }
 
     fn report_upload_notice(sender: &ComponentSender<Self>, notice_text: String) {
-        let _shell_closed = sender.output(SubmissionsPageOutput::UploadNoticeReady(notice_text));
+        let _shell_closed = sender.output(SentSamplesPageOutput::UploadNoticeReady(notice_text));
     }
 
     fn finish_sending(&self, outcome_text: &str, sender: &ComponentSender<Self>) {
@@ -468,7 +458,7 @@ impl SubmissionsPage {
         match upload_proposal.upload_service {
             UploadService::MalwareBazaarUpload { .. } => {
                 sender.oneshot_command(async move {
-                    SubmissionsPageCommand::BazaarUploadFinished {
+                    SentSamplesPageCommand::BazaarUploadFinished {
                         upload_attempt: upload_to_malware_bazaar(
                             &activity_history,
                             &quarantine_vault,
@@ -481,7 +471,7 @@ impl SubmissionsPage {
             }
             UploadService::VirusTotalUpload => {
                 sender.oneshot_command(async move {
-                    SubmissionsPageCommand::VirusTotalUploadFinished {
+                    SentSamplesPageCommand::VirusTotalUploadFinished {
                         upload_attempt: upload_to_virustotal(
                             &activity_history,
                             &quarantine_vault,
@@ -510,7 +500,7 @@ impl SubmissionsPage {
         };
         let activity_history = self.activity_history.clone();
         sender.oneshot_command(async move {
-            SubmissionsPageCommand::ClamavReportFinished {
+            SentSamplesPageCommand::ClamavReportFinished {
                 report_attempt: send_read_clamav_report(
                     &activity_history,
                     &clamav_report,
@@ -524,15 +514,15 @@ impl SubmissionsPage {
 }
 
 #[relm4::component(pub)]
-impl Component for SubmissionsPage {
-    type Init = SubmissionsPageInit;
-    type Input = SubmissionsPageInput;
-    type Output = SubmissionsPageOutput;
-    type CommandOutput = SubmissionsPageCommand;
+impl Component for SentSamplesPage {
+    type Init = SentSamplesPageInit;
+    type Input = SentSamplesPageInput;
+    type Output = SentSamplesPageOutput;
+    type CommandOutput = SentSamplesPageCommand;
 
     view! {
         adw::ToastOverlay {
-            connect_map => SubmissionsPageInput::PageShown,
+            connect_map => SentSamplesPageInput::PageShown,
 
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
@@ -541,7 +531,7 @@ impl Component for SubmissionsPage {
                         add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
                             set_icon_name: "view-refresh-symbolic",
                             set_tooltip_text: Some(&gettext("Check MalwareBazaar and VirusTotal for news")),
-                            connect_clicked => SubmissionsPageInput::RemoteRefreshRequested,
+                            connect_clicked => SentSamplesPageInput::RemoteRefreshRequested,
                         },
                         add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
                             set_tooltip_text: Some(&gettext("Checking")),
@@ -566,7 +556,7 @@ impl Component for SubmissionsPage {
                             )),
                             set_valign: gtk::Align::Center,
                             add_css_class: "flat",
-                            connect_clicked => SubmissionsPageInput::MissedMalwareReportRequested,
+                            connect_clicked => SentSamplesPageInput::MissedMalwareReportRequested,
                         },
 
                         #[local_ref]
@@ -583,14 +573,14 @@ impl Component for SubmissionsPage {
                     },
 
                     add = &adw::PreferencesGroup {
-                        set_title: &gettext("Submitted"),
+                        set_title: &gettext("Sent"),
                         set_description: Some(&gettext("What Lazaret sent and what became of it.")),
                         #[wrap(Some)]
                         set_header_suffix = &gtk::MenuButton {
                             set_menu_model: Some(&submission_filter_menu()),
                             set_always_show_arrow: true,
                             set_valign: gtk::Align::Center,
-                            set_tooltip_text: Some(&gettext("Filter Submissions")),
+                            set_tooltip_text: Some(&gettext("Filter Sent Samples")),
                             add_css_class: "flat",
                             #[watch]
                             set_label: &filter_summary_text(&model.submission_filters),
@@ -612,35 +602,19 @@ impl Component for SubmissionsPage {
                     },
 
                     add = &adw::PreferencesGroup {
-                        set_title: &gettext("Services and Keys"),
-                        set_description: Some(&gettext(
-                            "What each service receives. Lookups send only a hash or a signature \
-                             name; files leave this computer only when you confirm an upload.",
-                        )),
-
                         adw::ActionRow {
-                            set_title: "ClamAV (Cisco Talos)",
+                            set_title: &gettext("Online Services"),
                             set_subtitle: &gettext(
-                                "Reports send the file, the detection name for a false positive, \
-                                 and your name and email address. Talos processes samples by \
-                                 automation, never makes them public and doesn't share them with \
-                                 other companies. A review takes at least 48 hours. No key \
-                                 needed.",
+                                "What each service receives, and the MalwareBazaar and VirusTotal \
+                                 keys",
                             ),
                             set_subtitle_lines: 0,
-                        },
-
-                        adw::ActionRow {
-                            set_title: "CIRCL hashlookup",
-                            set_subtitle: &gettext(
-                                "Reputation checks send only a file's SHA-256 hash. No key needed.",
-                            ),
-                            set_subtitle_lines: 0,
+                            set_activatable: true,
+                            set_action_name: Some(ONLINE_SERVICES_ACTION),
+                            add_prefix = &gtk::Image { set_icon_name: Some("network-server-symbolic") },
+                            add_suffix = &gtk::Image { set_icon_name: Some("go-next-symbolic") },
                         },
                     },
-
-                    add: model.abuse_ch_section.widget(),
-                    add: model.virustotal_section.widget(),
                 },
             },
         }
@@ -664,22 +638,16 @@ impl Component for SubmissionsPage {
                 .launch(gtk::ListBox::default())
                 .forward(sender.input_sender(), |row_output| match row_output {
                     SubmittedEntryRowOutput::RemoteEntryRequested(entry_url) => {
-                        SubmissionsPageInput::RemoteEntryRequested(entry_url)
+                        SentSamplesPageInput::RemoteEntryRequested(entry_url)
                     }
                 }),
             candidate_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
                 .forward(sender.input_sender(), |row_output| match row_output {
                     QuarantinedCandidateRowOutput::SubmissionRequested { entry_id } => {
-                        SubmissionsPageInput::EntrySubmissionRequested { entry_id }
+                        SentSamplesPageInput::EntrySubmissionRequested { entry_id }
                     }
                 }),
-            abuse_ch_section: ServiceKeySection::builder()
-                .launch(ThreatIntelService::AbuseChService)
-                .forward(sender.input_sender(), page_input_for_key_output),
-            virustotal_section: ServiceKeySection::builder()
-                .launch(ThreatIntelService::VirusTotalService)
-                .forward(sender.input_sender(), page_input_for_key_output),
         };
         model.reload_submissions(&sender);
         model.reload_candidates(&sender);
@@ -696,31 +664,31 @@ impl Component for SubmissionsPage {
 
     fn update(
         &mut self,
-        page_input: SubmissionsPageInput,
+        page_input: SentSamplesPageInput,
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
         match page_input {
-            SubmissionsPageInput::PageShown => {
+            SentSamplesPageInput::PageShown => {
                 self.reload_submissions(&sender);
                 self.reload_candidates(&sender);
             }
-            SubmissionsPageInput::SubmissionsChanged => self.reload_submissions(&sender),
-            SubmissionsPageInput::QuarantineEntriesChanged => self.reload_candidates(&sender),
-            SubmissionsPageInput::ServiceFilterChosen(chosen_position) => {
+            SentSamplesPageInput::SubmissionsChanged => self.reload_submissions(&sender),
+            SentSamplesPageInput::QuarantineEntriesChanged => self.reload_candidates(&sender),
+            SentSamplesPageInput::ServiceFilterChosen(chosen_position) => {
                 if let Some(service_filter) = choice_at(&SERVICE_FILTER_CHOICES, chosen_position) {
                     self.submission_filters.service_filter = service_filter;
                     self.show_submitted_rows();
                 }
             }
-            SubmissionsPageInput::ProgressFilterChosen(chosen_position) => {
+            SentSamplesPageInput::ProgressFilterChosen(chosen_position) => {
                 if let Some(progress_filter) = choice_at(&PROGRESS_FILTER_CHOICES, chosen_position)
                 {
                     self.submission_filters.progress_filter = progress_filter;
                     self.show_submitted_rows();
                 }
             }
-            SubmissionsPageInput::RemoteRefreshRequested => {
+            SentSamplesPageInput::RemoteRefreshRequested => {
                 if self.remote_refresh_running() {
                     return;
                 }
@@ -729,14 +697,14 @@ impl Component for SubmissionsPage {
                     _refresh_stream: run_stream(
                         &sender,
                         stream::once(async move {
-                            SubmissionsPageCommand::RemoteRefreshFinished(
+                            SentSamplesPageCommand::RemoteRefreshFinished(
                                 refresh_remote_statuses(&activity_history).await,
                             )
                         }),
                     ),
                 };
             }
-            SubmissionsPageInput::EntrySubmissionRequested { entry_id } => {
+            SentSamplesPageInput::EntrySubmissionRequested { entry_id } => {
                 match self.candidate_listing.candidate_with_id(entry_id) {
                     Some(entry_record) => self.offer_targets_for(entry_record, root, &sender),
                     None => self.toaster.add_toast(plain_text_toast(&gettext(
@@ -744,7 +712,7 @@ impl Component for SubmissionsPage {
                     ))),
                 }
             }
-            SubmissionsPageInput::QuarantinedFileSubmissionRequested { original_path } => {
+            SentSamplesPageInput::QuarantinedFileSubmissionRequested { original_path } => {
                 match self.candidate_listing.newest_candidate_from(&original_path) {
                     Some(entry_record) => self.offer_targets_for(entry_record, root, &sender),
                     None => self.toaster.add_toast(plain_text_toast(&gettext(
@@ -752,36 +720,36 @@ impl Component for SubmissionsPage {
                     ))),
                 }
             }
-            SubmissionsPageInput::TargetChosen(chosen_target) => {
+            SentSamplesPageInput::TargetChosen(chosen_target) => {
                 self.confirm_chosen_target(chosen_target, root, &sender);
             }
-            SubmissionsPageInput::ClamavReportConfirmed(report_request) => {
+            SentSamplesPageInput::ClamavReportConfirmed(report_request) => {
                 let quarantine_vault = self.quarantine_vault.clone();
                 sender.oneshot_command(async move {
                     let read_outcome =
                         read_clamav_report_sample(&quarantine_vault, &report_request).await;
-                    SubmissionsPageCommand::ClamavSampleRead {
+                    SentSamplesPageCommand::ClamavSampleRead {
                         clamav_report: report_request.clamav_report,
                         read_outcome,
                     }
                 });
             }
-            SubmissionsPageInput::SampleUploadConfirmed(upload_proposal) => {
+            SentSamplesPageInput::SampleUploadConfirmed(upload_proposal) => {
                 self.start_sample_upload(&upload_proposal, &sender);
             }
-            SubmissionsPageInput::MissedMalwareReportRequested => {
+            SentSamplesPageInput::MissedMalwareReportRequested => {
                 deliver_local_outcome(
                     sender.input_sender().clone(),
                     chosen_file_to_submit(gettext("Choose the File ClamAV Misses")),
                     |chosen_file| match chosen_file {
                         ChosenSubmissionFile::FileChosen(chosen_path) => {
-                            Some(SubmissionsPageInput::MissedMalwareFileChosen(chosen_path))
+                            Some(SentSamplesPageInput::MissedMalwareFileChosen(chosen_path))
                         }
                         ChosenSubmissionFile::ChoiceCancelled => None,
                     },
                 );
             }
-            SubmissionsPageInput::MissedMalwareFileChosen(chosen_path) => {
+            SentSamplesPageInput::MissedMalwareFileChosen(chosen_path) => {
                 present_clamav_report_confirmation(
                     root,
                     ClamavReportProposal {
@@ -792,30 +760,27 @@ impl Component for SubmissionsPage {
                         },
                     },
                     sender.input_sender().clone(),
-                    SubmissionsPageInput::ClamavReportConfirmed,
+                    SentSamplesPageInput::ClamavReportConfirmed,
                 );
             }
-            SubmissionsPageInput::RemoteEntryRequested(entry_url) => {
+            SentSamplesPageInput::RemoteEntryRequested(entry_url) => {
                 gtk::UriLauncher::new(&entry_url).launch(
                     root.root().and_downcast::<gtk::Window>().as_ref(),
                     gtk::gio::Cancellable::NONE,
                     |_launch_outcome| {},
                 );
             }
-            SubmissionsPageInput::StoredKeyChanged => {
-                let _shell_closed = sender.output(SubmissionsPageOutput::StoredKeyChanged);
-            }
         }
     }
 
     fn update_cmd(
         &mut self,
-        page_command: SubmissionsPageCommand,
+        page_command: SentSamplesPageCommand,
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match page_command {
-            SubmissionsPageCommand::SubmissionsLoaded(load_outcome) => {
+            SentSamplesPageCommand::SubmissionsLoaded(load_outcome) => {
                 self.submission_listing = match load_outcome {
                     Ok(listed_submissions) => SubmissionListing::ListingLoaded(listed_submissions),
                     Err(history_failure) => SubmissionListing::ListingFailed(history_failure),
@@ -823,7 +788,7 @@ impl Component for SubmissionsPage {
                 self.show_submitted_rows();
                 self.report_tally(&sender);
             }
-            SubmissionsPageCommand::CandidatesLoaded(load_outcome) => {
+            SentSamplesPageCommand::CandidatesLoaded(load_outcome) => {
                 self.candidate_listing = match load_outcome {
                     Ok(listed_candidates) => CandidateListing::CandidatesLoaded(listed_candidates),
                     Err(quarantine_failure) => {
@@ -832,7 +797,7 @@ impl Component for SubmissionsPage {
                 };
                 self.show_candidate_rows();
             }
-            SubmissionsPageCommand::ClamavSampleRead {
+            SentSamplesPageCommand::ClamavSampleRead {
                 clamav_report,
                 read_outcome,
             } => match read_outcome {
@@ -846,7 +811,7 @@ impl Component for SubmissionsPage {
                     )),
                 ),
             },
-            SubmissionsPageCommand::ClamavReportFinished {
+            SentSamplesPageCommand::ClamavReportFinished {
                 upload_key,
                 report_attempt,
             } => {
@@ -856,7 +821,7 @@ impl Component for SubmissionsPage {
                     &sender,
                 );
             }
-            SubmissionsPageCommand::BazaarUploadFinished {
+            SentSamplesPageCommand::BazaarUploadFinished {
                 upload_key,
                 upload_attempt,
             } => {
@@ -866,7 +831,7 @@ impl Component for SubmissionsPage {
                     &sender,
                 );
             }
-            SubmissionsPageCommand::VirusTotalUploadFinished {
+            SentSamplesPageCommand::VirusTotalUploadFinished {
                 upload_key,
                 upload_attempt,
             } => {
@@ -876,7 +841,7 @@ impl Component for SubmissionsPage {
                     &sender,
                 );
             }
-            SubmissionsPageCommand::RemoteRefreshFinished(refresh_summary) => {
+            SentSamplesPageCommand::RemoteRefreshFinished(refresh_summary) => {
                 self.remote_refresh = RemoteRefreshRun::RefreshIdle;
                 self.finish_sending(&refresh_summary_text(&refresh_summary), &sender);
             }

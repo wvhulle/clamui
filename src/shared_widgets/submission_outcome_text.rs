@@ -62,7 +62,7 @@ pub fn earlier_submission_text(earlier_submission: &SubmissionRecord) -> String 
 pub fn clamav_report_attempt_text(report_attempt: &ClamavReportAttempt) -> String {
     match report_attempt {
         ClamavReportAttempt::ReportRecorded(_recorded_submission) => gettext(
-            "Report sent. ClamAV's review takes at least 48 hours; Submissions shows when a \
+            "Report sent. ClamAV's review takes at least 48 hours; Sent Samples shows when a \
              signature update changes the verdict.",
         ),
         ClamavReportAttempt::AlreadyReported(earlier_submission) => {
@@ -80,7 +80,7 @@ pub fn clamav_report_attempt_text(report_attempt: &ClamavReportAttempt) -> Strin
                 .replace("{error}", &history_failure_text(history_failure))
         }
         ClamavReportAttempt::ReportSentWithoutRecord(history_failure) => {
-            gettext("Report sent, but it could not be added to Submissions: {error}")
+            gettext("Report sent, but it could not be added to Sent Samples: {error}")
                 .replace("{error}", &describe_history_failure(history_failure))
         }
     }
@@ -101,14 +101,14 @@ pub fn bazaar_upload_attempt_text(upload_attempt: &BazaarUploadAttempt) -> Strin
         }) => gettext("MalwareBazaar refused the sample: {reason}")
             .replace("{reason}", &sanitize_scanner_line(refusal_reason)),
         BazaarUploadAttempt::SubmissionRecorded(_recorded_submission) => {
-            gettext("MalwareBazaar has the sample. Submissions links to its public entry.")
+            gettext("MalwareBazaar has the sample. Sent Samples links to its public entry.")
         }
         BazaarUploadAttempt::AlreadySubmitted(earlier_submission) => {
             earlier_submission_text(earlier_submission)
         }
-        BazaarUploadAttempt::KeyMissing => upload_not_sent(&gettext(
-            "add an abuse.ch key on the Submissions page first",
-        )),
+        BazaarUploadAttempt::KeyMissing => {
+            upload_not_sent(&gettext("add an abuse.ch key in Preferences first"))
+        }
         BazaarUploadAttempt::KeyUnreadable(key_failure) => {
             upload_not_sent(&describe_key_failure(key_failure))
         }
@@ -128,7 +128,7 @@ pub fn bazaar_upload_attempt_text(upload_attempt: &BazaarUploadAttempt) -> Strin
             upload_not_sent(&history_failure_text(history_failure))
         }
         BazaarUploadAttempt::SentWithoutRecord(history_failure) => {
-            gettext("Uploaded, but it could not be added to Submissions: {error}")
+            gettext("Uploaded, but it could not be added to Sent Samples: {error}")
                 .replace("{error}", &describe_history_failure(history_failure))
         }
     }
@@ -145,7 +145,7 @@ pub fn virustotal_upload_attempt_text(upload_attempt: &VirusTotalUploadAttempt) 
         }) => gettext("VirusTotal refused the file: {reason}")
             .replace("{reason}", &sanitize_scanner_line(refusal_reason)),
         VirusTotalUploadAttempt::SubmissionRecorded(_recorded_submission) => gettext(
-            "VirusTotal is analysing the file. Refresh on the Submissions page shows its verdict.",
+            "VirusTotal is analysing the file. Refresh on the Sent Samples page shows its verdict.",
         ),
         VirusTotalUploadAttempt::AlreadySubmitted(earlier_submission) => {
             earlier_submission_text(earlier_submission)
@@ -159,9 +159,9 @@ pub fn virustotal_upload_attempt_text(upload_attempt: &VirusTotalUploadAttempt) 
         )
         .replace("{count}", &file_report.detecting_engine_count.to_string())
         .replace("{total}", &file_report.total_engine_count.to_string()),
-        VirusTotalUploadAttempt::KeyMissing => upload_not_sent(&gettext(
-            "add a VirusTotal key on the Submissions page first",
-        )),
+        VirusTotalUploadAttempt::KeyMissing => {
+            upload_not_sent(&gettext("add a VirusTotal key in Preferences first"))
+        }
         VirusTotalUploadAttempt::KeyUnreadable(key_failure) => {
             upload_not_sent(&describe_key_failure(key_failure))
         }
@@ -175,7 +175,7 @@ pub fn virustotal_upload_attempt_text(upload_attempt: &VirusTotalUploadAttempt) 
             upload_not_sent(&history_failure_text(history_failure))
         }
         VirusTotalUploadAttempt::SentWithoutRecord(history_failure) => {
-            gettext("Uploaded, but it could not be added to Submissions: {error}")
+            gettext("Uploaded, but it could not be added to Sent Samples: {error}")
                 .replace("{error}", &describe_history_failure(history_failure))
         }
     }

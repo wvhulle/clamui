@@ -193,16 +193,10 @@ fn page_scenarios() -> Vec<PageScenario> {
             user_interactions: [shown("trusted-detections"), frame()].concat(),
         },
         PageScenario {
-            launched_page: LaunchedPage::NamedPage("online-lookups"),
+            launched_page: LaunchedPage::NamedPage("sent-samples"),
             scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "online-lookups",
-            user_interactions: [shown("online-lookups"), frame()].concat(),
-        },
-        PageScenario {
-            launched_page: LaunchedPage::NamedPage("submissions"),
-            scan_fixture_use: ScanFixtureUse::IdlePage,
-            animation_name: "submissions",
-            user_interactions: [shown("submissions"), frame()].concat(),
+            animation_name: "sent-samples",
+            user_interactions: [shown("sent-samples"), frame()].concat(),
         },
         PageScenario {
             launched_page: LaunchedPage::NamedPage("manual-scan"),
@@ -229,6 +223,12 @@ fn page_scenarios() -> Vec<PageScenario> {
             scan_fixture_use: ScanFixtureUse::IdlePage,
             animation_name: "preferences",
             user_interactions: [shown("preferences"), frame()].concat(),
+        },
+        PageScenario {
+            launched_page: LaunchedPage::NamedPage("online-services"),
+            scan_fixture_use: ScanFixtureUse::IdlePage,
+            animation_name: "online-services",
+            user_interactions: [shown("online-services"), frame()].concat(),
         },
     ]
 }

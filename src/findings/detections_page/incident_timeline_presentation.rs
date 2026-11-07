@@ -36,6 +36,7 @@ pub enum IncidentStepAction {
     CancelIncidentDeletion,
     DismissIncident,
     LookUpIncidentSignature,
+    OpenOnlineServices,
     SubmitIncidentSample,
 }
 
@@ -48,6 +49,7 @@ impl StepActionButton for IncidentStepAction {
             Self::CancelIncidentDeletion => gettext("Cancel"),
             Self::DismissIncident => gettext("Keep"),
             Self::LookUpIncidentSignature => gettext("Look Up"),
+            Self::OpenOnlineServices => gettext("Add Key…"),
             Self::SubmitIncidentSample => gettext("Submit…"),
         }
     }
@@ -60,6 +62,7 @@ impl StepActionButton for IncidentStepAction {
             | Self::CancelIncidentDeletion
             | Self::DismissIncident
             | Self::LookUpIncidentSignature
+            | Self::OpenOnlineServices
             | Self::SubmitIncidentSample => ActionConsequence::OrdinaryAction,
         }
     }
@@ -333,7 +336,7 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
         SignatureLookupState::NotLookedUp => None,
         SignatureLookupState::LookingUp => Some(gettext("Looking up…")),
         SignatureLookupState::KeyMissing => Some(gettext(
-            "Add your abuse.ch key on Submissions to look up detections.",
+            "Add your abuse.ch key in Preferences to look up detections.",
         )),
         SignatureLookupState::KeyUnreadable(key_failure) => {
             Some(sanitize_scanner_line(&describe_key_failure(key_failure)))
@@ -371,14 +374,27 @@ fn lookup_summary_text(lookup_state: &SignatureLookupState) -> Option<String> {
     }
 }
 
-fn lookup_choices() -> Vec<StepChoiceRow<IncidentStepAction>> {
+fn lookup_choices(lookup_state: &SignatureLookupState) -> Vec<StepChoiceRow<IncidentStepAction>> {
     let signature_lookup = StepChoiceRow {
         choice_description: gettext(
             "Ask MalwareBazaar about this signature. Only its name is sent.",
         ),
         chosen_action: IncidentStepAction::LookUpIncidentSignature,
     };
-    vec![signature_lookup]
+    match lookup_state {
+        SignatureLookupState::KeyMissing => vec![
+            signature_lookup,
+            StepChoiceRow {
+                choice_description: gettext("MalwareBazaar needs a free abuse.ch key"),
+                chosen_action: IncidentStepAction::OpenOnlineServices,
+            },
+        ],
+        SignatureLookupState::NotLookedUp
+        | SignatureLookupState::LookingUp
+        | SignatureLookupState::KeyUnreadable(_)
+        | SignatureLookupState::LookupFinished(_)
+        | SignatureLookupState::BazaarLookupFailed(_) => vec![signature_lookup],
+    }
 }
 
 fn decision_choices(
@@ -468,7 +484,7 @@ fn review_step(
         SettledStep {
             choice_rows: decision_choices(deletion_prompt, displayed_detection.file_state)
                 .into_iter()
-                .chain(lookup_choices())
+                .chain(lookup_choices(lookup_state))
                 .collect(),
             evidence_rows: lookup_summary_text(lookup_state)
                 .map(|lookup_summary| evidence_row(gettext("MalwareBazaar"), lookup_summary))
@@ -839,13 +855,22 @@ mod incident_timeline_presentation_tests {
 
     #[test]
     fn the_only_lookup_sends_the_signature_name() {
-        let lookup_actions = lookup_choices()
-            .into_iter()
-            .map(|choice_row| choice_row.chosen_action)
-            .collect::<Vec<_>>();
+        let lookup_actions = |lookup_state| {
+            lookup_choices(lookup_state)
+                .into_iter()
+                .map(|choice_row| choice_row.chosen_action)
+                .collect::<Vec<_>>()
+        };
         assert_eq!(
-            lookup_actions,
+            lookup_actions(&SignatureLookupState::NotLookedUp),
             vec![IncidentStepAction::LookUpIncidentSignature]
+        );
+        assert_eq!(
+            lookup_actions(&SignatureLookupState::KeyMissing),
+            vec![
+                IncidentStepAction::LookUpIncidentSignature,
+                IncidentStepAction::OpenOnlineServices
+            ]
         );
     }
 

@@ -49,6 +49,10 @@ use crate::{
             },
             quarantine_page_state::QuarantineEntryCount,
         },
+        sent_samples_page::{
+            sent_samples_component::{SentSamplesPage, SentSamplesPageInit, SentSamplesPageInput},
+            sent_samples_state::{SentSamplesPageOutput, SubmissionTally},
+        },
         trusted_detections_page::trusted_detections_component::{
             TrustedDetectionsPage, TrustedDetectionsPageInput, TrustedDetectionsPageOutput,
         },
@@ -108,16 +112,6 @@ use crate::{
         database_migration_failure_text::describe_history_failure,
         scan_runs::scan_run_progress::PageScanActivity,
     },
-    sharing::{
-        online_lookups_page::{
-            online_lookups_component::{OnlineLookupsPage, OnlineLookupsPageInput},
-            online_lookups_state::OnlineLookupsPageOutput,
-        },
-        submissions_page::{
-            submissions_component::{SubmissionsPage, SubmissionsPageInit, SubmissionsPageInput},
-            submissions_state::{SubmissionTally, SubmissionsPageOutput},
-        },
-    },
     signatures::{
         database_updates_page::{
             database_updates_component::{DatabaseUpdatesPage, DatabaseUpdatesPageInput},
@@ -161,8 +155,7 @@ pub struct PageNavigation {
     scheduled_scans_page: Controller<ScheduledScansPage>,
     detections_page: Controller<BackgroundDetectionsPage>,
     trusted_detections_page: Controller<TrustedDetectionsPage>,
-    online_lookups_page: Controller<OnlineLookupsPage>,
-    submissions_page: Controller<SubmissionsPage>,
+    sent_samples_page: Controller<SentSamplesPage>,
     submission_tally: SubmissionTally,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
@@ -330,15 +323,16 @@ const fn forwarded_database_updates_output(
     }
 }
 
-fn forwarded_submissions_output(submissions_output: SubmissionsPageOutput) -> PageNavigationInput {
-    match submissions_output {
-        SubmissionsPageOutput::TallyChanged(submission_tally) => {
+fn forwarded_sent_samples_output(
+    sent_samples_output: SentSamplesPageOutput,
+) -> PageNavigationInput {
+    match sent_samples_output {
+        SentSamplesPageOutput::TallyChanged(submission_tally) => {
             PageNavigationInput::SubmissionsTallied(submission_tally)
         }
-        SubmissionsPageOutput::UploadNoticeReady(notice_text) => {
+        SentSamplesPageOutput::UploadNoticeReady(notice_text) => {
             PageNavigationInput::UploadNoticeReceived(notice_text)
         }
-        SubmissionsPageOutput::StoredKeyChanged => PageNavigationInput::EvidenceRefreshRequested,
     }
 }
 
@@ -347,16 +341,6 @@ const fn forwarded_trusted_detections_output(
 ) -> PageNavigationInput {
     match trusted_detections_output {
         TrustedDetectionsPageOutput::EvidenceRefreshRequested => {
-            PageNavigationInput::EvidenceRefreshRequested
-        }
-    }
-}
-
-const fn forwarded_online_lookups_output(
-    online_lookups_output: OnlineLookupsPageOutput,
-) -> PageNavigationInput {
-    match online_lookups_output {
-        OnlineLookupsPageOutput::EvidenceRefreshRequested => {
             PageNavigationInput::EvidenceRefreshRequested
         }
     }
@@ -569,8 +553,6 @@ impl PageNavigation {
             .emit(TrustedDetectionsPageInput::EvidenceRefreshChanged(
                 next_refresh,
             ));
-        self.online_lookups_page
-            .emit(OnlineLookupsPageInput::EvidenceRefreshChanged(next_refresh));
         match gathering_start {
             GatheringStart::StartGathering => {
                 let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
@@ -691,11 +673,8 @@ impl Component for PageNavigation {
                             add_titled[Some(ApplicationPage::TrustedDetections.page_name()), &ApplicationPage::TrustedDetections.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::TrustedDetections, model.trusted_detections_page.widget()),
                             },
-                            add_titled[Some(ApplicationPage::OnlineLookups.page_name()), &ApplicationPage::OnlineLookups.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::OnlineLookups, model.online_lookups_page.widget()),
-                            },
-                            add_titled[Some(ApplicationPage::Submissions.page_name()), &ApplicationPage::Submissions.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Submissions, model.submissions_page.widget()),
+                            add_titled[Some(ApplicationPage::SentSamples.page_name()), &ApplicationPage::SentSamples.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::SentSamples, model.sent_samples_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::SignatureSources.page_name()), &ApplicationPage::SignatureSources.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::SignatureSources, model.signature_sources_page.widget()),
@@ -795,12 +774,12 @@ impl Component for PageNavigation {
         let scheduled_scans_page = ScheduledScansPage::builder()
             .launch(activity_history.clone())
             .forward(sender.input_sender(), forwarded_scheduled_scans_output);
-        let submissions_page = SubmissionsPage::builder()
-            .launch(SubmissionsPageInit {
+        let sent_samples_page = SentSamplesPage::builder()
+            .launch(SentSamplesPageInit {
                 activity_history: activity_history.clone(),
                 quarantine_vault: quarantine_vault.clone(),
             })
-            .forward(sender.input_sender(), forwarded_submissions_output);
+            .forward(sender.input_sender(), forwarded_sent_samples_output);
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
                 activity_history: activity_history.clone(),
@@ -810,9 +789,6 @@ impl Component for PageNavigation {
         let trusted_detections_page = TrustedDetectionsPage::builder()
             .launch(())
             .forward(sender.input_sender(), forwarded_trusted_detections_output);
-        let online_lookups_page = OnlineLookupsPage::builder()
-            .launch(())
-            .forward(sender.input_sender(), forwarded_online_lookups_output);
         let signature_sources_page = SignatureSourcesPage::builder()
             .launch(())
             .forward(sender.input_sender(), forwarded_signature_sources_output);
@@ -844,8 +820,7 @@ impl Component for PageNavigation {
             scheduled_scans_page,
             detections_page,
             trusted_detections_page,
-            online_lookups_page,
-            submissions_page,
+            sent_samples_page,
             submission_tally: SubmissionTally::TallyLoading,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
@@ -917,8 +892,8 @@ impl Component for PageNavigation {
             PageNavigationInput::QuarantineEntriesChanged => {
                 self.quarantine_page
                     .emit(QuarantineEntriesPageInput::ReloadEntriesRequested);
-                self.submissions_page
-                    .emit(SubmissionsPageInput::QuarantineEntriesChanged);
+                self.sent_samples_page
+                    .emit(SentSamplesPageInput::QuarantineEntriesChanged);
             }
             PageNavigationInput::SignaturesUpdated => {
                 self.quarantine_page
@@ -936,8 +911,8 @@ impl Component for PageNavigation {
             }
             PageNavigationInput::QuarantineEntriesCounted(quarantine_entry_count) => {
                 self.quarantine_entry_count = quarantine_entry_count;
-                self.submissions_page
-                    .emit(SubmissionsPageInput::QuarantineEntriesChanged);
+                self.sent_samples_page
+                    .emit(SentSamplesPageInput::QuarantineEntriesChanged);
                 self.refresh_area_summaries();
             }
             PageNavigationInput::UnresolvedDetectionsChanged(unresolved_detections) => {
@@ -973,21 +948,21 @@ impl Component for PageNavigation {
                 self.refresh_area_summaries();
             }
             PageNavigationInput::SubmissionsChanged => {
-                self.submissions_page
-                    .emit(SubmissionsPageInput::SubmissionsChanged);
+                self.sent_samples_page
+                    .emit(SentSamplesPageInput::SubmissionsChanged);
             }
             PageNavigationInput::SubmissionsTallied(submission_tally) => {
                 self.submission_tally = submission_tally;
                 self.refresh_area_summaries();
             }
             PageNavigationInput::EntrySubmissionRequested { entry_id } => {
-                self.show_page(ApplicationPage::Submissions);
-                self.submissions_page
-                    .emit(SubmissionsPageInput::EntrySubmissionRequested { entry_id });
+                self.show_page(ApplicationPage::SentSamples);
+                self.sent_samples_page
+                    .emit(SentSamplesPageInput::EntrySubmissionRequested { entry_id });
             }
             PageNavigationInput::ClamavReportConfirmed(report_request) => {
-                self.submissions_page
-                    .emit(SubmissionsPageInput::ClamavReportConfirmed(report_request));
+                self.sent_samples_page
+                    .emit(SentSamplesPageInput::ClamavReportConfirmed(report_request));
             }
             PageNavigationInput::UploadNoticeReceived(notice_text) => {
                 self.show_plain_toast(notice_text);
@@ -1038,9 +1013,9 @@ impl Component for PageNavigation {
                 });
             }
             PageNavigationInput::QuarantinedFileSubmissionRequested(original_path) => {
-                self.show_page(ApplicationPage::Submissions);
-                self.submissions_page.emit(
-                    SubmissionsPageInput::QuarantinedFileSubmissionRequested { original_path },
+                self.show_page(ApplicationPage::SentSamples);
+                self.sent_samples_page.emit(
+                    SentSamplesPageInput::QuarantinedFileSubmissionRequested { original_path },
                 );
             }
         }
@@ -1089,10 +1064,6 @@ impl Component for PageNavigation {
                     ));
                 self.trusted_detections_page
                     .emit(TrustedDetectionsPageInput::EvidenceGathered(
-                        self.gathered_evidence.clone(),
-                    ));
-                self.online_lookups_page
-                    .emit(OnlineLookupsPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);
@@ -1169,7 +1140,7 @@ mod page_navigation_tests {
     }
 
     #[test]
-    fn scan_result_reports_go_to_the_submissions_page_that_guards_uploads() {
+    fn scan_result_reports_go_to_the_sent_samples_page_that_guards_uploads() {
         assert!(matches!(
             forwarded_scan_output(ScanPageOutput::ClamavReportConfirmed(false_positive_request())),
             PageNavigationInput::ClamavReportConfirmed(report_request)
@@ -1187,7 +1158,7 @@ mod page_navigation_tests {
     #[test]
     fn upload_notices_reach_the_window_toasts() {
         assert!(matches!(
-            forwarded_submissions_output(SubmissionsPageOutput::UploadNoticeReady(
+            forwarded_sent_samples_output(SentSamplesPageOutput::UploadNoticeReady(
                 "Already being sent".to_owned()
             )),
             PageNavigationInput::UploadNoticeReceived(notice_text)

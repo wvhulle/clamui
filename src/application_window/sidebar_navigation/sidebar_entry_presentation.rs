@@ -12,7 +12,6 @@ pub enum SidebarGroup {
     SignaturesGroup,
     ScansGroup,
     FindingsGroup,
-    SharingGroup,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,7 +26,6 @@ impl SidebarGroup {
             Self::SignaturesGroup => gettext("Signatures"),
             Self::ScansGroup => gettext("Scans"),
             Self::FindingsGroup => gettext("Findings"),
-            Self::SharingGroup => gettext("Sharing"),
         }
     }
 
@@ -36,7 +34,6 @@ impl SidebarGroup {
             Self::SignaturesGroup => gettext("Where detections come from"),
             Self::ScansGroup => gettext("How files get checked"),
             Self::FindingsGroup => gettext("What was found"),
-            Self::SharingGroup => gettext("What leaves this computer"),
         }
     }
 
@@ -58,10 +55,7 @@ impl SidebarGroup {
                 SidebarRowKind::PageEntry(ApplicationPage::Detections),
                 SidebarRowKind::PageEntry(ApplicationPage::Quarantine),
                 SidebarRowKind::PageEntry(ApplicationPage::TrustedDetections),
-            ],
-            Self::SharingGroup => vec![
-                SidebarRowKind::PageEntry(ApplicationPage::OnlineLookups),
-                SidebarRowKind::PageEntry(ApplicationPage::Submissions),
+                SidebarRowKind::PageEntry(ApplicationPage::SentSamples),
             ],
         }
     }
@@ -189,11 +183,10 @@ mod sidebar_entry_presentation_tests {
     use super::*;
     use crate::application_window::application_pages::ALL_APPLICATION_PAGES;
 
-    const ALL_SIDEBAR_GROUPS: [SidebarGroup; 4] = [
+    const ALL_SIDEBAR_GROUPS: [SidebarGroup; 3] = [
         SidebarGroup::SignaturesGroup,
         SidebarGroup::ScansGroup,
         SidebarGroup::FindingsGroup,
-        SidebarGroup::SharingGroup,
     ];
 
     fn known_summary(area_status: AreaStatus, live_state_text: &str) -> EntrySummary {
@@ -230,7 +223,6 @@ mod sidebar_entry_presentation_tests {
                 ),
                 ("Scans".to_owned(), "How files get checked".to_owned()),
                 ("Findings".to_owned(), "What was found".to_owned()),
-                ("Sharing".to_owned(), "What leaves this computer".to_owned()),
             ]
         );
         assert_eq!(
@@ -243,6 +235,7 @@ mod sidebar_entry_presentation_tests {
                 SidebarRowKind::PageEntry(ApplicationPage::Detections),
                 SidebarRowKind::PageEntry(ApplicationPage::Quarantine),
                 SidebarRowKind::PageEntry(ApplicationPage::TrustedDetections),
+                SidebarRowKind::PageEntry(ApplicationPage::SentSamples),
             ]
         );
     }
@@ -254,8 +247,8 @@ mod sidebar_entry_presentation_tests {
             Some(1)
         );
         assert_eq!(
-            SidebarGroup::SharingGroup.row_position_of(ApplicationPage::Submissions),
-            Some(1)
+            SidebarGroup::FindingsGroup.row_position_of(ApplicationPage::SentSamples),
+            Some(3)
         );
         assert_eq!(
             SidebarGroup::SignaturesGroup.row_position_of(ApplicationPage::Detections),

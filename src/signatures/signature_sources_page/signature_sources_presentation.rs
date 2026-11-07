@@ -32,7 +32,7 @@ impl SourceChecks {
 fn abuse_ch_key_purpose_text() -> String {
     gettext(
         "URLhaus signatures through fangfrisch, MalwareBazaar lookups and MalwareBazaar uploads \
-         all use this key. It is kept and edited on Submissions.",
+         all use this key. It is kept and edited in Preferences, under Online Services.",
     )
 }
 
@@ -88,7 +88,7 @@ mod signature_sources_presentation_tests {
     }
 
     #[test]
-    fn the_abuse_ch_key_row_reads_like_the_online_lookups_page() {
+    fn the_abuse_ch_key_row_reads_like_the_online_services_preferences() {
         let configured = gathered_with_abuse_ch_key(ServiceKeyStatus::KeyConfigured);
         assert!(abuse_ch_key_subtitle(&configured).ends_with("\nAPI key configured"));
         assert!(!abuse_ch_key_needs_attention(&configured));

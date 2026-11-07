@@ -12,8 +12,7 @@ The sidebar groups the pages the way a detection travels, and each entry shows i
 
 - **Signatures**: Signature Sources, Database Updates.
 - **Scans**: Scan Files…, Scan Engine, On-Access Scanning, Scheduled Scans, Manual Scan, Removable Drives.
-- **Findings**: Detections, Quarantine, Trusted Detections.
-- **Sharing**: Online Lookups, Submissions.
+- **Findings**: Detections, Quarantine, Trusted Detections, Sent Samples.
 
 Recordings of every page are in [usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md).
 
@@ -28,7 +27,7 @@ Recordings of every page are in [usage](https://codeberg.org/wvhulle/lazaret/src
 
 ## Documentation
 
-- [Usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md): the sidebar and every page in its order, from signatures to submissions.
+- [Usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md): the sidebar and every page in its order, from signatures to sent samples.
 - [Architecture](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/architecture.md): how Lazaret talks to ClamAV, systemd and the ClamAV admin service.
 - [Development](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/development.md): building, testing, screenshots and recordings, translations and releases.
 

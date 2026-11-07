@@ -4,19 +4,27 @@ use relm4::{
     adw::prelude::*,
     gtk,
     gtk::{gio, gio::prelude::SettingsExtManual},
-    prelude::FactoryVecDeque,
+    prelude::{ComponentController, Controller, FactoryVecDeque},
 };
 
 use crate::{
     application_window::window_close_behavior::{CLOSE_ACTION_CHOICES, CloseAction},
-    host_services::desktop::{
-        file_manager_actions::SUPPORTED_FILE_MANAGERS,
-        flatpak_sandbox::{request_background_autostart, running_in_flatpak},
-        stored_settings::{CLOSE_ACTION_KEY, application_settings},
-        stored_settings_watch::forward_setting_changes,
+    host_services::{
+        desktop::{
+            file_manager_actions::SUPPORTED_FILE_MANAGERS,
+            flatpak_sandbox::{request_background_autostart, running_in_flatpak},
+            stored_settings::{CLOSE_ACTION_KEY, application_settings},
+            stored_settings_watch::forward_setting_changes,
+        },
+        threat_intel::service_key_storage::ThreatIntelService,
     },
-    preferences_dialog::file_manager_row::FileManagerRow,
+    preferences_dialog::{
+        file_manager_row::FileManagerRow,
+        service_key_section::{ServiceKeySection, ServiceKeySectionOutput},
+    },
 };
+
+pub const ONLINE_SERVICES_PAGE_NAME: &str = "online-services";
 
 const START_IN_BACKGROUND_KEY: &str = "start-in-background";
 const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
@@ -42,6 +50,8 @@ pub struct PreferencesDialog {
     stored_settings: gio::Settings,
     window_behavior: WindowBehaviorSettings,
     file_manager_rows: FactoryVecDeque<FileManagerRow>,
+    abuse_ch_section: Controller<ServiceKeySection>,
+    virustotal_section: Controller<ServiceKeySection>,
 }
 
 #[derive(Debug)]
@@ -50,6 +60,22 @@ pub enum PreferencesDialogInput {
     StartInBackgroundToggled(bool),
     NotificationsToggled(bool),
     StoredSettingChanged,
+    StoredServiceKeyChanged,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreferencesDialogOutput {
+    StoredServiceKeyChanged,
+}
+
+const fn dialog_input_for_key_output(
+    key_output: ServiceKeySectionOutput,
+) -> PreferencesDialogInput {
+    match key_output {
+        ServiceKeySectionOutput::StoredKeyChanged => {
+            PreferencesDialogInput::StoredServiceKeyChanged
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -66,7 +92,7 @@ fn close_action_labels() -> gtk::StringList {
 impl Component for PreferencesDialog {
     type Init = ();
     type Input = PreferencesDialogInput;
-    type Output = ();
+    type Output = PreferencesDialogOutput;
     type CommandOutput = PreferencesDialogCommand;
 
     view! {
@@ -131,6 +157,42 @@ impl Component for PreferencesDialog {
                 },
             },
 
+            add = &adw::PreferencesPage {
+                set_name: Some(ONLINE_SERVICES_PAGE_NAME),
+                set_title: &gettext("Online Services"),
+                set_icon_name: Some("network-server-symbolic"),
+                set_description: &gettext(
+                    "Services that tell you more about a detected or quarantined file. Lookups \
+                     run only when you press Look Up on a detection or Check in a quarantine \
+                     entry, and send only a hash or a signature name. A file leaves this \
+                     computer only when you submit it and confirm what is sent.",
+                ),
+
+                adw::PreferencesGroup {
+                    set_title: "CIRCL hashlookup",
+                    set_description: Some(&gettext(
+                        "Lookups send only a file's SHA-256 hash and tell whether it belongs to a \
+                         known, harmless file. No key needed.",
+                    )),
+                },
+
+                #[local_ref]
+                abuse_ch_group -> adw::PreferencesGroup {},
+
+                #[local_ref]
+                virustotal_group -> adw::PreferencesGroup {},
+
+                adw::PreferencesGroup {
+                    set_title: "ClamAV (Cisco Talos)",
+                    set_description: Some(&gettext(
+                        "No lookups. A report you confirm sends the file, the detection name for \
+                         a false positive, and your name and email address. Talos processes \
+                         samples by automation, never makes them public and doesn't share them \
+                         with other companies. A review takes at least 48 hours. No key needed.",
+                    )),
+                },
+            },
+
         }
     }
 
@@ -165,8 +227,16 @@ impl Component for PreferencesDialog {
             window_behavior: WindowBehaviorSettings::read_from(&stored_settings),
             stored_settings,
             file_manager_rows,
+            abuse_ch_section: ServiceKeySection::builder()
+                .launch(ThreatIntelService::AbuseChService)
+                .forward(sender.input_sender(), dialog_input_for_key_output),
+            virustotal_section: ServiceKeySection::builder()
+                .launch(ThreatIntelService::VirusTotalService)
+                .forward(sender.input_sender(), dialog_input_for_key_output),
         };
         let file_manager_group = model.file_manager_rows.widget();
+        let abuse_ch_group = model.abuse_ch_section.widget();
+        let virustotal_group = model.virustotal_section.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -205,6 +275,9 @@ impl Component for PreferencesDialog {
             }
             PreferencesDialogInput::StoredSettingChanged => {
                 self.window_behavior = WindowBehaviorSettings::read_from(&self.stored_settings);
+            }
+            PreferencesDialogInput::StoredServiceKeyChanged => {
+                let _shell_closed = sender.output(PreferencesDialogOutput::StoredServiceKeyChanged);
             }
         }
     }

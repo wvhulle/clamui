@@ -7,6 +7,7 @@ use relm4::{
 };
 
 use crate::{
+    application_window::application_actions::ONLINE_SERVICES_ACTION,
     findings::quarantine_page::quarantine_page_state::{
         EntryRowState, QuarantineRowInit, RowActivity, RowRecheckState, RowReputation,
     },
@@ -54,7 +55,6 @@ pub enum QuarantineEntryRowInput {
     ReputationCheckRequested,
     HashCopyRequested,
     VirusTotalReportRequested,
-    OnlineLookupsRequested,
     TrustFileRequested,
     FalsePositiveReportRequested,
     SubmissionRequested,
@@ -70,7 +70,6 @@ pub enum QuarantineEntryRowOutput {
     FalsePositiveReportRequested(ClamavReportProposal),
     SubmissionRequested { entry_id: i64 },
     HashCopyRequested(String),
-    OnlineLookupsRequested,
     ReportLinkRequested(String),
 }
 
@@ -278,7 +277,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_valign: gtk::Align::Center,
                     #[watch]
                     set_visible: self.source_needs_key(bazaar_source),
-                    connect_clicked => QuarantineEntryRowInput::OnlineLookupsRequested,
+                    set_action_name: Some(ONLINE_SERVICES_ACTION),
                 },
             },
 
@@ -291,7 +290,7 @@ impl FactoryComponent for QuarantineEntryRow {
                     set_valign: gtk::Align::Center,
                     #[watch]
                     set_visible: self.source_needs_key(virustotal_source),
-                    connect_clicked => QuarantineEntryRowInput::OnlineLookupsRequested,
+                    set_action_name: Some(ONLINE_SERVICES_ACTION),
                 },
 
                 add_suffix = &gtk::Button {
@@ -383,9 +382,6 @@ impl FactoryComponent for QuarantineEntryRow {
                         sha256_hex.to_owned(),
                     ));
                 }
-            }
-            QuarantineEntryRowInput::OnlineLookupsRequested => {
-                let _page_closed = sender.output(QuarantineEntryRowOutput::OnlineLookupsRequested);
             }
             QuarantineEntryRowInput::TrustFileRequested => {
                 let Some(sha256_hex) = self.known_sha256_hex().map(str::to_owned) else {

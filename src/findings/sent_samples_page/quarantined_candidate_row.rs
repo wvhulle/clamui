@@ -1,7 +1,7 @@
 use gettextrs::gettext;
 use relm4::{FactorySender, adw, adw::prelude::*, gtk, prelude::FactoryComponent};
 
-use crate::sharing::submissions_page::submissions_presentation::CandidateRowView;
+use crate::findings::sent_samples_page::sent_samples_presentation::CandidateRowView;
 
 #[derive(Debug)]
 pub enum QuarantinedCandidateRowOutput {

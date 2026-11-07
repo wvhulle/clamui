@@ -19,7 +19,6 @@ pub struct SidebarNavigationColumn {
     signatures_rows: FactoryVecDeque<SidebarEntryRow>,
     scans_rows: FactoryVecDeque<SidebarEntryRow>,
     findings_rows: FactoryVecDeque<SidebarEntryRow>,
-    sharing_rows: FactoryVecDeque<SidebarEntryRow>,
 }
 
 #[derive(Debug)]
@@ -146,19 +145,6 @@ impl Component for SidebarNavigationColumn {
                                 select_row: selected_group_row(findings_list, SidebarGroup::FindingsGroup, model.selected_page).as_ref(),
                             },
                         },
-
-                        adw::PreferencesGroup {
-                            set_title: &SidebarGroup::SharingGroup.group_title(),
-                            set_description: Some(&SidebarGroup::SharingGroup.group_description()),
-
-                            #[local_ref]
-                            sharing_list -> gtk::ListBox {
-                                add_css_class: "boxed-list",
-                                set_selection_mode: gtk::SelectionMode::Single,
-                                #[watch]
-                                select_row: selected_group_row(sharing_list, SidebarGroup::SharingGroup, model.selected_page).as_ref(),
-                            },
-                        },
                     },
                 },
             },
@@ -175,12 +161,10 @@ impl Component for SidebarNavigationColumn {
             signatures_rows: launched_group_rows(SidebarGroup::SignaturesGroup),
             scans_rows: launched_group_rows(SidebarGroup::ScansGroup),
             findings_rows: launched_group_rows(SidebarGroup::FindingsGroup),
-            sharing_rows: launched_group_rows(SidebarGroup::SharingGroup),
         };
         let signatures_list = model.signatures_rows.widget();
         let scans_list = model.scans_rows.widget();
         let findings_list = model.findings_rows.widget();
-        let sharing_list = model.sharing_rows.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -200,7 +184,6 @@ impl Component for SidebarNavigationColumn {
                     &mut self.signatures_rows,
                     &mut self.scans_rows,
                     &mut self.findings_rows,
-                    &mut self.sharing_rows,
                 ]
                 .into_iter()
                 .for_each(|group_rows| show_area_summaries(group_rows, &area_summaries));

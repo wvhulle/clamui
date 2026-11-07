@@ -15,10 +15,12 @@ use crate::{
     APPLICATION_ICON_NAME,
     application_window::{
         application_actions::{
-            AboutAction, PreferencesAction, QuitAction, ShowWindowAction,
+            AboutAction, OnlineServicesAction, PreferencesAction, QuitAction, ShowWindowAction,
             register_application_action,
         },
-        page_navigation::{PageNavigation, PageNavigationInit, PageNavigationOutput},
+        page_navigation::{
+            PageNavigation, PageNavigationInit, PageNavigationInput, PageNavigationOutput,
+        },
         start_page_choice::StartPageRequest,
         startup_arguments::{StartupPage, StartupRequest},
         system_tray_connection::{
@@ -42,7 +44,9 @@ use crate::{
             quarantine_file_moves::QuarantineMoveFailure,
         },
     },
-    preferences_dialog::preferences_dialog_component::PreferencesDialog,
+    preferences_dialog::preferences_dialog_component::{
+        ONLINE_SERVICES_PAGE_NAME, PreferencesDialog, PreferencesDialogOutput,
+    },
     shared_widgets::quarantine_failure_text::describe_quarantine_failure,
 };
 
@@ -126,6 +130,8 @@ pub enum ApplicationWindowShellInput {
     WindowShowRequested,
     AboutRequested,
     PreferencesRequested,
+    OnlineServicesRequested,
+    StoredServiceKeyChanged,
     QuitRequested,
     WindowCloseRequested,
     CloseAnswered(CloseAnswer),
@@ -162,9 +168,9 @@ const fn navigation_startup_page(startup_page: StartupPage) -> StartPageRequest 
         StartupPage::ApplicationPage(application_page) => {
             StartPageRequest::RequestedPage(application_page)
         }
-        StartupPage::FirstAreaNeedingAttention | StartupPage::PreferencesDialog => {
-            StartPageRequest::FirstAreaNeedingAttention
-        }
+        StartupPage::FirstAreaNeedingAttention
+        | StartupPage::PreferencesDialog
+        | StartupPage::OnlineServicesPreferences => StartPageRequest::FirstAreaNeedingAttention,
     }
 }
 
@@ -177,6 +183,12 @@ fn register_window_actions(sender: &AsyncComponentSender<ApplicationWindowShell>
     register_application_action(RelmAction::<PreferencesAction>::new_stateless(
         move |_action| {
             preferences_sender.emit(ApplicationWindowShellInput::PreferencesRequested);
+        },
+    ));
+    let online_services_sender = sender.input_sender().clone();
+    register_application_action(RelmAction::<OnlineServicesAction>::new_stateless(
+        move |_action| {
+            online_services_sender.emit(ApplicationWindowShellInput::OnlineServicesRequested);
         },
     ));
     let quit_sender = sender.input_sender().clone();
@@ -296,15 +308,28 @@ impl AsyncComponent for ApplicationWindowShell {
             close_action: CloseAction::read_from(&stored_settings),
             stored_settings,
             start_in_background,
-            preferences_dialog: PreferencesDialog::builder().launch(()).detach(),
+            preferences_dialog: PreferencesDialog::builder().launch(()).forward(
+                sender.input_sender(),
+                |preferences_output| match preferences_output {
+                    PreferencesDialogOutput::StoredServiceKeyChanged => {
+                        ApplicationWindowShellInput::StoredServiceKeyChanged
+                    }
+                },
+            ),
         };
         let content_widget = model.window_content.content_widget();
         let widgets = view_output!();
         sender.oneshot_command(async {
             ApplicationWindowShellCommand::TrayStartFinished(start_system_tray().await)
         });
-        if shown_startup_page == StartupPage::PreferencesDialog {
-            sender.input(ApplicationWindowShellInput::PreferencesRequested);
+        match shown_startup_page {
+            StartupPage::PreferencesDialog => {
+                sender.input(ApplicationWindowShellInput::PreferencesRequested);
+            }
+            StartupPage::OnlineServicesPreferences => {
+                sender.input(ApplicationWindowShellInput::OnlineServicesRequested);
+            }
+            StartupPage::ApplicationPage(_) | StartupPage::FirstAreaNeedingAttention => {}
         }
         AsyncComponentParts { model, widgets }
     }
@@ -320,6 +345,19 @@ impl AsyncComponent for ApplicationWindowShell {
             ApplicationWindowShellInput::AboutRequested => present_about_dialog(root),
             ApplicationWindowShellInput::PreferencesRequested => {
                 self.preferences_dialog.widget().present(Some(root));
+            }
+            ApplicationWindowShellInput::OnlineServicesRequested => {
+                let preferences_widget = self.preferences_dialog.widget();
+                preferences_widget.set_visible_page_name(ONLINE_SERVICES_PAGE_NAME);
+                preferences_widget.present(Some(root));
+            }
+            ApplicationWindowShellInput::StoredServiceKeyChanged => {
+                if let WindowContent::PagesShown {
+                    page_navigation, ..
+                } = &self.window_content
+                {
+                    page_navigation.emit(PageNavigationInput::EvidenceRefreshRequested);
+                }
             }
             ApplicationWindowShellInput::QuitRequested
             | ApplicationWindowShellInput::CloseAnswered(CloseAnswer::QuitChosen) => {

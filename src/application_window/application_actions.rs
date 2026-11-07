@@ -9,11 +9,19 @@ use crate::{
     host_services::desktop::running_instance_forwarding::{SCAN_PATHS_ACTION, SHOW_WINDOW_ACTION},
 };
 
+pub const ONLINE_SERVICES_ACTION_NAME: &str = "online-services";
+pub const ONLINE_SERVICES_ACTION: &str = "app.online-services";
+
 relm4::new_action_group!(pub ApplicationActionGroup, "app");
 relm4::new_action_group!(pub WindowActionGroup, "win");
 
 relm4::new_stateless_action!(pub AboutAction, ApplicationActionGroup, "about");
 relm4::new_stateless_action!(pub PreferencesAction, ApplicationActionGroup, "preferences");
+relm4::new_stateless_action!(
+    pub OnlineServicesAction,
+    ApplicationActionGroup,
+    ONLINE_SERVICES_ACTION_NAME
+);
 relm4::new_stateless_action!(pub QuitAction, ApplicationActionGroup, "quit");
 relm4::new_stateless_action!(pub QuickScanAction, ApplicationActionGroup, "quick-scan");
 relm4::new_stateless_action!(

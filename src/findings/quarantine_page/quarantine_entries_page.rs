@@ -2,12 +2,11 @@ use futures::{StreamExt, stream};
 use gettextrs::{gettext, ngettext};
 use jiff::{SignedDuration, Timestamp};
 use relm4::{
-    Component, ComponentParts, ComponentSender, abstractions::Toaster, actions::ActionName, adw,
-    adw::prelude::*, gtk, prelude::FactoryVecDeque,
+    Component, ComponentParts, ComponentSender, abstractions::Toaster, adw, adw::prelude::*, gtk,
+    prelude::FactoryVecDeque,
 };
 
 use crate::{
-    application_window::{application_actions::ShowPageAction, application_pages::ApplicationPage},
     findings::quarantine_page::{
         quarantine_entry_row::{
             QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput,
@@ -170,7 +169,6 @@ pub enum QuarantineEntriesPageInput {
     OperationFailuresDismissed,
     ReputationCheckRequested { entry_id: i64, content_hash: String },
     HashCopyRequested(String),
-    OnlineLookupsRequested,
     ReportLinkRequested(String),
     TrustRequested(TrustChoice),
     TrustConfirmed(TrustChoice),
@@ -775,9 +773,6 @@ impl Component for QuarantineEntriesPage {
                 QuarantineEntryRowOutput::HashCopyRequested(file_hash) => {
                     QuarantineEntriesPageInput::HashCopyRequested(file_hash)
                 }
-                QuarantineEntryRowOutput::OnlineLookupsRequested => {
-                    QuarantineEntriesPageInput::OnlineLookupsRequested
-                }
                 QuarantineEntryRowOutput::ReportLinkRequested(report_url) => {
                     QuarantineEntriesPageInput::ReportLinkRequested(report_url)
                 }
@@ -822,12 +817,6 @@ impl Component for QuarantineEntriesPage {
                 root.clipboard().set_text(&file_hash);
                 self.toaster
                     .add_toast(plain_text_toast(&gettext("Hash copied to clipboard")));
-            }
-            QuarantineEntriesPageInput::OnlineLookupsRequested => {
-                let _action_missing = root.activate_action(
-                    &ShowPageAction::action_name(),
-                    Some(&ApplicationPage::Submissions.page_name().to_variant()),
-                );
             }
             QuarantineEntriesPageInput::ReportLinkRequested(report_url) => {
                 gtk::UriLauncher::new(&report_url).launch(

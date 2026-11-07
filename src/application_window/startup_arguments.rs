@@ -5,6 +5,7 @@ use crate::application_window::application_pages::{ALL_APPLICATION_PAGES, Applic
 const STARTUP_PAGE_PREFIX: &str = "--page=";
 const BACKGROUND_ARGUMENT: &str = "--background";
 const PREFERENCES_PAGE_NAME: &str = "preferences";
+const ONLINE_SERVICES_PAGE_NAME: &str = "online-services";
 const PAGE_NAME_ALIASES: [(&str, StartupPage); 6] = [
     ("protection", StartupPage::FirstAreaNeedingAttention),
     ("logs", StartupPage::FirstAreaNeedingAttention),
@@ -32,6 +33,7 @@ pub enum StartupPage {
     ApplicationPage(ApplicationPage),
     FirstAreaNeedingAttention,
     PreferencesDialog,
+    OnlineServicesPreferences,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -51,6 +53,9 @@ impl StartupPageRequest {
     fn from_page_name(requested_page_name: &str) -> Self {
         if requested_page_name == PREFERENCES_PAGE_NAME {
             return Self::RecognizedPage(StartupPage::PreferencesDialog);
+        }
+        if requested_page_name == ONLINE_SERVICES_PAGE_NAME {
+            return Self::RecognizedPage(StartupPage::OnlineServicesPreferences);
         }
         ApplicationPage::from_page_name(requested_page_name)
             .map(StartupPage::ApplicationPage)
@@ -166,6 +171,10 @@ mod startup_arguments_tests {
             parsed_arguments(&["lazaret", "--page=preferences"]).startup_page,
             StartupPageRequest::RecognizedPage(StartupPage::PreferencesDialog)
         );
+        assert_eq!(
+            parsed_arguments(&["lazaret", "--page=online-services"]).startup_page,
+            StartupPageRequest::RecognizedPage(StartupPage::OnlineServicesPreferences)
+        );
     }
 
     #[test]
@@ -197,7 +206,7 @@ mod startup_arguments_tests {
                 "--page=trusted-detections",
                 ApplicationPage::TrustedDetections,
             ),
-            ("--page=online-lookups", ApplicationPage::OnlineLookups),
+            ("--page=sent-samples", ApplicationPage::SentSamples),
         ]
         .into_iter()
         .for_each(|(page_argument, expected_page)| {

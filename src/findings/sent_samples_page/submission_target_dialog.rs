@@ -2,13 +2,13 @@ use gettextrs::gettext;
 use relm4::{Sender, adw, adw::prelude::*, gtk};
 
 use crate::{
+    findings::sent_samples_page::{
+        sent_samples_presentation::target_choice_label, sent_samples_state::OfferedTarget,
+        uploads_in_flight::UploadActivity,
+    },
     host_services::activity_history::submission_history_store::SubmissionTarget,
     shared_widgets::awaited_dialogs::{
         AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice, deliver_local_outcome,
-    },
-    sharing::submissions_page::{
-        submissions_presentation::target_choice_label, submissions_state::OfferedTarget,
-        uploads_in_flight::UploadActivity,
     },
 };
 

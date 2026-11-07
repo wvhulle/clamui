@@ -1,6 +1,13 @@
 use gettextrs::{gettext, ngettext};
 
 use crate::{
+    findings::sent_samples_page::{
+        sent_samples_state::{
+            CandidateListing, ProgressFilter, SendAvailability, ServiceFilter, SubmissionFilters,
+            SubmissionListing, offered_target_activities, send_availability,
+        },
+        uploads_in_flight::UploadsInFlight,
+    },
     host_services::{
         activity_history::submission_history_store::{
             BazaarSampleStatus, FalsePositiveReview, MissedMalwareReview, RemoteEntryLink,
@@ -25,13 +32,6 @@ use crate::{
     shared_widgets::{
         quarantine_failure_text::describe_quarantine_failure,
         submission_outcome_text::history_failure_text,
-    },
-    sharing::submissions_page::{
-        submissions_state::{
-            CandidateListing, ProgressFilter, SendAvailability, ServiceFilter, SubmissionFilters,
-            SubmissionListing, offered_target_activities, send_availability,
-        },
-        uploads_in_flight::UploadsInFlight,
     },
 };
 

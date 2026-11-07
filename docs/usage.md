@@ -6,16 +6,15 @@ Lazaret works the same on every system. Where something depends on how you insta
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/start-page.webp" width="800" alt="Recording of the window opening on the first area that needs attention, with the status of every area in the sidebar">
 
-The sidebar follows the way a detection travels, in four groups:
+The sidebar follows the way a detection travels, in three groups:
 
 - **Signatures**, where detections come from: Signature Sources and Database Updates.
 - **Scans**, how files get checked: Scan Files…, Scan Engine, On-Access Scanning, Scheduled Scans, Manual Scan and Removable Drives.
-- **Findings**, what was found: Detections, Quarantine and Trusted Detections.
-- **Sharing**, what leaves this computer: Online Lookups and Submissions.
+- **Findings**, what was found and what you did about it: Detections, Quarantine, Trusted Detections and Sent Samples.
 
 Each entry shows its current state underneath, such as "Blocking ~/Downloads", "Next scan in 6 hours" or "2 need a decision". A warning icon means the area needs your review or its state is unknown, an error icon means it doesn't work, and a dimmed icon means it waits for another part, for example on-access scanning waiting for clamd. When you start Lazaret without choosing a page, it opens on the first entry that needs attention, or on Detections when everything is fine. It doesn't move once you have picked a page yourself.
 
-<kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> and <kbd>Ctrl</kbd>+<kbd>0</kbd> open the first ten entries in sidebar order, from Signature Sources to Trusted Detections. Online Lookups and Submissions have no shortcut. Start on a page with `lazaret --page=NAME`, for example `--page=manual-scan` or `--page=trusted-detections`.
+<kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> and <kbd>Ctrl</kbd>+<kbd>0</kbd> open the first ten entries in sidebar order, from Signature Sources to Trusted Detections. Sent Samples has no shortcut. Start on a page with `lazaret --page=NAME`, for example `--page=manual-scan` or `--page=trusted-detections`.
 
 The primary menu holds **Export History…**, which saves every recorded scan and signature update as CSV or JSON, and **Clear History…**, which deletes them after you confirm.
 
@@ -23,7 +22,7 @@ The primary menu holds **Export History…**, which saves every recorded scan an
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/signature-sources.webp" width="800" alt="Recording of the Signature Sources page, expanding a signature source that shows how to add it">
 
-Signature Sources lists where ClamAV's signatures come from and which other sources you could add, such as Sanesecurity or URLhaus, with the lines to add for each. It also shows whether the abuse.ch key is configured, missing or unreadable. That key unlocks URLhaus signatures through fangfrisch as well as MalwareBazaar lookups and uploads; it is edited on Submissions, and the row links there.
+Signature Sources lists where ClamAV's signatures come from and which other sources you could add, such as Sanesecurity or URLhaus, with the lines to add for each. It also shows whether the abuse.ch key is configured, missing or unreadable. That key unlocks URLhaus signatures through fangfrisch as well as MalwareBazaar lookups and uploads; it is edited in Preferences under Online Services, and the row opens it.
 
 ## Database Updates
 
@@ -79,11 +78,15 @@ With **Device Auto-Scan** turned on, Lazaret scans a removable or external drive
 
 When ClamAV detects a file in the background, Lazaret raises a desktop notification. For that it has to run in the background; the install guides explain how to start it with your session. Detections lists these detections, and each one opens a timeline of what happened to the file, from where you quarantine it, delete it or keep it. **Keep** only stops Lazaret asking: ClamAV still reports the file at the next scan, so trust it from Quarantine or a scan result if it is a false positive. The page also shows whether alerts can reach you, and whether other programs can attach to Lazaret.
 
+**Look Up** in an opened detection asks MalwareBazaar about the signature name, never the file, and shows the families and when they were first seen. Without an abuse.ch key it offers **Add Key…**, which opens Online Services in Preferences.
+
 ## Quarantine
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/quarantine.webp" width="800" alt="Recording of the Quarantine page with one entry expanded to show reputation lookups, false positive actions and its hash">
 
 An interrupted move never loses the file. Quarantine lists every quarantined file. Expand an entry to check its reputation, restore it to where it came from, or delete it for good. **Clear Old Items** deletes files that have been in quarantine for more than 30 days. Before a file is restored, Lazaret checks it again with today's signatures and shows where it will go. After a signature update, and whenever you press **Check Again**, it checks every quarantined file and marks the ones that are no longer detected, so you can restore false positives once a signature update fixes them.
+
+The reputation check in an expanded entry sends only the file's SHA-256 hash to CIRCL hashlookup, MalwareBazaar and VirusTotal, and shows each answer in place. A service without a key offers **Add Key**. If no service knows the file and you think it is malware, **Submit…** sends it as a separate step; see [Sent Samples](#sent-samples).
 
 When you are sure a detection is wrong, trust the file instead of excluding its path: press **Trust…** on a quarantined file, or choose **Trust This File…** on a scan result. The file is then never reported again on this computer, but a changed copy of it is still checked. **Ignore This Detection Everywhere…** stops reporting a detection for every file, so prefer trusting the file when only one file is wrong. To get the detection fixed for everyone, press **Report…**, which sends the file, with your name and email address, to the ClamAV team. Trusting asks for your administrator password and is not available in the Flatpak.
 
@@ -93,23 +96,11 @@ When you are sure a detection is wrong, trust the file instead of excluding its 
 
 Trusted Detections lists what ClamAV is told to stay silent about: the files you trusted and the detections you ignored, each with who added it and when, and any allowlist in the signature folder that Lazaret didn't write. Malware with administrator rights could hide itself this way, so check that every entry was added on purpose. Remove an entry to have ClamAV report it again. The system changes below list every trust change made through Lazaret, as the system recorded them.
 
-## Online Lookups
+## Sent Samples
 
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/online-lookups.webp" width="800" alt="Recording of the Online Lookups page with what each service receives">
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/sent-samples.webp" width="800" alt="Recording of the Sent Samples page with the list of files sent to public databases">
 
-Online Lookups says what each service receives and whether it is ready. A lookup never uploads the file:
-
-- **CIRCL hashlookup** gets the file's SHA-256 hash and tells whether it belongs to a known, harmless file. It needs no key.
-- **MalwareBazaar** (abuse.ch) gets a detection's signature name or a file's hash and tells whether it is a known malware sample. It needs the abuse.ch key.
-- **VirusTotal** gets a file's hash. It needs a VirusTotal key.
-
-The keys are kept on Submissions, and each row links there. Lookups run where you start them: **Look Up** in an opened detection, and **Reputation** in an expanded quarantine entry.
-
-## Submissions
-
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/submissions.webp" width="800" alt="Recording of the Submissions page with the submitted list and the keys">
-
-Submissions lists everything Lazaret sent to a public database, and what became of it. Nothing leaves your computer until you confirm a dialog that names the file, the service and exactly what is sent. Start a submission from **Submit…** on a quarantined file, from **Submit…** in an opened detection whose file is in quarantine, from the Quarantined Files list on this page, or with **Report Missed Malware** for a file ClamAV doesn't detect. A file you already sent to the same service is not sent again; the earlier submission is shown instead.
+Sent Samples lists everything Lazaret sent to a public database, and what became of it. Sending a file is a separate step from looking it up: a lookup only sends a hash or a signature name, and nothing leaves your computer until you confirm a dialog that names the file, the service and exactly what is sent. Start a submission from **Submit…** on a quarantined file, from **Submit…** in an opened detection whose file is in quarantine, from the Quarantined Files list on this page, or with **Report Missed Malware** for a file ClamAV doesn't detect. A file you already sent to the same service is not sent again; the earlier submission is shown instead.
 
 Each service receives something different:
 
@@ -127,10 +118,19 @@ Statuses update without timers:
 
 The refresh button asks MalwareBazaar and VirusTotal about uploads that are still waiting, only when you press it. A submission a service refused is marked for review, and you can try it again. Filter the list by service and status, and open a submission's public entry from its row.
 
-**Services and Keys** holds the abuse.ch and VirusTotal keys, stored in your keyring, or point Lazaret at key files as each install guide explains. The abuse.ch key unlocks MalwareBazaar lookups and uploads, and also URLhaus signature downloads through fangfrisch.
-
 ## Preferences
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/preferences.webp" width="800" alt="Recording of the general preferences">
 
-The preferences cover window behavior, starting in the background, desktop notifications and file-manager actions. ClamAV's own settings are on the pages of the area they belong to.
+The general preferences cover window behavior, starting in the background, desktop notifications and file-manager actions. ClamAV's own settings are on the pages of the area they belong to.
+
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/online-services.webp" width="800" alt="Recording of the Online Services preferences with what each service receives and the API keys">
+
+**Online Services** says what each service receives, for a lookup and for an upload, and holds the API keys:
+
+- **CIRCL hashlookup** gets a file's SHA-256 hash and tells whether it belongs to a known, harmless file. It needs no key.
+- **MalwareBazaar** (abuse.ch) gets a detection's signature name or a file's hash and tells whether it is a known malware sample. It needs the abuse.ch key, which also unlocks URLhaus signature downloads through fangfrisch.
+- **VirusTotal** gets a file's hash. It needs a VirusTotal key.
+- **ClamAV** (Cisco Talos) has no lookups; it only receives reports you confirm.
+
+Keys are stored in your keyring, or point Lazaret at key files as each install guide explains. A service without a key is simply off. **Add Key** on a lookup result, and the abuse.ch row on Signature Sources, open this page.

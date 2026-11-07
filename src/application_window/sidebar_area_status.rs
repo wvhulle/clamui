@@ -10,6 +10,7 @@ use crate::{
             AlertReadiness, alerts_condition, process_attach_condition,
         },
         quarantine_page::quarantine_page_state::QuarantineEntryCount,
+        sent_samples_page::sent_samples_state::SubmissionTally,
         trusted_detections_page::{
             trusted_detections_presentation::trust_list_condition,
             trusted_detections_section::trust_list_contents::{
@@ -40,7 +41,6 @@ use crate::{
             service_run_journal::UpdaterRunHistory,
         },
         systemd_bus::host_systemd_units::UnitTimestamp,
-        threat_intel::service_key_status::LookupKeyStatuses,
     },
     scans::{
         on_access_page::on_access_presentation::on_access_condition,
@@ -58,12 +58,6 @@ use crate::{
             runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_condition},
             step_evidence_builders::CheckedCondition,
         },
-    },
-    sharing::{
-        online_lookups_page::online_lookups_presentation::{
-            ready_services_text, some_lookup_key_unreadable,
-        },
-        submissions_page::submissions_state::SubmissionTally,
     },
     signatures::database_updates_page::database_updates_presentation::{
         database_update_condition, third_party_source_condition, updater_failed,
@@ -754,25 +748,16 @@ fn trusted_detections_summary(trust_list_reading: &TrustListReading) -> AreaSumm
     condition_summary(trust_list_condition(trust_list_reading), live_state_text)
 }
 
-fn online_lookups_summary(lookup_key_statuses: &LookupKeyStatuses) -> AreaSummary {
-    let area_status = if some_lookup_key_unreadable(lookup_key_statuses) {
-        AreaStatus::AreaNeedsReview
-    } else {
-        AreaStatus::AreaHealthy
-    };
-    summary_of(area_status, ready_services_text(lookup_key_statuses))
-}
-
-fn submissions_summary(submission_tally: SubmissionTally) -> AreaSummary {
+fn sent_samples_summary(submission_tally: SubmissionTally) -> AreaSummary {
     match submission_tally {
         SubmissionTally::TallyLoading => summary_of(AreaStatus::AreaUnknown, gettext("Loading…")),
         SubmissionTally::TallyUnavailable => summary_of(
             AreaStatus::AreaFailing,
-            gettext("Submissions can't be read"),
+            gettext("Sent samples can't be read"),
         ),
         SubmissionTally::TallyCounted {
             submitted_count: 0, ..
-        } => summary_of(AreaStatus::AreaHealthy, gettext("Nothing submitted")),
+        } => summary_of(AreaStatus::AreaHealthy, gettext("Nothing sent")),
         SubmissionTally::TallyCounted { refused_count, .. } if refused_count > 0 => summary_of(
             AreaStatus::AreaNeedsReview,
             ngettext(
@@ -796,8 +781,8 @@ fn submissions_summary(submission_tally: SubmissionTally) -> AreaSummary {
         } => summary_of(
             AreaStatus::AreaHealthy,
             ngettext(
-                "{count} submitted",
-                "{count} submitted",
+                "{count} sent",
+                "{count} sent",
                 count_as_u32(submitted_count),
             )
             .replace("{count}", &submitted_count.to_string()),
@@ -831,10 +816,7 @@ pub fn area_summary(
         ApplicationPage::TrustedDetections => {
             trusted_detections_summary(&protection_evidence.trust_list)
         }
-        ApplicationPage::OnlineLookups => {
-            online_lookups_summary(&protection_evidence.lookup_key_statuses)
-        }
-        ApplicationPage::Submissions => submissions_summary(area_context.submission_tally),
+        ApplicationPage::SentSamples => sent_samples_summary(area_context.submission_tally),
     }
 }
 
@@ -878,7 +860,6 @@ mod application_page_status_tests {
                 },
                 service_run_journal::ScanRunHistory,
             },
-            threat_intel::service_key_status::ServiceKeyStatus,
         },
         scans::removable_drives_page::drive_mount_checks::DeviceAutoScanSettings,
         signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
@@ -958,8 +939,7 @@ mod application_page_status_tests {
                 "Nothing to decide",
                 "Empty",
                 "Nothing trusted",
-                "3 of 3 services ready",
-                "Nothing submitted",
+                "Nothing sent",
             ]
         );
         assert_eq!(
@@ -1295,48 +1275,9 @@ mod application_page_status_tests {
         );
     }
 
-    #[test]
-    fn online_lookups_count_ready_services_and_review_an_unreadable_key() {
-        let with_keys = |abuse_ch_key, virustotal_key| ProtectionEvidence {
-            lookup_key_statuses: LookupKeyStatuses {
-                abuse_ch_key,
-                virustotal_key,
-            },
-            ..healthy_evidence()
-        };
-        assert_eq!(
-            summary_for(
-                ApplicationPage::OnlineLookups,
-                &with_keys(
-                    ServiceKeyStatus::KeyMissing,
-                    ServiceKeyStatus::KeyConfigured
-                )
-            ),
-            AreaSummary {
-                area_status: AreaStatus::AreaHealthy,
-                live_state_text: "2 of 3 services ready".to_owned(),
-            }
-        );
-        assert_eq!(
-            summary_for(
-                ApplicationPage::OnlineLookups,
-                &with_keys(
-                    ServiceKeyStatus::KeyUnreadable {
-                        failure_text: "permission denied".to_owned(),
-                    },
-                    ServiceKeyStatus::KeyMissing
-                )
-            ),
-            AreaSummary {
-                area_status: AreaStatus::AreaNeedsReview,
-                live_state_text: "1 of 3 services ready".to_owned(),
-            }
-        );
-    }
-
-    fn submissions_summary_with(submission_tally: SubmissionTally) -> AreaSummary {
+    fn sent_samples_summary_with(submission_tally: SubmissionTally) -> AreaSummary {
         area_summary(
-            ApplicationPage::Submissions,
+            ApplicationPage::SentSamples,
             &healthy_evidence(),
             &AreaSummaryContext {
                 submission_tally,
@@ -1346,9 +1287,9 @@ mod application_page_status_tests {
     }
 
     #[test]
-    fn submissions_show_their_count_and_review_refusals() {
+    fn sent_samples_show_their_count_and_review_refusals() {
         let counted = |submitted_count, awaiting_count, refused_count| {
-            submissions_summary_with(SubmissionTally::TallyCounted {
+            sent_samples_summary_with(SubmissionTally::TallyCounted {
                 submitted_count,
                 awaiting_count,
                 refused_count,
@@ -1356,11 +1297,11 @@ mod application_page_status_tests {
         };
         assert_eq!(
             counted(0, 0, 0),
-            summary_of(AreaStatus::AreaHealthy, "Nothing submitted".to_owned())
+            summary_of(AreaStatus::AreaHealthy, "Nothing sent".to_owned())
         );
         assert_eq!(
             counted(3, 0, 0),
-            summary_of(AreaStatus::AreaHealthy, "3 submitted".to_owned())
+            summary_of(AreaStatus::AreaHealthy, "3 sent".to_owned())
         );
         assert_eq!(
             counted(3, 2, 0),
@@ -1374,11 +1315,11 @@ mod application_page_status_tests {
             )
         );
         assert_eq!(
-            submissions_summary_with(SubmissionTally::TallyUnavailable).area_status,
+            sent_samples_summary_with(SubmissionTally::TallyUnavailable).area_status,
             AreaStatus::AreaFailing
         );
         assert_eq!(
-            submissions_summary_with(SubmissionTally::TallyLoading).area_status,
+            sent_samples_summary_with(SubmissionTally::TallyLoading).area_status,
             AreaStatus::AreaUnknown
         );
     }

@@ -7,7 +7,6 @@ mod host_verification_tests;
 mod preferences_dialog;
 mod scans;
 mod shared_widgets;
-mod sharing;
 mod signatures;
 
 use std::process::ExitCode;

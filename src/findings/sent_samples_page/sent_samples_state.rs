@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::{
+    findings::sent_samples_page::uploads_in_flight::{UploadActivity, UploadKey, UploadsInFlight},
     host_services::{
         activity_history::{
             activity_history_database::ActivityHistoryFailure,
@@ -14,14 +15,12 @@ use crate::{
         },
         sample_submissions::bazaar_sample_upload::{BazaarEligibility, bazaar_eligibility},
     },
-    sharing::submissions_page::uploads_in_flight::{UploadActivity, UploadKey, UploadsInFlight},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SubmissionsPageOutput {
+pub enum SentSamplesPageOutput {
     TallyChanged(SubmissionTally),
     UploadNoticeReady(String),
-    StoredKeyChanged,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

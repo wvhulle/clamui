@@ -11,7 +11,7 @@ use tokio::task::spawn_blocking;
 
 use crate::{
     application_window::{
-        application_actions::PreferencesAction,
+        application_actions::{ONLINE_SERVICES_ACTION_NAME, PreferencesAction},
         protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
     },
     findings::detections_page::{
@@ -601,6 +601,9 @@ impl BackgroundDetectionsPage {
     ) {
         match chosen_action {
             IncidentStepAction::LookUpIncidentSignature => self.start_signature_lookup(sender),
+            IncidentStepAction::OpenOnlineServices => {
+                relm4::main_application().activate_action(ONLINE_SERVICES_ACTION_NAME, None);
+            }
             IncidentStepAction::AskIncidentDeletion => {
                 let next_view = self
                     .taken_incident_view()

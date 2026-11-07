@@ -130,11 +130,11 @@ mod start_page_choice_tests {
         assert_eq!(
             start_page_after_evidence(
                 StartPageState::UserNavigated,
-                ApplicationPage::Submissions,
+                ApplicationPage::SentSamples,
                 &summaries_with_failing_engine(),
             ),
             StartPageTransition {
-                shown_page: ApplicationPage::Submissions,
+                shown_page: ApplicationPage::SentSamples,
                 next_state: StartPageState::UserNavigated,
             }
         );
@@ -143,7 +143,7 @@ mod start_page_choice_tests {
     #[test]
     fn a_requested_page_is_kept_when_the_evidence_arrives() {
         let requested = initial_start_page(StartPageRequest::RequestedPage(
-            ApplicationPage::OnlineLookups,
+            ApplicationPage::TrustedDetections,
         ));
         assert_eq!(
             start_page_after_evidence(
@@ -152,7 +152,7 @@ mod start_page_choice_tests {
                 &summaries_with_failing_engine(),
             )
             .shown_page,
-            ApplicationPage::OnlineLookups
+            ApplicationPage::TrustedDetections
         );
     }
 }

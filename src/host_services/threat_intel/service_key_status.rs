@@ -40,13 +40,6 @@ impl ServiceKeyStatus {
             Self::KeyUnreadable { .. } => true,
         }
     }
-
-    pub const fn service_ready(&self) -> bool {
-        match self {
-            Self::KeyConfigured => true,
-            Self::KeyMissing | Self::KeyUnreadable { .. } => false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -78,18 +71,15 @@ mod service_key_status_tests {
             ResolvedApiKey::FromKeyring("0123456789abcdef".to_owned()),
         ));
         assert_eq!(configured_status, ServiceKeyStatus::KeyConfigured);
-        assert!(configured_status.service_ready());
         assert!(!configured_status.needs_attention());
         let missing_status = ServiceKeyStatus::from_key_reading(&Ok(ResolvedApiKey::NotConfigured));
         assert_eq!(missing_status, ServiceKeyStatus::KeyMissing);
-        assert!(!missing_status.service_ready());
         assert!(!missing_status.needs_attention());
         let unreadable_status =
             ServiceKeyStatus::from_key_reading(&Err(KeyStorageFailure::KeyFilePermissionDenied {
                 key_file_path: PathBuf::from("/run/agenix/abuse-ch"),
             }));
         assert!(unreadable_status.needs_attention());
-        assert!(!unreadable_status.service_ready());
         assert!(
             unreadable_status
                 .status_text()

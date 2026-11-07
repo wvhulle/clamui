@@ -2,8 +2,8 @@ use gettextrs::gettext;
 use relm4::{FactorySender, adw, adw::prelude::*, gtk, prelude::FactoryComponent};
 
 use crate::{
+    findings::sent_samples_page::sent_samples_presentation::SubmittedRowView,
     host_services::activity_history::submission_history_store::RemoteEntryLink,
-    sharing::submissions_page::submissions_presentation::SubmittedRowView,
 };
 
 #[derive(Debug)]
