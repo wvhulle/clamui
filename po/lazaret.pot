@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 14:53+0100\n"
+"POT-Creation-Date: 2026-11-07 15:01+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1943,8 +1943,8 @@ msgstr ""
 
 #: src/host_services/settings_helper/live_settings_client.rs:202
 msgid ""
-"The system records that this change reduced protection, and the Protection "
-"page keeps showing it until you undo it."
+"The system records that this change reduced protection, and the sidebar "
+"keeps flagging the page of the changed setting until you undo it."
 msgstr ""
 
 #: src/host_services/settings_helper/trust_requests.rs:159

@@ -199,8 +199,8 @@ pub fn change_confirmation_text(
         Some(headline) => format!(
             "{headline}\n\n{change_lines}\n\n{}",
             gettext(
-                "The system records that this change reduced protection, and the Protection page \
-                 keeps showing it until you undo it.",
+                "The system records that this change reduced protection, and the sidebar keeps \
+                 flagging the page of the changed setting until you undo it.",
             )
         ),
         None => change_lines,
