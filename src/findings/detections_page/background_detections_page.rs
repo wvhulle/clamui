@@ -111,6 +111,7 @@ pub enum BackgroundDetectionsPageOutput {
     QuarantineReloadNeeded,
     JournalAccessChanged(JournalAccess),
     EvidenceRefreshRequested,
+    SubmissionRequestedForFile(PathBuf),
 }
 
 #[derive(Debug)]
@@ -619,6 +620,14 @@ impl BackgroundDetectionsPage {
             }
             IncidentStepAction::DismissIncident => {
                 self.resolve_opened_incident(sender, ResolvingIncidentAction::KeepFile);
+            }
+            IncidentStepAction::SubmitIncidentSample => {
+                if let Some(displayed_detection) = self.opened_detection() {
+                    let _shell_closed =
+                        sender.output(BackgroundDetectionsPageOutput::SubmissionRequestedForFile(
+                            displayed_detection.stored_detection.file_path.clone(),
+                        ));
+                }
             }
         }
     }

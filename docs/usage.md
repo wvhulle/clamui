@@ -36,13 +36,35 @@ An interrupted move never loses the file. The Quarantine page lists every quaran
 
 When you are sure a detection is wrong, trust the file instead of excluding its path. Open the menu of a detected threat and choose **Trust This File…**, or press **Trust…** on a quarantined file. The file is then never reported again on this computer, but a changed copy of it is still checked. **Ignore This Detection Everywhere…** stops reporting a detection for every file, so prefer trusting the file when only one file is wrong.
 
-To get the detection fixed for everyone, choose **Report False Positive…** or press **Report…** on a quarantined file. This uploads the file, with your name and email address, to the ClamAV team.
+To get the detection fixed for everyone, choose **Report False Positive…** or press **Report…** on a quarantined file. This uploads the file, with your name and email address, to the ClamAV team, and the **Submissions** page tracks the report.
 
 Both ask for your administrator password. Review and remove trusted files on the **Analysis & False Positives** page, and see who changed what on the **System Changes** tab of the Logs page. Trusting files is not available in the Flatpak.
 
 ## Reputation lookups
 
-On the Quarantine page you can look up a quarantined file without uploading it; only a fingerprint of the file is sent. CIRCL hashlookup tells whether the hash belongs to a known, harmless file. MalwareBazaar (abuse.ch) and VirusTotal tell whether it is a known malware sample. Both need a free API key. Paste the keys under **Preferences → Online Lookups**, where they are stored in your keyring. Or point Lazaret at key files, as each install guide explains.
+On the Quarantine page you can look up a quarantined file without uploading it; only a fingerprint of the file is sent. CIRCL hashlookup tells whether the hash belongs to a known, harmless file. MalwareBazaar (abuse.ch) and VirusTotal tell whether it is a known malware sample. Both need a free API key. Paste the keys under **Submissions → Services & Keys**, where they are stored in your keyring. Or point Lazaret at key files, as each install guide explains.
+
+## Submissions
+
+The Submissions page lists everything Lazaret sent to a public database, and what became of it. Nothing leaves your computer until you confirm a dialog that names the file, the service and exactly what is sent. Start a submission from **Submit…** on a quarantined file, from **Submit…** in an opened detection whose file is in quarantine, from the Quarantined Files list on this page, or with **Report Missed Malware** for a file ClamAV doesn't detect. A file you already sent to the same service is not sent again; the earlier submission is shown instead.
+
+Each service receives something different:
+
+- **ClamAV** (Cisco Talos) gets the file through `clamsubmit`, with your name and email address, and for a false positive also the detection name. Talos processes samples by automation, only Talos can access them, and they are never made public or shared with other companies. A review takes at least 48 hours.
+- **MalwareBazaar** (abuse.ch) gets a quarantined file that a ClamAV signature detected, named by its SHA-256 hash rather than its file name, with the signature as a tag. The sample becomes public: anyone can download it. Lazaret first looks the hash up and skips the upload when MalwareBazaar already lists it. Potentially unwanted programs are not sent.
+- **VirusTotal** gets a quarantined file, also named by its hash, when a hash lookup finds no report and the file is at most 32 MB. VirusTotal shares uploaded files with its paying customers.
+
+Only quarantined files can be uploaded to MalwareBazaar and VirusTotal, and only when their quarantine record has a usable hash: Lazaret reads them through the same integrity check as a restore, so it sends exactly the file it quarantined. Missed-malware reports read the file you pick without following symbolic links.
+
+Statuses update without timers:
+
+- A ClamAV report stays **awaiting review** until a signature update. After each update Lazaret checks the quarantined files again; a false positive that is no longer detected becomes **fixed in database version N**, and missed malware that is now detected becomes **detected since database version N**. Reports of files that are no longer kept in quarantine stay awaiting review.
+- A MalwareBazaar upload is **uploaded** until a later lookup confirms it is **listed**.
+- A VirusTotal upload is **queued** until it has a verdict, shown as how many engines flag it as malicious.
+
+The refresh button asks MalwareBazaar and VirusTotal about uploads that are still waiting, only when you press it. A submission a service refused is marked for review, and you can try it again. Filter the list by service and status, and open a submission's public entry from its row.
+
+**Services & Keys** holds the abuse.ch and VirusTotal keys. The abuse.ch key unlocks MalwareBazaar lookups and uploads, and also URLhaus signature downloads through fangfrisch.
 
 
 ## Protection
@@ -93,7 +115,7 @@ The Logs page keeps a history of scans, updates and quarantine actions, and show
 
 ## Preferences
 
-<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/preferences.webp" width="800" alt="Recording of the general preferences, then the Online Lookups tab with fields for the abuse.ch and VirusTotal keys">
+<img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/preferences.webp" width="800" alt="Recording of the general preferences">
 
 The **Detection** settings, next to Scanner Engine, choose whether ClamAV reports potentially unwanted programs, heuristic findings, Office macros, encrypted archives and files too large to check, and whether it looks inside archives. Scans that run without the ClamAV daemon follow the same choices.
 

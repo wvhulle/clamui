@@ -49,7 +49,7 @@ Not available in the Flatpak. Changing clamd settings needs a helper that runs a
 
 ## API keys for reputation lookups
 
-Keys you paste under **Preferences → Online Lookups** are kept in your keyring. To read them from files instead:
+Keys you paste under **Submissions → Services & Keys** are kept in your keyring. To read them from files instead:
 
 ```sh
 flatpak run --command=gsettings page.codeberg.wvhulle.Lazaret set page.codeberg.wvhulle.Lazaret virustotal-key-file /home/alice/.config/lazaret/virustotal.key

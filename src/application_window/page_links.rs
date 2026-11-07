@@ -16,6 +16,9 @@ fn page_link_subtitle(linked_page: ApplicationPage) -> String {
         ApplicationPage::Logs => gettext("Past scans, updates and system changes"),
         ApplicationPage::Quarantine => gettext("Files isolated from your system"),
         ApplicationPage::Analysis => gettext("Files and detections that ClamAV never reports"),
+        ApplicationPage::Submissions => {
+            gettext("What you sent to ClamAV, MalwareBazaar and VirusTotal, and the keys")
+        }
         ApplicationPage::Signatures => gettext("Where ClamAV's signatures come from"),
         ApplicationPage::DatabaseUpdates => gettext("How freshclam downloads signatures"),
         ApplicationPage::ScanEngine => {

@@ -202,12 +202,7 @@ fn page_scenarios() -> Vec<PageScenario> {
             page_argument: "--page=preferences",
             scan_fixture_use: ScanFixtureUse::IdlePage,
             animation_name: "preferences",
-            user_interactions: [
-                shown("preferences"),
-                point_and_click(WidgetTarget::page_tab("Online Lookups")),
-                shown("preferences-online-lookups"),
-            ]
-            .concat(),
+            user_interactions: [shown("preferences"), frame()].concat(),
         },
     ]
 }

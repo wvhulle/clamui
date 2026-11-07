@@ -167,6 +167,7 @@ pub enum RemovableDrivesPageOutput {
     StatusChanged(RemovableDrivesStatus),
     QuarantineEntriesChanged,
     ActivityRecorded,
+    SubmissionsChanged,
 }
 
 pub struct DeviceScanFlow {

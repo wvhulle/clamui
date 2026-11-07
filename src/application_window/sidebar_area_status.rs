@@ -52,9 +52,14 @@ use crate::{
             step_evidence_builders::CheckedCondition,
         },
     },
-    sharing::analysis_page::{
-        analysis_presentation::trust_list_condition,
-        trusted_detections_section::trust_list_contents::{LazaretListReading, TrustListReading},
+    sharing::{
+        analysis_page::{
+            analysis_presentation::trust_list_condition,
+            trusted_detections_section::trust_list_contents::{
+                LazaretListReading, TrustListReading,
+            },
+        },
+        submissions_page::submissions_state::SubmissionTally,
     },
     signatures::database_updates_page::database_updates_presentation::{
         database_update_condition, third_party_source_condition, updater_failed,
@@ -209,6 +214,7 @@ pub struct AreaSummaryContext {
     pub unresolved_detections: usize,
     pub quarantine_entry_count: QuarantineEntryCount,
     pub removable_drives_status: RemovableDrivesStatus,
+    pub submission_tally: SubmissionTally,
     pub home_directory: String,
     pub moment_formatters: &'static MomentFormatters,
     pub reference_moment: Timestamp,
@@ -823,6 +829,48 @@ fn analysis_summary(trust_list_reading: &TrustListReading) -> AreaSummary {
     condition_summary(trust_list_condition(trust_list_reading), live_state_text)
 }
 
+fn submissions_summary(submission_tally: SubmissionTally) -> AreaSummary {
+    match submission_tally {
+        SubmissionTally::TallyLoading => summary_of(AreaStatus::AreaUnknown, gettext("Loading…")),
+        SubmissionTally::TallyUnavailable => summary_of(
+            AreaStatus::AreaFailing,
+            gettext("Submissions can't be read"),
+        ),
+        SubmissionTally::TallyCounted {
+            submitted_count: 0, ..
+        } => summary_of(AreaStatus::AreaHealthy, gettext("Nothing submitted")),
+        SubmissionTally::TallyCounted { refused_count, .. } if refused_count > 0 => summary_of(
+            AreaStatus::AreaNeedsReview,
+            ngettext(
+                "{count} refused by its service",
+                "{count} refused by their services",
+                count_as_u32(refused_count),
+            )
+            .replace("{count}", &refused_count.to_string()),
+        ),
+        SubmissionTally::TallyCounted { awaiting_count, .. } if awaiting_count > 0 => summary_of(
+            AreaStatus::AreaHealthy,
+            ngettext(
+                "{count} awaiting review",
+                "{count} awaiting review",
+                count_as_u32(awaiting_count),
+            )
+            .replace("{count}", &awaiting_count.to_string()),
+        ),
+        SubmissionTally::TallyCounted {
+            submitted_count, ..
+        } => summary_of(
+            AreaStatus::AreaHealthy,
+            ngettext(
+                "{count} submitted",
+                "{count} submitted",
+                count_as_u32(submitted_count),
+            )
+            .replace("{count}", &submitted_count.to_string()),
+        ),
+    }
+}
+
 pub fn area_summary(
     sidebar_area: SidebarArea,
     protection_evidence: &ProtectionEvidence,
@@ -843,9 +891,7 @@ pub fn area_summary(
         SidebarArea::Detections => detections_summary(protection_evidence, area_context),
         SidebarArea::Quarantine => quarantine_summary(area_context.quarantine_entry_count),
         SidebarArea::AnalysisAndFalsePositives => analysis_summary(&protection_evidence.trust_list),
-        SidebarArea::Submissions => {
-            summary_of(AreaStatus::AreaHealthy, gettext("Nothing submitted"))
-        }
+        SidebarArea::Submissions => submissions_summary(area_context.submission_tally),
     }
 }
 
@@ -934,6 +980,11 @@ mod sidebar_area_status_tests {
                     skip_on_battery: true,
                 },
                 device_scan_status: DeviceScanStatus::NoDeviceScanYet,
+            },
+            submission_tally: SubmissionTally::TallyCounted {
+                submitted_count: 0,
+                awaiting_count: 0,
+                refused_count: 0,
             },
             home_directory: "/home/user".to_owned(),
             moment_formatters: english_formatters(),
@@ -1312,6 +1363,55 @@ mod sidebar_area_status_tests {
         assert_eq!(
             status_for(SidebarArea::Detections, &healthy_evidence()),
             AreaStatus::AreaHealthy
+        );
+    }
+
+    fn submissions_summary_with(submission_tally: SubmissionTally) -> AreaSummary {
+        area_summary(
+            SidebarArea::Submissions,
+            &healthy_evidence(),
+            &AreaSummaryContext {
+                submission_tally,
+                ..idle_context()
+            },
+        )
+    }
+
+    #[test]
+    fn submissions_show_their_count_and_review_refusals() {
+        let counted = |submitted_count, awaiting_count, refused_count| {
+            submissions_summary_with(SubmissionTally::TallyCounted {
+                submitted_count,
+                awaiting_count,
+                refused_count,
+            })
+        };
+        assert_eq!(
+            counted(0, 0, 0),
+            summary_of(AreaStatus::AreaHealthy, "Nothing submitted".to_owned())
+        );
+        assert_eq!(
+            counted(3, 0, 0),
+            summary_of(AreaStatus::AreaHealthy, "3 submitted".to_owned())
+        );
+        assert_eq!(
+            counted(3, 2, 0),
+            summary_of(AreaStatus::AreaHealthy, "2 awaiting review".to_owned())
+        );
+        assert_eq!(
+            counted(3, 2, 1),
+            summary_of(
+                AreaStatus::AreaNeedsReview,
+                "1 refused by its service".to_owned()
+            )
+        );
+        assert_eq!(
+            submissions_summary_with(SubmissionTally::TallyUnavailable).area_status,
+            AreaStatus::AreaFailing
+        );
+        assert_eq!(
+            submissions_summary_with(SubmissionTally::TallyLoading).area_status,
+            AreaStatus::AreaUnknown
         );
     }
 

@@ -57,6 +57,7 @@ pub enum QuarantineEntryRowInput {
     OnlineLookupsRequested,
     TrustFileRequested,
     FalsePositiveReportRequested,
+    SubmissionRequested,
     RowStateChanged(EntryRowState),
 }
 
@@ -67,6 +68,7 @@ pub enum QuarantineEntryRowOutput {
     DeletionRequested { entry_id: i64 },
     TrustRequested(TrustChoice),
     FalsePositiveReportRequested(ClamavReportProposal),
+    SubmissionRequested { entry_id: i64 },
     HashCopyRequested(String),
     OnlineLookupsRequested,
     ReportLinkRequested(String),
@@ -314,6 +316,14 @@ impl FactoryComponent for QuarantineEntryRow {
                 },
 
                 add_suffix = &gtk::Button {
+                    set_label: &gettext("Submit…"),
+                    set_valign: gtk::Align::Center,
+                    set_tooltip_text: Some(&gettext("Send it to ClamAV, MalwareBazaar or VirusTotal")),
+                    set_sensitive: self.known_sha256_hex().is_some(),
+                    connect_clicked => QuarantineEntryRowInput::SubmissionRequested,
+                },
+
+                add_suffix = &gtk::Button {
                     set_label: &gettext("Trust…"),
                     set_valign: gtk::Align::Center,
                     set_sensitive: self.known_sha256_hex().is_some(),
@@ -392,6 +402,11 @@ impl FactoryComponent for QuarantineEntryRow {
                         ),
                     },
                 ));
+            }
+            QuarantineEntryRowInput::SubmissionRequested => {
+                let _page_closed = sender.output(QuarantineEntryRowOutput::SubmissionRequested {
+                    entry_id: self.entry_record.entry_id,
+                });
             }
             QuarantineEntryRowInput::RowStateChanged(row_state) => {
                 self.row_state = row_state;

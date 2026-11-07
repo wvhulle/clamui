@@ -113,6 +113,7 @@ pub enum RemovableDrivesPageInput {
     ResultsDismissed,
     ToastRequested(String),
     QuarantineEntriesChanged,
+    SubmissionsChanged,
     HistoryReloadRequested,
 }
 
@@ -518,6 +519,9 @@ impl Component for RemovableDrivesPage {
                         ScanResultsSectionOutput::ToastRequested(toast_message) => {
                             RemovableDrivesPageInput::ToastRequested(toast_message)
                         }
+                        ScanResultsSectionOutput::SubmissionsChanged => {
+                            RemovableDrivesPageInput::SubmissionsChanged
+                        }
                     },
                 ),
             settings_section: DeviceAutoScanSection::builder().launch(()).forward(
@@ -584,6 +588,9 @@ impl Component for RemovableDrivesPage {
             RemovableDrivesPageInput::QuarantineEntriesChanged => {
                 let _shell_closed =
                     sender.output(RemovableDrivesPageOutput::QuarantineEntriesChanged);
+            }
+            RemovableDrivesPageInput::SubmissionsChanged => {
+                let _shell_closed = sender.output(RemovableDrivesPageOutput::SubmissionsChanged);
             }
             RemovableDrivesPageInput::HistoryReloadRequested => {
                 self.history_group

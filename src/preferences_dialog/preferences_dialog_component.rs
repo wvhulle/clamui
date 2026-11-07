@@ -1,6 +1,6 @@
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentController, ComponentParts, ComponentSender, Controller, adw,
+    Component, ComponentParts, ComponentSender, adw,
     adw::prelude::*,
     gtk,
     gtk::{gio, gio::prelude::SettingsExtManual},
@@ -9,46 +9,17 @@ use relm4::{
 
 use crate::{
     application_window::window_close_behavior::{CLOSE_ACTION_CHOICES, CloseAction},
-    host_services::{
-        desktop::{
-            file_manager_actions::SUPPORTED_FILE_MANAGERS,
-            flatpak_sandbox::{request_background_autostart, running_in_flatpak},
-            stored_settings::{CLOSE_ACTION_KEY, application_settings},
-            stored_settings_watch::forward_setting_changes,
-        },
-        threat_intel::service_key_storage::ThreatIntelService,
+    host_services::desktop::{
+        file_manager_actions::SUPPORTED_FILE_MANAGERS,
+        flatpak_sandbox::{request_background_autostart, running_in_flatpak},
+        stored_settings::{CLOSE_ACTION_KEY, application_settings},
+        stored_settings_watch::forward_setting_changes,
     },
-    preferences_dialog::{
-        file_manager_row::FileManagerRow,
-        online_lookups_page::service_key_section::ServiceKeySection,
-    },
+    preferences_dialog::file_manager_row::FileManagerRow,
 };
 
-const GENERAL_PAGE_NAME: &str = "general";
-const ONLINE_LOOKUPS_PAGE_NAME: &str = "online-lookups";
 const START_IN_BACKGROUND_KEY: &str = "start-in-background";
 const NOTIFICATIONS_ENABLED_KEY: &str = "notifications-enabled";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PreferencesPageName {
-    GeneralPreferences,
-    OnlineLookups,
-}
-
-impl PreferencesPageName {
-    pub const fn page_name(self) -> &'static str {
-        match self {
-            Self::GeneralPreferences => GENERAL_PAGE_NAME,
-            Self::OnlineLookups => ONLINE_LOOKUPS_PAGE_NAME,
-        }
-    }
-
-    pub fn from_page_name(page_name: &str) -> Option<Self> {
-        [Self::GeneralPreferences, Self::OnlineLookups]
-            .into_iter()
-            .find(|preferences_page| preferences_page.page_name() == page_name)
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct WindowBehaviorSettings {
@@ -70,15 +41,11 @@ impl WindowBehaviorSettings {
 pub struct PreferencesDialog {
     stored_settings: gio::Settings,
     window_behavior: WindowBehaviorSettings,
-    visible_page: PreferencesPageName,
     file_manager_rows: FactoryVecDeque<FileManagerRow>,
-    abuse_ch_section: Controller<ServiceKeySection>,
-    virustotal_section: Controller<ServiceKeySection>,
 }
 
 #[derive(Debug)]
 pub enum PreferencesDialogInput {
-    PageShown(PreferencesPageName),
     CloseActionChosen(u32),
     StartInBackgroundToggled(bool),
     NotificationsToggled(bool),
@@ -106,22 +73,10 @@ impl Component for PreferencesDialog {
         adw::PreferencesDialog {
             set_title: &gettext("Preferences"),
             set_search_enabled: true,
-            #[watch]
-            #[block_signal(visible_page_handler)]
-            set_visible_page_name: model.visible_page.page_name(),
-            connect_visible_page_name_notify[sender] => move |changed_dialog| {
-                if let Some(preferences_page) = changed_dialog
-                    .visible_page_name()
-                    .and_then(|page_name| PreferencesPageName::from_page_name(&page_name))
-                {
-                    sender.input(PreferencesDialogInput::PageShown(preferences_page));
-                }
-            } @visible_page_handler,
 
             add = &adw::PreferencesPage {
                 set_title: &gettext("General"),
                 set_icon_name: Some("preferences-system-symbolic"),
-                set_name: Some(GENERAL_PAGE_NAME),
 
                 adw::PreferencesGroup {
                     set_title: &gettext("Window Behavior"),
@@ -176,22 +131,6 @@ impl Component for PreferencesDialog {
                 },
             },
 
-            add = &adw::PreferencesPage {
-                set_title: &gettext("Online Lookups"),
-                set_icon_name: Some("network-server-symbolic"),
-                set_name: Some(ONLINE_LOOKUPS_PAGE_NAME),
-
-                adw::PreferencesGroup {
-                    set_title: "CIRCL hashlookup",
-                    set_description: Some(&gettext(
-                        "Always used by the reputation check on the Quarantine page. No key \
-                         needed; only a file's SHA-256 hash is sent.",
-                    )),
-                },
-
-                add: model.abuse_ch_section.widget(),
-                add: model.virustotal_section.widget(),
-            },
         }
     }
 
@@ -225,14 +164,7 @@ impl Component for PreferencesDialog {
         let model = Self {
             window_behavior: WindowBehaviorSettings::read_from(&stored_settings),
             stored_settings,
-            visible_page: PreferencesPageName::GeneralPreferences,
             file_manager_rows,
-            abuse_ch_section: ServiceKeySection::builder()
-                .launch(ThreatIntelService::AbuseChService)
-                .detach(),
-            virustotal_section: ServiceKeySection::builder()
-                .launch(ThreatIntelService::VirusTotalService)
-                .detach(),
         };
         let file_manager_group = model.file_manager_rows.widget();
         let widgets = view_output!();
@@ -246,9 +178,6 @@ impl Component for PreferencesDialog {
         _root: &Self::Root,
     ) {
         match dialog_input {
-            PreferencesDialogInput::PageShown(preferences_page) => {
-                self.visible_page = preferences_page;
-            }
             PreferencesDialogInput::CloseActionChosen(choice_position) => {
                 if let Some(close_action) = CloseAction::from_choice_position(choice_position) {
                     self.window_behavior.close_action = close_action;

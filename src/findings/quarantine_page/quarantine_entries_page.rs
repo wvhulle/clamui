@@ -7,7 +7,7 @@ use relm4::{
 };
 
 use crate::{
-    application_window::application_actions::PreferencesPageAction,
+    application_window::{application_actions::ShowPageAction, application_pages::ApplicationPage},
     findings::quarantine_page::{
         quarantine_entry_row::{
             QuarantineEntryRow, QuarantineEntryRowInput, QuarantineEntryRowOutput,
@@ -43,7 +43,6 @@ use crate::{
         },
         threat_intel::file_reputation_check::{ReputationAnswers, check_hash_reputation},
     },
-    preferences_dialog::preferences_dialog_component::PreferencesPageName,
     shared_widgets::{
         awaited_dialogs::{
             AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice,
@@ -173,12 +172,14 @@ pub enum QuarantineEntriesPageInput {
     TrustConfirmed(TrustChoice),
     FalsePositiveReportRequested(ClamavReportProposal),
     FalsePositiveReportConfirmed(ClamavReportRequest),
+    SubmissionRequested { entry_id: i64 },
 }
 
 #[derive(Debug)]
 pub enum QuarantineEntriesPageOutput {
     EntriesCounted(QuarantineEntryCount),
     SubmissionsChanged,
+    SubmissionRequested { entry_id: i64 },
 }
 
 #[derive(Debug)]
@@ -781,6 +782,9 @@ impl Component for QuarantineEntriesPage {
                 QuarantineEntryRowOutput::FalsePositiveReportRequested(reported_detection) => {
                     QuarantineEntriesPageInput::FalsePositiveReportRequested(reported_detection)
                 }
+                QuarantineEntryRowOutput::SubmissionRequested { entry_id } => {
+                    QuarantineEntriesPageInput::SubmissionRequested { entry_id }
+                }
             });
         let model = Self {
             quarantine_vault,
@@ -821,8 +825,8 @@ impl Component for QuarantineEntriesPage {
             }
             QuarantineEntriesPageInput::OnlineLookupsRequested => {
                 let _action_missing = root.activate_action(
-                    &PreferencesPageAction::action_name(),
-                    Some(&PreferencesPageName::OnlineLookups.page_name().to_variant()),
+                    &ShowPageAction::action_name(),
+                    Some(&ApplicationPage::Submissions.page_name().to_variant()),
                 );
             }
             QuarantineEntriesPageInput::ReportLinkRequested(report_url) => {
@@ -866,6 +870,10 @@ impl Component for QuarantineEntriesPage {
                             .await,
                     )
                 });
+            }
+            QuarantineEntriesPageInput::SubmissionRequested { entry_id } => {
+                let _shell_closed =
+                    sender.output(QuarantineEntriesPageOutput::SubmissionRequested { entry_id });
             }
             QuarantineEntriesPageInput::ReloadEntriesRequested => self.reload_entries(&sender),
             QuarantineEntriesPageInput::RestoreEntryRequested { entry_id } => {

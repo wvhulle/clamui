@@ -36,6 +36,7 @@ pub enum IncidentStepAction {
     CancelIncidentDeletion,
     DismissIncident,
     LookUpIncidentSignature,
+    SubmitIncidentSample,
 }
 
 impl StepActionButton for IncidentStepAction {
@@ -47,6 +48,7 @@ impl StepActionButton for IncidentStepAction {
             Self::CancelIncidentDeletion => gettext("Cancel"),
             Self::DismissIncident => gettext("Keep"),
             Self::LookUpIncidentSignature => gettext("Look Up"),
+            Self::SubmitIncidentSample => gettext("Submit…"),
         }
     }
 
@@ -57,7 +59,8 @@ impl StepActionButton for IncidentStepAction {
             | Self::AskIncidentDeletion
             | Self::CancelIncidentDeletion
             | Self::DismissIncident
-            | Self::LookUpIncidentSignature => ActionConsequence::OrdinaryAction,
+            | Self::LookUpIncidentSignature
+            | Self::SubmitIncidentSample => ActionConsequence::OrdinaryAction,
         }
     }
 }
@@ -503,11 +506,34 @@ fn resolved_step(displayed_detection: &DisplayedDetection) -> IncidentStep {
             detection_state_text(displayed_detection)
         }
     };
-    plain_step(
+    let quarantined_copy_kept = matches!(
+        stored_detection.detection_state,
+        DetectionState::Resolved {
+            resolution_kind: ResolutionKind::MovedToQuarantine,
+            ..
+        }
+    ) && !displayed_detection.file_state.file_is_present();
+    if !quarantined_copy_kept {
+        return plain_step(
+            step_title,
+            mechanism_details,
+            SettledNodeState::Completed,
+            status_text,
+        );
+    }
+    TimelineStep::settled(
         step_title,
         mechanism_details,
-        SettledNodeState::Completed,
         status_text,
+        SettledStep {
+            choice_rows: vec![StepChoiceRow {
+                choice_description: gettext(
+                    "Send the quarantined copy to ClamAV, MalwareBazaar or VirusTotal",
+                ),
+                chosen_action: IncidentStepAction::SubmitIncidentSample,
+            }],
+            ..SettledStep::without_offers(SettledNodeState::Completed)
+        },
     )
 }
 

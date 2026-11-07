@@ -19,14 +19,17 @@ fn service_group_title(threat_intel_service: ThreatIntelService) -> &'static str
 fn service_description(threat_intel_service: ThreatIntelService) -> String {
     match threat_intel_service {
         ThreatIntelService::VirusTotalService => gettext(
-            "Optional source for the reputation check on the Quarantine page. Only the file's \
-             SHA-256 hash is sent; files are never uploaded.",
+            "Lookups send VirusTotal only a file's SHA-256 hash. An upload you confirm sends the \
+             quarantined file itself, which VirusTotal shares with its paying customers. Uploads \
+             are skipped when VirusTotal already has a report, and refused above 32 MB.",
         ),
         ThreatIntelService::AbuseChService => gettext(
-            "Looks up a detection's signature name, and a quarantined file's SHA-256 hash, when \
-             you ask. The same abuse.ch key works for URLhaus signature downloads; on NixOS, \
-             Lazaret reuses fangfrisch's key file when your user can read it. abuse.ch's fair-use \
-             terms say for-profit users may need its commercial API.",
+            "MalwareBazaar lookups send a detection's signature name or a file's SHA-256 hash. An \
+             upload you confirm sends the quarantined file with its ClamAV signature as a tag, \
+             and the sample becomes public. The same abuse.ch key also unlocks URLhaus signature \
+             downloads through fangfrisch; on NixOS, Lazaret reuses fangfrisch's key file when \
+             your user can read it. abuse.ch's fair-use terms say for-profit users may need its \
+             commercial API.",
         ),
     }
 }

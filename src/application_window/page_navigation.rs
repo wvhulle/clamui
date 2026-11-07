@@ -101,9 +101,15 @@ use crate::{
         component_streams::{RunningStream, run_stream},
         scan_runs::scan_run_progress::PageScanActivity,
     },
-    sharing::analysis_page::{
-        analysis_component::{AnalysisPage, AnalysisPageInput},
-        analysis_state::AnalysisPageOutput,
+    sharing::{
+        analysis_page::{
+            analysis_component::{AnalysisPage, AnalysisPageInput},
+            analysis_state::AnalysisPageOutput,
+        },
+        submissions_page::{
+            submissions_component::{SubmissionsPage, SubmissionsPageInit, SubmissionsPageInput},
+            submissions_state::{SubmissionTally, SubmissionsPageOutput},
+        },
     },
     signatures::database_updates_page::{
         database_updates_component::{DatabaseUpdatesPage, DatabaseUpdatesPageInput},
@@ -143,6 +149,8 @@ pub struct PageNavigation {
     scheduled_scans_page: Controller<ScheduledScansPage>,
     detections_page: Controller<BackgroundDetectionsPage>,
     analysis_page: Controller<AnalysisPage>,
+    submissions_page: Controller<SubmissionsPage>,
+    submission_tally: SubmissionTally,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
     journal_access: JournalAccess,
@@ -174,6 +182,9 @@ pub enum PageNavigationInput {
     DeviceScanEnded,
     RemovableDrivesStatusChanged(RemovableDrivesStatus),
     SubmissionsChanged,
+    SubmissionsTallied(SubmissionTally),
+    EntrySubmissionRequested { entry_id: i64 },
+    QuarantinedFileSubmissionRequested(PathBuf),
 }
 
 #[derive(Debug)]
@@ -237,6 +248,7 @@ fn forwarded_scan_output(scan_output: ScanPageOutput) -> PageNavigationInput {
         ScanPageOutput::QuarantineEntriesChanged => PageNavigationInput::QuarantineEntriesChanged,
         ScanPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
         ScanPageOutput::EvidenceRefreshRequested => PageNavigationInput::EvidenceRefreshRequested,
+        ScanPageOutput::SubmissionsChanged => PageNavigationInput::SubmissionsChanged,
     }
 }
 
@@ -255,6 +267,7 @@ fn forwarded_removable_drives_output(
             PageNavigationInput::QuarantineEntriesChanged
         }
         RemovableDrivesPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+        RemovableDrivesPageOutput::SubmissionsChanged => PageNavigationInput::SubmissionsChanged,
     }
 }
 
@@ -287,6 +300,9 @@ fn forwarded_detections_output(
         BackgroundDetectionsPageOutput::EvidenceRefreshRequested => {
             PageNavigationInput::EvidenceRefreshRequested
         }
+        BackgroundDetectionsPageOutput::SubmissionRequestedForFile(original_path) => {
+            PageNavigationInput::QuarantinedFileSubmissionRequested(original_path)
+        }
     }
 }
 
@@ -299,6 +315,16 @@ const fn forwarded_database_updates_output(
         }
         DatabaseUpdatesPageOutput::SignaturesUpdated => PageNavigationInput::SignaturesUpdated,
         DatabaseUpdatesPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+    }
+}
+
+const fn forwarded_submissions_output(
+    submissions_output: SubmissionsPageOutput,
+) -> PageNavigationInput {
+    match submissions_output {
+        SubmissionsPageOutput::TallyChanged(submission_tally) => {
+            PageNavigationInput::SubmissionsTallied(submission_tally)
+        }
     }
 }
 
@@ -412,6 +438,7 @@ impl PageNavigation {
                 unresolved_detections: self.unresolved_detections,
                 quarantine_entry_count: self.quarantine_entry_count,
                 removable_drives_status: self.removable_drives_status.clone(),
+                submission_tally: self.submission_tally,
                 home_directory: glib::home_dir().to_string_lossy().into_owned(),
                 moment_formatters: host_moment_formatters(),
                 reference_moment: *gathered_at,
@@ -605,6 +632,7 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::Logs),
                                     append: &navigation_row(ApplicationPage::Quarantine),
                                     append: &navigation_row(ApplicationPage::Analysis),
+                                    append: &navigation_row(ApplicationPage::Submissions),
                                     append: &navigation_row(ApplicationPage::Signatures),
                                     append: &navigation_row(ApplicationPage::DatabaseUpdates),
                                     append: &navigation_row(ApplicationPage::ScanEngine),
@@ -644,6 +672,9 @@ impl Component for PageNavigation {
                             },
                             add_titled[Some(ApplicationPage::Analysis.page_name()), &ApplicationPage::Analysis.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Analysis, model.analysis_page.widget()),
+                            },
+                            add_titled[Some(ApplicationPage::Submissions.page_name()), &ApplicationPage::Submissions.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::Submissions, model.submissions_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Signatures.page_name()), &ApplicationPage::Signatures.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Signatures, model.signatures_page.widget()),
@@ -704,6 +735,9 @@ impl Component for PageNavigation {
                     QuarantineEntriesPageOutput::SubmissionsChanged => {
                         PageNavigationInput::SubmissionsChanged
                     }
+                    QuarantineEntriesPageOutput::SubmissionRequested { entry_id } => {
+                        PageNavigationInput::EntrySubmissionRequested { entry_id }
+                    }
                 },
             );
         let logs_page = ActivityLogsPage::builder()
@@ -752,6 +786,12 @@ impl Component for PageNavigation {
         let scheduled_scans_page = ScheduledScansPage::builder()
             .launch(activity_history.clone())
             .forward(sender.input_sender(), forwarded_scheduled_scans_output);
+        let submissions_page = SubmissionsPage::builder()
+            .launch(SubmissionsPageInit {
+                activity_history: activity_history.clone(),
+                quarantine_vault: quarantine_vault.clone(),
+            })
+            .forward(sender.input_sender(), forwarded_submissions_output);
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
                 activity_history,
@@ -805,6 +845,8 @@ impl Component for PageNavigation {
             scheduled_scans_page,
             detections_page,
             analysis_page,
+            submissions_page,
+            submission_tally: SubmissionTally::TallyLoading,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
             journal_access: JournalAccess::FollowingJournal,
@@ -881,6 +923,8 @@ impl Component for PageNavigation {
             PageNavigationInput::QuarantineEntriesChanged => {
                 self.quarantine_page
                     .emit(QuarantineEntriesPageInput::ReloadEntriesRequested);
+                self.submissions_page
+                    .emit(SubmissionsPageInput::QuarantineEntriesChanged);
             }
             PageNavigationInput::SignaturesUpdated => {
                 self.quarantine_page
@@ -904,6 +948,8 @@ impl Component for PageNavigation {
             }
             PageNavigationInput::QuarantineEntriesCounted(quarantine_entry_count) => {
                 self.quarantine_entry_count = quarantine_entry_count;
+                self.submissions_page
+                    .emit(SubmissionsPageInput::QuarantineEntriesChanged);
                 self.refresh_area_summaries();
             }
             PageNavigationInput::UnresolvedDetectionsChanged(unresolved_detections) => {
@@ -941,7 +987,25 @@ impl Component for PageNavigation {
                 self.removable_drives_status = removable_drives_status;
                 self.refresh_area_summaries();
             }
-            PageNavigationInput::SubmissionsChanged => {}
+            PageNavigationInput::SubmissionsChanged => {
+                self.submissions_page
+                    .emit(SubmissionsPageInput::SubmissionsChanged);
+            }
+            PageNavigationInput::SubmissionsTallied(submission_tally) => {
+                self.submission_tally = submission_tally;
+                self.refresh_area_summaries();
+            }
+            PageNavigationInput::EntrySubmissionRequested { entry_id } => {
+                self.show_page(ApplicationPage::Submissions);
+                self.submissions_page
+                    .emit(SubmissionsPageInput::EntrySubmissionRequested { entry_id });
+            }
+            PageNavigationInput::QuarantinedFileSubmissionRequested(original_path) => {
+                self.show_page(ApplicationPage::Submissions);
+                self.submissions_page.emit(
+                    SubmissionsPageInput::QuarantinedFileSubmissionRequested { original_path },
+                );
+            }
         }
     }
 

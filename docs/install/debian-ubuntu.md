@@ -55,7 +55,7 @@ Without changes, the merged file is identical to `/etc/clamav/clamd.conf`. Chang
 
 ## API keys for reputation lookups
 
-Keys you paste under **Preferences → Online Lookups** are kept in your keyring. To read them from files instead, for example files managed by your configuration tooling, set the paths:
+Keys you paste under **Submissions → Services & Keys** are kept in your keyring. To read them from files instead, for example files managed by your configuration tooling, set the paths:
 
 ```sh
 gsettings set page.codeberg.wvhulle.Lazaret virustotal-key-file /home/alice/.config/lazaret/virustotal.key

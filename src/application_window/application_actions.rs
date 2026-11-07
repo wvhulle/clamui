@@ -15,13 +15,6 @@ relm4::new_action_group!(pub WindowActionGroup, "win");
 relm4::new_stateless_action!(pub AboutAction, ApplicationActionGroup, "about");
 relm4::new_stateless_action!(pub PreferencesAction, ApplicationActionGroup, "preferences");
 relm4::new_stateless_action!(pub QuitAction, ApplicationActionGroup, "quit");
-relm4::new_stateful_action!(
-    pub PreferencesPageAction,
-    ApplicationActionGroup,
-    "preferences-page",
-    String,
-    ()
-);
 relm4::new_stateless_action!(pub QuickScanAction, ApplicationActionGroup, "quick-scan");
 relm4::new_stateless_action!(
     pub UpdateDefinitionsAction,

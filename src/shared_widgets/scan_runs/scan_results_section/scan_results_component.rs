@@ -108,6 +108,7 @@ pub enum ScanResultsSectionOutput {
     QuarantineEntriesChanged,
     ResultsDismissRequested,
     ToastRequested(String),
+    SubmissionsChanged,
 }
 
 #[derive(Debug)]
@@ -566,6 +567,9 @@ impl Component for ScanResultsSection {
                 ));
             }
             ScanResultsSectionCommand::FalsePositiveReportFinished(report_attempt) => {
+                if matches!(report_attempt, ClamavReportAttempt::ReportRecorded(_)) {
+                    let _page_closed = sender.output(ScanResultsSectionOutput::SubmissionsChanged);
+                }
                 let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
                     clamav_report_attempt_text(&report_attempt),
                 ));

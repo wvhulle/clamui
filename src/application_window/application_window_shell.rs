@@ -15,7 +15,7 @@ use crate::{
     APPLICATION_ICON_NAME, application_data_directory,
     application_window::{
         application_actions::{
-            AboutAction, PreferencesAction, PreferencesPageAction, QuitAction, ShowWindowAction,
+            AboutAction, PreferencesAction, QuitAction, ShowWindowAction,
             register_application_action,
         },
         application_pages::ApplicationPage,
@@ -38,9 +38,7 @@ use crate::{
             quarantine_file_moves::QuarantineMoveFailure,
         },
     },
-    preferences_dialog::preferences_dialog_component::{
-        PreferencesDialog, PreferencesDialogInput, PreferencesPageName,
-    },
+    preferences_dialog::preferences_dialog_component::PreferencesDialog,
     shared_widgets::quarantine_failure_text::describe_quarantine_failure,
 };
 
@@ -123,7 +121,7 @@ pub struct ApplicationWindowShell {
 pub enum ApplicationWindowShellInput {
     WindowShowRequested,
     AboutRequested,
-    PreferencesRequested(PreferencesPageName),
+    PreferencesRequested,
     QuitRequested,
     WindowCloseRequested,
     CloseAnswered(CloseAnswer),
@@ -170,19 +168,7 @@ fn register_window_actions(sender: &AsyncComponentSender<ApplicationWindowShell>
     let preferences_sender = sender.input_sender().clone();
     register_application_action(RelmAction::<PreferencesAction>::new_stateless(
         move |_action| {
-            preferences_sender.emit(ApplicationWindowShellInput::PreferencesRequested(
-                PreferencesPageName::GeneralPreferences,
-            ));
-        },
-    ));
-    let preferences_page_sender = sender.input_sender().clone();
-    register_application_action(RelmAction::<PreferencesPageAction>::new_with_target_value(
-        move |_action, page_name: String| {
-            if let Some(preferences_page) = PreferencesPageName::from_page_name(&page_name) {
-                preferences_page_sender.emit(ApplicationWindowShellInput::PreferencesRequested(
-                    preferences_page,
-                ));
-            }
+            preferences_sender.emit(ApplicationWindowShellInput::PreferencesRequested);
         },
     ));
     let quit_sender = sender.input_sender().clone();
@@ -310,9 +296,7 @@ impl AsyncComponent for ApplicationWindowShell {
             ApplicationWindowShellCommand::TrayStartFinished(start_system_tray().await)
         });
         if shown_startup_page == StartupPage::PreferencesDialog {
-            sender.input(ApplicationWindowShellInput::PreferencesRequested(
-                PreferencesPageName::GeneralPreferences,
-            ));
+            sender.input(ApplicationWindowShellInput::PreferencesRequested);
         }
         AsyncComponentParts { model, widgets }
     }
@@ -326,9 +310,7 @@ impl AsyncComponent for ApplicationWindowShell {
         match shell_input {
             ApplicationWindowShellInput::WindowShowRequested => root.present(),
             ApplicationWindowShellInput::AboutRequested => present_about_dialog(root),
-            ApplicationWindowShellInput::PreferencesRequested(preferences_page) => {
-                self.preferences_dialog
-                    .emit(PreferencesDialogInput::PageShown(preferences_page));
+            ApplicationWindowShellInput::PreferencesRequested => {
                 self.preferences_dialog.widget().present(Some(root));
             }
             ApplicationWindowShellInput::QuitRequested

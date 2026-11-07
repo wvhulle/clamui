@@ -10,7 +10,6 @@ use crate::{
         protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
     },
     host_services::threat_intel::service_key_storage::{ThreatIntelService, read_api_key},
-    preferences_dialog::preferences_dialog_component::PreferencesPageName,
     shared_widgets::{
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
@@ -34,7 +33,6 @@ use crate::{
 };
 
 const SHOW_PAGE_ACTION: &str = "win.show-page";
-const PREFERENCES_PAGE_ACTION: &str = "app.preferences-page";
 
 pub struct AnalysisPage {
     toaster: Toaster,
@@ -80,10 +78,6 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .title(toast_text)
         .use_markup(false)
         .build()
-}
-
-fn online_lookups_target() -> gtk::glib::Variant {
-    PreferencesPageName::OnlineLookups.page_name().to_variant()
 }
 
 fn page_target(application_page: ApplicationPage) -> gtk::glib::Variant {
@@ -175,7 +169,8 @@ impl Component for AnalysisPage {
                             set_title: &gettext("Reputation Lookups"),
                             set_description: Some(&gettext(
                                 "Lookups only run when you ask for one, and send only what is \
-                                 listed here. Files are never uploaded.",
+                                 listed here. Files are only uploaded from Submissions, after you \
+                                 confirm. Keys are kept there too.",
                             )),
 
                             adw::ActionRow {
@@ -194,8 +189,8 @@ impl Component for AnalysisPage {
                                     &model.lookup_key_statuses.abuse_ch_key,
                                 ),
                                 set_activatable: true,
-                                set_action_name: Some(PREFERENCES_PAGE_ACTION),
-                                set_action_target_value: Some(&online_lookups_target()),
+                                set_action_name: Some(SHOW_PAGE_ACTION),
+                                set_action_target_value: Some(&page_target(ApplicationPage::Submissions)),
                                 add_suffix = &gtk::Image {
                                     set_icon_name: Some("dialog-warning-symbolic"),
                                     add_css_class: "warning",
@@ -215,8 +210,8 @@ impl Component for AnalysisPage {
                                     &model.lookup_key_statuses.virustotal_key,
                                 ),
                                 set_activatable: true,
-                                set_action_name: Some(PREFERENCES_PAGE_ACTION),
-                                set_action_target_value: Some(&online_lookups_target()),
+                                set_action_name: Some(SHOW_PAGE_ACTION),
+                                set_action_target_value: Some(&page_target(ApplicationPage::Submissions)),
                                 add_suffix = &gtk::Image {
                                     set_icon_name: Some("dialog-warning-symbolic"),
                                     add_css_class: "warning",
@@ -301,12 +296,13 @@ impl Component for AnalysisPage {
                                 set_subtitle: &gettext(
                                     "Report… on a quarantine entry, or Report False Positive… on \
                                      a scan result, sends the file to Cisco Talos, so a later \
-                                     signature update fixes the detection for everyone.",
+                                     signature update fixes the detection for everyone. \
+                                     Submissions tracks each report.",
                                 ),
                                 set_subtitle_lines: 0,
                                 set_activatable: true,
                                 set_action_name: Some(SHOW_PAGE_ACTION),
-                                set_action_target_value: Some(&page_target(ApplicationPage::Quarantine)),
+                                set_action_target_value: Some(&page_target(ApplicationPage::Submissions)),
                                 add_suffix = &gtk::Image { set_icon_name: Some("go-next-symbolic") },
                             },
                         },

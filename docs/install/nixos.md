@@ -80,7 +80,7 @@ Evaluation fails if `allowedSettings` contains a refused setting. Changes are st
 
 ## API keys for reputation lookups
 
-Without configuration, keys you paste under **Preferences → Online Lookups** are kept in your keyring. To manage them as secrets instead, point Lazaret at files from agenix or sops-nix. Only the path ends up in the Nix store, and the file has to be readable by your user:
+Without configuration, keys you paste under **Submissions → Services & Keys** are kept in your keyring. To manage them as secrets instead, point Lazaret at files from agenix or sops-nix. Only the path ends up in the Nix store, and the file has to be readable by your user:
 
 ```nix
 age.secrets.abuse-ch-key.owner = "alice";

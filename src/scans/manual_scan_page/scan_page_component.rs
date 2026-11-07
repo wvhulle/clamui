@@ -180,6 +180,7 @@ pub enum ScanPageInput {
     ExportResultsRequested,
     ToastRequested(String),
     QuarantineEntriesChanged,
+    SubmissionsChanged,
     EvidenceGathered(GatheredEvidence),
     SystemScanRequested,
 }
@@ -190,6 +191,7 @@ pub enum ScanPageOutput {
     QuarantineEntriesChanged,
     ActivityRecorded,
     EvidenceRefreshRequested,
+    SubmissionsChanged,
 }
 
 #[derive(Debug)]
@@ -909,6 +911,9 @@ impl Component for ScanPage {
                         ScanResultsSectionOutput::ToastRequested(toast_message) => {
                             ScanPageInput::ToastRequested(toast_message)
                         }
+                        ScanResultsSectionOutput::SubmissionsChanged => {
+                            ScanPageInput::SubmissionsChanged
+                        }
                     },
                 ),
             scan_target_rows,
@@ -1032,6 +1037,9 @@ impl Component for ScanPage {
             ScanPageInput::ToastRequested(toast_message) => self.toaster.toast(&toast_message),
             ScanPageInput::QuarantineEntriesChanged => {
                 let _shell_closed = sender.output(ScanPageOutput::QuarantineEntriesChanged);
+            }
+            ScanPageInput::SubmissionsChanged => {
+                let _shell_closed = sender.output(ScanPageOutput::SubmissionsChanged);
             }
             ScanPageInput::EvidenceGathered(GatheredEvidence::Gathered {
                 protection_evidence,
