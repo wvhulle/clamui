@@ -7,7 +7,7 @@ use relm4::{
 use crate::{
     application_window::{
         application_pages::ApplicationPage,
-        page_links::{SHOW_PAGE_ACTION, page_target, system_settings_group},
+        page_links::{SHOW_PAGE_ACTION, page_target},
         protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
     },
     host_services::{
@@ -171,7 +171,6 @@ impl Component for SignatureSourcesPage {
                         },
                     },
 
-                    add: &system_settings_group(&[ApplicationPage::DatabaseUpdates]),
                 },
             },
         }

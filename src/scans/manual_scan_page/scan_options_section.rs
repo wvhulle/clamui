@@ -6,20 +6,14 @@ use relm4::{
     gtk::{gio, gio::prelude::SettingsExtManual},
 };
 
-use crate::{
-    application_window::{
-        application_pages::ApplicationPage,
-        page_links::{page_link_group, system_settings_group},
-    },
-    host_services::{
-        clamav_scanner::scanner_command_builder::ScannerBackendPreference,
-        desktop::{
-            stored_settings::{
-                SCAN_BACKEND_CHOICES, SCAN_BACKEND_KEY, SHOW_LIVE_PROGRESS_KEY,
-                application_settings, scanner_backend_preference,
-            },
-            stored_settings_watch::forward_setting_changes,
+use crate::host_services::{
+    clamav_scanner::scanner_command_builder::ScannerBackendPreference,
+    desktop::{
+        stored_settings::{
+            SCAN_BACKEND_CHOICES, SCAN_BACKEND_KEY, SHOW_LIVE_PROGRESS_KEY, application_settings,
+            scanner_backend_preference,
         },
+        stored_settings_watch::forward_setting_changes,
     },
 };
 
@@ -105,8 +99,6 @@ impl Component for ScanOptionsSection {
                 },
             },
 
-            append: &page_link_group(gettext("More"), &[ApplicationPage::ScheduledScans]),
-            append: &system_settings_group(&[ApplicationPage::ScanEngine]),
         }
     }
 

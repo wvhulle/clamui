@@ -1,5 +1,4 @@
-use gettextrs::gettext;
-use relm4::{adw, adw::prelude::*, gtk};
+use relm4::{adw::prelude::*, gtk};
 
 use crate::application_window::application_pages::ApplicationPage;
 
@@ -7,67 +6,4 @@ pub const SHOW_PAGE_ACTION: &str = "win.show-page";
 
 pub fn page_target(linked_page: ApplicationPage) -> gtk::glib::Variant {
     linked_page.page_name().to_variant()
-}
-
-fn page_link_subtitle(linked_page: ApplicationPage) -> String {
-    match linked_page {
-        ApplicationPage::Detections => gettext("Background detections and how alerts reach you"),
-        ApplicationPage::ManualScan => {
-            gettext("Scan files and folders, and the folders scans skip")
-        }
-        ApplicationPage::RemovableDrives => {
-            gettext("Scan removable drives when they are connected")
-        }
-        ApplicationPage::Quarantine => gettext("Files isolated from your system"),
-        ApplicationPage::TrustedDetections => {
-            gettext("Files and detections that ClamAV never reports")
-        }
-        ApplicationPage::OnlineLookups => {
-            gettext("What CIRCL, MalwareBazaar and VirusTotal receive when you look something up")
-        }
-        ApplicationPage::Submissions => {
-            gettext("What you sent to ClamAV, MalwareBazaar and VirusTotal, and the keys")
-        }
-        ApplicationPage::SignatureSources => gettext("Where ClamAV's signatures come from"),
-        ApplicationPage::DatabaseUpdates => gettext("How freshclam downloads signatures"),
-        ApplicationPage::ScanEngine => {
-            gettext("clamd settings, unwanted programs, macros and archives")
-        }
-        ApplicationPage::OnAccessScanning => {
-            gettext("Which folders clamonacc watches, and how it blocks")
-        }
-        ApplicationPage::ScheduledScans => gettext("Scan automatically with a systemd timer"),
-    }
-}
-
-pub fn page_link_row(linked_page: ApplicationPage) -> adw::ActionRow {
-    let link_row = adw::ActionRow::builder()
-        .title(linked_page.page_title())
-        .subtitle(page_link_subtitle(linked_page))
-        .activatable(true)
-        .action_name(SHOW_PAGE_ACTION)
-        .action_target(&page_target(linked_page))
-        .build();
-    link_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
-    link_row
-}
-
-pub fn page_link_group(
-    group_title: String,
-    linked_pages: &[ApplicationPage],
-) -> adw::PreferencesGroup {
-    let link_group = adw::PreferencesGroup::builder().title(group_title).build();
-    linked_pages
-        .iter()
-        .for_each(|linked_page| link_group.add(&page_link_row(*linked_page)));
-    link_group
-}
-
-pub fn system_settings_group(linked_pages: &[ApplicationPage]) -> adw::PreferencesGroup {
-    let system_group = page_link_group(gettext("System"), linked_pages);
-    system_group.set_description(Some(&gettext(
-        "ClamAV configuration shared by all users is on these pages. Changes need administrator \
-         approval.",
-    )));
-    system_group
 }
