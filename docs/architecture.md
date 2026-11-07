@@ -155,9 +155,13 @@ flowchart LR
 
 ## Stored data
 
-Lazaret keeps two SQLite databases in its data directory, `history.db` and `quarantine.db`. Their tables are created from `data/database-schemas/`, which the screenshot fixtures load too. The tables follow the shape of the Rust types: each state that carries its own data has its own detail table, keyed like its parent and deleted with it, so a column never holds a placeholder such as `0` or `''`. `CHECK` constraints list the valid values and combinations, and every connection turns on `PRAGMA foreign_keys`. Detail tables repeat the parent's status in their key, so a foreign key ties each detail row to the one status it belongs to.
+Lazaret keeps one SQLite database, `lazaret.db`, in its data directory: `$XDG_DATA_HOME/lazaret`, or `~/.local/share/lazaret` when that variable is unset, found with the `xdg` crate. Debug builds use `lazaret-devel` instead, and inside the Flatpak `XDG_DATA_HOME` points into the sandbox. Quarantined payloads sit in the `quarantine` directory next to the database. The tables are created by the numbered SQL files in `migrations/`, which are compiled into the binary. Each open reads `PRAGMA user_version` and applies the files it hasn't applied yet in order, each in its own transaction that also raises the version. A database with a higher version comes from a newer release and is refused without being changed. The screenshot fixtures and the tests create their databases through the same migrations.
 
-### history.db
+Every store opens the file through `host_services::lazaret_database::locked_database_connection`, which holds `lazaret.lock` for as long as the connection lives, so only one connection in one process uses the file at a time; turso doesn't allow two processes to have it open together. Connections are short and a store never opens a second one while it holds the first. The window also holds `quarantine.lock` for as long as it runs, so only one process moves files into or out of quarantine; a scheduled scan that finds it taken leaves its detections in place. The quarantine lock is taken first and only ever around the database lock, so the two can't wait on each other.
+
+The tables follow the shape of the Rust types: each state that carries its own data has its own detail table, keyed like its parent and deleted with it, so a column never holds a placeholder such as `0` or `''`. `CHECK` constraints list the valid values and combinations, and every connection turns on `PRAGMA foreign_keys`. Detail tables repeat the parent's status in their key, so a foreign key ties each detail row to the one status it belongs to.
+
+### History tables
 
 ```mermaid
 erDiagram
@@ -192,7 +196,7 @@ erDiagram
 | `virustotal_verdicts` | as `submissions` | `virustotal_analyses`, with its status | How many engines flagged the file, out of how many. |
 | `upload_refusals` | as `submissions` | `submissions`, with its status | Why MalwareBazaar or VirusTotal refused an upload. |
 
-### quarantine.db
+### Quarantine tables
 
 ```mermaid
 erDiagram
@@ -211,7 +215,7 @@ erDiagram
 | `pending_payload_hashes` | `quarantine_path` | `quarantine_pending` | The hash of a copied payload. A blocked file renamed into quarantine has no hash until the next start computes it. |
 | `pending_signatures` | `quarantine_path` | `quarantine_pending` | The signature of a pending move, with the same meaning as `quarantine_signatures`. |
 
-A submission in `history.db` names its content by the same SHA-256 as `file_contents`. SQLite can't enforce a foreign key across two database files, so the hash is the only link. Lazaret still treats an entry whose stored hash or detection date doesn't parse as unverified, so a database edited by hand can't make it restore unchecked content.
+A submission names its content by the same SHA-256 as `file_contents`, but has no foreign key to it: a submitted file may never have been quarantined, and `file_contents` loses its row when the last quarantined copy is restored or deleted, while the submission stays. A detection has no key to a quarantine entry for the same reason. Lazaret still treats an entry whose stored hash or detection date doesn't parse as unverified, so a database edited by hand can't make it restore unchecked content.
 
 ## Deployments
 

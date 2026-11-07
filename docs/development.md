@@ -44,6 +44,14 @@ Debug builds use the application ID `page.codeberg.wvhulle.Lazaret.Devel` and th
 
 [Architecture](architecture.md) explains the reasons behind these rules.
 
+## Changing the database schema
+
+The schema of `lazaret.db` lives in the numbered files in `migrations/`:
+
+1. Add the next numbered file, such as `migrations/0002_scan_durations.sql`, and append it to `LAZARET_MIGRATIONS` in `src/host_services/lazaret_database/embedded_migration_lists.rs`.
+2. Never edit a file that a release has shipped: databases that already ran it won't run it again.
+3. Test with a database at the previous version: create it with `create_migrated_test_database` and the list without your file, add rows, then open it with the store and check the rows.
+
 ## Translations
 
 User-facing strings go through `gettext` with literal strings, and untrusted values are substituted last. After changing strings, update the template:
