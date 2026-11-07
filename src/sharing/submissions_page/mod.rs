@@ -5,3 +5,4 @@ pub mod submissions_component;
 pub mod submissions_presentation;
 pub mod submissions_state;
 pub mod submitted_entry_row;
+pub mod uploads_in_flight;

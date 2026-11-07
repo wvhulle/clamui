@@ -21,6 +21,7 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ScanOrigin,
         },
+        clamav_programs::clamav_report_submission::ClamavReportRequest,
         clamav_scanner::{
             scan_progress_estimates::file_progress_text,
             scan_progress_events::ScanProgressEvent,
@@ -180,7 +181,7 @@ pub enum ScanPageInput {
     ExportResultsRequested,
     ToastRequested(String),
     QuarantineEntriesChanged,
-    SubmissionsChanged,
+    ClamavReportConfirmed(ClamavReportRequest),
     EvidenceGathered(GatheredEvidence),
     SystemScanRequested,
 }
@@ -191,7 +192,7 @@ pub enum ScanPageOutput {
     QuarantineEntriesChanged,
     ActivityRecorded,
     EvidenceRefreshRequested,
-    SubmissionsChanged,
+    ClamavReportConfirmed(ClamavReportRequest),
 }
 
 #[derive(Debug)]
@@ -896,7 +897,6 @@ impl Component for ScanPage {
             scan_results_section: ScanResultsSection::builder()
                 .launch(ScanResultsSectionInit {
                     quarantine_vault: page_init.quarantine_vault,
-                    activity_history: page_init.activity_history.clone(),
                     dismiss_label: gettext("New Scan"),
                 })
                 .forward(
@@ -911,8 +911,8 @@ impl Component for ScanPage {
                         ScanResultsSectionOutput::ToastRequested(toast_message) => {
                             ScanPageInput::ToastRequested(toast_message)
                         }
-                        ScanResultsSectionOutput::SubmissionsChanged => {
-                            ScanPageInput::SubmissionsChanged
+                        ScanResultsSectionOutput::ClamavReportConfirmed(report_request) => {
+                            ScanPageInput::ClamavReportConfirmed(report_request)
                         }
                     },
                 ),
@@ -1038,8 +1038,9 @@ impl Component for ScanPage {
             ScanPageInput::QuarantineEntriesChanged => {
                 let _shell_closed = sender.output(ScanPageOutput::QuarantineEntriesChanged);
             }
-            ScanPageInput::SubmissionsChanged => {
-                let _shell_closed = sender.output(ScanPageOutput::SubmissionsChanged);
+            ScanPageInput::ClamavReportConfirmed(report_request) => {
+                let _shell_closed =
+                    sender.output(ScanPageOutput::ClamavReportConfirmed(report_request));
             }
             ScanPageInput::EvidenceGathered(GatheredEvidence::Gathered {
                 protection_evidence,

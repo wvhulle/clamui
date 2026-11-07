@@ -50,6 +50,7 @@ use crate::{
     },
     host_services::{
         activity_history::activity_history_database::ActivityHistory,
+        clamav_programs::clamav_report_submission::ClamavReportRequest,
         desktop::{
             locale_formatting::host_moment_formatters,
             running_instance_forwarding::paths_from_bytes, stored_settings::application_settings,
@@ -183,6 +184,8 @@ pub enum PageNavigationInput {
     RemovableDrivesStatusChanged(RemovableDrivesStatus),
     SubmissionsChanged,
     SubmissionsTallied(SubmissionTally),
+    ClamavReportConfirmed(ClamavReportRequest),
+    UploadNoticeReceived(String),
     EntrySubmissionRequested { entry_id: i64 },
     QuarantinedFileSubmissionRequested(PathBuf),
 }
@@ -248,7 +251,9 @@ fn forwarded_scan_output(scan_output: ScanPageOutput) -> PageNavigationInput {
         ScanPageOutput::QuarantineEntriesChanged => PageNavigationInput::QuarantineEntriesChanged,
         ScanPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
         ScanPageOutput::EvidenceRefreshRequested => PageNavigationInput::EvidenceRefreshRequested,
-        ScanPageOutput::SubmissionsChanged => PageNavigationInput::SubmissionsChanged,
+        ScanPageOutput::ClamavReportConfirmed(report_request) => {
+            PageNavigationInput::ClamavReportConfirmed(report_request)
+        }
     }
 }
 
@@ -267,7 +272,9 @@ fn forwarded_removable_drives_output(
             PageNavigationInput::QuarantineEntriesChanged
         }
         RemovableDrivesPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
-        RemovableDrivesPageOutput::SubmissionsChanged => PageNavigationInput::SubmissionsChanged,
+        RemovableDrivesPageOutput::ClamavReportConfirmed(report_request) => {
+            PageNavigationInput::ClamavReportConfirmed(report_request)
+        }
     }
 }
 
@@ -318,12 +325,13 @@ const fn forwarded_database_updates_output(
     }
 }
 
-const fn forwarded_submissions_output(
-    submissions_output: SubmissionsPageOutput,
-) -> PageNavigationInput {
+fn forwarded_submissions_output(submissions_output: SubmissionsPageOutput) -> PageNavigationInput {
     match submissions_output {
         SubmissionsPageOutput::TallyChanged(submission_tally) => {
             PageNavigationInput::SubmissionsTallied(submission_tally)
+        }
+        SubmissionsPageOutput::UploadNoticeReady(notice_text) => {
+            PageNavigationInput::UploadNoticeReceived(notice_text)
         }
     }
 }
@@ -735,6 +743,9 @@ impl Component for PageNavigation {
                     QuarantineEntriesPageOutput::SubmissionsChanged => {
                         PageNavigationInput::SubmissionsChanged
                     }
+                    QuarantineEntriesPageOutput::ClamavReportConfirmed(report_request) => {
+                        PageNavigationInput::ClamavReportConfirmed(report_request)
+                    }
                     QuarantineEntriesPageOutput::SubmissionRequested { entry_id } => {
                         PageNavigationInput::EntrySubmissionRequested { entry_id }
                     }
@@ -1000,6 +1011,18 @@ impl Component for PageNavigation {
                 self.submissions_page
                     .emit(SubmissionsPageInput::EntrySubmissionRequested { entry_id });
             }
+            PageNavigationInput::ClamavReportConfirmed(report_request) => {
+                self.submissions_page
+                    .emit(SubmissionsPageInput::ClamavReportConfirmed(report_request));
+            }
+            PageNavigationInput::UploadNoticeReceived(notice_text) => {
+                self.toaster.add_toast(
+                    adw::Toast::builder()
+                        .title(notice_text)
+                        .use_markup(false)
+                        .build(),
+                );
+            }
             PageNavigationInput::QuarantinedFileSubmissionRequested(original_path) => {
                 self.show_page(ApplicationPage::Submissions);
                 self.submissions_page.emit(
@@ -1061,5 +1084,55 @@ impl Component for PageNavigation {
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::WatchedUnitChanged, &sender);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod page_navigation_tests {
+    use super::*;
+    use crate::host_services::clamav_programs::clamav_report_submission::{
+        ClamavReport, ClamavReportKind, ReporterContact, SubmittedContent,
+    };
+
+    fn false_positive_request() -> ClamavReportRequest {
+        ClamavReportRequest {
+            clamav_report: ClamavReport {
+                reporter_contact: ReporterContact {
+                    reporter_name: "Alex Doe".to_owned(),
+                    reporter_email: "alex@example.org".to_owned(),
+                },
+                report_kind: ClamavReportKind::FalsePositive {
+                    detection_name: "Win.Trojan.Agent".to_owned(),
+                },
+            },
+            submitted_content: SubmittedContent::QuarantinedEntry { entry_id: 7 },
+        }
+    }
+
+    #[test]
+    fn scan_result_reports_go_to_the_submissions_page_that_guards_uploads() {
+        assert!(matches!(
+            forwarded_scan_output(ScanPageOutput::ClamavReportConfirmed(false_positive_request())),
+            PageNavigationInput::ClamavReportConfirmed(report_request)
+                if report_request == false_positive_request()
+        ));
+        assert!(matches!(
+            forwarded_removable_drives_output(RemovableDrivesPageOutput::ClamavReportConfirmed(
+                false_positive_request()
+            )),
+            PageNavigationInput::ClamavReportConfirmed(report_request)
+                if report_request == false_positive_request()
+        ));
+    }
+
+    #[test]
+    fn upload_notices_reach_the_window_toasts() {
+        assert!(matches!(
+            forwarded_submissions_output(SubmissionsPageOutput::UploadNoticeReady(
+                "Already being sent".to_owned()
+            )),
+            PageNavigationInput::UploadNoticeReceived(notice_text)
+                if notice_text == "Already being sent"
+        ));
     }
 }

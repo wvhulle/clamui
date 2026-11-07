@@ -34,9 +34,8 @@ use crate::{
             },
             quarantine_file_moves::QuarantineMoveFailure,
         },
-        sample_submissions::{
-            clamav_report_flow::{ClamavReportAttempt, send_clamav_report},
-            clamav_report_review::{current_database_version, settle_clamav_reviews},
+        sample_submissions::clamav_report_review::{
+            current_database_version, settle_clamav_reviews,
         },
         settings_helper::trust_requests::{
             TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
@@ -54,7 +53,7 @@ use crate::{
         quarantine_failure_text::describe_quarantine_failure,
         scanner_exit_text::abnormal_scanner_exit_text,
         submission_confirm_dialog::{ClamavReportProposal, present_clamav_report_confirmation},
-        submission_outcome_text::{clamav_report_attempt_text, history_failure_text},
+        submission_outcome_text::history_failure_text,
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -179,6 +178,7 @@ pub enum QuarantineEntriesPageInput {
 pub enum QuarantineEntriesPageOutput {
     EntriesCounted(QuarantineEntryCount),
     SubmissionsChanged,
+    ClamavReportConfirmed(ClamavReportRequest),
     SubmissionRequested { entry_id: i64 },
 }
 
@@ -194,7 +194,6 @@ pub enum QuarantineEntriesPageCommand {
         reputation_answers: ReputationAnswers,
     },
     TrustChangeFinished(TrustOutcome),
-    FalsePositiveReportFinished(ClamavReportAttempt),
     RestoreCheckFinished {
         entry_id: i64,
         content_verdict: ContentVerdict,
@@ -863,13 +862,9 @@ impl Component for QuarantineEntriesPage {
                 );
             }
             QuarantineEntriesPageInput::FalsePositiveReportConfirmed(report_request) => {
-                let activity_history = self.activity_history.clone();
-                sender.oneshot_command(async move {
-                    QuarantineEntriesPageCommand::FalsePositiveReportFinished(
-                        send_clamav_report(&activity_history, &quarantine_vault, report_request)
-                            .await,
-                    )
-                });
+                let _shell_closed = sender.output(
+                    QuarantineEntriesPageOutput::ClamavReportConfirmed(report_request),
+                );
             }
             QuarantineEntriesPageInput::SubmissionRequested { entry_id } => {
                 let _shell_closed =
@@ -1062,16 +1057,6 @@ impl Component for QuarantineEntriesPage {
             QuarantineEntriesPageCommand::ClamavReviewsSettled(Err(history_failure)) => {
                 self.toaster
                     .add_toast(plain_text_toast(&history_failure_text(&history_failure)));
-            }
-            QuarantineEntriesPageCommand::FalsePositiveReportFinished(report_attempt) => {
-                if matches!(report_attempt, ClamavReportAttempt::ReportRecorded(_)) {
-                    let _shell_closed =
-                        sender.output(QuarantineEntriesPageOutput::SubmissionsChanged);
-                }
-                self.toaster
-                    .add_toast(plain_text_toast(&clamav_report_attempt_text(
-                        &report_attempt,
-                    )));
             }
             QuarantineEntriesPageCommand::TrustChangeFinished(trust_outcome) => {
                 self.toaster

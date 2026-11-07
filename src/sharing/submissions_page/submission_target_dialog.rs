@@ -6,7 +6,10 @@ use crate::{
     shared_widgets::awaited_dialogs::{
         AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice, deliver_local_outcome,
     },
-    sharing::submissions_page::submissions_presentation::target_choice_label,
+    sharing::submissions_page::{
+        submissions_presentation::target_choice_label, submissions_state::OfferedTarget,
+        uploads_in_flight::UploadActivity,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,7 +42,7 @@ impl AlertChoice for TargetDialogChoice {
 pub struct TargetChoiceRequest {
     pub entry_id: i64,
     pub file_name: String,
-    pub offered_targets: Vec<SubmissionTarget>,
+    pub offered_targets: Vec<OfferedTarget>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -70,11 +73,18 @@ pub fn present_target_choice<Message: 'static>(
         .offered_targets
         .iter()
         .for_each(|offered_target| {
+            let target_choice = TargetDialogChoice::TargetPicked(offered_target.submission_target);
             add_alert_choice(
                 &target_dialog,
-                TargetDialogChoice::TargetPicked(*offered_target),
-                &target_choice_label(*offered_target),
+                target_choice,
+                &target_choice_label(offered_target.submission_target),
             );
+            match offered_target.upload_activity {
+                UploadActivity::UploadIdle => {}
+                UploadActivity::UploadRunning => {
+                    target_dialog.set_response_enabled(target_choice.response_id(), false);
+                }
+            }
         });
     target_dialog.set_default_response(Some(TargetDialogChoice::TargetDismissed.response_id()));
     let entry_id = choice_request.entry_id;

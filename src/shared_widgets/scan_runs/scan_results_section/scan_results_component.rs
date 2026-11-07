@@ -9,7 +9,6 @@ use relm4::{
 
 use crate::{
     host_services::{
-        activity_history::activity_history_database::ActivityHistory,
         clamav_programs::clamav_report_submission::ClamavReportRequest,
         clamav_scanner::{
             scan_exclusion_rules::exclusion_entry_for_threat,
@@ -20,7 +19,6 @@ use crate::{
             quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
             quarantine_file_moves::QuarantineMoveFailure,
         },
-        sample_submissions::clamav_report_flow::{ClamavReportAttempt, send_clamav_report},
         settings_helper::trust_requests::{
             FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file, request_trust_change,
             trust_outcome_text,
@@ -44,7 +42,6 @@ use crate::{
             },
         },
         submission_confirm_dialog::{ClamavReportProposal, present_clamav_report_confirmation},
-        submission_outcome_text::clamav_report_attempt_text,
         trust_confirmation_dialog::present_trust_confirmation,
     },
 };
@@ -71,7 +68,6 @@ impl AlertChoice for QuarantineDialogChoice {
 
 pub struct ScanResultsSectionInit {
     pub quarantine_vault: QuarantineVault,
-    pub activity_history: ActivityHistory,
     pub dismiss_label: String,
 }
 
@@ -80,7 +76,6 @@ pub struct ScanResultsSection {
     results_view: ScanResultsView,
     results_generation: u64,
     quarantine_vault: QuarantineVault,
-    activity_history: ActivityHistory,
     threat_rows: FactoryVecDeque<DetectedThreatRow>,
     problem_rows: FactoryVecDeque<ScanProblemRow>,
 }
@@ -108,7 +103,7 @@ pub enum ScanResultsSectionOutput {
     QuarantineEntriesChanged,
     ResultsDismissRequested,
     ToastRequested(String),
-    SubmissionsChanged,
+    ClamavReportConfirmed(ClamavReportRequest),
 }
 
 #[derive(Debug)]
@@ -124,7 +119,6 @@ pub enum ScanResultsSectionCommand {
         fingerprint_outcome: std::io::Result<FileFingerprint>,
     },
     TrustChangeFinished(TrustOutcome),
-    FalsePositiveReportFinished(ClamavReportAttempt),
 }
 
 struct PendingThreatMove {
@@ -377,7 +371,6 @@ impl Component for ScanResultsSection {
     ) -> ComponentParts<Self> {
         let ScanResultsSectionInit {
             quarantine_vault,
-            activity_history,
             dismiss_label,
         } = section_init;
         let model = Self {
@@ -385,7 +378,6 @@ impl Component for ScanResultsSection {
             results_view: ScanResultsView::empty_results(),
             results_generation: 0,
             quarantine_vault,
-            activity_history,
             threat_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
                 .forward(sender.input_sender(), forwarded_threat_output),
@@ -503,14 +495,9 @@ impl Component for ScanResultsSection {
                 );
             }
             ScanResultsSectionInput::FalsePositiveReportConfirmed(report_request) => {
-                let activity_history = self.activity_history.clone();
-                let quarantine_vault = self.quarantine_vault.clone();
-                sender.oneshot_command(async move {
-                    ScanResultsSectionCommand::FalsePositiveReportFinished(
-                        send_clamav_report(&activity_history, &quarantine_vault, report_request)
-                            .await,
-                    )
-                });
+                let _page_closed = sender.output(ScanResultsSectionOutput::ClamavReportConfirmed(
+                    report_request,
+                ));
             }
             ScanResultsSectionInput::CopyReportRequested => {
                 root.clipboard()
@@ -564,14 +551,6 @@ impl Component for ScanResultsSection {
             } => {
                 let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
                     fingerprint_failure_text(&fingerprint_failure),
-                ));
-            }
-            ScanResultsSectionCommand::FalsePositiveReportFinished(report_attempt) => {
-                if matches!(report_attempt, ClamavReportAttempt::ReportRecorded(_)) {
-                    let _page_closed = sender.output(ScanResultsSectionOutput::SubmissionsChanged);
-                }
-                let _page_closed = sender.output(ScanResultsSectionOutput::ToastRequested(
-                    clamav_report_attempt_text(&report_attempt),
                 ));
             }
             ScanResultsSectionCommand::TrustChangeFinished(trust_outcome) => {

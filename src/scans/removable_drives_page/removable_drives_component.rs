@@ -12,6 +12,7 @@ use crate::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ScanOrigin,
         },
+        clamav_programs::clamav_report_submission::ClamavReportRequest,
         clamav_scanner::{
             scan_progress_estimates::file_progress_text, scan_progress_events::ScanProgressEvent,
         },
@@ -113,7 +114,7 @@ pub enum RemovableDrivesPageInput {
     ResultsDismissed,
     ToastRequested(String),
     QuarantineEntriesChanged,
-    SubmissionsChanged,
+    ClamavReportConfirmed(ClamavReportRequest),
     HistoryReloadRequested,
 }
 
@@ -504,7 +505,6 @@ impl Component for RemovableDrivesPage {
             scan_results_section: ScanResultsSection::builder()
                 .launch(ScanResultsSectionInit {
                     quarantine_vault: page_init.quarantine_vault,
-                    activity_history: page_init.activity_history.clone(),
                     dismiss_label: gettext("Close Results"),
                 })
                 .forward(
@@ -519,8 +519,8 @@ impl Component for RemovableDrivesPage {
                         ScanResultsSectionOutput::ToastRequested(toast_message) => {
                             RemovableDrivesPageInput::ToastRequested(toast_message)
                         }
-                        ScanResultsSectionOutput::SubmissionsChanged => {
-                            RemovableDrivesPageInput::SubmissionsChanged
+                        ScanResultsSectionOutput::ClamavReportConfirmed(report_request) => {
+                            RemovableDrivesPageInput::ClamavReportConfirmed(report_request)
                         }
                     },
                 ),
@@ -589,8 +589,10 @@ impl Component for RemovableDrivesPage {
                 let _shell_closed =
                     sender.output(RemovableDrivesPageOutput::QuarantineEntriesChanged);
             }
-            RemovableDrivesPageInput::SubmissionsChanged => {
-                let _shell_closed = sender.output(RemovableDrivesPageOutput::SubmissionsChanged);
+            RemovableDrivesPageInput::ClamavReportConfirmed(report_request) => {
+                let _shell_closed = sender.output(
+                    RemovableDrivesPageOutput::ClamavReportConfirmed(report_request),
+                );
             }
             RemovableDrivesPageInput::HistoryReloadRequested => {
                 self.history_group

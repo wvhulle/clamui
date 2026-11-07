@@ -30,7 +30,8 @@ impl FactoryComponent for QuarantinedCandidateRow {
             add_suffix = &gtk::Button {
                 set_label: &gettext("Submit…"),
                 set_valign: gtk::Align::Center,
-                set_sensitive: self.row_view.can_be_sent,
+                #[watch]
+                set_sensitive: self.row_view.allows_sending(),
                 connect_clicked[sender, entry_id = self.row_view.entry_id] => move |_clicked_button| {
                     let _page_closed = sender.output(QuarantinedCandidateRowOutput::SubmissionRequested { entry_id });
                 },

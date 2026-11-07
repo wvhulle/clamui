@@ -3,8 +3,11 @@ use std::{path::PathBuf, time::Instant};
 use jiff::Timestamp;
 
 use crate::{
-    host_services::clamav_scanner::{
-        scan_progress_events::ScanProgressEvent, scanner_output_parser::DetectedThreat,
+    host_services::{
+        clamav_programs::clamav_report_submission::ClamavReportRequest,
+        clamav_scanner::{
+            scan_progress_events::ScanProgressEvent, scanner_output_parser::DetectedThreat,
+        },
     },
     scans::removable_drives_page::drive_mount_checks::{
         DeviceAutoScanSettings, DriveScanDecision, DriveSkipReason,
@@ -167,7 +170,7 @@ pub enum RemovableDrivesPageOutput {
     StatusChanged(RemovableDrivesStatus),
     QuarantineEntriesChanged,
     ActivityRecorded,
-    SubmissionsChanged,
+    ClamavReportConfirmed(ClamavReportRequest),
 }
 
 pub struct DeviceScanFlow {

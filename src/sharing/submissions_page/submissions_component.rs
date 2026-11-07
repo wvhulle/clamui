@@ -14,7 +14,7 @@ use crate::{
             submission_history_store::{SubmissionRecord, SubmissionTarget},
         },
         clamav_programs::clamav_report_submission::{
-            ClamavReportKind, ClamavReportRequest, SubmittedContent,
+            ClamavReport, ClamavReportKind, ClamavReportRequest, SubmittedContent,
         },
         clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::host_moment_formatters,
@@ -27,9 +27,12 @@ use crate::{
                 BazaarEligibility, BazaarUploadAttempt, bazaar_eligibility,
                 upload_to_malware_bazaar,
             },
-            clamav_report_flow::{ClamavReportAttempt, send_clamav_report},
+            clamav_report_flow::{
+                ClamavReportAttempt, clamav_report_target, read_clamav_report_sample,
+                send_read_clamav_report,
+            },
             remote_status_refresh::{RemoteRefreshSummary, refresh_remote_statuses},
-            submission_samples::shown_file_name,
+            submission_samples::{SampleReadFailure, SubmissionSample, shown_file_name},
             virustotal_sample_upload::{VirusTotalUploadAttempt, upload_to_virustotal},
         },
         threat_intel::service_key_storage::ThreatIntelService,
@@ -56,9 +59,11 @@ use crate::{
         },
         submissions_state::{
             CandidateListing, PROGRESS_FILTER_CHOICES, SERVICE_FILTER_CHOICES, SubmissionFilters,
-            SubmissionListing, SubmissionsPageOutput, choice_at, choice_position, offered_targets,
+            SubmissionListing, SubmissionsPageOutput, choice_at, choice_position, entry_upload_key,
+            offered_target_activities,
         },
         submitted_entry_row::{SubmittedEntryRow, SubmittedEntryRowOutput},
+        uploads_in_flight::{UploadKey, UploadsInFlight, upload_refusal_text},
     },
 };
 
@@ -80,6 +85,7 @@ pub struct SubmissionsPage {
     candidate_listing: CandidateListing,
     submission_filters: SubmissionFilters,
     remote_refresh: RemoteRefreshRun,
+    uploads_in_flight: UploadsInFlight,
     submitted_rows: FactoryVecDeque<SubmittedEntryRow>,
     candidate_rows: FactoryVecDeque<QuarantinedCandidateRow>,
     abuse_ch_section: Controller<ServiceKeySection>,
@@ -108,9 +114,22 @@ pub enum SubmissionsPageInput {
 pub enum SubmissionsPageCommand {
     SubmissionsLoaded(Result<Vec<SubmissionRecord>, ActivityHistoryFailure>),
     CandidatesLoaded(Result<Vec<QuarantineEntryRecord>, QuarantineMoveFailure>),
-    ClamavReportFinished(ClamavReportAttempt),
-    BazaarUploadFinished(BazaarUploadAttempt),
-    VirusTotalUploadFinished(VirusTotalUploadAttempt),
+    ClamavSampleRead {
+        clamav_report: ClamavReport,
+        read_outcome: Result<SubmissionSample, SampleReadFailure>,
+    },
+    ClamavReportFinished {
+        upload_key: UploadKey,
+        report_attempt: ClamavReportAttempt,
+    },
+    BazaarUploadFinished {
+        upload_key: UploadKey,
+        upload_attempt: BazaarUploadAttempt,
+    },
+    VirusTotalUploadFinished {
+        upload_key: UploadKey,
+        upload_attempt: VirusTotalUploadAttempt,
+    },
     RemoteRefreshFinished(RemoteRefreshSummary),
 }
 
@@ -168,7 +187,10 @@ impl SubmissionsPage {
             .listed_candidates()
             .iter()
             .for_each(|listed_candidate| {
-                row_guard.push_back(candidate_row_view(listed_candidate));
+                row_guard.push_back(candidate_row_view(
+                    listed_candidate,
+                    &self.uploads_in_flight,
+                ));
             });
     }
 
@@ -196,7 +218,7 @@ impl SubmissionsPage {
         root: &adw::ToastOverlay,
         sender: &ComponentSender<Self>,
     ) {
-        let entry_targets = offered_targets(entry_record);
+        let entry_targets = offered_target_activities(entry_record, &self.uploads_in_flight);
         if entry_targets.is_empty() {
             self.toaster.add_toast(plain_text_toast(&gettext(
                 "This quarantine record has no usable hash, so Lazaret doesn't send it anywhere",
@@ -292,9 +314,125 @@ impl SubmissionsPage {
         }
     }
 
+    fn report_upload_notice(sender: &ComponentSender<Self>, notice_text: String) {
+        let _shell_closed = sender.output(SubmissionsPageOutput::UploadNoticeReady(notice_text));
+    }
+
     fn finish_sending(&self, outcome_text: &str, sender: &ComponentSender<Self>) {
         self.toaster.add_toast(plain_text_toast(outcome_text));
         self.reload_submissions(sender);
+    }
+
+    fn finish_upload(
+        &mut self,
+        upload_key: &UploadKey,
+        outcome_text: String,
+        sender: &ComponentSender<Self>,
+    ) {
+        self.uploads_in_flight.finish_upload(upload_key);
+        self.show_candidate_rows();
+        Self::report_upload_notice(sender, outcome_text);
+        self.reload_submissions(sender);
+    }
+
+    fn admit_upload(
+        &mut self,
+        upload_key: UploadKey,
+        sender: &ComponentSender<Self>,
+    ) -> Option<UploadKey> {
+        match self.uploads_in_flight.start_upload(upload_key) {
+            Ok(admitted_key) => {
+                self.show_candidate_rows();
+                Some(admitted_key)
+            }
+            Err(upload_refusal) => {
+                Self::report_upload_notice(sender, upload_refusal_text(&upload_refusal));
+                None
+            }
+        }
+    }
+
+    fn start_sample_upload(
+        &mut self,
+        upload_proposal: &SampleUploadProposal,
+        sender: &ComponentSender<Self>,
+    ) {
+        let entry_id = upload_proposal.entry_id;
+        let upload_target = match upload_proposal.upload_service {
+            UploadService::MalwareBazaarUpload { .. } => SubmissionTarget::MalwareBazaarSample,
+            UploadService::VirusTotalUpload => SubmissionTarget::VirusTotalSample,
+        };
+        let Some(upload_key) = self
+            .candidate_listing
+            .candidate_with_id(entry_id)
+            .and_then(|entry_record| entry_upload_key(entry_record, upload_target))
+        else {
+            Self::report_upload_notice(
+                sender,
+                gettext("This file is no longer in quarantine with a usable hash"),
+            );
+            return;
+        };
+        let Some(upload_key) = self.admit_upload(upload_key, sender) else {
+            return;
+        };
+        let activity_history = self.activity_history.clone();
+        let quarantine_vault = self.quarantine_vault.clone();
+        match upload_proposal.upload_service {
+            UploadService::MalwareBazaarUpload { .. } => {
+                sender.oneshot_command(async move {
+                    SubmissionsPageCommand::BazaarUploadFinished {
+                        upload_attempt: upload_to_malware_bazaar(
+                            &activity_history,
+                            &quarantine_vault,
+                            entry_id,
+                        )
+                        .await,
+                        upload_key,
+                    }
+                });
+            }
+            UploadService::VirusTotalUpload => {
+                sender.oneshot_command(async move {
+                    SubmissionsPageCommand::VirusTotalUploadFinished {
+                        upload_attempt: upload_to_virustotal(
+                            &activity_history,
+                            &quarantine_vault,
+                            entry_id,
+                        )
+                        .await,
+                        upload_key,
+                    }
+                });
+            }
+        }
+    }
+
+    fn start_read_clamav_report(
+        &mut self,
+        clamav_report: ClamavReport,
+        submission_sample: SubmissionSample,
+        sender: &ComponentSender<Self>,
+    ) {
+        let upload_key = UploadKey::for_target(
+            &submission_sample.submitted_file.content_sha256,
+            clamav_report_target(&clamav_report.report_kind),
+        );
+        let Some(upload_key) = self.admit_upload(upload_key, sender) else {
+            return;
+        };
+        let activity_history = self.activity_history.clone();
+        sender.oneshot_command(async move {
+            SubmissionsPageCommand::ClamavReportFinished {
+                report_attempt: send_read_clamav_report(
+                    &activity_history,
+                    &clamav_report,
+                    submission_sample,
+                )
+                .await,
+                upload_key,
+            }
+        });
     }
 }
 
@@ -480,6 +618,7 @@ impl Component for SubmissionsPage {
             candidate_listing: CandidateListing::CandidatesLoading,
             submission_filters: SubmissionFilters::SHOW_EVERYTHING,
             remote_refresh: RemoteRefreshRun::RefreshIdle,
+            uploads_in_flight: UploadsInFlight::default(),
             submitted_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
                 .forward(sender.input_sender(), |row_output| match row_output {
@@ -571,45 +710,18 @@ impl Component for SubmissionsPage {
                 self.confirm_chosen_target(chosen_target, root, &sender);
             }
             SubmissionsPageInput::ClamavReportConfirmed(report_request) => {
-                let activity_history = self.activity_history.clone();
                 let quarantine_vault = self.quarantine_vault.clone();
                 sender.oneshot_command(async move {
-                    SubmissionsPageCommand::ClamavReportFinished(
-                        send_clamav_report(&activity_history, &quarantine_vault, report_request)
-                            .await,
-                    )
+                    let read_outcome =
+                        read_clamav_report_sample(&quarantine_vault, &report_request).await;
+                    SubmissionsPageCommand::ClamavSampleRead {
+                        clamav_report: report_request.clamav_report,
+                        read_outcome,
+                    }
                 });
             }
             SubmissionsPageInput::SampleUploadConfirmed(upload_proposal) => {
-                let activity_history = self.activity_history.clone();
-                let quarantine_vault = self.quarantine_vault.clone();
-                let entry_id = upload_proposal.entry_id;
-                match upload_proposal.upload_service {
-                    UploadService::MalwareBazaarUpload { .. } => {
-                        sender.oneshot_command(async move {
-                            SubmissionsPageCommand::BazaarUploadFinished(
-                                upload_to_malware_bazaar(
-                                    &activity_history,
-                                    &quarantine_vault,
-                                    entry_id,
-                                )
-                                .await,
-                            )
-                        });
-                    }
-                    UploadService::VirusTotalUpload => {
-                        sender.oneshot_command(async move {
-                            SubmissionsPageCommand::VirusTotalUploadFinished(
-                                upload_to_virustotal(
-                                    &activity_history,
-                                    &quarantine_vault,
-                                    entry_id,
-                                )
-                                .await,
-                            )
-                        });
-                    }
-                }
+                self.start_sample_upload(&upload_proposal, &sender);
             }
             SubmissionsPageInput::MissedMalwareReportRequested => {
                 deliver_local_outcome(
@@ -671,14 +783,49 @@ impl Component for SubmissionsPage {
                 };
                 self.show_candidate_rows();
             }
-            SubmissionsPageCommand::ClamavReportFinished(report_attempt) => {
-                self.finish_sending(&clamav_report_attempt_text(&report_attempt), &sender);
+            SubmissionsPageCommand::ClamavSampleRead {
+                clamav_report,
+                read_outcome,
+            } => match read_outcome {
+                Ok(submission_sample) => {
+                    self.start_read_clamav_report(clamav_report, submission_sample, &sender);
+                }
+                Err(read_failure) => Self::report_upload_notice(
+                    &sender,
+                    clamav_report_attempt_text(&ClamavReportAttempt::SampleUnreadable(
+                        read_failure,
+                    )),
+                ),
+            },
+            SubmissionsPageCommand::ClamavReportFinished {
+                upload_key,
+                report_attempt,
+            } => {
+                self.finish_upload(
+                    &upload_key,
+                    clamav_report_attempt_text(&report_attempt),
+                    &sender,
+                );
             }
-            SubmissionsPageCommand::BazaarUploadFinished(upload_attempt) => {
-                self.finish_sending(&bazaar_upload_attempt_text(&upload_attempt), &sender);
+            SubmissionsPageCommand::BazaarUploadFinished {
+                upload_key,
+                upload_attempt,
+            } => {
+                self.finish_upload(
+                    &upload_key,
+                    bazaar_upload_attempt_text(&upload_attempt),
+                    &sender,
+                );
             }
-            SubmissionsPageCommand::VirusTotalUploadFinished(upload_attempt) => {
-                self.finish_sending(&virustotal_upload_attempt_text(&upload_attempt), &sender);
+            SubmissionsPageCommand::VirusTotalUploadFinished {
+                upload_key,
+                upload_attempt,
+            } => {
+                self.finish_upload(
+                    &upload_key,
+                    virustotal_upload_attempt_text(&upload_attempt),
+                    &sender,
+                );
             }
             SubmissionsPageCommand::RemoteRefreshFinished(refresh_summary) => {
                 self.remote_refresh = RemoteRefreshRun::RefreshIdle;

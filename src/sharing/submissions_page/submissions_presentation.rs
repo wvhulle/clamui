@@ -26,8 +26,12 @@ use crate::{
         quarantine_failure_text::describe_quarantine_failure,
         submission_outcome_text::history_failure_text,
     },
-    sharing::submissions_page::submissions_state::{
-        CandidateListing, ProgressFilter, ServiceFilter, SubmissionListing, offered_targets,
+    sharing::submissions_page::{
+        submissions_state::{
+            CandidateListing, ProgressFilter, SendAvailability, ServiceFilter, SubmissionListing,
+            offered_target_activities, send_availability,
+        },
+        uploads_in_flight::UploadsInFlight,
     },
 };
 
@@ -186,10 +190,19 @@ pub struct CandidateRowView {
     pub entry_id: i64,
     pub row_title: String,
     pub row_subtitle: String,
-    pub can_be_sent: bool,
+    pub send_availability: SendAvailability,
 }
 
-pub fn candidate_row_view(entry_record: &QuarantineEntryRecord) -> CandidateRowView {
+impl CandidateRowView {
+    pub const fn allows_sending(&self) -> bool {
+        matches!(self.send_availability, SendAvailability::SendableNow)
+    }
+}
+
+pub fn candidate_row_view(
+    entry_record: &QuarantineEntryRecord,
+    uploads_in_flight: &UploadsInFlight,
+) -> CandidateRowView {
     let detection_text = displayed_threat_name(&entry_record.threat_identity);
     CandidateRowView {
         entry_id: entry_record.entry_id,
@@ -203,7 +216,10 @@ pub fn candidate_row_view(entry_record: &QuarantineEntryRecord) -> CandidateRowV
                     .replace("{detection}", &detection_text)
             }
         },
-        can_be_sent: !offered_targets(entry_record).is_empty(),
+        send_availability: send_availability(&offered_target_activities(
+            entry_record,
+            uploads_in_flight,
+        )),
     }
 }
 
@@ -389,20 +405,26 @@ mod submissions_presentation_tests {
 
     #[test]
     fn an_unhashed_candidate_cannot_be_sent() {
-        let candidate_view = candidate_row_view(&QuarantineEntryRecord {
-            entry_id: 5,
-            original_path: PathBuf::from("/home/user/old.bin"),
-            quarantine_path: PathBuf::from("/vault/old"),
-            threat_identity: ThreatIdentity::Signature {
-                signature_name: "Legacy.Test".to_owned(),
+        let candidate_view = candidate_row_view(
+            &QuarantineEntryRecord {
+                entry_id: 5,
+                original_path: PathBuf::from("/home/user/old.bin"),
+                quarantine_path: PathBuf::from("/vault/old"),
+                threat_identity: ThreatIdentity::Signature {
+                    signature_name: "Legacy.Test".to_owned(),
+                },
+                detection_date: StoredDetectionDate::from("2020-01-01T00:00:00Z".to_owned()),
+                file_size: ByteSize::b(3),
+                payload_hash: RecordedPayloadHash::IntegrityUnknown,
+                original_permissions: 0o644,
             },
-            detection_date: StoredDetectionDate::from("2020-01-01T00:00:00Z".to_owned()),
-            file_size: ByteSize::b(3),
-            payload_hash: RecordedPayloadHash::IntegrityUnknown,
-            original_permissions: 0o644,
-        });
+            &UploadsInFlight::default(),
+        );
         assert_eq!(candidate_view.row_title, "old.bin");
-        assert!(!candidate_view.can_be_sent);
+        assert_eq!(
+            candidate_view.send_availability,
+            SendAvailability::NothingToSend
+        );
         assert!(candidate_view.row_subtitle.contains("No usable hash"));
     }
 

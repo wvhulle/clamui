@@ -9,10 +9,13 @@ use crate::host_services::{
         },
     },
     clamav_programs::clamav_report_submission::{
-        ClamavReportKind, ClamavReportRequest, ClamsubmitFailure, submit_clamav_report,
+        ClamavReport, ClamavReportKind, ClamavReportRequest, ClamsubmitFailure,
+        submit_clamav_report,
     },
     quarantine_vault::quarantine_entry_database::QuarantineVault,
-    sample_submissions::submission_samples::{SampleReadFailure, read_submitted_content},
+    sample_submissions::submission_samples::{
+        SampleReadFailure, SubmissionSample, read_submitted_content,
+    },
 };
 
 #[derive(Debug)]
@@ -46,17 +49,19 @@ pub fn awaiting_review_state(report_kind: &ClamavReportKind) -> SubmissionState 
     }
 }
 
-pub async fn send_clamav_report(
-    activity_history: &ActivityHistory,
+pub async fn read_clamav_report_sample(
     quarantine_vault: &QuarantineVault,
-    report_request: ClamavReportRequest,
+    report_request: &ClamavReportRequest,
+) -> Result<SubmissionSample, SampleReadFailure> {
+    read_submitted_content(quarantine_vault, &report_request.submitted_content).await
+}
+
+pub async fn send_read_clamav_report(
+    activity_history: &ActivityHistory,
+    clamav_report: &ClamavReport,
+    submission_sample: SubmissionSample,
 ) -> ClamavReportAttempt {
-    let report_kind = &report_request.clamav_report.report_kind;
-    let submission_sample =
-        match read_submitted_content(quarantine_vault, &report_request.submitted_content).await {
-            Ok(submission_sample) => submission_sample,
-            Err(read_failure) => return ClamavReportAttempt::SampleUnreadable(read_failure),
-        };
+    let report_kind = &clamav_report.report_kind;
     match activity_history
         .find_earlier_submission(
             &submission_sample.submitted_file.content_sha256,
@@ -70,11 +75,8 @@ pub async fn send_clamav_report(
         Ok(EarlierSubmission::NotSubmittedBefore) => {}
         Err(history_failure) => return ClamavReportAttempt::HistoryUnavailable(history_failure),
     }
-    if let Err(clamsubmit_failure) = submit_clamav_report(
-        &report_request.clamav_report,
-        submission_sample.sample_bytes,
-    )
-    .await
+    if let Err(clamsubmit_failure) =
+        submit_clamav_report(clamav_report, submission_sample.sample_bytes).await
     {
         return ClamavReportAttempt::ReportNotSent(clamsubmit_failure);
     }
@@ -101,9 +103,7 @@ mod clamav_report_flow_tests {
     use super::*;
     use crate::host_services::{
         activity_history::submission_history_store::SubmittedFile,
-        clamav_programs::clamav_report_submission::{
-            ClamavReport, ReporterContact, SubmittedContent,
-        },
+        clamav_programs::clamav_report_submission::{ReporterContact, SubmittedContent},
         sample_submissions::submission_samples::content_sha256_text,
     };
 
@@ -157,21 +157,29 @@ mod clamav_report_flow_tests {
             })
             .await
             .expect("earlier report");
-        let report_attempt = send_clamav_report(
-            &activity_history,
-            &quarantine_vault,
-            ClamavReportRequest {
-                clamav_report: ClamavReport {
-                    reporter_contact: ReporterContact {
-                        reporter_name: "Alex Doe".to_owned(),
-                        reporter_email: "alex@example.org".to_owned(),
-                    },
-                    report_kind: ClamavReportKind::MissedMalware,
+        let report_request = ClamavReportRequest {
+            clamav_report: ClamavReport {
+                reporter_contact: ReporterContact {
+                    reporter_name: "Alex Doe".to_owned(),
+                    reporter_email: "alex@example.org".to_owned(),
                 },
-                submitted_content: SubmittedContent::FileOnDisk {
-                    file_path: picked_path,
-                },
+                report_kind: ClamavReportKind::MissedMalware,
             },
+            submitted_content: SubmittedContent::FileOnDisk {
+                file_path: picked_path,
+            },
+        };
+        let submission_sample = read_clamav_report_sample(&quarantine_vault, &report_request)
+            .await
+            .expect("picked sample");
+        assert_eq!(
+            submission_sample.submitted_file.content_sha256,
+            content_sha256_text(b"missed sample")
+        );
+        let report_attempt = send_read_clamav_report(
+            &activity_history,
+            &report_request.clamav_report,
+            submission_sample,
         )
         .await;
         assert!(matches!(

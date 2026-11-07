@@ -1,22 +1,26 @@
 use std::path::Path;
 
-use crate::host_services::{
-    activity_history::{
-        activity_history_database::ActivityHistoryFailure,
-        submission_history_store::{
-            SubmissionProgress, SubmissionRecord, SubmissionService, SubmissionTarget,
+use crate::{
+    host_services::{
+        activity_history::{
+            activity_history_database::ActivityHistoryFailure,
+            submission_history_store::{
+                SubmissionProgress, SubmissionRecord, SubmissionService, SubmissionTarget,
+            },
         },
+        quarantine_vault::{
+            quarantine_entry_database::{QuarantineEntryRecord, StoredDetectionDate},
+            quarantine_file_moves::{QuarantineMoveFailure, RecordedPayloadHash},
+        },
+        sample_submissions::bazaar_sample_upload::{BazaarEligibility, bazaar_eligibility},
     },
-    quarantine_vault::{
-        quarantine_entry_database::{QuarantineEntryRecord, StoredDetectionDate},
-        quarantine_file_moves::{QuarantineMoveFailure, RecordedPayloadHash},
-    },
-    sample_submissions::bazaar_sample_upload::{BazaarEligibility, bazaar_eligibility},
+    sharing::submissions_page::uploads_in_flight::{UploadActivity, UploadKey, UploadsInFlight},
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SubmissionsPageOutput {
     TallyChanged(SubmissionTally),
+    UploadNoticeReady(String),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -197,6 +201,59 @@ pub fn offered_targets(entry_record: &QuarantineEntryRecord) -> Vec<SubmissionTa
         .collect()
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OfferedTarget {
+    pub submission_target: SubmissionTarget,
+    pub upload_activity: UploadActivity,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SendAvailability {
+    SendableNow,
+    NothingToSend,
+    EveryTargetUploading,
+}
+
+pub fn entry_upload_key(
+    entry_record: &QuarantineEntryRecord,
+    submission_target: SubmissionTarget,
+) -> Option<UploadKey> {
+    match &entry_record.payload_hash {
+        RecordedPayloadHash::KnownSha256 { sha256_hex } => {
+            Some(UploadKey::for_target(sha256_hex, submission_target))
+        }
+        RecordedPayloadHash::IntegrityUnknown => None,
+    }
+}
+
+pub fn offered_target_activities(
+    entry_record: &QuarantineEntryRecord,
+    uploads_in_flight: &UploadsInFlight,
+) -> Vec<OfferedTarget> {
+    offered_targets(entry_record)
+        .into_iter()
+        .filter_map(|submission_target| {
+            entry_upload_key(entry_record, submission_target).map(|upload_key| OfferedTarget {
+                submission_target,
+                upload_activity: uploads_in_flight.upload_activity(&upload_key),
+            })
+        })
+        .collect()
+}
+
+pub fn send_availability(offered_activities: &[OfferedTarget]) -> SendAvailability {
+    if offered_activities.is_empty() {
+        SendAvailability::NothingToSend
+    } else if offered_activities
+        .iter()
+        .any(|offered_target| offered_target.upload_activity == UploadActivity::UploadIdle)
+    {
+        SendAvailability::SendableNow
+    } else {
+        SendAvailability::EveryTargetUploading
+    }
+}
+
 #[cfg(test)]
 mod submissions_state_tests {
     use std::path::PathBuf;
@@ -370,6 +427,66 @@ mod submissions_state_tests {
                 RecordedPayloadHash::IntegrityUnknown
             ))
             .is_empty()
+        );
+    }
+
+    #[test]
+    fn targets_being_uploaded_are_offered_but_not_available() {
+        let entry_record = quarantined_entry(
+            ThreatIdentity::Signature {
+                signature_name: "Win.Trojan.Agent".to_owned(),
+            },
+            known_hash(),
+        );
+        let mut uploads_in_flight = UploadsInFlight::default();
+        uploads_in_flight
+            .start_upload(UploadKey::for_target(
+                &"b".repeat(64),
+                SubmissionTarget::MalwareBazaarSample,
+            ))
+            .expect("first upload");
+        let offered_activities = offered_target_activities(&entry_record, &uploads_in_flight);
+        assert_eq!(
+            offered_activities
+                .iter()
+                .map(|offered_target| offered_target.upload_activity)
+                .collect::<Vec<_>>(),
+            vec![
+                UploadActivity::UploadIdle,
+                UploadActivity::UploadRunning,
+                UploadActivity::UploadIdle
+            ]
+        );
+        assert_eq!(
+            send_availability(&offered_activities),
+            SendAvailability::SendableNow
+        );
+        [
+            SubmissionTarget::ClamavFalsePositive,
+            SubmissionTarget::VirusTotalSample,
+        ]
+        .into_iter()
+        .for_each(|submission_target| {
+            uploads_in_flight
+                .start_upload(UploadKey::for_target(&"b".repeat(64), submission_target))
+                .expect("other uploads");
+        });
+        assert_eq!(
+            send_availability(&offered_target_activities(
+                &entry_record,
+                &uploads_in_flight
+            )),
+            SendAvailability::EveryTargetUploading
+        );
+        assert_eq!(
+            send_availability(&offered_target_activities(
+                &quarantined_entry(
+                    ThreatIdentity::BlockedByOnAccess,
+                    RecordedPayloadHash::IntegrityUnknown
+                ),
+                &uploads_in_flight
+            )),
+            SendAvailability::NothingToSend
         );
     }
 
