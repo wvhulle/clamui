@@ -1,7 +1,9 @@
 use std::{
+    cell::{Cell, RefCell},
     ffi::{OsStr, OsString},
     fs::{self, File},
-    os::unix::fs::PermissionsExt,
+    io,
+    os::unix::{fs::PermissionsExt, process::CommandExt},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     thread,
@@ -32,40 +34,154 @@ fn isolated_bus_config(bus_address: &str) -> String {
     include_str!("../assets/isolated-session-bus.conf").replace("@BUS_ADDRESS@", bus_address)
 }
 
-fn start_isolated_bus(session_root: &Path) -> Result<Child, SceneCaptureFailure> {
-    let bus_socket = session_subdirectory(session_root, "runtime/bus");
-    let bus_config_path = session_subdirectory(session_root, "bus.conf");
+struct SessionProcesses {
+    started_processes: Vec<Child>,
+}
+
+impl SessionProcesses {
+    const fn new() -> Self {
+        Self {
+            started_processes: Vec::new(),
+        }
+    }
+
+    fn spawn_tied(
+        &mut self,
+        tool_name: &'static str,
+        tool_command: &mut Command,
+    ) -> Result<&mut Child, SceneCaptureFailure> {
+        let started_process = die_with_parent(tool_command)
+            .process_group(0)
+            .spawn()
+            .map_err(|start_failure| SceneCaptureFailure::ToolNotStarted {
+                tool_name,
+                start_failure,
+            })?;
+        self.started_processes.push(started_process);
+        Ok(self
+            .started_processes
+            .last_mut()
+            .expect("a process was just pushed"))
+    }
+}
+
+impl Drop for SessionProcesses {
+    fn drop(&mut self) {
+        self.started_processes
+            .iter_mut()
+            .rev()
+            .for_each(|started_process| {
+                kill_process_group(started_process);
+                let _already_exited = started_process.kill();
+                let _exit_status = started_process.wait();
+            });
+    }
+}
+
+fn kill_process_group(started_process: &Child) {
+    if let Ok(group_leader) = i32::try_from(started_process.id()) {
+        unsafe {
+            libc::kill(-group_leader, libc::SIGKILL);
+        }
+    }
+}
+
+fn die_with_parent(tool_command: &mut Command) -> &mut Command {
+    unsafe {
+        tool_command.pre_exec(|| {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AccessibilityStack {
+    NotStarted,
+    Running,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IsolatedBus {
+    SessionBus,
+    AccessibilityBus,
+}
+
+impl IsolatedBus {
+    const fn socket_name(self) -> &'static str {
+        match self {
+            Self::SessionBus => "runtime/bus",
+            Self::AccessibilityBus => "runtime/accessibility-bus",
+        }
+    }
+
+    const fn file_stem(self) -> &'static str {
+        match self {
+            Self::SessionBus => "session-bus",
+            Self::AccessibilityBus => "accessibility-bus",
+        }
+    }
+
+    const fn readiness_condition(self) -> &'static str {
+        match self {
+            Self::SessionBus => "the isolated session bus",
+            Self::AccessibilityBus => "the isolated accessibility bus",
+        }
+    }
+
+    fn bus_address(self, session_root: &Path) -> String {
+        format!(
+            "unix:path={}",
+            session_subdirectory(session_root, self.socket_name()).display()
+        )
+    }
+}
+
+fn start_isolated_bus(
+    session_root: &Path,
+    isolated_bus: IsolatedBus,
+    session_processes: &mut SessionProcesses,
+) -> Result<(), SceneCaptureFailure> {
+    let bus_socket = session_subdirectory(session_root, isolated_bus.socket_name());
+    let bus_config_path =
+        session_subdirectory(session_root, &format!("{}.conf", isolated_bus.file_stem()));
     fs::write(
         &bus_config_path,
-        isolated_bus_config(&session_bus_address(session_root)),
+        isolated_bus_config(&isolated_bus.bus_address(session_root)),
     )?;
-    let bus_process = Command::new("dbus-daemon")
-        .arg("--nofork")
-        .arg(format!("--config-file={}", bus_config_path.display()))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .spawn()
-        .map_err(|start_failure| SceneCaptureFailure::ToolNotStarted {
-            tool_name: "dbus-daemon",
-            start_failure,
-        })?;
+    session_processes.spawn_tied(
+        "dbus-daemon",
+        Command::new("dbus-daemon")
+            .arg("--nofork")
+            .arg(format!("--config-file={}", bus_config_path.display()))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(File::create(session_subdirectory(
+                session_root,
+                &format!("{}.log", isolated_bus.file_stem()),
+            ))?),
+    )?;
     let waiting_since = Instant::now();
     while !bus_socket.exists() {
         if waiting_since.elapsed() > READINESS_TIMEOUT {
             return Err(SceneCaptureFailure::NeverReady {
-                awaited_condition: "the isolated session bus",
+                awaited_condition: isolated_bus.readiness_condition(),
             });
         }
         thread::sleep(READINESS_POLL_INTERVAL);
     }
-    Ok(bus_process)
+    Ok(())
 }
 
 fn session_bus_address(session_root: &Path) -> String {
-    format!(
-        "unix:path={}",
-        session_subdirectory(session_root, "runtime/bus").display()
-    )
+    IsolatedBus::SessionBus.bus_address(session_root)
+}
+
+fn accessibility_bus_address(session_root: &Path) -> String {
+    IsolatedBus::AccessibilityBus.bus_address(session_root)
 }
 
 struct FixedVariable {
@@ -83,52 +199,27 @@ impl FixedVariable {
 }
 
 pub struct HeadlessSwaySession {
+    session_processes: RefCell<SessionProcesses>,
+    accessibility_stack: Cell<AccessibilityStack>,
     session_directory: TempDir,
     wayland_display: OsString,
-    sway_process: Child,
-    bus_process: Child,
-    accessibility_bus_process: Child,
-    accessibility_registry_process: Child,
     screen_size: ScreenSize,
 }
 
-fn accessibility_bus_is_published(session_bus_address: &str) -> bool {
-    zbus::blocking::connection::Builder::address(session_bus_address)
-        .and_then(zbus::blocking::connection::Builder::build)
-        .and_then(|session_bus| {
-            session_bus.call_method(
-                Some("org.a11y.Bus"),
-                "/org/a11y/bus",
-                Some("org.a11y.Bus"),
-                "GetAddress",
-                &(),
-            )
-        })
-        .is_ok()
-}
-
-fn start_accessibility_registry(session_root: &Path) -> Result<Child, SceneCaptureFailure> {
-    let session_bus_address = session_bus_address(session_root);
-    let waiting_since = Instant::now();
-    while !accessibility_bus_is_published(&session_bus_address) {
-        if waiting_since.elapsed() > READINESS_TIMEOUT {
-            return Err(SceneCaptureFailure::NeverReady {
-                awaited_condition: "the accessibility bus launcher",
-            });
-        }
-        thread::sleep(READINESS_POLL_INTERVAL);
-    }
+fn start_accessibility_registry(
+    session_root: &Path,
+    session_processes: &mut SessionProcesses,
+) -> Result<(), SceneCaptureFailure> {
     let mut registry_command = Command::new("at-spi2-registryd");
     apply_session_environment(session_root, &mut registry_command);
-    registry_command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|start_failure| SceneCaptureFailure::ToolNotStarted {
-            tool_name: "at-spi2-registryd",
-            start_failure,
-        })
+    session_processes.spawn_tied(
+        "at-spi2-registryd",
+        registry_command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+    )?;
+    Ok(())
 }
 
 fn sway_config(screen_size: ScreenSize) -> String {
@@ -136,21 +227,6 @@ fn sway_config(screen_size: ScreenSize) -> String {
         "output * resolution {}x{} scale 1\n{SWAY_BASE_CONFIG}",
         screen_size.logical_width, screen_size.logical_height
     )
-}
-
-fn start_accessibility_bus(session_root: &Path) -> Result<Child, SceneCaptureFailure> {
-    let mut launcher_command = Command::new("at-spi-bus-launcher");
-    apply_session_environment(session_root, &mut launcher_command);
-    launcher_command
-        .arg("--launch-immediately")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|start_failure| SceneCaptureFailure::ToolNotStarted {
-            tool_name: "at-spi-bus-launcher",
-            start_failure,
-        })
 }
 
 fn session_subdirectory(session_directory: &Path, subdirectory_name: &str) -> PathBuf {
@@ -168,6 +244,10 @@ fn apply_session_environment(session_directory: &Path, session_command: &mut Com
         .env(
             "DBUS_SYSTEM_BUS_ADDRESS",
             session_bus_address(session_directory),
+        )
+        .env(
+            "AT_SPI_BUS_ADDRESS",
+            accessibility_bus_address(session_directory),
         )
         .env("HOME", session_subdirectory(session_directory, "home"))
         .env(
@@ -245,38 +325,52 @@ impl HeadlessSwaySession {
         let sway_config_path = session_subdirectory(session_root, "sway_config");
         fs::write(&sway_config_path, sway_config(screen_size))?;
 
-        let bus_process = start_isolated_bus(session_root)?;
-        let accessibility_bus_process = start_accessibility_bus(session_root)?;
-        let accessibility_registry_process = start_accessibility_registry(session_root)?;
+        let mut session_processes = SessionProcesses::new();
+        start_isolated_bus(
+            session_root,
+            IsolatedBus::SessionBus,
+            &mut session_processes,
+        )?;
         let sway_log_path = session_subdirectory(session_root, "sway.log");
         let mut sway_command = Command::new("sway");
         apply_session_environment(session_root, &mut sway_command);
-        let mut sway_process = sway_command
-            .env_remove("WAYLAND_DISPLAY")
-            .arg("--config")
-            .arg(&sway_config_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(File::create(&sway_log_path)?)
-            .spawn()
-            .map_err(|start_failure| SceneCaptureFailure::ToolNotStarted {
-                tool_name: "sway",
-                start_failure,
-            })?;
-        let wayland_display = wait_for_wayland_display(&runtime_directory, &mut sway_process)
+        let sway_process = session_processes.spawn_tied(
+            "sway",
+            sway_command
+                .env_remove("WAYLAND_DISPLAY")
+                .arg("--config")
+                .arg(&sway_config_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(File::create(&sway_log_path)?),
+        )?;
+        let wayland_display = wait_for_wayland_display(&runtime_directory, sway_process)
             .inspect_err(|_startup_failure| {
                 let sway_log = fs::read_to_string(&sway_log_path).unwrap_or_default();
                 eprintln!("{sway_log}");
             })?;
         Ok(Self {
+            session_processes: RefCell::new(session_processes),
+            accessibility_stack: Cell::new(AccessibilityStack::NotStarted),
             session_directory,
             wayland_display,
-            sway_process,
-            bus_process,
-            accessibility_bus_process,
-            accessibility_registry_process,
             screen_size,
         })
+    }
+
+    pub fn start_accessibility(&self) -> Result<(), SceneCaptureFailure> {
+        if self.accessibility_stack.get() == AccessibilityStack::Running {
+            return Ok(());
+        }
+        let mut session_processes = self.session_processes.borrow_mut();
+        start_isolated_bus(
+            self.session_root(),
+            IsolatedBus::AccessibilityBus,
+            &mut session_processes,
+        )?;
+        start_accessibility_registry(self.session_root(), &mut session_processes)?;
+        self.accessibility_stack.set(AccessibilityStack::Running);
+        Ok(())
     }
 
     pub const fn screen_size(&self) -> ScreenSize {
@@ -291,6 +385,10 @@ impl HeadlessSwaySession {
         session_bus_address(self.session_root())
     }
 
+    pub fn accessibility_bus_address(&self) -> String {
+        accessibility_bus_address(self.session_root())
+    }
+
     pub fn wayland_socket_path(&self) -> PathBuf {
         session_subdirectory(self.session_root(), "runtime").join(&self.wayland_display)
     }
@@ -300,18 +398,5 @@ impl HeadlessSwaySession {
         apply_session_environment(self.session_root(), &mut session_command);
         session_command.env("WAYLAND_DISPLAY", &self.wayland_display);
         session_command
-    }
-}
-
-impl Drop for HeadlessSwaySession {
-    fn drop(&mut self) {
-        let _already_exited = self.sway_process.kill();
-        let _exit_status = self.sway_process.wait();
-        let _registry_already_exited = self.accessibility_registry_process.kill();
-        let _registry_exit_status = self.accessibility_registry_process.wait();
-        let _launcher_already_exited = self.accessibility_bus_process.kill();
-        let _launcher_exit_status = self.accessibility_bus_process.wait();
-        let _bus_already_exited = self.bus_process.kill();
-        let _bus_exit_status = self.bus_process.wait();
     }
 }

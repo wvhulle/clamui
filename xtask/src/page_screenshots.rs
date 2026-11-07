@@ -1,4 +1,5 @@
 use std::{
+    env,
     ffi::OsString,
     fs,
     path::Path,
@@ -10,7 +11,7 @@ use std::{
 use gtk_scene_capture::{
     accessible_widget_lookup::{AccessibleTree, WidgetTarget},
     headless_sway_session::HeadlessSwaySession,
-    scene_driver::{SceneDriver, UserInteraction},
+    scene_driver::{SceneDriver, UserInteraction, WidgetAccess},
     virtual_pointer_input::ScreenSize,
     webp_animation_encoding::encode_webp_animation,
 };
@@ -26,6 +27,11 @@ const STEP_FRAME_DURATION: Duration = Duration::from_millis(1800);
 const POINTING_FRAME_DURATION: Duration = Duration::from_millis(900);
 const FINAL_FRAME_DURATION: Duration = Duration::from_secs(4);
 const APPLICATION_EXIT_DURATION: Duration = Duration::from_millis(500);
+const LAZARET_PROGRAM_VARIABLE: &str = "LAZARET_SCREENSHOT_PROGRAM";
+const SCREENSHOT_FONTCONFIG_VARIABLE: &str = "LAZARET_SCREENSHOT_FONTCONFIG";
+const SCREEN_CAPTURE_TOOLS: [&str; 4] = ["dbus-daemon", "sway", "grim", "img2webp"];
+const ACCESSIBILITY_TOOLS: [&str; 1] = ["at-spi2-registryd"];
+const QUARANTINING_SCENARIO: &str = "scan-results";
 pub const SCREEN_SIZE: ScreenSize = ScreenSize {
     logical_width: 900,
     logical_height: 700,
@@ -243,15 +249,54 @@ fn application_arguments(
     page_arguments.into_iter().chain(scan_target).collect()
 }
 
+fn lazaret_program() -> OsString {
+    env::var_os(LAZARET_PROGRAM_VARIABLE).unwrap_or_else(|| OsString::from("lazaret"))
+}
+
+fn program_on_path(program_name: &str) -> bool {
+    env::var_os("PATH").is_some_and(|search_path| {
+        env::split_paths(&search_path)
+            .any(|search_directory| search_directory.join(program_name).is_file())
+    })
+}
+
+fn check_required_tools(widget_access: WidgetAccess) -> Result<(), TaskFailure> {
+    let accessibility_tools: &[&str] = match widget_access {
+        WidgetAccess::ScreenOnly => &[],
+        WidgetAccess::WidgetInteraction => &ACCESSIBILITY_TOOLS,
+    };
+    let missing_tools: Vec<&str> = SCREEN_CAPTURE_TOOLS
+        .iter()
+        .chain(accessibility_tools)
+        .copied()
+        .filter(|tool_name| !program_on_path(tool_name))
+        .collect();
+    if missing_tools.is_empty() {
+        Ok(())
+    } else {
+        Err(TaskFailure::ScreenshotToolsMissing {
+            missing_tools: missing_tools.join(", "),
+        })
+    }
+}
+
 fn launch_application(
     headless_session: &HeadlessSwaySession,
     screenshot_fixtures: &ScreenshotFixtures,
     page_arguments: Vec<OsString>,
     scan_fixture_use: ScanFixtureUse,
+    widget_access: WidgetAccess,
 ) -> Result<Child, TaskFailure> {
-    let application_process = headless_session
-        .session_command("lazaret")
+    if widget_access == WidgetAccess::WidgetInteraction {
+        headless_session.start_accessibility()?;
+    }
+    let mut application_command = headless_session.session_command(lazaret_program());
+    if let Some(screenshot_fontconfig) = env::var_os(SCREENSHOT_FONTCONFIG_VARIABLE) {
+        application_command.env("FONTCONFIG_FILE", screenshot_fontconfig);
+    }
+    let application_process = application_command
         .env("PATH", &screenshot_fixtures.search_path)
+        .env("GTK_A11Y", widget_access.gtk_accessibility_backend())
         .args(application_arguments(
             page_arguments,
             scan_fixture_use,
@@ -279,14 +324,16 @@ fn run_page_scenario(
     output_directory: &Path,
     page_scenario: &PageScenario,
 ) -> Result<(), TaskFailure> {
+    let widget_access = WidgetAccess::required_by(&page_scenario.user_interactions);
     let application_process = launch_application(
         headless_session,
         screenshot_fixtures,
         page_scenario.launched_page.page_arguments(),
         page_scenario.scan_fixture_use,
+        widget_access,
     )?;
-    let scenario_outcome =
-        SceneDriver::attach(headless_session, output_directory).and_then(|mut scene_driver| {
+    let scenario_outcome = SceneDriver::attach(headless_session, output_directory, widget_access)
+        .and_then(|mut scene_driver| {
             scene_driver.perform_all(&page_scenario.user_interactions)?;
             Ok(scene_driver.take_animation_frames())
         });
@@ -323,7 +370,8 @@ struct PreparedSession {
     screenshot_fixtures: ScreenshotFixtures,
 }
 
-fn prepare_session() -> Result<PreparedSession, TaskFailure> {
+fn prepare_session(widget_access: WidgetAccess) -> Result<PreparedSession, TaskFailure> {
+    check_required_tools(widget_access)?;
     let headless_session = HeadlessSwaySession::start_session(SCREEN_SIZE)?;
     let fixture_systemd = serve_fixture_systemd(&headless_session.bus_address())?;
     let screenshot_fixtures = prepare_screenshot_fixtures(headless_session.session_root())?;
@@ -334,11 +382,53 @@ fn prepare_session() -> Result<PreparedSession, TaskFailure> {
     })
 }
 
-pub fn render_page_screenshots(output_directory: &Path) -> Result<(), TaskFailure> {
+fn select_scenarios(selected_names: &[String]) -> Result<Vec<PageScenario>, TaskFailure> {
+    let all_scenarios = page_scenarios();
+    if let Some(unknown_name) = selected_names.iter().find(|selected_name| {
+        !all_scenarios
+            .iter()
+            .any(|page_scenario| page_scenario.animation_name == selected_name.as_str())
+    }) {
+        return Err(TaskFailure::ScenarioUnknown {
+            requested_name: unknown_name.clone(),
+            known_names: all_scenarios
+                .iter()
+                .map(|page_scenario| page_scenario.animation_name)
+                .collect::<Vec<_>>()
+                .join(", "),
+        });
+    }
+    Ok(all_scenarios
+        .into_iter()
+        .filter(|page_scenario| {
+            selected_names.is_empty()
+                || selected_names
+                    .iter()
+                    .any(|selected_name| selected_name == page_scenario.animation_name)
+        })
+        .collect())
+}
+
+fn widget_access_for_all(page_scenarios: &[PageScenario]) -> WidgetAccess {
+    if page_scenarios.iter().any(|page_scenario| {
+        WidgetAccess::required_by(&page_scenario.user_interactions)
+            == WidgetAccess::WidgetInteraction
+    }) {
+        WidgetAccess::WidgetInteraction
+    } else {
+        WidgetAccess::ScreenOnly
+    }
+}
+
+pub fn render_page_screenshots(
+    output_directory: &Path,
+    selected_names: &[String],
+) -> Result<(), TaskFailure> {
+    let selected_scenarios = select_scenarios(selected_names)?;
     fs::create_dir_all(output_directory)?;
     let absolute_output = fs::canonicalize(output_directory)?;
-    let prepared_session = prepare_session()?;
-    page_scenarios().iter().try_for_each(|page_scenario| {
+    let prepared_session = prepare_session(widget_access_for_all(&selected_scenarios))?;
+    selected_scenarios.iter().try_for_each(|page_scenario| {
         run_page_scenario(
             &prepared_session.headless_session,
             &prepared_session.screenshot_fixtures,
@@ -346,25 +436,37 @@ pub fn render_page_screenshots(output_directory: &Path) -> Result<(), TaskFailur
             page_scenario,
         )
     })?;
-    verify_fixtures_were_quarantined(&prepared_session.screenshot_fixtures)
+    if selected_scenarios
+        .iter()
+        .any(|page_scenario| page_scenario.animation_name == QUARANTINING_SCENARIO)
+    {
+        verify_fixtures_were_quarantined(&prepared_session.screenshot_fixtures)
+    } else {
+        Ok(())
+    }
 }
 
 pub fn list_visible_widgets(page_argument: &str) -> Result<Vec<String>, TaskFailure> {
-    let prepared_session = prepare_session()?;
+    let prepared_session = prepare_session(WidgetAccess::WidgetInteraction)?;
     let application_process = launch_application(
         &prepared_session.headless_session,
         &prepared_session.screenshot_fixtures,
         vec![OsString::from(page_argument)],
         ScanFixtureUse::IdlePage,
+        WidgetAccess::WidgetInteraction,
     )?;
     let async_runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     let widget_descriptions = async_runtime.block_on(async {
-        AccessibleTree::connect_through(&prepared_session.headless_session.bus_address())
-            .await?
-            .describe_visible_widgets()
-            .await
+        AccessibleTree::connect_to(
+            &prepared_session
+                .headless_session
+                .accessibility_bus_address(),
+        )
+        .await?
+        .describe_visible_widgets()
+        .await
     });
     stop_application(application_process);
     widget_descriptions

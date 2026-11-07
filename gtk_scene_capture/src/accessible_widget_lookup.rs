@@ -5,7 +5,6 @@ use atspi::{
     proxy::{
         accessible::{AccessibleProxy, ObjectRefExt},
         action::ActionProxy,
-        bus::BusProxy,
         component::ComponentProxy,
     },
     zbus,
@@ -131,11 +130,7 @@ async fn is_matching_widget(
 }
 
 impl AccessibleTree {
-    pub async fn connect_through(session_bus_address: &str) -> Result<Self, WidgetLookupFailure> {
-        let session_bus = zbus::connection::Builder::address(session_bus_address)?
-            .build()
-            .await?;
-        let accessibility_bus_address = BusProxy::new(&session_bus).await?.get_address().await?;
+    pub async fn connect_to(accessibility_bus_address: &str) -> Result<Self, WidgetLookupFailure> {
         Ok(Self {
             accessibility_connection: AccessibilityConnection::from_address(
                 accessibility_bus_address.parse()?,

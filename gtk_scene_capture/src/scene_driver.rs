@@ -26,10 +26,74 @@ pub enum UserInteraction {
     CaptureFrame { shown_for: Duration },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WidgetAccess {
+    ScreenOnly,
+    WidgetInteraction,
+}
+
+impl WidgetAccess {
+    pub fn required_by(user_interactions: &[UserInteraction]) -> Self {
+        if user_interactions.iter().any(|user_interaction| {
+            matches!(
+                user_interaction,
+                UserInteraction::ClickWidget(_)
+                    | UserInteraction::HoverWidget(_)
+                    | UserInteraction::WaitForWidget(_)
+            )
+        }) {
+            Self::WidgetInteraction
+        } else {
+            Self::ScreenOnly
+        }
+    }
+
+    pub const fn gtk_accessibility_backend(self) -> &'static str {
+        match self {
+            Self::ScreenOnly => "none",
+            Self::WidgetInteraction => "atspi",
+        }
+    }
+}
+
+enum WidgetTreeLink {
+    ScreenOnly,
+    Connected(AccessibleTree),
+}
+
+impl WidgetTreeLink {
+    fn connected_tree(&self) -> Result<&AccessibleTree, SceneCaptureFailure> {
+        match self {
+            Self::Connected(accessible_tree) => Ok(accessible_tree),
+            Self::ScreenOnly => Err(SceneCaptureFailure::WidgetAccessNotRequested),
+        }
+    }
+}
+
+fn connect_accessible_tree(
+    async_runtime: &tokio::runtime::Runtime,
+    accessibility_bus_address: &str,
+) -> Result<AccessibleTree, SceneCaptureFailure> {
+    let waiting_since = Instant::now();
+    loop {
+        match async_runtime.block_on(AccessibleTree::connect_to(accessibility_bus_address)) {
+            Ok(accessible_tree) => return Ok(accessible_tree),
+            Err(_bus_not_ready) if waiting_since.elapsed() < ACCESSIBILITY_BUS_TIMEOUT => {
+                thread::sleep(WIDGET_POLL_INTERVAL);
+            }
+            Err(_bus_never_ready) => {
+                return Err(SceneCaptureFailure::NeverReady {
+                    awaited_condition: "the accessibility bus",
+                });
+            }
+        }
+    }
+}
+
 pub struct SceneDriver<'session> {
     headless_session: &'session HeadlessSwaySession,
     async_runtime: tokio::runtime::Runtime,
-    accessible_tree: AccessibleTree,
+    widget_tree: WidgetTreeLink,
     pointer_input: VirtualPointerInput,
     output_directory: PathBuf,
     frame_directory: PathBuf,
@@ -48,24 +112,17 @@ impl<'session> SceneDriver<'session> {
     pub fn attach(
         headless_session: &'session HeadlessSwaySession,
         output_directory: &Path,
+        widget_access: WidgetAccess,
     ) -> Result<Self, SceneCaptureFailure> {
         let async_runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
-        let session_bus_address = headless_session.bus_address();
-        let waiting_since = Instant::now();
-        let accessible_tree = loop {
-            match async_runtime.block_on(AccessibleTree::connect_through(&session_bus_address)) {
-                Ok(accessible_tree) => break accessible_tree,
-                Err(_bus_not_ready) if waiting_since.elapsed() < ACCESSIBILITY_BUS_TIMEOUT => {
-                    thread::sleep(WIDGET_POLL_INTERVAL);
-                }
-                Err(_bus_never_ready) => {
-                    return Err(SceneCaptureFailure::NeverReady {
-                        awaited_condition: "the accessibility bus",
-                    });
-                }
-            }
+        let widget_tree = match widget_access {
+            WidgetAccess::ScreenOnly => WidgetTreeLink::ScreenOnly,
+            WidgetAccess::WidgetInteraction => WidgetTreeLink::Connected(connect_accessible_tree(
+                &async_runtime,
+                &headless_session.accessibility_bus_address(),
+            )?),
         };
         let frame_directory = headless_session.session_root().join("animation-frames");
         std::fs::create_dir_all(&frame_directory)?;
@@ -78,7 +135,7 @@ impl<'session> SceneDriver<'session> {
                 headless_session.screen_size(),
             )?,
             async_runtime,
-            accessible_tree,
+            widget_tree,
             output_directory: output_directory.to_path_buf(),
         })
     }
@@ -87,11 +144,12 @@ impl<'session> SceneDriver<'session> {
         &self,
         widget_target: &WidgetTarget,
     ) -> Result<LocatedWidget, SceneCaptureFailure> {
+        let accessible_tree = self.widget_tree.connected_tree()?;
         let waiting_since = Instant::now();
         loop {
             match self
                 .async_runtime
-                .block_on(self.accessible_tree.find_widget(widget_target))
+                .block_on(accessible_tree.find_widget(widget_target))
             {
                 Ok(located_widget) => return Ok(located_widget),
                 Err(WidgetLookupFailure::WidgetMissing { .. })
@@ -102,7 +160,7 @@ impl<'session> SceneDriver<'session> {
                 Err(lookup_failure) => {
                     let visible_widgets = self
                         .async_runtime
-                        .block_on(self.accessible_tree.describe_visible_widgets())
+                        .block_on(accessible_tree.describe_visible_widgets())
                         .unwrap_or_default();
                     eprintln!("visible widgets:\n{}", visible_widgets.join("\n"));
                     return Err(lookup_failure.into());
@@ -116,7 +174,8 @@ impl<'session> SceneDriver<'session> {
         self.pointer_input
             .move_to(screen_position_of(&located_widget))?;
         let activation_outcome = self.async_runtime.block_on(
-            self.accessible_tree
+            self.widget_tree
+                .connected_tree()?
                 .activate_widget(&located_widget, widget_target),
         );
         match activation_outcome {

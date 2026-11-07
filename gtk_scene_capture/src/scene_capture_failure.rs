@@ -28,6 +28,8 @@ pub enum SceneCaptureFailure {
     },
     #[error("no frames were captured for {}", .animation_path.display())]
     AnimationWithoutFrames { animation_path: PathBuf },
+    #[error("the scenario interacts with widgets but was attached for screen capture only")]
+    WidgetAccessNotRequested,
     #[error("timed out waiting for {awaited_condition}")]
     NeverReady { awaited_condition: &'static str },
 }

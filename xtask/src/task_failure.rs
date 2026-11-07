@@ -8,6 +8,16 @@ pub enum TaskFailure {
     FixtureSystemdFailed(#[from] zbus::Error),
     #[error("environment variable {variable_name} is not set")]
     VariableMissing { variable_name: &'static str },
+    #[error(
+        "missing screenshot tools on PATH: {missing_tools}; run `nix run .#render-screenshots -- \
+         <dir>` or use the devshell"
+    )]
+    ScreenshotToolsMissing { missing_tools: String },
+    #[error("no screenshot scenario is named {requested_name}; known scenarios: {known_names}")]
+    ScenarioUnknown {
+        requested_name: String,
+        known_names: String,
+    },
     #[error("an interaction had no effect: {expected_effect}")]
     InteractionHadNoEffect { expected_effect: &'static str },
     #[error("file operation failed: {0}")]

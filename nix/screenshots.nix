@@ -79,6 +79,7 @@ in
     cachixPush
     publishScreenshots
     renderScreenshots
+    screenshotFonts
     screenshots
     ;
 }

@@ -1681,6 +1681,7 @@ name = "gtk_scene_capture"
 version = "0.1.0"
 dependencies = [
  "atspi",
+ "libc",
  "tempfile",
  "thiserror",
  "tokio",

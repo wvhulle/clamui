@@ -314,7 +314,16 @@ in
       pkgs.gnumake
       pkgs.nixfmt
       pkgs.sqlite
+      pkgs.dbus
+      pkgs.grim
+      pkgs.libwebp
+      pkgs.sway
     ];
     GSETTINGS_SCHEMA_DIR = developmentSchemas;
+    LAZARET_SCREENSHOT_FONTCONFIG = screenshotRendering.screenshotFonts;
+    shellHook = ''
+      export PATH="$PATH:${pkgs.at-spi2-core}/libexec"
+      export LAZARET_SCREENSHOT_PROGRAM="$PWD/target/debug/lazaret"
+    '';
   };
 }

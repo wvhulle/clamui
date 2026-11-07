@@ -44,6 +44,8 @@ enum RepositoryTask {
     RenderScreenshots {
         #[arg(default_value = "dist/screenshots")]
         output_directory: PathBuf,
+        #[arg(long = "only")]
+        selected_scenarios: Vec<String>,
     },
     ListWidgets {
         #[arg(default_value = "--page=manual-scan")]
@@ -98,9 +100,10 @@ enum RepositoryTask {
 
 fn run_repository_task(repository_task: RepositoryTask) -> Result<(), TaskFailure> {
     match repository_task {
-        RepositoryTask::RenderScreenshots { output_directory } => {
-            render_page_screenshots(&output_directory)
-        }
+        RepositoryTask::RenderScreenshots {
+            output_directory,
+            selected_scenarios,
+        } => render_page_screenshots(&output_directory, &selected_scenarios),
         RepositoryTask::PushToCachix { installables } => push_build_closure(&installables),
         RepositoryTask::CheckCommits {
             fetch_target_branch,
