@@ -5,8 +5,11 @@ use relm4::{
 };
 
 use crate::{
-    host_services::activity_history::activity_history_database::{
-        ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure,
+    host_services::{
+        activity_history::activity_history_database::{
+            ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure,
+        },
+        desktop::failure_journal_log::log_failed_outcome,
     },
     shared_widgets::{
         activity_entries::{
@@ -98,13 +101,15 @@ impl Component for ActivityHistoryGroup {
             set_title: &group_init.group_title,
             set_description: Some(&group_init.group_description),
 
-            #[local_ref]
-            history_list -> gtk::ListBox {
+            gtk::ListBox {
                 add_css_class: "boxed-list",
                 set_selection_mode: gtk::SelectionMode::None,
-                #[wrap(Some)]
-                set_placeholder = &adw::ActionRow {
+                #[watch]
+                set_visible: model.history_view.load_failed(),
+
+                adw::ActionRow {
                     set_use_markup: false,
+                    set_activatable: false,
                     set_title: &gettext("Scan history can't be read"),
                     set_subtitle_lines: 0,
                     #[watch]
@@ -119,6 +124,14 @@ impl Component for ActivityHistoryGroup {
                         connect_clicked => ActivityHistoryGroupInput::ReloadRequested,
                     },
                 },
+            },
+
+            #[local_ref]
+            history_list -> gtk::ListBox {
+                add_css_class: "boxed-list",
+                set_selection_mode: gtk::SelectionMode::None,
+                #[watch]
+                set_visible: !model.history_view.load_failed(),
                 connect_row_activated[sender] => move |_history_list, activated_row| {
                     sender.input(ActivityHistoryGroupInput::EntryActivated {
                         row_position: usize::try_from(activated_row.index()).unwrap_or_default(),
@@ -170,6 +183,7 @@ impl Component for ActivityHistoryGroup {
     ) {
         match group_command {
             ActivityHistoryGroupCommand::HistoryLoaded(load_outcome) => {
+                log_failed_outcome("loading the scan history failed", &load_outcome);
                 self.history_view =
                     FilteredHistoryView::from_load_outcome(load_outcome, self.history_filter);
                 let mut history_guard = self.history_rows.guard();

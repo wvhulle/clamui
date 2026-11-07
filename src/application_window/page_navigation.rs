@@ -60,7 +60,7 @@ use crate::{
         clamav_programs::clamav_report_submission::ClamavReportRequest,
         desktop::{
             application_directories::application_config_directory,
-            locale_formatting::host_moment_formatters,
+            failure_journal_log::log_failure_to_journal, locale_formatting::host_moment_formatters,
             running_instance_forwarding::paths_from_bytes, stored_settings::application_settings,
         },
         detection_journal::detection_journal_follower::JournalAccess,
@@ -1136,6 +1136,7 @@ impl Component for PageNavigation {
                 self.reload_every_history();
             }
             PageNavigationCommand::HistoryCleared(Err(clear_failure)) => {
+                log_failure_to_journal("clearing the history failed", &clear_failure);
                 self.show_plain_toast(
                     gettext("Could not clear the history: {error}")
                         .replace("{error}", &describe_history_failure(&clear_failure)),

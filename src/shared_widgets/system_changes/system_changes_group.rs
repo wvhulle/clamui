@@ -4,7 +4,10 @@ use relm4::{
 };
 
 use crate::{
-    host_services::settings_helper::helper_audit_records::HelperAuditEntry,
+    host_services::{
+        desktop::failure_journal_log::log_failure_to_journal,
+        settings_helper::helper_audit_records::HelperAuditEntry,
+    },
     shared_widgets::{
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
         system_changes::{
@@ -160,6 +163,7 @@ impl Component for SystemChangesGroup {
                 self.replace_rows(grouped_entries);
             }
             SystemChangesGroupCommand::SystemChangesLoaded(Err(read_failure)) => {
+                log_failure_to_journal("reading the system changes failed", &read_failure);
                 self.system_changes_view = SystemChangesView::SystemChangesFailed(read_failure);
                 self.replace_rows(Vec::new());
             }

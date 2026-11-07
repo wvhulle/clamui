@@ -16,6 +16,7 @@ use crate::{
         },
         desktop::{
             desktop_notifications::notify_outside_the_window,
+            failure_journal_log::{log_failed_outcome, log_failure_to_journal},
             locale_formatting::host_moment_formatters,
         },
     },
@@ -428,12 +429,17 @@ impl Component for DatabaseUpdatesPage {
                 Self::report_output(&sender, DatabaseUpdatesPageOutput::ActivityRecorded);
             }
             DatabaseUpdatesPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
+                log_failure_to_journal(
+                    "recording the update in the history failed",
+                    &recording_failure,
+                );
                 self.toaster.add_toast(plain_text_toast(
                     &gettext("The update could not be added to the history: {error}")
                         .replace("{error}", &describe_history_failure(&recording_failure)),
                 ));
             }
             DatabaseUpdatesPageCommand::HistoryLoaded(load_outcome) => {
+                log_failed_outcome("loading the update history failed", &load_outcome);
                 self.update_history = UpdateHistoryView::from_load_outcome(load_outcome);
                 let mut history_guard = self.history_rows.guard();
                 history_guard.clear();

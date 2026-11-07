@@ -27,7 +27,10 @@ use crate::{
             },
             scanner_output_parser::{displayed_threat_name, sanitize_scanner_line},
         },
-        desktop::locale_formatting::byte_size_text,
+        desktop::{
+            failure_journal_log::{log_failed_outcome, log_failure_to_journal},
+            locale_formatting::byte_size_text,
+        },
         quarantine_vault::{
             quarantine_entry_database::{
                 QuarantineEntryRecord, QuarantineVault, StoredDetectionDate,
@@ -1055,6 +1058,7 @@ impl Component for QuarantineEntriesPage {
                 let _shell_closed = sender.output(QuarantineEntriesPageOutput::SubmissionsChanged);
             }
             QuarantineEntriesPageCommand::ClamavReviewsSettled(Err(history_failure)) => {
+                log_failure_to_journal("settling ClamAV reviews failed", &history_failure);
                 self.toaster
                     .add_toast(plain_text_toast(&history_failure_text(&history_failure)));
             }
@@ -1063,6 +1067,7 @@ impl Component for QuarantineEntriesPage {
                     .add_toast(plain_text_toast(&trust_outcome_text(&trust_outcome)));
             }
             QuarantineEntriesPageCommand::EntriesLoaded(load_outcome) => {
+                log_failed_outcome("loading the quarantine failed", &load_outcome);
                 self.page_state.record_loaded_entries(load_outcome);
                 self.show_matching_entries();
                 let _shell_closed = sender.output(QuarantineEntriesPageOutput::EntriesCounted(

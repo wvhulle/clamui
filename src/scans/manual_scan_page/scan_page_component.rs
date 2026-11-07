@@ -29,7 +29,10 @@ use crate::{
             },
             scanner_output_parser::sanitize_scanner_line,
         },
-        desktop::stored_settings::{application_settings, scanner_backend_preference},
+        desktop::{
+            failure_journal_log::log_failure_to_journal,
+            stored_settings::{application_settings, scanner_backend_preference},
+        },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
     scans::manual_scan_page::{
@@ -996,6 +999,7 @@ impl Component for ScanPage {
                 self.change_target_rows(target_rows_change);
             }
             ScanPageCommand::ProfilesLoaded(Err(load_failure)) => {
+                log_failure_to_journal("loading the scan profiles failed", &load_failure);
                 self.page_notice = ScanPageNotice::ProfilesUnloadable(load_failure);
             }
             ScanPageCommand::EicarTestFileWritten(write_outcome) => {
@@ -1075,6 +1079,10 @@ impl Component for ScanPage {
                 let _shell_closed = sender.output(ScanPageOutput::ActivityRecorded);
             }
             ScanPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
+                log_failure_to_journal(
+                    "recording the scan in the history failed",
+                    &recording_failure,
+                );
                 self.page_notice = ScanPageNotice::ScanNotRecorded(recording_failure);
             }
         }

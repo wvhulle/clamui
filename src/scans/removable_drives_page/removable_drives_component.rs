@@ -17,7 +17,8 @@ use crate::{
             scan_progress_estimates::file_progress_text, scan_progress_events::ScanProgressEvent,
         },
         desktop::{
-            desktop_notifications::notify_outside_the_window, stored_settings::application_settings,
+            desktop_notifications::notify_outside_the_window,
+            failure_journal_log::log_failure_to_journal, stored_settings::application_settings,
         },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
@@ -635,6 +636,10 @@ impl Component for RemovableDrivesPage {
                 let _shell_closed = sender.output(RemovableDrivesPageOutput::ActivityRecorded);
             }
             RemovableDrivesPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
+                log_failure_to_journal(
+                    "recording the drive scan in the history failed",
+                    &recording_failure,
+                );
                 self.page_notice = DrivesPageNotice::ScanNotRecorded(recording_failure);
             }
         }

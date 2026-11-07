@@ -1,6 +1,7 @@
 pub mod application_directories;
 pub mod content_pipe;
 pub mod desktop_notifications;
+pub mod failure_journal_log;
 pub mod file_manager_actions;
 pub mod file_process_lock;
 pub mod flatpak_sandbox;

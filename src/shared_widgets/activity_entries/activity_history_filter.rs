@@ -78,6 +78,13 @@ impl FilteredHistoryView {
         }
     }
 
+    pub const fn load_failed(&self) -> bool {
+        match self {
+            Self::HistoryLoadFailed(_) => true,
+            Self::HistoryLoading | Self::HistoryLoaded(_) => false,
+        }
+    }
+
     pub const fn has_shown_rows(&self) -> bool {
         match self {
             Self::HistoryLoaded(listed_entries) => !listed_entries.is_empty(),
