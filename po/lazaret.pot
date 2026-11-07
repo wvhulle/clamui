@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 15:29+0100\n"
+"POT-Creation-Date: 2026-11-07 15:31+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -929,7 +929,7 @@ msgstr ""
 #: src/findings/trusted_detections_page/trusted_detections_component.rs:216
 #: src/scans/on_access_page/on_access_component.rs:247
 #: src/scans/scan_engine_page/scan_engine_component.rs:270
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:204
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:202
 #: src/signatures/database_updates_page/database_updates_component.rs:402
 #: src/signatures/signature_sources_page/signature_sources_component.rs:228
 msgid "Command copied to clipboard"
@@ -2447,15 +2447,11 @@ msgid ""
 "Scans started from Lazaret, newest first. Select one to read its transcript."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:937
-msgid "No scans were started from Lazaret yet"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_page_component.rs:966
+#: src/scans/manual_scan_page/scan_page_component.rs:964
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:974
+#: src/scans/manual_scan_page/scan_page_component.rs:972
 msgid "Choose a Folder to Scan"
 msgstr ""
 
@@ -2961,10 +2957,6 @@ msgid ""
 "read its transcript."
 msgstr ""
 
-#: src/scans/removable_drives_page/removable_drives_component.rs:545
-msgid "No drive was scanned yet"
-msgstr ""
-
 #: src/scans/removable_drives_page/removable_drives_presentation.rs:40
 msgid "Scans every drive"
 msgstr ""
@@ -3330,11 +3322,7 @@ msgid ""
 "transcript."
 msgstr ""
 
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:161
-msgid "Lazaret's schedule has not run a scan yet"
-msgstr ""
-
-#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:167
+#: src/scans/scheduled_scans_page/scheduled_scans_component.rs:165
 msgid "Checking the schedule…"
 msgstr ""
 
@@ -3512,20 +3500,15 @@ msgstr ""
 msgid "Full Output"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_history_group.rs:60
+#: src/shared_widgets/activity_entries/activity_history_group.rs:57
 #: src/signatures/database_updates_page/database_updates_component.rs:132
 #, rust-format
 msgid "Failed to load historical logs: {error}"
 msgstr ""
 
-#: src/shared_widgets/activity_entries/activity_history_group.rs:113
+#: src/shared_widgets/activity_entries/activity_history_group.rs:110
 #: src/signatures/database_updates_page/database_updates_component.rs:287
 msgid "Historical logs can't be read"
-msgstr ""
-
-#: src/shared_widgets/activity_entries/activity_history_group.rs:147
-#: src/signatures/database_updates_page/database_updates_component.rs:345
-msgid "Loading history…"
 msgstr ""
 
 #: src/shared_widgets/activity_entries/activity_transcript_dialog.rs:54
@@ -5122,6 +5105,10 @@ msgstr ""
 msgid ""
 "Updates started from Lazaret, newest first. Select one to read its "
 "transcript."
+msgstr ""
+
+#: src/signatures/database_updates_page/database_updates_component.rs:345
+msgid "Loading history…"
 msgstr ""
 
 #: src/signatures/database_updates_page/database_updates_component.rs:349

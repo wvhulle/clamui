@@ -15,7 +15,6 @@ use crate::{
             activity_transcript_dialog::ActivityTranscriptDialog,
         },
         database_migration_failure_text::describe_history_failure,
-        loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
     },
 };
 
@@ -24,8 +23,6 @@ pub struct ActivityHistoryGroupInit {
     pub history_filter: ActivityHistoryFilter,
     pub group_title: String,
     pub group_description: String,
-    pub empty_title: String,
-    pub empty_icon_name: &'static str,
 }
 
 enum TranscriptDialogView {
@@ -97,6 +94,8 @@ impl Component for ActivityHistoryGroup {
 
     view! {
         adw::PreferencesGroup {
+            #[watch]
+            set_visible: model.history_view.has_shown_rows(),
             set_title: &group_init.group_title,
             set_description: Some(&group_init.group_description),
 
@@ -105,19 +104,14 @@ impl Component for ActivityHistoryGroup {
                 add_css_class: "boxed-list",
                 set_selection_mode: gtk::SelectionMode::None,
                 #[wrap(Some)]
-                #[local_ref]
-                set_placeholder = history_placeholder -> gtk::Stack {
-                    add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
-                        add_css_class: "compact",
-                        set_icon_name: Some("dialog-error-symbolic"),
-                        set_title: &gettext("Historical logs can't be read"),
-                        #[watch]
-                        set_description: Some(&gtk::glib::markup_escape_text(
-                            &history_failure_text(&model.history_view),
-                        )),
-                    },
+                set_placeholder = &adw::StatusPage {
+                    add_css_class: "compact",
+                    set_icon_name: Some("dialog-error-symbolic"),
+                    set_title: &gettext("Historical logs can't be read"),
                     #[watch]
-                    set_visible_child_name: model.history_view.placeholder_page_name(),
+                    set_description: Some(&gtk::glib::markup_escape_text(
+                        &history_failure_text(&model.history_view),
+                    )),
                 },
                 connect_row_activated[sender] => move |_history_list, activated_row| {
                     sender.input(ActivityHistoryGroupInput::EntryActivated {
@@ -143,14 +137,6 @@ impl Component for ActivityHistoryGroup {
             transcript_dialog: TranscriptDialogView::DialogClosed,
         };
         let history_list = model.history_rows.widget();
-        let history_placeholder = &loading_placeholder_stack(
-            &gettext("Loading history…"),
-            &adw::StatusPage::builder()
-                .css_classes(["compact"])
-                .icon_name(group_init.empty_icon_name)
-                .title(group_init.empty_title.as_str())
-                .build(),
-        );
         let widgets = view_output!();
         model.reload_history(&sender);
         ComponentParts { model, widgets }

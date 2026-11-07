@@ -158,8 +158,6 @@ impl Component for ScheduledScansPage {
                         "Scans Lazaret's schedule ran, newest first. Select one to read its \
                          transcript.",
                     ),
-                    empty_title: gettext("Lazaret's schedule has not run a scan yet"),
-                    empty_icon_name: "alarm-symbolic",
                 })
                 .detach(),
         };

@@ -1,10 +1,5 @@
-use crate::{
-    host_services::activity_history::activity_history_database::{
-        ActivityEntryRecord, ActivityHistoryFailure, ActivityRecord, ScanOrigin,
-    },
-    shared_widgets::loading_indicators::{
-        LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
-    },
+use crate::host_services::activity_history::activity_history_database::{
+    ActivityEntryRecord, ActivityHistoryFailure, ActivityRecord, ScanOrigin,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -83,11 +78,11 @@ impl FilteredHistoryView {
         }
     }
 
-    pub const fn placeholder_page_name(&self) -> &'static str {
+    pub const fn has_shown_rows(&self) -> bool {
         match self {
-            Self::HistoryLoading => LOADING_PAGE_NAME,
-            Self::HistoryLoaded(_) => LOADED_PAGE_NAME,
-            Self::HistoryLoadFailed(_) => LOAD_FAILED_PAGE_NAME,
+            Self::HistoryLoaded(listed_entries) => !listed_entries.is_empty(),
+            Self::HistoryLoadFailed(_) => true,
+            Self::HistoryLoading => false,
         }
     }
 }
@@ -182,10 +177,36 @@ mod activity_history_filter_tests {
             ActivityHistoryFilter::ManualScans,
         );
         assert!(history_view.listed_entries().is_empty());
-        assert_eq!(history_view.placeholder_page_name(), LOAD_FAILED_PAGE_NAME);
-        assert_eq!(
-            FilteredHistoryView::HistoryLoading.placeholder_page_name(),
-            LOADING_PAGE_NAME
+        assert!(history_view.has_shown_rows());
+    }
+
+    #[test]
+    fn an_empty_or_loading_history_hides_the_group() {
+        assert!(!FilteredHistoryView::HistoryLoading.has_shown_rows());
+        let empty_view = FilteredHistoryView::from_load_outcome(
+            Ok(Vec::new()),
+            ActivityHistoryFilter::ManualScans,
         );
+        assert!(!empty_view.has_shown_rows());
+        let update_only_view = FilteredHistoryView::from_load_outcome(
+            Ok(vec![history_entry(
+                1,
+                10,
+                ActivityRecord::UpdateActivity {
+                    update_status: UpdateActivityStatus::UpdateApplied,
+                },
+            )]),
+            ActivityHistoryFilter::ManualScans,
+        );
+        assert!(!update_only_view.has_shown_rows());
+        let manual_view = FilteredHistoryView::from_load_outcome(
+            Ok(vec![history_entry(
+                2,
+                20,
+                scan_with(ScanOrigin::ManualScan),
+            )]),
+            ActivityHistoryFilter::ManualScans,
+        );
+        assert!(manual_view.has_shown_rows());
     }
 }

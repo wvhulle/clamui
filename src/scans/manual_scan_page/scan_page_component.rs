@@ -934,8 +934,6 @@ impl Component for ScanPage {
                         "Scans started from Lazaret, newest first. Select one to read its \
                          transcript.",
                     ),
-                    empty_title: gettext("No scans were started from Lazaret yet"),
-                    empty_icon_name: "system-search-symbolic",
                 })
                 .detach(),
             exclusions_section: ScanExclusionsSection::builder().launch(()).detach(),

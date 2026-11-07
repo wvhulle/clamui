@@ -542,8 +542,6 @@ impl Component for RemovableDrivesPage {
                         "Drives Lazaret scanned when they were connected, newest first. Select \
                          one to read its transcript.",
                     ),
-                    empty_title: gettext("No drive was scanned yet"),
-                    empty_icon_name: "drive-removable-media-symbolic",
                 })
                 .detach(),
             page_notice: DrivesPageNotice::NoNoticeShown,

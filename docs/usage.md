@@ -63,7 +63,7 @@ A profile picks targets and exclusions in one go. Manage them with **Manage Prof
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan-exclusions.webp" width="800" alt="Recording of opening the exclusions from the Manual Scan page, with folders and patterns that scans skip">
 
-After a scan, the results show how many files were scanned out of how many were planned, how long it took, and every threat with its severity. Files the scanner never reported on are listed as a problem rather than silently counted as clean. From a threat you can copy its path, exclude it from future scans, trust it, report it, or quarantine it. **Quarantine** asks for confirmation, then moves each file into Lazaret's quarantine. Recent scans lists the manual scans, newest first.
+After a scan, the results show how many files were scanned out of how many were planned, how long it took, and every threat with its severity. Files the scanner never reported on are listed as a problem rather than silently counted as clean. From a threat you can copy its path, exclude it from future scans, trust it, report it, or quarantine it. **Quarantine** asks for confirmation, then moves each file into Lazaret's quarantine. Recent scans lists the manual scans, newest first, and stays hidden until there is one.
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/scan-results.webp" width="800" alt="Recording of a finished scan with two threats, the quarantine confirmation and the results after both files moved to quarantine">
 
