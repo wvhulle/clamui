@@ -166,6 +166,7 @@ mod startup_arguments_tests {
             ("--page=scan-engine", ApplicationPage::ScanEngine),
             ("--page=on-access", ApplicationPage::OnAccessScanning),
             ("--page=scheduled-scans", ApplicationPage::ScheduledScans),
+            ("--page=scan", ApplicationPage::Scan),
         ]
         .into_iter()
         .for_each(|(page_argument, expected_page)| {

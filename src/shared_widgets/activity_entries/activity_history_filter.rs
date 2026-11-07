@@ -9,6 +9,7 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActivityHistoryFilter {
+    ManualScans,
     ScheduledScans,
 }
 
@@ -16,6 +17,13 @@ impl ActivityHistoryFilter {
     pub const fn keeps_record(self, activity_record: &ActivityRecord) -> bool {
         match (self, activity_record) {
             (
+                Self::ManualScans,
+                ActivityRecord::ScanActivity {
+                    scan_origin: ScanOrigin::ManualScan,
+                    ..
+                },
+            )
+            | (
                 Self::ScheduledScans,
                 ActivityRecord::ScanActivity {
                     scan_origin: ScanOrigin::ScheduledScan,
@@ -24,6 +32,15 @@ impl ActivityHistoryFilter {
                 | ActivityRecord::SkippedScan { .. },
             ) => true,
             (
+                Self::ManualScans,
+                ActivityRecord::ScanActivity {
+                    scan_origin: ScanOrigin::ScheduledScan,
+                    ..
+                }
+                | ActivityRecord::SkippedScan { .. }
+                | ActivityRecord::UpdateActivity { .. },
+            )
+            | (
                 Self::ScheduledScans,
                 ActivityRecord::ScanActivity {
                     scan_origin: ScanOrigin::ManualScan,
@@ -150,6 +167,11 @@ mod activity_history_filter_tests {
     }
 
     #[test]
+    fn manual_history_lists_only_manual_scans_newest_first() {
+        assert_eq!(listed_ids(ActivityHistoryFilter::ManualScans), vec![5, 1]);
+    }
+
+    #[test]
     fn scheduled_history_lists_scheduled_and_skipped_runs_newest_first() {
         assert_eq!(
             listed_ids(ActivityHistoryFilter::ScheduledScans),
@@ -161,7 +183,7 @@ mod activity_history_filter_tests {
     fn a_failed_load_lists_nothing_and_shows_the_failure() {
         let history_view = FilteredHistoryView::from_load_outcome(
             Err(ActivityHistoryFailure::DatabasePathNotUtf8),
-            ActivityHistoryFilter::ScheduledScans,
+            ActivityHistoryFilter::ManualScans,
         );
         assert!(history_view.listed_entries().is_empty());
         assert_eq!(history_view.placeholder_page_name(), LOAD_FAILED_PAGE_NAME);

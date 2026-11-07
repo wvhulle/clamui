@@ -51,11 +51,15 @@ use crate::{
         },
     },
     scans::manual_scan_page::{
-        device_auto_scan_page::device_mount_scans::{
-            DEVICE_SCAN_SETTING_KEYS, DeviceAutoScanSettings, MountedDevice,
-            device_qualifies_for_scan, mounted_device_of, settled_device_passes_limits,
+        device_auto_scan_page::{
+            device_mount_scans::{
+                DEVICE_SCAN_SETTING_KEYS, DeviceAutoScanSettings, MountedDevice,
+                device_qualifies_for_scan, mounted_device_of, settled_device_passes_limits,
+            },
+            device_scan_page::DeviceAutoScanSection,
         },
         eicar_test_file::{EicarTestFileFailure, written_eicar_test_file},
+        exclusions_page::scan_exclusions_page::ScanExclusionsSection,
         found_threat_row::FoundThreatRow,
         scan_options_section::ScanOptionsSection,
         scan_page_state::{
@@ -89,6 +93,12 @@ use crate::{
         },
     },
     shared_widgets::{
+        activity_entries::{
+            activity_history_filter::ActivityHistoryFilter,
+            activity_history_group::{
+                ActivityHistoryGroup, ActivityHistoryGroupInit, ActivityHistoryGroupInput,
+            },
+        },
         awaited_dialogs::{chosen_files_to_open, chosen_folders_to_open, deliver_local_outcome},
         component_streams::run_stream_then,
         loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
@@ -163,6 +173,9 @@ pub struct ScanPage {
     stored_settings: gio::Settings,
     device_auto_scan_settings: DeviceAutoScanSettings,
     system_scan_control: SystemScanControl,
+    recent_scans_group: Controller<ActivityHistoryGroup>,
+    exclusions_section: Controller<ScanExclusionsSection>,
+    device_auto_scan_section: Controller<DeviceAutoScanSection>,
     _device_monitor: gio::VolumeMonitor,
     toaster: Toaster,
 }
@@ -887,6 +900,24 @@ impl Component for ScanPage {
                             #[watch]
                             set_visible: model.scan_page_state.shows_scan_settings(),
                         },
+
+                        #[local_ref]
+                        recent_scans_widget -> adw::PreferencesGroup {
+                            #[watch]
+                            set_visible: model.scan_page_state.shows_scan_settings(),
+                        },
+
+                        #[local_ref]
+                        exclusions_widget -> adw::PreferencesGroup {
+                            #[watch]
+                            set_visible: model.scan_page_state.shows_scan_settings(),
+                        },
+
+                        #[local_ref]
+                        device_auto_scan_widget -> adw::PreferencesGroup {
+                            #[watch]
+                            set_visible: model.scan_page_state.shows_scan_settings(),
+                        },
                     },
                 },
             },
@@ -948,7 +979,7 @@ impl Component for ScanPage {
             profile_choice: ScanProfileChoice::without_profiles(),
             profile_manager_view: ProfileManagerView::ManagerClosed,
             profile_list_reloaded: false,
-            activity_history: page_init.activity_history,
+            activity_history: page_init.activity_history.clone(),
             file_list_directory: page_init.file_list_directory,
             scan_page_state: ScanPageState::WaitingForTargets,
             next_scan_run_number: ScanRunNumber::FIRST_RUN,
@@ -977,6 +1008,21 @@ impl Component for ScanPage {
             scan_options_section: ScanOptionsSection::builder().launch(()).detach(),
             device_auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
             system_scan_control: SystemScanControl::new(),
+            recent_scans_group: ActivityHistoryGroup::builder()
+                .launch(ActivityHistoryGroupInit {
+                    activity_history: page_init.activity_history,
+                    history_filter: ActivityHistoryFilter::ManualScans,
+                    group_title: gettext("Recent scans"),
+                    group_description: gettext(
+                        "Scans started from Lazaret, newest first. Select one to read its \
+                         transcript.",
+                    ),
+                    empty_title: gettext("No scans were started from Lazaret yet"),
+                    empty_icon_name: "system-search-symbolic",
+                })
+                .detach(),
+            exclusions_section: ScanExclusionsSection::builder().launch(()).detach(),
+            device_auto_scan_section: DeviceAutoScanSection::builder().launch(()).detach(),
             stored_settings,
             _device_monitor: device_monitor,
             toaster: Toaster::new(&root),
@@ -987,6 +1033,9 @@ impl Component for ScanPage {
         let found_threat_list = model.found_threat_rows.widget();
         let scan_results_widget = model.scan_results_section.widget();
         let scan_options_widget = model.scan_options_section.widget();
+        let recent_scans_widget = model.recent_scans_group.widget();
+        let exclusions_widget = model.exclusions_section.widget();
+        let device_auto_scan_widget = model.device_auto_scan_section.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -1239,6 +1288,8 @@ impl Component for ScanPage {
                 self.scanner_backend_view = ScannerBackendView::BackendUndetermined(lookup_failure);
             }
             ScanPageCommand::ActivityRecordingFinished(Ok(())) => {
+                self.recent_scans_group
+                    .emit(ActivityHistoryGroupInput::ReloadRequested);
                 let _shell_closed = sender.output(ScanPageOutput::ActivityRecorded);
             }
             ScanPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 10:36+0100\n"
+"POT-Creation-Date: 2026-11-07 10:40+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -32,8 +32,8 @@ msgid "Detections"
 msgstr ""
 
 #: src/application_window/application_pages.rs:59
-#: src/scans/manual_scan_page/scan_page_component.rs:350
-#: src/scans/manual_scan_page/scan_page_component.rs:616
+#: src/scans/manual_scan_page/scan_page_component.rs:363
+#: src/scans/manual_scan_page/scan_page_component.rs:629
 msgid "Scan"
 msgstr ""
 
@@ -139,14 +139,13 @@ msgid ""
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:85
-#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:107
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:246
 msgid "Exclusions"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:87
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:42
-#: src/scans/manual_scan_page/scan_page_component.rs:1072
+#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:41
+#: src/scans/manual_scan_page/scan_page_component.rs:1121
 msgid "Device Auto-Scan"
 msgstr ""
 
@@ -550,7 +549,7 @@ msgstr ""
 #: src/findings/quarantine_page/quarantine_entries_page.rs:215
 #: src/findings/quarantine_page/quarantine_entries_page.rs:526
 #: src/logs_page/activity_logs_page.rs:176
-#: src/scans/manual_scan_page/scan_page_component.rs:694
+#: src/scans/manual_scan_page/scan_page_component.rs:707
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
 #: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:205
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:396
@@ -1174,8 +1173,8 @@ msgid "The file will be permanently deleted."
 msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entries_page.rs:717
-#: src/scans/manual_scan_page/scan_options_section.rs:108
-#: src/scans/manual_scan_page/scan_page_component.rs:639
+#: src/scans/manual_scan_page/scan_options_section.rs:107
+#: src/scans/manual_scan_page/scan_page_component.rs:652
 msgid "More"
 msgstr ""
 
@@ -1263,7 +1262,7 @@ msgstr[1] ""
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:118
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:206
 #: src/protection_page/protection_timeline_page.rs:281
-#: src/scans/manual_scan_page/scan_page_component.rs:301
+#: src/scans/manual_scan_page/scan_page_component.rs:314
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:103
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
 #: src/shared_widgets/service_log/service_log_state.rs:51
@@ -1384,7 +1383,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/headless_modes/headless_scheduled_scan.rs:230
-#: src/scans/manual_scan_page/scan_page_component.rs:554
+#: src/scans/manual_scan_page/scan_page_component.rs:567
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:105
 msgid "Threats Detected"
 msgstr ""
@@ -2004,7 +2003,7 @@ msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:228
 #: src/protection_page/protection_timeline_presentation.rs:75
-#: src/scans/manual_scan_page/scan_page_component.rs:240
+#: src/scans/manual_scan_page/scan_page_component.rs:253
 msgid "Review"
 msgstr ""
 
@@ -2201,24 +2200,24 @@ msgstr ""
 msgid "Files are only checked when you scan them"
 msgstr ""
 
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:44
+#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:43
 msgid ""
 "Automatically scan removable and external drives when they are connected."
 msgstr ""
 
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:48
+#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:47
 msgid "Enable Device Auto-Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:58
+#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:57
 msgid "Max Device Size (GB)"
 msgstr ""
 
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:59
+#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:58
 msgid "0 means no size limit."
 msgstr ""
 
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:70
+#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:69
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:331
 msgid "Skip on Battery"
 msgstr ""
@@ -2254,24 +2253,24 @@ msgstr ""
 msgid "Remove"
 msgstr ""
 
-#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:111
+#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:112
 msgid "Preset Exclusions"
 msgstr ""
 
-#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:113
+#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:114
 msgid "Common directories to exclude from scanning. Changes save immediately."
 msgstr ""
 
-#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:121
+#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:122
 msgid "Custom Exclusions"
 msgstr ""
 
-#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:123
+#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:124
 msgid ""
 "Enter an absolute path or a pattern such as *.tmp. Changes save immediately."
 msgstr ""
 
-#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:132
+#: src/scans/manual_scan_page/exclusions_page/scan_exclusions_page.rs:133
 msgid "/path/to/exclude or *.tmp"
 msgstr ""
 
@@ -2307,172 +2306,185 @@ msgstr ""
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:137
+#: src/scans/manual_scan_page/scan_page_component.rs:147
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:260
+#: src/scans/manual_scan_page/scan_page_component.rs:273
 msgid "No Profile (Manual)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:303
+#: src/scans/manual_scan_page/scan_page_component.rs:316
 #, rust-format
 msgid "Backend: unknown, the scanner programs could not be looked up: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:307
+#: src/scans/manual_scan_page/scan_page_component.rs:320
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:310
+#: src/scans/manual_scan_page/scan_page_component.rs:323
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:351
+#: src/scans/manual_scan_page/scan_page_component.rs:364
 #: src/scans/manual_scan_page/scan_progress_view.rs:39
 msgid "Preparing…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:355
+#: src/scans/manual_scan_page/scan_page_component.rs:368
 msgid "Cancelling…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:362
+#: src/scans/manual_scan_page/scan_page_component.rs:375
 #, rust-format
 msgid "Scanning {name}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:365
+#: src/scans/manual_scan_page/scan_page_component.rs:378
 #, rust-format
 msgid "Scanning {count} location"
 msgid_plural "Scanning {count} locations"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:374
+#: src/scans/manual_scan_page/scan_page_component.rs:387
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:108
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:52
 msgid "Scan cancelled by user"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:378
+#: src/scans/manual_scan_page/scan_page_component.rs:391
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:160
 msgid "Threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:383
-#: src/scans/manual_scan_page/scan_page_component.rs:556
+#: src/scans/manual_scan_page/scan_page_component.rs:396
+#: src/scans/manual_scan_page/scan_page_component.rs:569
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:107
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:51
 msgid "The scan did not finish cleanly"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:385
-#: src/scans/manual_scan_page/scan_page_component.rs:555
+#: src/scans/manual_scan_page/scan_page_component.rs:398
+#: src/scans/manual_scan_page/scan_page_component.rs:568
 #: src/scans/manual_scan_page/scan_results_section/scan_results_state.rs:106
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:50
 msgid "No threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:599
+#: src/scans/manual_scan_page/scan_page_component.rs:612
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:623
+#: src/scans/manual_scan_page/scan_page_component.rs:636
 msgid "Add Files"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:631
+#: src/scans/manual_scan_page/scan_page_component.rs:644
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:213
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:336
 msgid "Add Folder"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:648
+#: src/scans/manual_scan_page/scan_page_component.rs:661
 msgid "Run EICAR Test"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:659
+#: src/scans/manual_scan_page/scan_page_component.rs:672
 msgid "Copy Results"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:670
+#: src/scans/manual_scan_page/scan_page_component.rs:683
 msgid "Export Results…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:684
+#: src/scans/manual_scan_page/scan_page_component.rs:697
 msgid "Start Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:705
+#: src/scans/manual_scan_page/scan_page_component.rs:718
 msgid "Lazaret refuses a ClamAV program that your account could replace"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:706
+#: src/scans/manual_scan_page/scan_page_component.rs:719
 msgid "Details"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:750
+#: src/scans/manual_scan_page/scan_page_component.rs:763
 msgid "Scan Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:755
+#: src/scans/manual_scan_page/scan_page_component.rs:768
 msgid "Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:770
+#: src/scans/manual_scan_page/scan_page_component.rs:783
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:218
 msgid "Manage Profiles"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:779
+#: src/scans/manual_scan_page/scan_page_component.rs:792
 msgid "Scan Targets"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:802
+#: src/scans/manual_scan_page/scan_page_component.rs:815
 msgid "Drop files or folders to scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:811
+#: src/scans/manual_scan_page/scan_page_component.rs:824
 msgid "Add Files…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:817
+#: src/scans/manual_scan_page/scan_page_component.rs:830
 msgid "Add Folder…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:827
+#: src/scans/manual_scan_page/scan_page_component.rs:840
 msgid "System scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:835
+#: src/scans/manual_scan_page/scan_page_component.rs:848
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:225
 msgid "Folders scanned"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:841
+#: src/scans/manual_scan_page/scan_page_component.rs:854
 msgid "Run Now"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:848
+#: src/scans/manual_scan_page/scan_page_component.rs:861
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:857
+#: src/scans/manual_scan_page/scan_page_component.rs:870
 msgid "Found so far"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1004
+#: src/scans/manual_scan_page/scan_page_component.rs:1015
+msgid "Recent scans"
+msgstr ""
+
+#: src/scans/manual_scan_page/scan_page_component.rs:1017
+msgid ""
+"Scans started from Lazaret, newest first. Select one to read its transcript."
+msgstr ""
+
+#: src/scans/manual_scan_page/scan_page_component.rs:1020
+msgid "No scans were started from Lazaret yet"
+msgstr ""
+
+#: src/scans/manual_scan_page/scan_page_component.rs:1053
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1012
+#: src/scans/manual_scan_page/scan_page_component.rs:1061
 msgid "Choose a Folder to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:1074
+#: src/scans/manual_scan_page/scan_page_component.rs:1123
 msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 

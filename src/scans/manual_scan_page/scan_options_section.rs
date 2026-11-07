@@ -104,14 +104,7 @@ impl Component for ScanOptionsSection {
                 },
             },
 
-            append: &settings_link_group(
-                gettext("More"),
-                &[
-                    SettingsSubpage::ScanExclusions,
-                    SettingsSubpage::ScanSchedule,
-                    SettingsSubpage::DeviceAutoScan,
-                ],
-            ),
+            append: &settings_link_group(gettext("More"), &[SettingsSubpage::ScanSchedule]),
             append: &system_settings_group(&[
                 SettingsSubpage::DetectionChoices,
                 SettingsSubpage::ScannerEngine,

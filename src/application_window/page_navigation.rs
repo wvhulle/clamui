@@ -66,8 +66,8 @@ use crate::{
     },
     scans::{
         manual_scan_page::{
-            device_auto_scan_page::device_scan_page::DeviceScanPage,
-            exclusions_page::scan_exclusions_page::ScanExclusionsPage,
+            device_auto_scan_page::device_scan_page::DeviceAutoScanSection,
+            exclusions_page::scan_exclusions_page::ScanExclusionsSection,
             scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
             scan_profiles_dialog::scan_profile_store::ScanProfileStore,
         },
@@ -113,8 +113,8 @@ pub struct PageNavigationInit {
 
 enum SettingsSubpageContent {
     EngineSettings(Controller<EngineSettingsSubpage>),
-    ScanExclusions(Controller<ScanExclusionsPage>),
-    DeviceAutoScan(Controller<DeviceScanPage>),
+    ScanExclusions(Controller<ScanExclusionsSection>),
+    DeviceAutoScan(Controller<DeviceAutoScanSection>),
     ScanSchedule(Controller<ScanScheduleSection>),
     TrustedDetections(Controller<TrustedDetectionsPage>),
 }
@@ -143,10 +143,10 @@ impl SettingsSubpageContent {
                     .detach(),
             ),
             SettingsSubpage::ScanExclusions => {
-                Self::ScanExclusions(ScanExclusionsPage::builder().launch(()).detach())
+                Self::ScanExclusions(ScanExclusionsSection::builder().launch(()).detach())
             }
             SettingsSubpage::DeviceAutoScan => {
-                Self::DeviceAutoScan(DeviceScanPage::builder().launch(()).detach())
+                Self::DeviceAutoScan(DeviceAutoScanSection::builder().launch(()).detach())
             }
             SettingsSubpage::ScanSchedule => {
                 Self::ScanSchedule(ScanScheduleSection::builder().launch(()).detach())

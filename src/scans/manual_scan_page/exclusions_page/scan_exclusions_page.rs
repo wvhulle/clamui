@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-pub struct ScanExclusionsPage {
+pub struct ScanExclusionsSection {
     stored_settings: gio::Settings,
     exclusion_entries: Vec<ExclusionEntry>,
     draft_cleared: bool,
@@ -29,7 +29,7 @@ pub struct ScanExclusionsPage {
 }
 
 #[derive(Debug)]
-pub enum ScanExclusionsPageInput {
+pub enum ScanExclusionsSectionInput {
     DraftPatternApplied(String),
     EnabledToggled {
         exclusion_pattern: String,
@@ -41,17 +41,17 @@ pub enum ScanExclusionsPageInput {
     StoredRulesChanged,
 }
 
-fn forwarded_row_output(row_output: ScanExclusionRowOutput) -> ScanExclusionsPageInput {
+fn forwarded_row_output(row_output: ScanExclusionRowOutput) -> ScanExclusionsSectionInput {
     match row_output {
         ScanExclusionRowOutput::EnabledToggled {
             exclusion_pattern,
             is_enabled,
-        } => ScanExclusionsPageInput::EnabledToggled {
+        } => ScanExclusionsSectionInput::EnabledToggled {
             exclusion_pattern,
             is_enabled,
         },
         ScanExclusionRowOutput::RemovalRequested { exclusion_pattern } => {
-            ScanExclusionsPageInput::RemovalRequested { exclusion_pattern }
+            ScanExclusionsSectionInput::RemovalRequested { exclusion_pattern }
         }
     }
 }
@@ -63,7 +63,7 @@ fn boxed_list() -> gtk::ListBox {
         .build()
 }
 
-impl ScanExclusionsPage {
+impl ScanExclusionsSection {
     fn show_exclusion_entries(&mut self, exclusion_entries: Vec<ExclusionEntry>) {
         if exclusion_entries == self.exclusion_entries {
             return;
@@ -96,16 +96,17 @@ impl ScanExclusionsPage {
 }
 
 #[relm4::component(pub)]
-impl Component for ScanExclusionsPage {
+impl Component for ScanExclusionsSection {
     type Init = ();
-    type Input = ScanExclusionsPageInput;
+    type Input = ScanExclusionsSectionInput;
     type Output = ();
     type CommandOutput = ();
 
     view! {
-        adw::PreferencesPage {
-            set_title: &gettext("Exclusions"),
-            set_icon_name: Some("action-unavailable-symbolic"),
+        adw::PreferencesGroup {
+            gtk::Box {
+            set_orientation: gtk::Orientation::Vertical,
+            set_spacing: 24,
 
             adw::PreferencesGroup {
                 set_title: &gettext("Preset Exclusions"),
@@ -134,7 +135,7 @@ impl Component for ScanExclusionsPage {
                         #[track(model.draft_cleared)]
                         set_text: "",
                         connect_apply[sender] => move |applied_row| {
-                            sender.input(ScanExclusionsPageInput::DraftPatternApplied(
+                            sender.input(ScanExclusionsSectionInput::DraftPatternApplied(
                                 applied_row.text().to_string(),
                             ));
                         },
@@ -143,6 +144,7 @@ impl Component for ScanExclusionsPage {
 
                 #[local_ref]
                 custom_list -> gtk::ListBox {},
+            },
             },
         }
     }
@@ -157,7 +159,7 @@ impl Component for ScanExclusionsPage {
             &stored_settings,
             &[EXCLUSION_RULES_KEY],
             sender.input_sender(),
-            |_changed_settings, _changed_key| ScanExclusionsPageInput::StoredRulesChanged,
+            |_changed_settings, _changed_key| ScanExclusionsSectionInput::StoredRulesChanged,
         );
         let mut model = Self {
             exclusion_entries: Vec::new(),
@@ -179,13 +181,13 @@ impl Component for ScanExclusionsPage {
 
     fn update(
         &mut self,
-        page_input: ScanExclusionsPageInput,
+        page_input: ScanExclusionsSectionInput,
         _sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         self.draft_cleared = false;
         match page_input {
-            ScanExclusionsPageInput::DraftPatternApplied(draft_pattern) => {
+            ScanExclusionsSectionInput::DraftPatternApplied(draft_pattern) => {
                 let added_pattern = draft_pattern.trim().to_owned();
                 if !added_pattern.is_empty() {
                     add_exclusion_entry(
@@ -195,17 +197,17 @@ impl Component for ScanExclusionsPage {
                     self.draft_cleared = true;
                 }
             }
-            ScanExclusionsPageInput::EnabledToggled {
+            ScanExclusionsSectionInput::EnabledToggled {
                 exclusion_pattern,
                 is_enabled,
             } => {
                 self.record_enabled_change(&exclusion_pattern, is_enabled);
                 set_entry_enabled(&self.stored_settings, &exclusion_pattern, is_enabled);
             }
-            ScanExclusionsPageInput::RemovalRequested { exclusion_pattern } => {
+            ScanExclusionsSectionInput::RemovalRequested { exclusion_pattern } => {
                 remove_exclusion_entry(&self.stored_settings, &exclusion_pattern);
             }
-            ScanExclusionsPageInput::StoredRulesChanged => {
+            ScanExclusionsSectionInput::StoredRulesChanged => {
                 self.show_exclusion_entries(read_exclusion_entries(&self.stored_settings));
             }
         }

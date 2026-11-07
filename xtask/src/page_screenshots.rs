@@ -116,7 +116,7 @@ fn page_scenarios() -> Vec<PageScenario> {
             animation_name: "scan-settings",
             user_interactions: [
                 frame(),
-                point_and_click(WidgetTarget::list_item("Exclusions")),
+                point_and_click(WidgetTarget::list_item("node_modules")),
                 shown("scan-exclusions"),
             ]
             .concat(),
