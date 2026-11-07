@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 14:45+0100\n"
+"POT-Creation-Date: 2026-11-07 14:53+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -232,36 +232,32 @@ msgid ""
 "administrator approval."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:306
+#: src/application_window/page_navigation.rs:287
 #: src/application_window/sidebar_area_status.rs:616
 #: src/scans/removable_drives_page/removable_drives_presentation.rs:104
 #, rust-format
 msgid "Scanning {drive}"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:309
+#: src/application_window/page_navigation.rs:290
 #: src/scans/manual_scan_page/scan_page_component.rs:283
 msgid "Open Removable Drives"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:677
-msgid "Menu"
-msgstr ""
-
-#: src/application_window/page_navigation.rs:1175
+#: src/application_window/page_navigation.rs:1126
 #, rust-format
 msgid "Could not export the history: {error}"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:1180
+#: src/application_window/page_navigation.rs:1131
 msgid "History exported"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:1187
+#: src/application_window/page_navigation.rs:1138
 msgid "History cleared"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:1192
+#: src/application_window/page_navigation.rs:1143
 #, rust-format
 msgid "Could not clear the history: {error}"
 msgstr ""
@@ -605,6 +601,74 @@ msgid "{count} submitted"
 msgid_plural "{count} submitted"
 msgstr[0] ""
 msgstr[1] ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:27
+msgid "Signatures"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:28
+msgid "Scans"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:29
+msgid "Findings"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:30
+msgid "Sharing"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:36
+msgid "Where detections come from"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:37
+msgid "How files get checked"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:38
+msgid "What was found"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:39
+msgid "What leaves this computer"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:122
+msgid "Needs review"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:123
+msgid "Not working"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:124
+msgid "Waiting for another part"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:163
+msgid "Scan Files…"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:164
+msgid "Choose files or folders to check now"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_entry_presentation.rs:171
+#: src/findings/quarantine_page/quarantine_entry_row.rs:84
+#: src/findings/quarantine_page/quarantine_entry_row.rs:144
+#: src/scans/manual_scan_page/scan_page_component.rs:344
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:103
+#: src/shared_widgets/service_log/service_log_state.rs:51
+#: src/sharing/submissions_page/service_key_section.rs:126
+#: src/sharing/submissions_page/service_key_section.rs:214
+#: src/signatures/signature_sources_page/source_check_row.rs:116
+msgid "Checking…"
+msgstr ""
+
+#: src/application_window/sidebar_navigation/sidebar_navigation_column.rs:92
+msgid "Menu"
+msgstr ""
 
 #: src/application_window/system_tray_menu.rs:70
 msgid "Show Lazaret"
@@ -1410,17 +1474,6 @@ msgid "{count} report to ClamAV is settled by the new signatures"
 msgid_plural "{count} reports to ClamAV are settled by the new signatures"
 msgstr[0] ""
 msgstr[1] ""
-
-#: src/findings/quarantine_page/quarantine_entry_row.rs:84
-#: src/findings/quarantine_page/quarantine_entry_row.rs:144
-#: src/scans/manual_scan_page/scan_page_component.rs:344
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:103
-#: src/shared_widgets/service_log/service_log_state.rs:51
-#: src/sharing/submissions_page/service_key_section.rs:126
-#: src/sharing/submissions_page/service_key_section.rs:214
-#: src/signatures/signature_sources_page/source_check_row.rs:116
-msgid "Checking…"
-msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entry_row.rs:86
 msgid "No longer detected"
@@ -4870,7 +4923,7 @@ msgid "Quarantined Files"
 msgstr ""
 
 #: src/sharing/submissions_page/submissions_component.rs:581
-msgid "Services & Keys"
+msgid "Services and Keys"
 msgstr ""
 
 #: src/sharing/submissions_page/submissions_component.rs:583

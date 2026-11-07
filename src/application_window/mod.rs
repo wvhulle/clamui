@@ -7,6 +7,7 @@ pub mod page_navigation;
 pub mod protection_evidence_refresh;
 pub mod scan_slot_arbiter;
 pub mod sidebar_area_status;
+pub mod sidebar_navigation;
 pub mod start_page_choice;
 pub mod startup_arguments;
 pub mod system_tray_connection;

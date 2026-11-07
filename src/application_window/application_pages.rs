@@ -110,14 +110,6 @@ impl ApplicationPage {
             .get(page_position..=page_position)
             .unwrap_or(&[])
     }
-
-    pub fn sidebar_position(self) -> i32 {
-        ALL_APPLICATION_PAGES
-            .into_iter()
-            .position(|application_page| application_page == self)
-            .and_then(|page_position| i32::try_from(page_position).ok())
-            .unwrap_or_default()
-    }
 }
 
 #[cfg(test)]

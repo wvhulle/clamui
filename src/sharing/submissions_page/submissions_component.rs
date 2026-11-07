@@ -578,7 +578,7 @@ impl Component for SubmissionsPage {
                     },
 
                     add = &adw::PreferencesGroup {
-                        set_title: &gettext("Services & Keys"),
+                        set_title: &gettext("Services and Keys"),
                         set_description: Some(&gettext(
                             "What each service receives. Lookups send only a hash or a signature \
                              name; files leave this computer only when you confirm an upload.",

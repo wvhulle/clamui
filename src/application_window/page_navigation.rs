@@ -5,12 +5,7 @@ use gettextrs::gettext;
 use jiff::Timestamp;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller,
-    abstractions::Toaster,
-    actions::RelmAction,
-    adw,
-    adw::prelude::*,
-    gtk,
-    gtk::{gio, glib},
+    abstractions::Toaster, actions::RelmAction, adw, adw::prelude::*, gtk, gtk::glib,
 };
 
 use crate::{
@@ -18,13 +13,13 @@ use crate::{
     application_window::{
         application_actions::{
             ClearHistoryAction, ExportHistoryAction, OpenDetectionAction, OpenDetectionsAction,
-            QuickScanAction, ScanPathsAction, ShowPageAction, UpdateDefinitionsAction,
-            register_application_action, register_window_action,
+            QuickScanAction, ScanFilesAction, ScanPathsAction, ShowPageAction,
+            UpdateDefinitionsAction, register_application_action, register_window_action,
         },
         application_pages::{ALL_APPLICATION_PAGES, ApplicationPage},
         history_menu_actions::{
             ClearHistoryChoice, HistoryExportChoice, HistoryExportFormat, clear_history_dialog,
-            exported_history_file, history_export_dialog, primary_menu_entries,
+            exported_history_file, history_export_dialog,
         },
         protection_evidence_refresh::{
             EvidenceRefresh, EvidenceRefreshTransition, EvidenceRefreshTrigger, GatheredEvidence,
@@ -32,6 +27,9 @@ use crate::{
         },
         scan_slot_arbiter::{ScanSlot, ScanSlotEvent, ScanSlotReply, ScanSlotTransition},
         sidebar_area_status::{AreaSummaryContext, SidebarAreaSummary, all_area_summaries},
+        sidebar_navigation::sidebar_navigation_column::{
+            SidebarNavigationColumn, SidebarNavigationColumnInput,
+        },
         start_page_choice::{
             StartPageRequest, StartPageState, StartPageTransition, initial_start_page,
             start_page_after_evidence,
@@ -144,6 +142,7 @@ enum AreaSummaries {
 
 pub struct PageNavigation {
     visible_page: ApplicationPage,
+    sidebar_column: Controller<SidebarNavigationColumn>,
     start_page_state: StartPageState,
     shows_content_when_narrow: bool,
     scan_page: Controller<ScanPage>,
@@ -199,6 +198,7 @@ pub enum PageNavigationInput {
     UploadNoticeReceived(String),
     EntrySubmissionRequested { entry_id: i64 },
     QuarantinedFileSubmissionRequested(PathBuf),
+    ScanFilesRequested,
     HistoryExportRequested,
     HistoryExportFormatChosen(HistoryExportFormat),
     HistoryClearRequested,
@@ -235,25 +235,6 @@ fn page_root(
         .tag(application_page.page_name())
         .child(page_widget)
         .build()
-}
-
-fn navigation_row(application_page: ApplicationPage) -> gtk::ListBoxRow {
-    let row_content = gtk::Box::builder().spacing(12).build();
-    row_content.append(&gtk::Image::from_icon_name(application_page.page_icon()));
-    row_content.append(&gtk::Label::new(Some(&application_page.page_title())));
-    let navigation_row = gtk::ListBoxRow::builder().child(&row_content).build();
-    navigation_row.set_widget_name(application_page.page_name());
-    navigation_row
-}
-
-fn primary_menu() -> gio::Menu {
-    let primary_menu = gio::Menu::new();
-    primary_menu_entries()
-        .into_iter()
-        .for_each(|(entry_label, action_name)| {
-            primary_menu.append(Some(&entry_label), Some(action_name));
-        });
-    primary_menu
 }
 
 fn narrow_layout_breakpoint(split_view: &adw::NavigationSplitView) -> adw::Breakpoint {
@@ -445,6 +426,13 @@ fn register_page_actions(
             clear_sender.input(PageNavigationInput::HistoryClearRequested);
         }),
     );
+    let scan_files_sender = sender.clone();
+    register_window_action(
+        window_root,
+        RelmAction::<ScanFilesAction>::new_stateless(move |_action| {
+            scan_files_sender.input(PageNavigationInput::ScanFilesRequested);
+        }),
+    );
     let quick_scan_sender = sender.clone();
     register_application_action(RelmAction::<QuickScanAction>::new_stateless(
         move |_action| {
@@ -512,6 +500,18 @@ impl PageNavigation {
                 reference_moment: *gathered_at,
             },
         ));
+        self.sidebar_column
+            .emit(SidebarNavigationColumnInput::AreaSummariesChanged(
+                self.computed_area_summaries().to_vec(),
+            ));
+    }
+
+    fn select_visible_page(&mut self, application_page: ApplicationPage) {
+        self.visible_page = application_page;
+        self.sidebar_column
+            .emit(SidebarNavigationColumnInput::SelectedPageChanged(
+                application_page,
+            ));
     }
 
     fn apply_start_page_choice(&mut self) {
@@ -523,7 +523,7 @@ impl PageNavigation {
             self.visible_page,
             self.computed_area_summaries(),
         );
-        self.visible_page = shown_page;
+        self.select_visible_page(shown_page);
         self.start_page_state = next_state;
     }
 
@@ -606,7 +606,7 @@ impl PageNavigation {
     }
 
     fn show_page(&mut self, application_page: ApplicationPage) {
-        self.visible_page = application_page;
+        self.select_visible_page(application_page);
         self.start_page_state = StartPageState::UserNavigated;
         self.shows_content_when_narrow = true;
     }
@@ -665,57 +665,7 @@ impl Component for PageNavigation {
                         sender.input(PageNavigationInput::NarrowContentToggled(split_view.shows_content()));
                     } @narrow_content_handler,
 
-                    #[wrap(Some)]
-                    set_sidebar = &adw::NavigationPage {
-                        set_title: "Lazaret",
-
-                        #[wrap(Some)]
-                        set_child = &adw::ToolbarView {
-                            add_top_bar = &adw::HeaderBar {
-                                pack_end = &gtk::MenuButton {
-                                    set_icon_name: "open-menu-symbolic",
-                                    set_tooltip_text: Some(&gettext("Menu")),
-                                    set_menu_model: Some(&primary_menu()),
-                                    set_primary: true,
-                                },
-                            },
-
-                            #[wrap(Some)]
-                            set_content = &gtk::ScrolledWindow {
-                                set_hscrollbar_policy: gtk::PolicyType::Never,
-
-                                #[name = "sidebar_list"]
-                                gtk::ListBox {
-                                    set_selection_mode: gtk::SelectionMode::Single,
-                                    add_css_class: "navigation-sidebar",
-                                    #[watch]
-                                    select_row: sidebar_list
-                                        .row_at_index(model.visible_page.sidebar_position())
-                                        .as_ref(),
-                                    connect_row_activated[sender] => move |_sidebar_list, activated_row| {
-                                        if let Some(application_page) =
-                                            ApplicationPage::from_page_name(&activated_row.widget_name())
-                                        {
-                                            sender.input(PageNavigationInput::PageShown(application_page));
-                                        }
-                                    },
-
-                                    append: &navigation_row(ApplicationPage::SignatureSources),
-                                    append: &navigation_row(ApplicationPage::DatabaseUpdates),
-                                    append: &navigation_row(ApplicationPage::ScanEngine),
-                                    append: &navigation_row(ApplicationPage::OnAccessScanning),
-                                    append: &navigation_row(ApplicationPage::ScheduledScans),
-                                    append: &navigation_row(ApplicationPage::ManualScan),
-                                    append: &navigation_row(ApplicationPage::RemovableDrives),
-                                    append: &navigation_row(ApplicationPage::Detections),
-                                    append: &navigation_row(ApplicationPage::Quarantine),
-                                    append: &navigation_row(ApplicationPage::TrustedDetections),
-                                    append: &navigation_row(ApplicationPage::OnlineLookups),
-                                    append: &navigation_row(ApplicationPage::Submissions),
-                                },
-                            },
-                        },
-                    },
+                    set_sidebar: Some(model.sidebar_column.widget()),
 
                     #[wrap(Some)]
                     set_content = &adw::NavigationPage {
@@ -872,6 +822,9 @@ impl Component for PageNavigation {
         } = initial_start_page(navigation_init.startup_page);
         let mut model = Self {
             visible_page: initial_page,
+            sidebar_column: SidebarNavigationColumn::builder()
+                .launch(initial_page)
+                .detach(),
             start_page_state: initial_start_state,
             shows_content_when_narrow: false,
             scan_page,
@@ -909,12 +862,6 @@ impl Component for PageNavigation {
         model.advance_evidence_refresh(EvidenceRefreshTrigger::RefreshRequested, &sender);
         let page_toast_overlay = model.toaster.overlay_widget();
         let widgets = view_output!();
-        widgets.sidebar_list.select_row(
-            widgets
-                .sidebar_list
-                .row_at_index(model.visible_page.sidebar_position())
-                .as_ref(),
-        );
         register_page_actions(&navigation_init.window_root, &sender);
         if !navigation_init.startup_scan_targets.is_empty() {
             sender.input(PageNavigationInput::ScanTargetsReceived(
@@ -1044,6 +991,10 @@ impl Component for PageNavigation {
             }
             PageNavigationInput::UploadNoticeReceived(notice_text) => {
                 self.show_plain_toast(notice_text);
+            }
+            PageNavigationInput::ScanFilesRequested => {
+                self.show_page(ApplicationPage::ManualScan);
+                self.scan_page.emit(ScanPageInput::ChooseFilesRequested);
             }
             PageNavigationInput::HistoryExportRequested => {
                 deliver_local_outcome(
