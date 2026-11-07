@@ -10,7 +10,8 @@ const SUBMISSION_COLUMNS: &str = "content_sha256, submission_service, submission
                                   submitted_at_unix, submission_status";
 const SUBMISSION_KEY_FILTER: &str =
     "content_sha256 = ?1 AND submission_service = ?2 AND submission_kind = ?3";
-const DETAIL_TABLES: [&str; 5] = [
+const DETAIL_TABLES: [&str; 6] = [
+    "settled_database_versions",
     "false_positive_signatures",
     "clamav_review_settlements",
     "virustotal_analyses",
@@ -123,15 +124,6 @@ pub enum SignatureDatabaseVersion {
 }
 
 impl SignatureDatabaseVersion {
-    fn column_value(self) -> Value {
-        match self {
-            Self::DailyVersion { version_number } => {
-                Value::Integer(i64::try_from(version_number).unwrap_or(i64::MAX))
-            }
-            Self::VersionUnreadable => Value::Null,
-        }
-    }
-
     fn from_column_value(column_value: Value) -> Result<Self, ActivityHistoryFailure> {
         match column_value {
             Value::Null => Ok(Self::VersionUnreadable),
@@ -495,10 +487,16 @@ async fn stored_settlement_version(
     SignatureDatabaseVersion::from_column_value(
         first_detail_row(
             database_connection,
-            &format!(
-                "SELECT settled_database_version FROM clamav_review_settlements WHERE \
-                 {SUBMISSION_KEY_FILTER}"
-            ),
+            "SELECT settled_database_versions.settled_database_version FROM \
+             clamav_review_settlements LEFT JOIN settled_database_versions ON \
+             settled_database_versions.content_sha256 = clamav_review_settlements.content_sha256 \
+             AND settled_database_versions.submission_service = \
+             clamav_review_settlements.submission_service AND \
+             settled_database_versions.submission_kind = \
+             clamav_review_settlements.submission_kind WHERE \
+             clamav_review_settlements.content_sha256 = ?1 AND \
+             clamav_review_settlements.submission_service = ?2 AND \
+             clamav_review_settlements.submission_kind = ?3",
             content_sha256,
             submission_target,
         )
@@ -669,12 +667,11 @@ async fn submission_with_key(
     ))
 }
 
-async fn write_status_details(
+async fn delete_status_details(
     database_connection: &Connection,
     content_sha256: &str,
-    submission_state: &SubmissionState,
+    submission_target: SubmissionTarget,
 ) -> Result<(), ActivityHistoryFailure> {
-    let submission_target = submission_state.submission_target();
     for detail_table in DETAIL_TABLES {
         database_connection
             .execute(
@@ -683,21 +680,59 @@ async fn write_status_details(
             )
             .await?;
     }
+    Ok(())
+}
+
+async fn insert_status_details(
+    database_connection: &Connection,
+    content_sha256: &str,
+    submission_state: &SubmissionState,
+) -> Result<(), ActivityHistoryFailure> {
+    let submission_target = submission_state.submission_target();
+    let status_key_values = || {
+        key_values(content_sha256, submission_target)
+            .into_iter()
+            .chain([Value::Text(
+                submission_state.stored_status_name().to_owned(),
+            )])
+    };
     for status_detail in submission_state.status_details() {
         let (detail_insert, detail_values) = match status_detail {
             StatusDetail::ReportedSignature { reported_signature } => (
                 "INSERT INTO false_positive_signatures (content_sha256, submission_service, \
-                 submission_kind, reported_signature) VALUES (?1, ?2, ?3, ?4)",
+                 submission_kind, submission_status, reported_signature) VALUES (?1, ?2, ?3, ?4, \
+                 ?5)",
                 vec![Value::Text(sanitize_scanner_line(reported_signature))],
             ),
-            StatusDetail::ReviewSettlement { database_version } => (
-                "INSERT INTO clamav_review_settlements (content_sha256, submission_service, \
-                 submission_kind, settled_database_version) VALUES (?1, ?2, ?3, ?4)",
-                vec![database_version.column_value()],
-            ),
+            StatusDetail::ReviewSettlement { database_version } => {
+                database_connection
+                    .execute(
+                        "INSERT INTO clamav_review_settlements (content_sha256, \
+                         submission_service, submission_kind, submission_status) VALUES (?1, ?2, \
+                         ?3, ?4)",
+                        status_key_values().collect::<Vec<_>>(),
+                    )
+                    .await?;
+                let SignatureDatabaseVersion::DailyVersion { version_number } = database_version
+                else {
+                    continue;
+                };
+                database_connection
+                    .execute(
+                        "INSERT INTO settled_database_versions (content_sha256, \
+                         submission_service, submission_kind, settled_database_version) VALUES \
+                         (?1, ?2, ?3, ?4)",
+                        key_values(content_sha256, submission_target)
+                            .into_iter()
+                            .chain([stored_count(version_number)])
+                            .collect::<Vec<_>>(),
+                    )
+                    .await?;
+                continue;
+            }
             StatusDetail::VirusTotalAnalysis { analysis_id } => (
                 "INSERT INTO virustotal_analyses (content_sha256, submission_service, \
-                 submission_kind, analysis_id) VALUES (?1, ?2, ?3, ?4)",
+                 submission_kind, submission_status, analysis_id) VALUES (?1, ?2, ?3, ?4, ?5)",
                 vec![Value::Text(sanitize_scanner_line(analysis_id))],
             ),
             StatusDetail::VirusTotalVerdict {
@@ -705,22 +740,20 @@ async fn write_status_details(
                 engine_count,
             } => (
                 "INSERT INTO virustotal_verdicts (content_sha256, submission_service, \
-                 submission_kind, malicious_count, engine_count) VALUES (?1, ?2, ?3, ?4, ?5)",
+                 submission_kind, submission_status, malicious_count, engine_count) VALUES (?1, \
+                 ?2, ?3, ?4, ?5, ?6)",
                 vec![stored_count(malicious_count), stored_count(engine_count)],
             ),
             StatusDetail::UploadRefusal { refusal_reason } => (
                 "INSERT INTO upload_refusals (content_sha256, submission_service, \
-                 submission_kind, refusal_reason) VALUES (?1, ?2, ?3, ?4)",
+                 submission_kind, submission_status, refusal_reason) VALUES (?1, ?2, ?3, ?4, ?5)",
                 vec![Value::Text(sanitize_scanner_line(refusal_reason))],
             ),
         };
         database_connection
             .execute(
                 detail_insert,
-                key_values(content_sha256, submission_target)
-                    .into_iter()
-                    .chain(detail_values)
-                    .collect::<Vec<_>>(),
+                status_key_values().chain(detail_values).collect::<Vec<_>>(),
             )
             .await?;
     }
@@ -816,7 +849,7 @@ impl ActivityHistory {
                         .collect::<Vec<_>>(),
                 )
                 .await?;
-            write_status_details(
+            insert_status_details(
                 &database_connection,
                 &content_sha256,
                 &new_submission.submission_state,
@@ -857,6 +890,7 @@ impl ActivityHistory {
         let _history_lock = self.lock_history().await?;
         let database_connection = self.open_connection().await?;
         in_transaction(&database_connection, async {
+            delete_status_details(&database_connection, content_sha256, submission_target).await?;
             let updated_rows = database_connection
                 .execute(
                     &format!(
@@ -874,7 +908,7 @@ impl ActivityHistory {
             if updated_rows == 0 {
                 return Err(ActivityHistoryFailure::StoredSubmissionUnreadable);
             }
-            write_status_details(&database_connection, content_sha256, &submission_state).await
+            insert_status_details(&database_connection, content_sha256, &submission_state).await
         })
         .await
     }
@@ -1181,42 +1215,98 @@ mod submission_history_store_tests {
         let sqlite_connection =
             rusqlite::Connection::open(temporary_root.path().join("history.db")).expect("sqlite");
         sqlite_connection
-            .execute_batch("PRAGMA foreign_keys=ON")
-            .expect("foreign keys");
+            .execute_batch(&format!(
+                "PRAGMA foreign_keys=ON;
+                 INSERT INTO submissions VALUES ('{SAMPLE_SHA256}', 'clamav', 'missed_malware', \
+                 'a', 1, 'awaiting_review');
+                 INSERT INTO submissions VALUES ('{SAMPLE_SHA256}', 'virustotal', \
+                 'malware_sample', 'a', 1, 'analysis_queued');
+                 INSERT INTO virustotal_analyses VALUES ('{SAMPLE_SHA256}', 'virustotal', \
+                 'malware_sample', 'analysis_queued', 'analysis-1');"
+            ))
+            .expect("valid rows");
+        [
+            format!(
+                "INSERT INTO submissions VALUES ('{SAMPLE_SHA256}', 'virustotal', 'shredded', \
+                 'a', 1, 'analysed')"
+            ),
+            "INSERT INTO submissions VALUES ('ab', 'malware_bazaar', 'malware_sample', 'a', 1, \
+             'listed')"
+                .to_owned(),
+            format!(
+                "INSERT INTO submissions VALUES ('{SAMPLE_SHA256}', 'malware_bazaar', \
+                 'malware_sample', 'a', 1, 'analysed')"
+            ),
+            format!(
+                "INSERT INTO submissions VALUES ('{SAMPLE_SHA256}', 'clamav', 'malware_sample', \
+                 'a', 1, 'awaiting_review')"
+            ),
+            format!(
+                "INSERT INTO false_positive_signatures VALUES ('{SAMPLE_SHA256}', 'clamav', \
+                 'missed_malware', 'awaiting_review', 'Win.Trojan.Agent')"
+            ),
+            format!(
+                "INSERT INTO clamav_review_settlements VALUES ('{SAMPLE_SHA256}', 'clamav', \
+                 'missed_malware', 'now_detected')"
+            ),
+            format!(
+                "INSERT INTO settled_database_versions VALUES ('{SAMPLE_SHA256}', 'clamav', \
+                 'missed_malware', 28173)"
+            ),
+            format!(
+                "INSERT INTO virustotal_verdicts VALUES ('{SAMPLE_SHA256}', 'virustotal', \
+                 'malware_sample', 'analysed', 1, 70)"
+            ),
+            format!(
+                "INSERT INTO upload_refusals VALUES ('{SAMPLE_SHA256}', 'virustotal', \
+                 'malware_sample', 'refused', 'BadRequestError')"
+            ),
+        ]
+        .into_iter()
+        .for_each(|invalid_insert| {
+            assert!(
+                sqlite_connection.execute(&invalid_insert, []).is_err(),
+                "accepted: {invalid_insert}"
+            );
+        });
         assert!(
             sqlite_connection
                 .execute(
-                    "INSERT INTO submissions VALUES ('ab', 'virustotal', 'shredded', 'a', 1, \
-                     'analysed')",
+                    &format!(
+                        "UPDATE submissions SET submission_status = 'refused' WHERE \
+                         submission_service = 'virustotal' AND content_sha256 = '{SAMPLE_SHA256}'"
+                    ),
                     [],
                 )
                 .is_err()
         );
-        assert!(
-            sqlite_connection
-                .execute(
-                    "INSERT INTO virustotal_analyses VALUES ('ab', 'virustotal', \
-                     'malware_sample', 'analysis-1')",
+    }
+
+    #[tokio::test]
+    async fn a_settlement_without_a_readable_version_stores_no_version_row() {
+        let temporary_root = tempfile::tempdir().expect("temporary root");
+        let history = fixture_history(&temporary_root);
+        history
+            .record_submission(new_submission(
+                SAMPLE_SHA256,
+                SubmissionState::ClamavMissedMalware {
+                    review_status: MissedMalwareReview::NowDetected {
+                        database_version: SignatureDatabaseVersion::VersionUnreadable,
+                    },
+                },
+            ))
+            .await
+            .expect("recorded");
+        let version_rows: i64 =
+            rusqlite::Connection::open(temporary_root.path().join("history.db"))
+                .expect("sqlite")
+                .query_row(
+                    "SELECT COUNT(*) FROM settled_database_versions",
                     [],
+                    |count_row| count_row.get(0),
                 )
-                .is_err()
-        );
-        sqlite_connection
-            .execute(
-                "INSERT INTO submissions VALUES ('ab', 'clamav', 'missed_malware', 'a', 1, \
-                 'awaiting_review')",
-                [],
-            )
-            .expect("parent row");
-        assert!(
-            sqlite_connection
-                .execute(
-                    "INSERT INTO false_positive_signatures VALUES ('ab', 'clamav', \
-                     'missed_malware', 'Win.Trojan.Agent')",
-                    [],
-                )
-                .is_err()
-        );
+                .expect("count");
+        assert_eq!(version_rows, 0);
     }
 
     #[tokio::test]
@@ -1227,8 +1317,10 @@ mod submission_history_store_tests {
         rusqlite::Connection::open(temporary_root.path().join("history.db"))
             .expect("sqlite")
             .execute(
-                "INSERT INTO submissions VALUES ('ab', 'virustotal', 'malware_sample', 'a', 1, \
-                 'analysis_queued')",
+                &format!(
+                    "INSERT INTO submissions VALUES ('{SAMPLE_SHA256}', 'virustotal', \
+                     'malware_sample', 'a', 1, 'analysis_queued')"
+                ),
                 [],
             )
             .expect("orphaned status");

@@ -165,6 +165,12 @@ erDiagram
     scan_activities ||--o| scan_inspections : "scan that ran"
     scan_inspections ||--o| scan_threat_counts : "infected, counted"
     background_detections ||--o| detection_resolutions : "resolved"
+    submissions ||--o| false_positive_signatures : "false positive"
+    submissions ||--o| clamav_review_settlements : "settled by ClamAV"
+    clamav_review_settlements ||--o| settled_database_versions : "version known"
+    submissions ||--o| virustotal_analyses : "VirusTotal analysis"
+    virustotal_analyses ||--o| virustotal_verdicts : "analysed"
+    submissions ||--o| upload_refusals : "refused"
 ```
 
 | Table | Key | References | Stores |
@@ -177,6 +183,13 @@ erDiagram
 | `background_detections` | `file_path, signature_name`; `detection_id` is unique too | | One file that clamd or clamonacc reported for one signature: which scanners saw it, when, and how often. The journal follower matches new lines on the key. The pages and the incident view refer to a detection by `detection_id`. |
 | `detection_resolutions` | `file_path, signature_name` | `background_detections` | How and when you resolved a detection. An open detection has no row, and a later sighting deletes it. |
 | `detection_journal_position` | `position_row`, always 1 | | The journal cursor the follower continues from. |
+| `submissions` | `content_sha256, submission_service, submission_kind` | | One file sent to ClamAV, MalwareBazaar or VirusTotal: its name, when, and its status. A `CHECK` lists the statuses each service and kind can have. |
+| `false_positive_signatures` | as `submissions` | `submissions`, with its status | The signature reported as a false positive. |
+| `clamav_review_settlements` | as `submissions` | `submissions`, with its status | A ClamAV report that a signature update settled. |
+| `settled_database_versions` | as `submissions` | `clamav_review_settlements` | The daily database version that settled it. Without this row Lazaret couldn't read the version. |
+| `virustotal_analyses` | as `submissions` | `submissions`, with its status | The VirusTotal analysis ID of an upload. |
+| `virustotal_verdicts` | as `submissions` | `virustotal_analyses`, with its status | How many engines flagged the file, out of how many. |
+| `upload_refusals` | as `submissions` | `submissions`, with its status | Why MalwareBazaar or VirusTotal refused an upload. |
 
 ### quarantine.db
 

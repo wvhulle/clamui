@@ -72,24 +72,37 @@ CREATE TABLE IF NOT EXISTS detection_journal_position (
     journal_cursor TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS submissions (
-    content_sha256 TEXT NOT NULL,
-    submission_service TEXT NOT NULL
-        CHECK (submission_service IN ('clamav', 'malware_bazaar', 'virustotal')),
-    submission_kind TEXT NOT NULL
-        CHECK (submission_kind IN ('false_positive', 'missed_malware', 'malware_sample')),
+    content_sha256 TEXT NOT NULL
+        CHECK (length(content_sha256) = 64 AND content_sha256 NOT GLOB '*[^0-9a-f]*'),
+    submission_service TEXT NOT NULL,
+    submission_kind TEXT NOT NULL,
     file_name TEXT NOT NULL,
     submitted_at_unix INTEGER NOT NULL,
     submission_status TEXT NOT NULL,
-    PRIMARY KEY (content_sha256, submission_service, submission_kind)
+    CHECK (
+        (submission_service = 'clamav' AND submission_kind = 'false_positive'
+            AND submission_status IN ('awaiting_review', 'fixed_in_database'))
+        OR (submission_service = 'clamav' AND submission_kind = 'missed_malware'
+            AND submission_status IN ('awaiting_review', 'now_detected'))
+        OR (submission_service = 'malware_bazaar' AND submission_kind = 'malware_sample'
+            AND submission_status IN ('upload_accepted', 'listed', 'refused'))
+        OR (submission_service = 'virustotal' AND submission_kind = 'malware_sample'
+            AND submission_status IN ('analysis_queued', 'analysed', 'refused'))
+    ),
+    PRIMARY KEY (content_sha256, submission_service, submission_kind),
+    UNIQUE (content_sha256, submission_service, submission_kind, submission_status)
 );
 CREATE TABLE IF NOT EXISTS false_positive_signatures (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL CHECK (submission_service = 'clamav'),
     submission_kind TEXT NOT NULL CHECK (submission_kind = 'false_positive'),
+    submission_status TEXT NOT NULL
+        CHECK (submission_status IN ('awaiting_review', 'fixed_in_database')),
     reported_signature TEXT NOT NULL,
     PRIMARY KEY (content_sha256, submission_service, submission_kind),
-    FOREIGN KEY (content_sha256, submission_service, submission_kind)
-        REFERENCES submissions (content_sha256, submission_service, submission_kind)
+    FOREIGN KEY (content_sha256, submission_service, submission_kind, submission_status)
+        REFERENCES submissions (content_sha256, submission_service, submission_kind,
+            submission_status)
         ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS clamav_review_settlements (
@@ -97,31 +110,50 @@ CREATE TABLE IF NOT EXISTS clamav_review_settlements (
     submission_service TEXT NOT NULL CHECK (submission_service = 'clamav'),
     submission_kind TEXT NOT NULL
         CHECK (submission_kind IN ('false_positive', 'missed_malware')),
-    settled_database_version INTEGER,
+    submission_status TEXT NOT NULL
+        CHECK (submission_status IN ('fixed_in_database', 'now_detected')),
+    PRIMARY KEY (content_sha256, submission_service, submission_kind),
+    FOREIGN KEY (content_sha256, submission_service, submission_kind, submission_status)
+        REFERENCES submissions (content_sha256, submission_service, submission_kind,
+            submission_status)
+        ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS settled_database_versions (
+    content_sha256 TEXT NOT NULL,
+    submission_service TEXT NOT NULL,
+    submission_kind TEXT NOT NULL,
+    settled_database_version INTEGER NOT NULL CHECK (settled_database_version >= 0),
     PRIMARY KEY (content_sha256, submission_service, submission_kind),
     FOREIGN KEY (content_sha256, submission_service, submission_kind)
-        REFERENCES submissions (content_sha256, submission_service, submission_kind)
+        REFERENCES clamav_review_settlements (content_sha256, submission_service,
+            submission_kind)
         ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS virustotal_analyses (
     content_sha256 TEXT NOT NULL,
     submission_service TEXT NOT NULL CHECK (submission_service = 'virustotal'),
     submission_kind TEXT NOT NULL CHECK (submission_kind = 'malware_sample'),
+    submission_status TEXT NOT NULL
+        CHECK (submission_status IN ('analysis_queued', 'analysed')),
     analysis_id TEXT NOT NULL,
     PRIMARY KEY (content_sha256, submission_service, submission_kind),
-    FOREIGN KEY (content_sha256, submission_service, submission_kind)
-        REFERENCES submissions (content_sha256, submission_service, submission_kind)
+    UNIQUE (content_sha256, submission_service, submission_kind, submission_status),
+    FOREIGN KEY (content_sha256, submission_service, submission_kind, submission_status)
+        REFERENCES submissions (content_sha256, submission_service, submission_kind,
+            submission_status)
         ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS virustotal_verdicts (
     content_sha256 TEXT NOT NULL,
-    submission_service TEXT NOT NULL CHECK (submission_service = 'virustotal'),
-    submission_kind TEXT NOT NULL CHECK (submission_kind = 'malware_sample'),
+    submission_service TEXT NOT NULL,
+    submission_kind TEXT NOT NULL,
+    submission_status TEXT NOT NULL CHECK (submission_status = 'analysed'),
     malicious_count INTEGER NOT NULL CHECK (malicious_count >= 0),
     engine_count INTEGER NOT NULL CHECK (engine_count >= malicious_count),
     PRIMARY KEY (content_sha256, submission_service, submission_kind),
-    FOREIGN KEY (content_sha256, submission_service, submission_kind)
-        REFERENCES submissions (content_sha256, submission_service, submission_kind)
+    FOREIGN KEY (content_sha256, submission_service, submission_kind, submission_status)
+        REFERENCES virustotal_analyses (content_sha256, submission_service, submission_kind,
+            submission_status)
         ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS upload_refusals (
@@ -129,9 +161,11 @@ CREATE TABLE IF NOT EXISTS upload_refusals (
     submission_service TEXT NOT NULL
         CHECK (submission_service IN ('malware_bazaar', 'virustotal')),
     submission_kind TEXT NOT NULL CHECK (submission_kind = 'malware_sample'),
+    submission_status TEXT NOT NULL CHECK (submission_status = 'refused'),
     refusal_reason TEXT NOT NULL,
     PRIMARY KEY (content_sha256, submission_service, submission_kind),
-    FOREIGN KEY (content_sha256, submission_service, submission_kind)
-        REFERENCES submissions (content_sha256, submission_service, submission_kind)
+    FOREIGN KEY (content_sha256, submission_service, submission_kind, submission_status)
+        REFERENCES submissions (content_sha256, submission_service, submission_kind,
+            submission_status)
         ON DELETE CASCADE
 );
