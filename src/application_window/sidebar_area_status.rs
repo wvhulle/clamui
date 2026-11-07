@@ -4,6 +4,7 @@ use gettextrs::{gettext, ngettext};
 use jiff::Timestamp;
 
 use crate::{
+    application_window::application_pages::{ALL_APPLICATION_PAGES, ApplicationPage},
     findings::{
         detections_page::alert_delivery_presentation::{
             AlertReadiness, alerts_condition, process_attach_condition,
@@ -41,7 +42,6 @@ use crate::{
         systemd_bus::host_systemd_units::UnitTimestamp,
         threat_intel::service_key_status::LookupKeyStatuses,
     },
-    protection_page::protection_timeline_page::shown_coverage_text,
     scans::{
         on_access_page::on_access_presentation::on_access_condition,
         removable_drives_page::{
@@ -71,56 +71,6 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SidebarArea {
-    SignatureSources,
-    DatabaseUpdates,
-    ScanEngine,
-    OnAccessScanning,
-    ScheduledScans,
-    ManualScan,
-    RemovableDrives,
-    Detections,
-    Quarantine,
-    TrustedDetections,
-    OnlineLookups,
-    Submissions,
-}
-
-pub const ALL_SIDEBAR_AREAS: [SidebarArea; 12] = [
-    SidebarArea::SignatureSources,
-    SidebarArea::DatabaseUpdates,
-    SidebarArea::ScanEngine,
-    SidebarArea::OnAccessScanning,
-    SidebarArea::ScheduledScans,
-    SidebarArea::ManualScan,
-    SidebarArea::RemovableDrives,
-    SidebarArea::Detections,
-    SidebarArea::Quarantine,
-    SidebarArea::TrustedDetections,
-    SidebarArea::OnlineLookups,
-    SidebarArea::Submissions,
-];
-
-impl SidebarArea {
-    pub fn area_title(self) -> String {
-        match self {
-            Self::SignatureSources => gettext("Signature Sources"),
-            Self::DatabaseUpdates => gettext("Database Updates"),
-            Self::ScanEngine => gettext("Scan Engine"),
-            Self::OnAccessScanning => gettext("On-Access Scanning"),
-            Self::ScheduledScans => gettext("Scheduled Scans"),
-            Self::ManualScan => gettext("Manual Scan"),
-            Self::RemovableDrives => gettext("Removable Drives"),
-            Self::Detections => gettext("Detections"),
-            Self::Quarantine => gettext("Quarantine"),
-            Self::TrustedDetections => gettext("Trusted Detections"),
-            Self::OnlineLookups => gettext("Online Lookups"),
-            Self::Submissions => gettext("Submissions"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AreaStatus {
     AreaHealthy,
     AreaNeedsReview,
@@ -146,16 +96,6 @@ impl AreaStatus {
             Self::AreaNeedsReview | Self::AreaFailing | Self::AreaUnknown => true,
         }
     }
-
-    pub const fn status_indicator(self) -> StatusIndicator {
-        match self {
-            Self::AreaHealthy => StatusIndicator::IndicatorHidden,
-            Self::AreaNeedsReview | Self::AreaUnknown | Self::AreaWaiting => {
-                StatusIndicator::WarningIndicator
-            }
-            Self::AreaFailing => StatusIndicator::ErrorIndicator,
-        }
-    }
 }
 
 impl From<CheckedCondition> for AreaStatus {
@@ -172,37 +112,6 @@ impl From<CheckedCondition> for AreaStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StatusIndicator {
-    IndicatorHidden,
-    WarningIndicator,
-    ErrorIndicator,
-}
-
-impl StatusIndicator {
-    pub const fn is_shown(self) -> bool {
-        match self {
-            Self::IndicatorHidden => false,
-            Self::WarningIndicator | Self::ErrorIndicator => true,
-        }
-    }
-
-    pub const fn icon_name(self) -> &'static str {
-        match self {
-            Self::IndicatorHidden | Self::WarningIndicator => "dialog-warning-symbolic",
-            Self::ErrorIndicator => "dialog-error-symbolic",
-        }
-    }
-
-    pub const fn css_classes(self) -> &'static [&'static str] {
-        match self {
-            Self::IndicatorHidden => &[],
-            Self::WarningIndicator => &["warning"],
-            Self::ErrorIndicator => &["error"],
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AreaSummary {
     pub area_status: AreaStatus,
@@ -211,7 +120,7 @@ pub struct AreaSummary {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SidebarAreaSummary {
-    pub sidebar_area: SidebarArea,
+    pub application_page: ApplicationPage,
     pub area_summary: AreaSummary,
 }
 
@@ -472,6 +381,15 @@ fn scan_engine_summary(protection_evidence: &ProtectionEvidence) -> AreaSummary 
 
 fn waiting_for_daemon_text() -> String {
     gettext("Waiting for clamd")
+}
+
+fn shown_coverage_text(coverage_summary: &str, home_directory: &str) -> String {
+    if home_directory.is_empty() || home_directory == "/" {
+        return coverage_summary.to_owned();
+    }
+    coverage_summary
+        .replace(&format!("{home_directory}/"), "~/")
+        .replace(&format!("{home_directory},"), "~,")
 }
 
 fn watched_paths_text(watch_scope: &WatchScope, home_directory: &str) -> String {
@@ -888,31 +806,35 @@ fn submissions_summary(submission_tally: SubmissionTally) -> AreaSummary {
 }
 
 pub fn area_summary(
-    sidebar_area: SidebarArea,
+    application_page: ApplicationPage,
     protection_evidence: &ProtectionEvidence,
     area_context: &AreaSummaryContext,
 ) -> AreaSummary {
-    match sidebar_area {
-        SidebarArea::SignatureSources => {
+    match application_page {
+        ApplicationPage::SignatureSources => {
             signature_sources_summary(&protection_evidence.signature_evidence, area_context)
         }
-        SidebarArea::DatabaseUpdates => database_updates_summary(protection_evidence, area_context),
-        SidebarArea::ScanEngine => scan_engine_summary(protection_evidence),
-        SidebarArea::OnAccessScanning => on_access_summary(protection_evidence, area_context),
-        SidebarArea::ScheduledScans => scheduled_scans_summary(protection_evidence, area_context),
-        SidebarArea::ManualScan => manual_scan_summary(protection_evidence),
-        SidebarArea::RemovableDrives => {
+        ApplicationPage::DatabaseUpdates => {
+            database_updates_summary(protection_evidence, area_context)
+        }
+        ApplicationPage::ScanEngine => scan_engine_summary(protection_evidence),
+        ApplicationPage::OnAccessScanning => on_access_summary(protection_evidence, area_context),
+        ApplicationPage::ScheduledScans => {
+            scheduled_scans_summary(protection_evidence, area_context)
+        }
+        ApplicationPage::ManualScan => manual_scan_summary(protection_evidence),
+        ApplicationPage::RemovableDrives => {
             removable_drives_summary(&area_context.removable_drives_status)
         }
-        SidebarArea::Detections => detections_summary(protection_evidence, area_context),
-        SidebarArea::Quarantine => quarantine_summary(area_context.quarantine_entry_count),
-        SidebarArea::TrustedDetections => {
+        ApplicationPage::Detections => detections_summary(protection_evidence, area_context),
+        ApplicationPage::Quarantine => quarantine_summary(area_context.quarantine_entry_count),
+        ApplicationPage::TrustedDetections => {
             trusted_detections_summary(&protection_evidence.trust_list)
         }
-        SidebarArea::OnlineLookups => {
+        ApplicationPage::OnlineLookups => {
             online_lookups_summary(&protection_evidence.lookup_key_statuses)
         }
-        SidebarArea::Submissions => submissions_summary(area_context.submission_tally),
+        ApplicationPage::Submissions => submissions_summary(area_context.submission_tally),
     }
 }
 
@@ -920,51 +842,26 @@ pub fn all_area_summaries(
     protection_evidence: &ProtectionEvidence,
     area_context: &AreaSummaryContext,
 ) -> Vec<SidebarAreaSummary> {
-    ALL_SIDEBAR_AREAS
+    ALL_APPLICATION_PAGES
         .into_iter()
-        .map(|sidebar_area| SidebarAreaSummary {
-            sidebar_area,
-            area_summary: area_summary(sidebar_area, protection_evidence, area_context),
+        .map(|application_page| SidebarAreaSummary {
+            application_page,
+            area_summary: area_summary(application_page, protection_evidence, area_context),
         })
         .collect()
 }
 
-pub fn first_area_needing_attention(area_summaries: &[SidebarAreaSummary]) -> SidebarArea {
+pub fn first_area_needing_attention(area_summaries: &[SidebarAreaSummary]) -> ApplicationPage {
     area_summaries
         .iter()
         .find(|sidebar_summary| sidebar_summary.area_summary.area_status.needs_attention())
-        .map_or(SidebarArea::Detections, |sidebar_summary| {
-            sidebar_summary.sidebar_area
-        })
-}
-
-pub fn worst_area_status(area_summaries: &[SidebarAreaSummary]) -> AreaStatus {
-    area_summaries
-        .iter()
-        .map(|sidebar_summary| sidebar_summary.area_summary.area_status)
-        .fold(AreaStatus::AreaHealthy, |kept_status, candidate_status| {
-            if candidate_status.severity_rank() > kept_status.severity_rank() {
-                candidate_status
-            } else {
-                kept_status
-            }
-        })
-}
-
-pub fn attention_summary_text(area_summaries: &[SidebarAreaSummary]) -> String {
-    let attention_area = first_area_needing_attention(area_summaries);
-    area_summaries
-        .iter()
-        .find(|sidebar_summary| sidebar_summary.sidebar_area == attention_area)
-        .map_or_else(String::new, |sidebar_summary| {
-            gettext("{area}: {state}")
-                .replace("{area}", &sidebar_summary.sidebar_area.area_title())
-                .replace("{state}", &sidebar_summary.area_summary.live_state_text)
+        .map_or(ApplicationPage::Detections, |sidebar_summary| {
+            sidebar_summary.application_page
         })
 }
 
 #[cfg(test)]
-mod sidebar_area_status_tests {
+mod application_page_status_tests {
     use super::*;
     use crate::{
         host_services::{
@@ -1015,17 +912,17 @@ mod sidebar_area_status_tests {
     }
 
     fn summary_for(
-        sidebar_area: SidebarArea,
+        application_page: ApplicationPage,
         protection_evidence: &ProtectionEvidence,
     ) -> AreaSummary {
-        area_summary(sidebar_area, protection_evidence, &idle_context())
+        area_summary(application_page, protection_evidence, &idle_context())
     }
 
     fn status_for(
-        sidebar_area: SidebarArea,
+        application_page: ApplicationPage,
         protection_evidence: &ProtectionEvidence,
     ) -> AreaStatus {
-        summary_for(sidebar_area, protection_evidence).area_status
+        summary_for(application_page, protection_evidence).area_status
     }
 
     fn daemon_stopped_evidence() -> ProtectionEvidence {
@@ -1067,42 +964,43 @@ mod sidebar_area_status_tests {
         );
         assert_eq!(
             first_area_needing_attention(&area_summaries),
-            SidebarArea::Detections
+            ApplicationPage::Detections
         );
-        assert_eq!(worst_area_status(&area_summaries), AreaStatus::AreaHealthy);
     }
 
     #[test]
     fn a_stopped_daemon_fails_the_engine_and_leaves_the_clamd_scans_waiting() {
         let protection_evidence = daemon_stopped_evidence();
         assert_eq!(
-            summary_for(SidebarArea::ScanEngine, &protection_evidence),
+            summary_for(ApplicationPage::ScanEngine, &protection_evidence),
             AreaSummary {
                 area_status: AreaStatus::AreaFailing,
                 live_state_text: "clamd not running".to_owned(),
             }
         );
-        [SidebarArea::OnAccessScanning, SidebarArea::ScheduledScans]
-            .into_iter()
-            .for_each(|waiting_area| {
-                assert_eq!(
-                    summary_for(waiting_area, &protection_evidence),
-                    AreaSummary {
-                        area_status: AreaStatus::AreaWaiting,
-                        live_state_text: "Waiting for clamd".to_owned(),
-                    }
-                );
-            });
+        [
+            ApplicationPage::OnAccessScanning,
+            ApplicationPage::ScheduledScans,
+        ]
+        .into_iter()
+        .for_each(|waiting_area| {
+            assert_eq!(
+                summary_for(waiting_area, &protection_evidence),
+                AreaSummary {
+                    area_status: AreaStatus::AreaWaiting,
+                    live_state_text: "Waiting for clamd".to_owned(),
+                }
+            );
+        });
         assert_eq!(
-            summary_for(SidebarArea::ManualScan, &protection_evidence).live_state_text,
+            summary_for(ApplicationPage::ManualScan, &protection_evidence).live_state_text,
             "Uses the slower clamscan"
         );
         let area_summaries = all_area_summaries(&protection_evidence, &idle_context());
         assert_eq!(
             first_area_needing_attention(&area_summaries),
-            SidebarArea::ScanEngine
+            ApplicationPage::ScanEngine
         );
-        assert_eq!(worst_area_status(&area_summaries), AreaStatus::AreaFailing);
     }
 
     #[test]
@@ -1117,7 +1015,7 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            summary_for(SidebarArea::OnAccessScanning, &protection_evidence),
+            summary_for(ApplicationPage::OnAccessScanning, &protection_evidence),
             AreaSummary {
                 area_status: AreaStatus::AreaUnknown,
                 live_state_text: "clamd.conf unreadable".to_owned(),
@@ -1140,7 +1038,7 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            summary_for(SidebarArea::DatabaseUpdates, &protection_evidence),
+            summary_for(ApplicationPage::DatabaseUpdates, &protection_evidence),
             AreaSummary {
                 area_status: AreaStatus::AreaNeedsReview,
                 live_state_text: "Last update failed".to_owned(),
@@ -1151,7 +1049,7 @@ mod sidebar_area_status_tests {
                 &protection_evidence,
                 &idle_context()
             )),
-            SidebarArea::DatabaseUpdates
+            ApplicationPage::DatabaseUpdates
         );
     }
 
@@ -1172,7 +1070,7 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            summary_for(SidebarArea::DatabaseUpdates, &protection_evidence),
+            summary_for(ApplicationPage::DatabaseUpdates, &protection_evidence),
             AreaSummary {
                 area_status: AreaStatus::AreaHealthy,
                 live_state_text: "Updated 2 hours ago".to_owned(),
@@ -1195,7 +1093,7 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            summary_for(SidebarArea::ScheduledScans, &protection_evidence),
+            summary_for(ApplicationPage::ScheduledScans, &protection_evidence),
             AreaSummary {
                 area_status: AreaStatus::AreaFailing,
                 live_state_text: "Timer not active".to_owned(),
@@ -1207,28 +1105,28 @@ mod sidebar_area_status_tests {
     fn unreadable_evidence_is_never_reported_as_healthy() {
         let unknown_cases = [
             (
-                SidebarArea::ScanEngine,
+                ApplicationPage::ScanEngine,
                 ProtectionEvidence {
                     daemon_evidence: DaemonEvidence::UnitStateUnknown,
                     ..healthy_evidence()
                 },
             ),
             (
-                SidebarArea::ScanEngine,
+                ApplicationPage::ScanEngine,
                 ProtectionEvidence {
                     program_trust: ProgramTrustInspection::CheckInterrupted,
                     ..healthy_evidence()
                 },
             ),
             (
-                SidebarArea::DatabaseUpdates,
+                ApplicationPage::DatabaseUpdates,
                 ProtectionEvidence {
                     program_trust: ProgramTrustInspection::CheckInterrupted,
                     ..healthy_evidence()
                 },
             ),
             (
-                SidebarArea::DatabaseUpdates,
+                ApplicationPage::DatabaseUpdates,
                 ProtectionEvidence {
                     signature_evidence: SignatureEvidence {
                         database_evidence: DatabaseEvidence::InspectionInterrupted,
@@ -1238,7 +1136,7 @@ mod sidebar_area_status_tests {
                 },
             ),
             (
-                SidebarArea::SignatureSources,
+                ApplicationPage::SignatureSources,
                 ProtectionEvidence {
                     signature_evidence: SignatureEvidence {
                         third_party_listing: ThirdPartySignatureListing::FolderUnreadable(
@@ -1250,7 +1148,7 @@ mod sidebar_area_status_tests {
                 },
             ),
             (
-                SidebarArea::OnAccessScanning,
+                ApplicationPage::OnAccessScanning,
                 ProtectionEvidence {
                     on_access_evidence: OnAccessEvidence {
                         on_access_scanner: OnAccessScanner::UnitStateUnknown,
@@ -1260,7 +1158,7 @@ mod sidebar_area_status_tests {
                 },
             ),
             (
-                SidebarArea::OnAccessScanning,
+                ApplicationPage::OnAccessScanning,
                 ProtectionEvidence {
                     runtime_reductions: RuntimeReductions::OverridesUnreadable(
                         OverridesReadFailure::ReadingTaskInterrupted,
@@ -1269,7 +1167,7 @@ mod sidebar_area_status_tests {
                 },
             ),
             (
-                SidebarArea::ScheduledScans,
+                ApplicationPage::ScheduledScans,
                 ProtectionEvidence {
                     scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
                         service_unit: "clamdscan.service",
@@ -1285,11 +1183,11 @@ mod sidebar_area_status_tests {
         ];
         unknown_cases
             .iter()
-            .for_each(|(sidebar_area, protection_evidence)| {
+            .for_each(|(application_page, protection_evidence)| {
                 assert_eq!(
-                    status_for(*sidebar_area, protection_evidence),
+                    status_for(*application_page, protection_evidence),
                     AreaStatus::AreaUnknown,
-                    "{sidebar_area:?}"
+                    "{application_page:?}"
                 );
             });
     }
@@ -1308,14 +1206,14 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            summary_for(SidebarArea::OnAccessScanning, &protection_evidence),
+            summary_for(ApplicationPage::OnAccessScanning, &protection_evidence),
             AreaSummary {
                 area_status: AreaStatus::AreaNeedsReview,
                 live_state_text: "Settings reduced at runtime".to_owned(),
             }
         );
         assert_eq!(
-            status_for(SidebarArea::ScanEngine, &protection_evidence),
+            status_for(ApplicationPage::ScanEngine, &protection_evidence),
             AreaStatus::AreaHealthy
         );
     }
@@ -1329,14 +1227,22 @@ mod sidebar_area_status_tests {
         };
         let protection_evidence = healthy_evidence();
         assert_eq!(
-            area_summary(SidebarArea::Detections, &protection_evidence, &area_context),
+            area_summary(
+                ApplicationPage::Detections,
+                &protection_evidence,
+                &area_context
+            ),
             AreaSummary {
                 area_status: AreaStatus::AreaNeedsReview,
                 live_state_text: "2 need a decision".to_owned(),
             }
         );
         assert_eq!(
-            area_summary(SidebarArea::Quarantine, &protection_evidence, &area_context),
+            area_summary(
+                ApplicationPage::Quarantine,
+                &protection_evidence,
+                &area_context
+            ),
             AreaSummary {
                 area_status: AreaStatus::AreaHealthy,
                 live_state_text: "1 item".to_owned(),
@@ -1351,7 +1257,7 @@ mod sidebar_area_status_tests {
         };
         assert_eq!(
             area_summary(
-                SidebarArea::Detections,
+                ApplicationPage::Detections,
                 &protection_evidence,
                 &unreadable_journal
             )
@@ -1367,7 +1273,7 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            summary_for(SidebarArea::Detections, &attach_open),
+            summary_for(ApplicationPage::Detections, &attach_open),
             AreaSummary {
                 area_status: AreaStatus::AreaNeedsReview,
                 live_state_text: "Other programs can attach to Lazaret".to_owned(),
@@ -1380,11 +1286,11 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         assert_eq!(
-            status_for(SidebarArea::Detections, &attach_unreadable),
+            status_for(ApplicationPage::Detections, &attach_unreadable),
             AreaStatus::AreaUnknown
         );
         assert_eq!(
-            status_for(SidebarArea::Detections, &healthy_evidence()),
+            status_for(ApplicationPage::Detections, &healthy_evidence()),
             AreaStatus::AreaHealthy
         );
     }
@@ -1400,7 +1306,7 @@ mod sidebar_area_status_tests {
         };
         assert_eq!(
             summary_for(
-                SidebarArea::OnlineLookups,
+                ApplicationPage::OnlineLookups,
                 &with_keys(
                     ServiceKeyStatus::KeyMissing,
                     ServiceKeyStatus::KeyConfigured
@@ -1413,7 +1319,7 @@ mod sidebar_area_status_tests {
         );
         assert_eq!(
             summary_for(
-                SidebarArea::OnlineLookups,
+                ApplicationPage::OnlineLookups,
                 &with_keys(
                     ServiceKeyStatus::KeyUnreadable {
                         failure_text: "permission denied".to_owned(),
@@ -1430,7 +1336,7 @@ mod sidebar_area_status_tests {
 
     fn submissions_summary_with(submission_tally: SubmissionTally) -> AreaSummary {
         area_summary(
-            SidebarArea::Submissions,
+            ApplicationPage::Submissions,
             &healthy_evidence(),
             &AreaSummaryContext {
                 submission_tally,
@@ -1477,11 +1383,11 @@ mod sidebar_area_status_tests {
         );
     }
 
-    fn summary_list(area_statuses: &[(SidebarArea, AreaStatus)]) -> Vec<SidebarAreaSummary> {
+    fn summary_list(area_statuses: &[(ApplicationPage, AreaStatus)]) -> Vec<SidebarAreaSummary> {
         area_statuses
             .iter()
-            .map(|(sidebar_area, area_status)| SidebarAreaSummary {
-                sidebar_area: *sidebar_area,
+            .map(|(application_page, area_status)| SidebarAreaSummary {
+                application_page: *application_page,
                 area_summary: summary_of(*area_status, String::new()),
             })
             .collect()
@@ -1491,37 +1397,35 @@ mod sidebar_area_status_tests {
     fn the_first_area_needing_attention_follows_the_sidebar_order() {
         assert_eq!(
             first_area_needing_attention(&summary_list(&[
-                (SidebarArea::DatabaseUpdates, AreaStatus::AreaHealthy),
-                (SidebarArea::OnAccessScanning, AreaStatus::AreaUnknown),
-                (SidebarArea::Quarantine, AreaStatus::AreaFailing),
+                (ApplicationPage::DatabaseUpdates, AreaStatus::AreaHealthy),
+                (ApplicationPage::OnAccessScanning, AreaStatus::AreaUnknown),
+                (ApplicationPage::Quarantine, AreaStatus::AreaFailing),
             ])),
-            SidebarArea::OnAccessScanning
+            ApplicationPage::OnAccessScanning
         );
         assert_eq!(
             first_area_needing_attention(&summary_list(&[
-                (SidebarArea::ScheduledScans, AreaStatus::AreaWaiting),
-                (SidebarArea::Quarantine, AreaStatus::AreaHealthy),
+                (ApplicationPage::ScheduledScans, AreaStatus::AreaWaiting),
+                (ApplicationPage::Quarantine, AreaStatus::AreaHealthy),
             ])),
-            SidebarArea::Detections
+            ApplicationPage::Detections
         );
-        assert_eq!(first_area_needing_attention(&[]), SidebarArea::Detections);
+        assert_eq!(
+            first_area_needing_attention(&[]),
+            ApplicationPage::Detections
+        );
     }
 
     #[test]
-    fn the_protection_row_shows_the_worst_status() {
-        let area_summaries = summary_list(&[
-            (SidebarArea::ScanEngine, AreaStatus::AreaUnknown),
-            (SidebarArea::ScheduledScans, AreaStatus::AreaNeedsReview),
-        ]);
+    fn coverage_lines_shorten_the_home_folder() {
         assert_eq!(
-            worst_area_status(&area_summaries).status_indicator(),
-            StatusIndicator::WarningIndicator
+            shown_coverage_text("/home/user/Downloads blocked on access", "/home/user"),
+            "~/Downloads blocked on access"
         );
         assert_eq!(
-            AreaStatus::AreaFailing.status_indicator(),
-            StatusIndicator::ErrorIndicator
+            shown_coverage_text("/home/username/Downloads blocked", "/home/user"),
+            "/home/username/Downloads blocked"
         );
-        assert!(!AreaStatus::AreaHealthy.status_indicator().is_shown());
     }
 
     #[test]
@@ -1531,7 +1435,7 @@ mod sidebar_area_status_tests {
             ..healthy_evidence()
         };
         let unknown_kernel = summary_for(
-            SidebarArea::OnAccessScanning,
+            ApplicationPage::OnAccessScanning,
             &with_on_access(OnAccessEvidence {
                 kernel_blocking_support: KernelBlockingSupport::KernelConfigUnreadable(
                     KernelConfigReadFailure::NoKernelConfigFound,
@@ -1545,7 +1449,7 @@ mod sidebar_area_status_tests {
             "Checks files, blocking unknown"
         );
         let notify_only = summary_for(
-            SidebarArea::OnAccessScanning,
+            ApplicationPage::OnAccessScanning,
             &with_on_access(OnAccessEvidence {
                 kernel_blocking_support: KernelBlockingSupport::NotifyOnly,
                 ..healthy_evidence().on_access_evidence
@@ -1566,7 +1470,7 @@ mod sidebar_area_status_tests {
             panic!("the healthy fixture reads its config");
         };
         let not_excluded = summary_for(
-            SidebarArea::OnAccessScanning,
+            ApplicationPage::OnAccessScanning,
             &with_on_access(OnAccessEvidence {
                 on_access_config: OnAccessConfig::ConfigRead {
                     watch_scope,
@@ -1587,7 +1491,7 @@ mod sidebar_area_status_tests {
         device_scan_status: DeviceScanStatus,
     ) -> AreaSummary {
         area_summary(
-            SidebarArea::RemovableDrives,
+            ApplicationPage::RemovableDrives,
             &healthy_evidence(),
             &AreaSummaryContext {
                 removable_drives_status: RemovableDrivesStatus {

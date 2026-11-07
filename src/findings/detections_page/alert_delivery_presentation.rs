@@ -128,19 +128,6 @@ fn alerts_timeline_step<StepAction: StepActionButton>(
     )
 }
 
-pub fn alerts_status_step<StepAction: StepActionButton>(
-    alert_readiness: &AlertReadiness,
-    background_service_state: UnitState,
-    header_action: StepActionSlot<StepAction>,
-) -> TimelineStep<StepAction> {
-    alerts_timeline_step(
-        alert_readiness,
-        background_service_state,
-        header_action,
-        Vec::new(),
-    )
-}
-
 fn notifications_text(notifications_enabled: bool) -> String {
     if notifications_enabled {
         gettext("On")

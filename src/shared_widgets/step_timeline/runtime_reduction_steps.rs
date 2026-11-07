@@ -20,7 +20,6 @@ const ON_ACCESS_KEY_PREFIX: &str = "OnAccess";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReducedSettingGroup {
-    AllSettings,
     OnAccessSettings,
     EngineSettings,
 }
@@ -29,7 +28,6 @@ impl ReducedSettingGroup {
     pub fn includes_setting(self, setting_key: &str) -> bool {
         let on_access_setting = setting_key.starts_with(ON_ACCESS_KEY_PREFIX);
         match self {
-            Self::AllSettings => true,
             Self::OnAccessSettings => on_access_setting,
             Self::EngineSettings => !on_access_setting,
         }
@@ -293,10 +291,6 @@ mod runtime_reduction_steps_tests {
         assert_eq!(
             reduction_rows(ReducedSettingGroup::EngineSettings),
             vec!["DetectPUA"]
-        );
-        assert_eq!(
-            reduction_rows(ReducedSettingGroup::AllSettings),
-            vec!["OnAccessPrevention", "DetectPUA"]
         );
     }
 

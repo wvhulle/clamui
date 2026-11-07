@@ -156,17 +156,6 @@ pub const fn scheduled_scan_condition(
     }
 }
 
-pub fn last_scheduled_run_failed(scheduled_scan_evidence: &ScheduledScanEvidence) -> bool {
-    matches!(
-        scheduled_scan_evidence,
-        ScheduledScanEvidence::SystemTimer {
-            timer_state: TimerState::TimerActive { .. },
-            scan_service: ScanServiceEvidence::ServiceConfigured { last_result, .. },
-            ..
-        } if scan_result_failed(last_result)
-    )
-}
-
 fn scheduled_status_text(
     scheduled_scan_evidence: &ScheduledScanEvidence,
     daemon_answering: bool,
@@ -419,10 +408,6 @@ mod scheduled_scans_presentation_tests {
             step_of(failed_evidence.clone()).status_text,
             "The last scan ended with an error"
         );
-        assert!(last_scheduled_run_failed(&failed_evidence));
-        assert!(!last_scheduled_run_failed(
-            &healthy_evidence().scheduled_scan_evidence
-        ));
     }
 
     #[test]

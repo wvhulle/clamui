@@ -2,53 +2,50 @@ use gettextrs::gettext;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ApplicationPage {
-    Protection,
-    Detections,
-    Scan,
-    RemovableDrives,
-    Quarantine,
-    TrustedDetections,
-    OnlineLookups,
-    Submissions,
-    Signatures,
+    SignatureSources,
     DatabaseUpdates,
     ScanEngine,
     OnAccessScanning,
     ScheduledScans,
+    ManualScan,
+    RemovableDrives,
+    Detections,
+    Quarantine,
+    TrustedDetections,
+    OnlineLookups,
+    Submissions,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 13] = [
-    ApplicationPage::Protection,
-    ApplicationPage::Detections,
-    ApplicationPage::Scan,
-    ApplicationPage::RemovableDrives,
-    ApplicationPage::Quarantine,
-    ApplicationPage::TrustedDetections,
-    ApplicationPage::OnlineLookups,
-    ApplicationPage::Submissions,
-    ApplicationPage::Signatures,
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 12] = [
+    ApplicationPage::SignatureSources,
     ApplicationPage::DatabaseUpdates,
     ApplicationPage::ScanEngine,
     ApplicationPage::OnAccessScanning,
     ApplicationPage::ScheduledScans,
+    ApplicationPage::ManualScan,
+    ApplicationPage::RemovableDrives,
+    ApplicationPage::Detections,
+    ApplicationPage::Quarantine,
+    ApplicationPage::TrustedDetections,
+    ApplicationPage::OnlineLookups,
+    ApplicationPage::Submissions,
 ];
 
 impl ApplicationPage {
     pub const fn page_name(self) -> &'static str {
         match self {
-            Self::Protection => "protection",
-            Self::Detections => "detections",
-            Self::Scan => "scan",
-            Self::RemovableDrives => "removable-drives",
-            Self::Quarantine => "quarantine",
-            Self::TrustedDetections => "trusted-detections",
-            Self::OnlineLookups => "online-lookups",
-            Self::Submissions => "submissions",
-            Self::Signatures => "signatures",
+            Self::SignatureSources => "signatures",
             Self::DatabaseUpdates => "database-updates",
             Self::ScanEngine => "scan-engine",
             Self::OnAccessScanning => "on-access",
             Self::ScheduledScans => "scheduled-scans",
+            Self::ManualScan => "scan",
+            Self::RemovableDrives => "removable-drives",
+            Self::Detections => "detections",
+            Self::Quarantine => "quarantine",
+            Self::TrustedDetections => "trusted-detections",
+            Self::OnlineLookups => "online-lookups",
+            Self::Submissions => "submissions",
         }
     }
 
@@ -60,56 +57,58 @@ impl ApplicationPage {
 
     pub fn page_title(self) -> String {
         match self {
-            Self::Protection => gettext("Protection"),
-            Self::Detections => gettext("Detections"),
-            Self::Scan => gettext("Scan"),
-            Self::RemovableDrives => gettext("Removable Drives"),
-            Self::Quarantine => gettext("Quarantine"),
-            Self::TrustedDetections => gettext("Trusted Detections"),
-            Self::OnlineLookups => gettext("Online Lookups"),
-            Self::Submissions => gettext("Submissions"),
-            Self::Signatures => gettext("Signatures"),
+            Self::SignatureSources => gettext("Signature Sources"),
             Self::DatabaseUpdates => gettext("Database Updates"),
             Self::ScanEngine => gettext("Scan Engine"),
             Self::OnAccessScanning => gettext("On-Access Scanning"),
             Self::ScheduledScans => gettext("Scheduled Scans"),
+            Self::ManualScan => gettext("Manual Scan"),
+            Self::RemovableDrives => gettext("Removable Drives"),
+            Self::Detections => gettext("Detections"),
+            Self::Quarantine => gettext("Quarantine"),
+            Self::TrustedDetections => gettext("Trusted Detections"),
+            Self::OnlineLookups => gettext("Online Lookups"),
+            Self::Submissions => gettext("Submissions"),
         }
     }
 
     pub const fn page_icon(self) -> &'static str {
         match self {
-            Self::Protection => "security-high-symbolic",
-            Self::Detections => "dialog-warning-symbolic",
-            Self::Scan => "system-search-symbolic",
-            Self::RemovableDrives => "drive-removable-media-symbolic",
-            Self::Quarantine => "folder-symbolic",
-            Self::TrustedDetections => "security-medium-symbolic",
-            Self::OnlineLookups => "edit-find-symbolic",
-            Self::Submissions => "document-send-symbolic",
-            Self::Signatures => "drive-harddisk-symbolic",
+            Self::SignatureSources => "drive-harddisk-symbolic",
             Self::DatabaseUpdates => "software-update-available-symbolic",
             Self::ScanEngine => "system-run-symbolic",
             Self::OnAccessScanning => "folder-visiting-symbolic",
             Self::ScheduledScans => "alarm-symbolic",
+            Self::ManualScan => "system-search-symbolic",
+            Self::RemovableDrives => "drive-removable-media-symbolic",
+            Self::Detections => "dialog-warning-symbolic",
+            Self::Quarantine => "folder-symbolic",
+            Self::TrustedDetections => "security-medium-symbolic",
+            Self::OnlineLookups => "edit-find-symbolic",
+            Self::Submissions => "document-send-symbolic",
         }
     }
 
-    pub const fn keyboard_accelerators(self) -> &'static [&'static str] {
-        match self {
-            Self::Protection => &["<Control>1"],
-            Self::Detections => &["<Control>2"],
-            Self::Scan => &["<Control>3"],
-            Self::Quarantine => &["<Control>5"],
-            Self::Signatures => &["<Control>6"],
-            Self::DatabaseUpdates => &["<Control>7"],
-            Self::ScanEngine => &["<Control>8"],
-            Self::OnAccessScanning => &["<Control>9"],
-            Self::ScheduledScans => &["<Control>0"],
-            Self::RemovableDrives
-            | Self::TrustedDetections
-            | Self::OnlineLookups
-            | Self::Submissions => &[],
-        }
+    pub fn keyboard_accelerators(self) -> &'static [&'static str] {
+        const SIDEBAR_ACCELERATORS: [&str; 10] = [
+            "<Control>1",
+            "<Control>2",
+            "<Control>3",
+            "<Control>4",
+            "<Control>5",
+            "<Control>6",
+            "<Control>7",
+            "<Control>8",
+            "<Control>9",
+            "<Control>0",
+        ];
+        let page_position = ALL_APPLICATION_PAGES
+            .iter()
+            .position(|application_page| *application_page == self)
+            .unwrap_or(SIDEBAR_ACCELERATORS.len());
+        SIDEBAR_ACCELERATORS
+            .get(page_position..=page_position)
+            .unwrap_or(&[])
     }
 
     pub fn sidebar_position(self) -> i32 {
@@ -139,16 +138,19 @@ mod application_pages_tests {
     }
 
     #[test]
-    fn sidebar_positions_follow_the_page_order() {
-        assert_eq!(ApplicationPage::Protection.sidebar_position(), 0);
-        assert_eq!(ApplicationPage::Scan.sidebar_position(), 2);
-        assert_eq!(ApplicationPage::RemovableDrives.sidebar_position(), 3);
-        assert_eq!(ApplicationPage::TrustedDetections.sidebar_position(), 5);
-        assert_eq!(ApplicationPage::OnlineLookups.sidebar_position(), 6);
-        assert_eq!(ApplicationPage::Submissions.sidebar_position(), 7);
-        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 9);
-        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 10);
-        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 11);
-        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 12);
+    fn the_first_ten_entries_get_control_digits_in_sidebar_order() {
+        let accelerators = ALL_APPLICATION_PAGES
+            .into_iter()
+            .map(ApplicationPage::keyboard_accelerators)
+            .collect::<Vec<_>>();
+        assert_eq!(accelerators[0], ["<Control>1"]);
+        assert_eq!(accelerators[8], ["<Control>9"]);
+        assert_eq!(accelerators[9], ["<Control>0"]);
+        assert!(accelerators[10].is_empty());
+        assert!(accelerators[11].is_empty());
+        assert_eq!(
+            ApplicationPage::Detections.keyboard_accelerators(),
+            ["<Control>8"]
+        );
     }
 }

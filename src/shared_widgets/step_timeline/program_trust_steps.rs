@@ -15,7 +15,6 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrustedProgramGroup {
-    AllClamavPrograms,
     ScannerPrograms,
     UpdaterPrograms,
 }
@@ -27,7 +26,6 @@ impl TrustedProgramGroup {
             ClamavProgram::StandaloneScanner.program_name(),
         ];
         match self {
-            Self::AllClamavPrograms => true,
             Self::ScannerPrograms => scanner_names.contains(&program_name),
             Self::UpdaterPrograms => program_name == ClamavProgram::SignatureUpdater.program_name(),
         }
@@ -112,16 +110,14 @@ pub fn program_trust_condition(
 
 fn program_trust_title(program_group: TrustedProgramGroup) -> String {
     match program_group {
-        TrustedProgramGroup::AllClamavPrograms | TrustedProgramGroup::ScannerPrograms => {
-            gettext("Scanner programs can be trusted")
-        }
+        TrustedProgramGroup::ScannerPrograms => gettext("Scanner programs can be trusted"),
         TrustedProgramGroup::UpdaterPrograms => gettext("freshclam can be trusted"),
     }
 }
 
 fn program_trust_details(program_group: TrustedProgramGroup) -> String {
     match program_group {
-        TrustedProgramGroup::AllClamavPrograms | TrustedProgramGroup::ScannerPrograms => gettext(
+        TrustedProgramGroup::ScannerPrograms => gettext(
             "Malware running as you could put a fake clamdscan earlier on your search path that \
              reports every file as clean. Lazaret only runs ClamAV programs that your account \
              can't replace, such as the ones installed for the whole system.",

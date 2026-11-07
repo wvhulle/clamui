@@ -31,7 +31,7 @@ use crate::{
             timeline_step_contents::{
                 ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
                 EvidenceRowControl, OfferedAction, RunningStep, SettledNodeState, SettledStep,
-                StepActionButton, StepActionSlot, StepEvidenceRow, TimelineStep,
+                StepActionButton, StepEvidenceRow, TimelineStep,
             },
         },
     },
@@ -375,36 +375,11 @@ fn signature_guidance_commands(
     }
 }
 
-pub fn signature_node_state(
+fn signature_node_state(
     signature_evidence: &SignatureEvidence,
     reference_moment: Timestamp,
 ) -> SettledNodeState {
     signature_condition(signature_evidence, reference_moment).node_state()
-}
-
-pub fn signature_status_step<StepAction: StepActionButton>(
-    signature_evidence: &SignatureEvidence,
-    moment_context: MomentContext,
-    distribution_family: DistributionFamily,
-    header_action: StepActionSlot<StepAction>,
-) -> TimelineStep<StepAction> {
-    TimelineStep::settled(
-        signature_step_title(),
-        signature_mechanism_details(),
-        database_status_text(&signature_evidence.database_evidence, moment_context),
-        SettledStep {
-            evidence_rows: plain_rows(signature_status_rows(signature_evidence, moment_context)),
-            header_action,
-            ..SettledStep::without_offers(signature_node_state(
-                signature_evidence,
-                moment_context.reference_moment,
-            ))
-        },
-    )
-    .with_guidance_commands(signature_guidance_commands(
-        signature_evidence,
-        distribution_family,
-    ))
 }
 
 pub fn signature_update_step(
@@ -683,28 +658,6 @@ mod database_updates_presentation_tests {
         assert_eq!(signature_step.node_state(), StepNodeState::NeedsReview);
         assert!(signature_step.status_text.contains("unknown"));
         assert!(!signature_step.status_text.contains("No virus definitions"));
-    }
-
-    #[test]
-    fn the_status_step_carries_the_given_header_action_without_update_controls() {
-        let status_step = signature_status_step(
-            &healthy_evidence().signature_evidence,
-            reference_context(),
-            DistributionFamily::NixosFamily,
-            StepActionSlot::ActionOffered(OfferedAction::plain(
-                DatabaseUpdateAction::UpdateSignatures,
-            )),
-        );
-        assert_eq!(
-            status_step.header_offer(),
-            Some(OfferedAction::plain(DatabaseUpdateAction::UpdateSignatures))
-        );
-        assert!(
-            status_step
-                .shown_evidence_rows()
-                .iter()
-                .all(|step_evidence| step_evidence.evidence_name != "Manual update")
-        );
     }
 
     #[test]

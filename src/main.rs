@@ -5,7 +5,6 @@ mod host_services;
 #[cfg(test)]
 mod host_verification_tests;
 mod preferences_dialog;
-mod protection_page;
 mod scans;
 mod shared_widgets;
 mod sharing;

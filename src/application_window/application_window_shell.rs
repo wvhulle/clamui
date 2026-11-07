@@ -18,8 +18,8 @@ use crate::{
             AboutAction, PreferencesAction, QuitAction, ShowWindowAction,
             register_application_action,
         },
-        application_pages::ApplicationPage,
         page_navigation::{PageNavigation, PageNavigationInit, PageNavigationOutput},
+        start_page_choice::StartPageRequest,
         startup_arguments::{StartupPage, StartupRequest},
         system_tray_connection::{
             RunningTrayHandle, TrayConnection, TrayStartFailure, show_unresolved_detections,
@@ -153,10 +153,14 @@ fn present_about_dialog(parent_window: &adw::ApplicationWindow) {
         .present(Some(parent_window));
 }
 
-const fn navigation_startup_page(startup_page: StartupPage) -> ApplicationPage {
+const fn navigation_startup_page(startup_page: StartupPage) -> StartPageRequest {
     match startup_page {
-        StartupPage::ApplicationPage(application_page) => application_page,
-        StartupPage::PreferencesDialog => ApplicationPage::Protection,
+        StartupPage::ApplicationPage(application_page) => {
+            StartPageRequest::RequestedPage(application_page)
+        }
+        StartupPage::FirstAreaNeedingAttention | StartupPage::PreferencesDialog => {
+            StartPageRequest::FirstAreaNeedingAttention
+        }
     }
 }
 

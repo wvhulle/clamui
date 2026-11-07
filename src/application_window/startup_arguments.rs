@@ -7,11 +7,13 @@ const BACKGROUND_ARGUMENT: &str = "--background";
 const PREFERENCES_PAGE_NAME: &str = "preferences";
 const DATABASE_PAGE_NAME: &str = "database";
 const ANALYSIS_PAGE_NAME: &str = "analysis";
-const DEFAULT_STARTUP_PAGE: StartupPage = StartupPage::ApplicationPage(ApplicationPage::Protection);
+const PROTECTION_PAGE_NAME: &str = "protection";
+const DEFAULT_STARTUP_PAGE: StartupPage = StartupPage::FirstAreaNeedingAttention;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StartupPage {
     ApplicationPage(ApplicationPage),
+    FirstAreaNeedingAttention,
     PreferencesDialog,
 }
 
@@ -32,6 +34,7 @@ impl StartupPageRequest {
     fn from_page_name(requested_page_name: &str) -> Self {
         match requested_page_name {
             PREFERENCES_PAGE_NAME => Self::RecognizedPage(StartupPage::PreferencesDialog),
+            PROTECTION_PAGE_NAME => Self::RecognizedPage(StartupPage::FirstAreaNeedingAttention),
             DATABASE_PAGE_NAME => Self::RecognizedPage(StartupPage::ApplicationPage(
                 ApplicationPage::DatabaseUpdates,
             )),
@@ -110,7 +113,7 @@ mod startup_arguments_tests {
     }
 
     #[test]
-    fn no_arguments_open_the_protection_page_without_targets() {
+    fn no_arguments_open_the_first_area_needing_attention_without_targets() {
         assert_eq!(
             parsed_arguments(&["lazaret"]),
             StartupRequest {
@@ -170,7 +173,7 @@ mod startup_arguments_tests {
             ("--page=scan-engine", ApplicationPage::ScanEngine),
             ("--page=on-access", ApplicationPage::OnAccessScanning),
             ("--page=scheduled-scans", ApplicationPage::ScheduledScans),
-            ("--page=scan", ApplicationPage::Scan),
+            ("--page=scan", ApplicationPage::ManualScan),
         ]
         .into_iter()
         .for_each(|(page_argument, expected_page)| {
@@ -182,7 +185,7 @@ mod startup_arguments_tests {
     }
 
     #[test]
-    fn an_unknown_page_is_reported_and_shows_the_protection_page() {
+    fn an_unknown_page_is_reported_and_opens_the_first_area_needing_attention() {
         let startup_page = parsed_arguments(&["lazaret", "--page=quarantaine"]).startup_page;
         assert_eq!(
             startup_page,

@@ -31,9 +31,10 @@ use crate::{
             GatheringStart,
         },
         scan_slot_arbiter::{ScanSlot, ScanSlotEvent, ScanSlotReply, ScanSlotTransition},
-        sidebar_area_status::{
-            AreaSummaryContext, SidebarAreaSummary, StatusIndicator, all_area_summaries,
-            attention_summary_text, worst_area_status,
+        sidebar_area_status::{AreaSummaryContext, SidebarAreaSummary, all_area_summaries},
+        start_page_choice::{
+            StartPageRequest, StartPageState, StartPageTransition, initial_start_page,
+            start_page_after_evidence,
         },
     },
     findings::{
@@ -71,9 +72,6 @@ use crate::{
         },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
         systemd_bus::host_systemd_units::watched_unit_changes,
-    },
-    protection_page::protection_timeline_page::{
-        ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
     },
     scans::{
         manual_scan_page::{
@@ -135,7 +133,7 @@ pub struct PageNavigationInit {
     pub quarantine_vault: QuarantineVault,
     pub data_directory: PathBuf,
     pub window_root: adw::ApplicationWindow,
-    pub startup_page: ApplicationPage,
+    pub startup_page: StartPageRequest,
     pub startup_scan_targets: Vec<PathBuf>,
 }
 
@@ -146,6 +144,7 @@ enum AreaSummaries {
 
 pub struct PageNavigation {
     visible_page: ApplicationPage,
+    start_page_state: StartPageState,
     shows_content_when_narrow: bool,
     scan_page: Controller<ScanPage>,
     removable_drives_page: Controller<RemovableDrivesPage>,
@@ -155,7 +154,6 @@ pub struct PageNavigation {
     quarantine_page: Controller<QuarantineEntriesPage>,
     activity_history: ActivityHistory,
     signature_sources_page: Controller<SignatureSourcesPage>,
-    protection_page: Controller<ProtectionTimelinePage>,
     database_updates_page: Controller<DatabaseUpdatesPage>,
     scan_engine_page: Controller<ScanEnginePage>,
     on_access_page: Controller<OnAccessPage>,
@@ -516,15 +514,24 @@ impl PageNavigation {
         ));
     }
 
+    fn apply_start_page_choice(&mut self) {
+        let StartPageTransition {
+            shown_page,
+            next_state,
+        } = start_page_after_evidence(
+            self.start_page_state,
+            self.visible_page,
+            self.computed_area_summaries(),
+        );
+        self.visible_page = shown_page;
+        self.start_page_state = next_state;
+    }
+
     fn computed_area_summaries(&self) -> &[SidebarAreaSummary] {
         match &self.area_summaries {
             AreaSummaries::SummariesPending => &[],
             AreaSummaries::SummariesComputed(area_summaries) => area_summaries,
         }
-    }
-
-    fn protection_status_indicator(&self) -> StatusIndicator {
-        worst_area_status(self.computed_area_summaries()).status_indicator()
     }
 
     fn advance_evidence_refresh(
@@ -537,10 +544,6 @@ impl PageNavigation {
             gathering_start,
         } = self.evidence_refresh.after_trigger(refresh_trigger);
         self.evidence_refresh = next_refresh;
-        self.protection_page
-            .emit(ProtectionTimelinePageInput::EvidenceRefreshChanged(
-                next_refresh,
-            ));
         self.signature_sources_page
             .emit(SignatureSourcesPageInput::EvidenceRefreshChanged(
                 next_refresh,
@@ -604,6 +607,7 @@ impl PageNavigation {
 
     fn show_page(&mut self, application_page: ApplicationPage) {
         self.visible_page = application_page;
+        self.start_page_state = StartPageState::UserNavigated;
         self.shows_content_when_narrow = true;
     }
 
@@ -696,45 +700,18 @@ impl Component for PageNavigation {
                                         }
                                     },
 
-                                    append = &gtk::ListBoxRow {
-                                        set_widget_name: ApplicationPage::Protection.page_name(),
-
-                                        #[wrap(Some)]
-                                        set_child = &gtk::Box {
-                                            set_spacing: 12,
-
-                                            gtk::Image {
-                                                set_icon_name: Some(ApplicationPage::Protection.page_icon()),
-                                            },
-                                            gtk::Label {
-                                                set_label: &ApplicationPage::Protection.page_title(),
-                                            },
-                                            gtk::Image {
-                                                set_hexpand: true,
-                                                set_halign: gtk::Align::End,
-                                                #[watch]
-                                                set_visible: model.protection_status_indicator().is_shown(),
-                                                #[watch]
-                                                set_icon_name: Some(model.protection_status_indicator().icon_name()),
-                                                #[watch]
-                                                set_css_classes: model.protection_status_indicator().css_classes(),
-                                                #[watch]
-                                                set_tooltip_text: Some(&attention_summary_text(model.computed_area_summaries())),
-                                            },
-                                        },
-                                    },
-                                    append: &navigation_row(ApplicationPage::Detections),
-                                    append: &navigation_row(ApplicationPage::Scan),
-                                    append: &navigation_row(ApplicationPage::RemovableDrives),
-                                    append: &navigation_row(ApplicationPage::Quarantine),
-                                    append: &navigation_row(ApplicationPage::TrustedDetections),
-                                    append: &navigation_row(ApplicationPage::OnlineLookups),
-                                    append: &navigation_row(ApplicationPage::Submissions),
-                                    append: &navigation_row(ApplicationPage::Signatures),
+                                    append: &navigation_row(ApplicationPage::SignatureSources),
                                     append: &navigation_row(ApplicationPage::DatabaseUpdates),
                                     append: &navigation_row(ApplicationPage::ScanEngine),
                                     append: &navigation_row(ApplicationPage::OnAccessScanning),
                                     append: &navigation_row(ApplicationPage::ScheduledScans),
+                                    append: &navigation_row(ApplicationPage::ManualScan),
+                                    append: &navigation_row(ApplicationPage::RemovableDrives),
+                                    append: &navigation_row(ApplicationPage::Detections),
+                                    append: &navigation_row(ApplicationPage::Quarantine),
+                                    append: &navigation_row(ApplicationPage::TrustedDetections),
+                                    append: &navigation_row(ApplicationPage::OnlineLookups),
+                                    append: &navigation_row(ApplicationPage::Submissions),
                                 },
                             },
                         },
@@ -748,14 +725,11 @@ impl Component for PageNavigation {
                         #[name = "page_stack"]
                         gtk::Stack {
 
-                            add_titled[Some(ApplicationPage::Protection.page_name()), &ApplicationPage::Protection.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Protection, model.protection_page.widget()),
-                            },
                             add_titled[Some(ApplicationPage::Detections.page_name()), &ApplicationPage::Detections.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Detections, model.detections_page.widget()),
                             },
-                            add_titled[Some(ApplicationPage::Scan.page_name()), &ApplicationPage::Scan.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Scan, model.scan_page.widget()),
+                            add_titled[Some(ApplicationPage::ManualScan.page_name()), &ApplicationPage::ManualScan.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::ManualScan, model.scan_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::RemovableDrives.page_name()), &ApplicationPage::RemovableDrives.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::RemovableDrives, model.removable_drives_page.widget()),
@@ -772,8 +746,8 @@ impl Component for PageNavigation {
                             add_titled[Some(ApplicationPage::Submissions.page_name()), &ApplicationPage::Submissions.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Submissions, model.submissions_page.widget()),
                             },
-                            add_titled[Some(ApplicationPage::Signatures.page_name()), &ApplicationPage::Signatures.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Signatures, model.signature_sources_page.widget()),
+                            add_titled[Some(ApplicationPage::SignatureSources.page_name()), &ApplicationPage::SignatureSources.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::SignatureSources, model.signature_sources_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::DatabaseUpdates.page_name()), &ApplicationPage::DatabaseUpdates.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::DatabaseUpdates, model.database_updates_page.widget()),
@@ -859,14 +833,6 @@ impl Component for PageNavigation {
                 file_list_directory: data_directory,
             })
             .forward(sender.input_sender(), forwarded_removable_drives_output);
-        let protection_page = ProtectionTimelinePage::builder().launch(()).forward(
-            sender.input_sender(),
-            |protection_output| match protection_output {
-                ProtectionTimelinePageOutput::EvidenceRefreshRequested => {
-                    PageNavigationInput::EvidenceRefreshRequested
-                }
-            },
-        );
         let database_updates_page = DatabaseUpdatesPage::builder()
             .launch(activity_history.clone())
             .forward(sender.input_sender(), forwarded_database_updates_output);
@@ -900,8 +866,13 @@ impl Component for PageNavigation {
         let signature_sources_page = SignatureSourcesPage::builder()
             .launch(())
             .forward(sender.input_sender(), forwarded_signature_sources_output);
+        let StartPageTransition {
+            shown_page: initial_page,
+            next_state: initial_start_state,
+        } = initial_start_page(navigation_init.startup_page);
         let mut model = Self {
-            visible_page: navigation_init.startup_page,
+            visible_page: initial_page,
+            start_page_state: initial_start_state,
             shows_content_when_narrow: false,
             scan_page,
             removable_drives_page,
@@ -914,7 +885,6 @@ impl Component for PageNavigation {
             quarantine_page,
             activity_history,
             signature_sources_page,
-            protection_page,
             database_updates_page,
             scan_engine_page,
             on_access_page,
@@ -966,7 +936,7 @@ impl Component for PageNavigation {
                 self.shows_content_when_narrow = shows_content;
             }
             PageNavigationInput::QuickScanRequested => {
-                self.show_page(ApplicationPage::Scan);
+                self.show_page(ApplicationPage::ManualScan);
                 self.scan_page.emit(ScanPageInput::QuickScanRequested);
             }
             PageNavigationInput::SignatureUpdateRequested => {
@@ -975,7 +945,7 @@ impl Component for PageNavigation {
                     .emit(DatabaseUpdatesPageInput::SignatureUpdateRequested);
             }
             PageNavigationInput::ScanTargetsReceived(scan_targets) => {
-                self.show_page(ApplicationPage::Scan);
+                self.show_page(ApplicationPage::ManualScan);
                 self.scan_page
                     .emit(ScanPageInput::ScanTargetsChosen(scan_targets));
             }
@@ -1016,10 +986,6 @@ impl Component for PageNavigation {
             PageNavigationInput::JournalAccessChanged(journal_access) => {
                 self.journal_access = journal_access.clone();
                 self.refresh_area_summaries();
-                self.protection_page
-                    .emit(ProtectionTimelinePageInput::JournalAccessChanged(
-                        journal_access,
-                    ));
             }
             PageNavigationInput::QuarantineEntriesCounted(quarantine_entry_count) => {
                 self.quarantine_entry_count = quarantine_entry_count;
@@ -1030,9 +996,6 @@ impl Component for PageNavigation {
             PageNavigationInput::UnresolvedDetectionsChanged(unresolved_detections) => {
                 self.unresolved_detections = unresolved_detections;
                 self.refresh_area_summaries();
-                self.protection_page.emit(
-                    ProtectionTimelinePageInput::UnresolvedDetectionsChanged(unresolved_detections),
-                );
                 let _window_closed = sender.output(
                     PageNavigationOutput::UnresolvedDetectionsChanged(unresolved_detections),
                 );
@@ -1148,10 +1111,7 @@ impl Component for PageNavigation {
                     gathered_at,
                 };
                 self.refresh_area_summaries();
-                self.protection_page
-                    .emit(ProtectionTimelinePageInput::EvidenceGathered(
-                        self.gathered_evidence.clone(),
-                    ));
+                self.apply_start_page_choice();
                 self.signature_sources_page
                     .emit(SignatureSourcesPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),

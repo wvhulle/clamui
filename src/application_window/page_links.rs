@@ -11,9 +11,10 @@ pub fn page_target(linked_page: ApplicationPage) -> gtk::glib::Variant {
 
 fn page_link_subtitle(linked_page: ApplicationPage) -> String {
     match linked_page {
-        ApplicationPage::Protection => gettext("What protects your files right now"),
         ApplicationPage::Detections => gettext("Background detections and how alerts reach you"),
-        ApplicationPage::Scan => gettext("Scan files and folders, and the folders scans skip"),
+        ApplicationPage::ManualScan => {
+            gettext("Scan files and folders, and the folders scans skip")
+        }
         ApplicationPage::RemovableDrives => {
             gettext("Scan removable drives when they are connected")
         }
@@ -27,7 +28,7 @@ fn page_link_subtitle(linked_page: ApplicationPage) -> String {
         ApplicationPage::Submissions => {
             gettext("What you sent to ClamAV, MalwareBazaar and VirusTotal, and the keys")
         }
-        ApplicationPage::Signatures => gettext("Where ClamAV's signatures come from"),
+        ApplicationPage::SignatureSources => gettext("Where ClamAV's signatures come from"),
         ApplicationPage::DatabaseUpdates => gettext("How freshclam downloads signatures"),
         ApplicationPage::ScanEngine => {
             gettext("clamd settings, unwanted programs, macros and archives")
