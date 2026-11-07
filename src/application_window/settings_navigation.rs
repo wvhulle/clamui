@@ -62,9 +62,10 @@ impl SettingsSubpage {
             Self::ScannerEngine | Self::DetectionChoices => {
                 SubpagePlacement::EmbeddedInPage(ApplicationPage::ScanEngine)
             }
-            Self::OnAccessScanning | Self::TrustedDetections => {
-                SubpagePlacement::StackedOnPage(ApplicationPage::Protection)
+            Self::OnAccessScanning => {
+                SubpagePlacement::EmbeddedInPage(ApplicationPage::OnAccessScanning)
             }
+            Self::TrustedDetections => SubpagePlacement::StackedOnPage(ApplicationPage::Protection),
             Self::SignatureUpdates => {
                 SubpagePlacement::EmbeddedInPage(ApplicationPage::DatabaseUpdates)
             }
@@ -200,6 +201,10 @@ mod settings_navigation_tests {
         assert_eq!(
             SettingsSubpage::DetectionChoices.owning_page(),
             ApplicationPage::ScanEngine
+        );
+        assert_eq!(
+            SettingsSubpage::OnAccessScanning.subpage_placement(),
+            SubpagePlacement::EmbeddedInPage(ApplicationPage::OnAccessScanning)
         );
         assert_eq!(
             SettingsSubpage::SignatureUpdates.owning_page(),

@@ -66,7 +66,7 @@ const DAEMON_SERVICE_UNITS: [&str; 3] = [
     "clamd@scan.service",
     "clamd.service",
 ];
-const ON_ACCESS_SERVICE_UNITS: [&str; 2] = ["clamav-clamonacc.service", "clamonacc.service"];
+pub const ON_ACCESS_SERVICE_UNITS: [&str; 2] = ["clamav-clamonacc.service", "clamonacc.service"];
 const SIGNATURE_UPDATER_UNITS: [SignatureUpdaterUnit; 3] = [
     SignatureUpdaterUnit {
         updater_program: SignatureUpdaterProgram::Freshclam,

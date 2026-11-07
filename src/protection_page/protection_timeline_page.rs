@@ -252,6 +252,9 @@ impl ProtectionTimelinePage {
             ProtectionStepAction::OpenScanEngine => {
                 show_application_page(root, ApplicationPage::ScanEngine);
             }
+            ProtectionStepAction::OpenOnAccessScanning => {
+                show_application_page(root, ApplicationPage::OnAccessScanning);
+            }
             ProtectionStepAction::RunScheduledScan { service_unit } => {
                 self.scheduled_scan_starting = true;
                 self.show_timeline();

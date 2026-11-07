@@ -6,21 +6,27 @@ use crate::{
     hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
-        desktop::locale_formatting::{MomentFormatters, byte_size_text, exact_local_time_text},
+        desktop::locale_formatting::{MomentFormatters, exact_local_time_text},
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::{
             host_protection_evidence::{
-                AccountSettingFinding, ClamdConfigReadFailure, EngineInstallation, OnAccessConfig,
-                OnAccessEvidence, OnAccessResponse, OnAccessScanner, OnAccessSizeLimit,
-                ProtectionEvidence, ScanServiceEvidence, ScanUnitResult, ScheduledScanEvidence,
-                SignatureEvidence, TimerState, WatchScope, WatchedLocation,
+                AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
+                OnAccessResponse, OnAccessScanner, ProtectionEvidence, ScanServiceEvidence,
+                ScanUnitResult, ScheduledScanEvidence, SignatureEvidence, TimerState, WatchScope,
+                WatchedLocation,
             },
             service_run_journal::{ScanRunFindings, ScanRunHistory},
         },
         systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
     },
-    scans::scan_engine_page::scan_engine_presentation::{
-        daemon_condition, daemon_is_answering, daemon_step, engine_condition, engine_step,
+    scans::{
+        on_access_page::on_access_presentation::{
+            OnAccessStepControls, on_access_condition, on_access_step,
+        },
+        scan_engine_page::scan_engine_presentation::{
+            daemon_awaited_text, daemon_condition, daemon_is_answering, daemon_step,
+            engine_condition, engine_step,
+        },
     },
     shared_widgets::{
         journal_follow_failure_text::journal_follow_failure_text,
@@ -54,6 +60,7 @@ use crate::{
 pub enum ProtectionStepAction {
     OpenDatabaseUpdates,
     OpenScanEngine,
+    OpenOnAccessScanning,
     RunScheduledScan { service_unit: &'static str },
     ReviewSettingsSubpage(SettingsSubpage),
     SetUpSettingsSubpage(SettingsSubpage),
@@ -64,6 +71,7 @@ impl StepActionButton for ProtectionStepAction {
         match self {
             Self::OpenDatabaseUpdates => gettext("Open Database Updates"),
             Self::OpenScanEngine => gettext("Open Scan Engine"),
+            Self::OpenOnAccessScanning => gettext("Open On-Access Scanning"),
             Self::RunScheduledScan { .. } => gettext("Run Now"),
             Self::ReviewSettingsSubpage(_) => gettext("Review"),
             Self::SetUpSettingsSubpage(_) => gettext("Set Up"),
@@ -74,6 +82,7 @@ impl StepActionButton for ProtectionStepAction {
         match self {
             Self::OpenDatabaseUpdates
             | Self::OpenScanEngine
+            | Self::OpenOnAccessScanning
             | Self::RunScheduledScan { .. }
             | Self::ReviewSettingsSubpage(_)
             | Self::SetUpSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
@@ -82,7 +91,6 @@ impl StepActionButton for ProtectionStepAction {
 }
 
 pub type ProtectionStep = TimelineStep<ProtectionStepAction>;
-type ProtectionEvidenceRow = ActionableEvidenceRow<ProtectionStepAction>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AlertReadiness {
@@ -114,14 +122,22 @@ impl ProtectionActivity {
     }
 }
 
+fn offer_for_condition(
+    checked_condition: CheckedCondition,
+    offered_action: ProtectionStepAction,
+) -> OfferedAction<ProtectionStepAction> {
+    if checked_condition.node_state() == SettledNodeState::Completed {
+        OfferedAction::plain(offered_action)
+    } else {
+        OfferedAction::suggested(offered_action)
+    }
+}
+
 fn scan_engine_offer(checked_condition: CheckedCondition) -> StepActionSlot<ProtectionStepAction> {
-    StepActionSlot::ActionOffered(
-        if checked_condition.node_state() == SettledNodeState::Completed {
-            OfferedAction::plain(ProtectionStepAction::OpenScanEngine)
-        } else {
-            OfferedAction::suggested(ProtectionStepAction::OpenScanEngine)
-        },
-    )
+    StepActionSlot::ActionOffered(offer_for_condition(
+        checked_condition,
+        ProtectionStepAction::OpenScanEngine,
+    ))
 }
 
 fn runtime_review_action() -> StepActionSlot<ProtectionStepAction> {
@@ -371,215 +387,6 @@ fn signature_overview_step(
             },
         ),
     )
-}
-
-fn on_access_setting_row(evidence_name: String, evidence_value: String) -> ProtectionEvidenceRow {
-    ActionableEvidenceRow {
-        shown_evidence: StepEvidenceRow {
-            evidence_moment: EvidenceMoment::SettingValue,
-            ..evidence_row(evidence_name, evidence_value)
-        },
-        row_control: EvidenceRowControl::SettingsLink {
-            settings_action: ProtectionStepAction::ReviewSettingsSubpage(
-                SettingsSubpage::OnAccessScanning,
-            ),
-        },
-    }
-}
-
-fn clamd_config_failure_text(config_failure: ClamdConfigReadFailure) -> String {
-    match config_failure {
-        ClamdConfigReadFailure::NoReadableConfig => gettext("No readable clamd.conf was found"),
-        ClamdConfigReadFailure::ReadingTaskAborted => {
-            gettext("Reading clamd.conf stopped before it finished")
-        }
-    }
-}
-
-fn watched_location_text(watched_location: &WatchedLocation) -> String {
-    match watched_location {
-        WatchedLocation::WatchedFolder { folder_path } => folder_path.clone(),
-        WatchedLocation::WatchedMount { mount_path } => {
-            gettext("{path} (whole mount)").replace("{path}", mount_path)
-        }
-    }
-}
-
-fn watch_scope_text(watch_scope: &WatchScope) -> String {
-    match watch_scope {
-        WatchScope::NothingWatched => gettext("None configured"),
-        WatchScope::WatchedLocations { .. } => watch_scope
-            .watched_locations()
-            .into_iter()
-            .map(watched_location_text)
-            .collect::<Vec<_>>()
-            .join("\n"),
-    }
-}
-
-fn size_limit_text(size_limit: &OnAccessSizeLimit) -> String {
-    match size_limit {
-        OnAccessSizeLimit::DefaultLimit => gettext("The ClamAV default"),
-        OnAccessSizeLimit::ConfiguredLimit { size_limit } => byte_size_text(*size_limit),
-        OnAccessSizeLimit::UnreadableLimit { limit_text } => limit_text.clone(),
-    }
-}
-
-fn on_access_rows(on_access_config: &OnAccessConfig) -> Vec<ProtectionEvidenceRow> {
-    match on_access_config {
-        OnAccessConfig::ConfigUnreadable(config_failure) => vec![on_access_setting_row(
-            gettext("Configuration"),
-            clamd_config_failure_text(*config_failure),
-        )],
-        OnAccessConfig::ConfigRead {
-            watch_scope,
-            size_limit,
-            ..
-        } => vec![
-            on_access_setting_row(gettext("Watched folders"), watch_scope_text(watch_scope)),
-            on_access_setting_row(gettext("Largest file scanned"), size_limit_text(size_limit)),
-        ],
-    }
-}
-
-struct OnAccessVerdict {
-    checked_condition: CheckedCondition,
-    status_text: String,
-    suggested_remedies: Vec<SuggestedRemedy>,
-}
-
-fn running_monitor_verdict(on_access_config: &OnAccessConfig) -> OnAccessVerdict {
-    match on_access_config {
-        OnAccessConfig::ConfigUnreadable(_) => OnAccessVerdict {
-            checked_condition: CheckedCondition::EvidenceUnknown,
-            status_text: gettext(
-                "Running, but clamd.conf could not be read, so what is checked and whether \
-                 detected files are blocked is unknown",
-            ),
-            suggested_remedies: Vec::new(),
-        },
-        OnAccessConfig::ConfigRead {
-            watch_scope: WatchScope::NothingWatched,
-            blocking_response: OnAccessResponse::BlockAccess,
-            ..
-        } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ReviewSuggested,
-            status_text: gettext("Running, but no folders or mounts are watched"),
-            suggested_remedies: vec![SuggestedRemedy::OnAccessWatchedPathAdd],
-        },
-        OnAccessConfig::ConfigRead {
-            watch_scope: WatchScope::NothingWatched,
-            blocking_response: OnAccessResponse::ReportOnly,
-            ..
-        } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ReviewSuggested,
-            status_text: gettext(
-                "Running, but no folders or mounts are watched, and detected files would not be \
-                 blocked",
-            ),
-            suggested_remedies: vec![
-                SuggestedRemedy::OnAccessWatchedPathAdd,
-                SuggestedRemedy::OnAccessPreventionEnable,
-            ],
-        },
-        OnAccessConfig::ConfigRead {
-            watch_scope: WatchScope::WatchedLocations { .. },
-            blocking_response: OnAccessResponse::ReportOnly,
-            ..
-        } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ReviewSuggested,
-            status_text: gettext("Files are checked, but detected files are not blocked"),
-            suggested_remedies: vec![SuggestedRemedy::OnAccessPreventionEnable],
-        },
-        OnAccessConfig::ConfigRead {
-            watch_scope: WatchScope::WatchedLocations { .. },
-            blocking_response: OnAccessResponse::BlockAccess,
-            ..
-        } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ConditionMet,
-            status_text: gettext("Detected files are blocked"),
-            suggested_remedies: Vec::new(),
-        },
-    }
-}
-
-fn on_access_verdict(
-    on_access_evidence: &OnAccessEvidence,
-    daemon_answering: bool,
-) -> OnAccessVerdict {
-    match on_access_evidence.on_access_scanner {
-        OnAccessScanner::UnitStateUnknown => OnAccessVerdict {
-            checked_condition: CheckedCondition::EvidenceUnknown,
-            status_text: gettext(
-                "Unknown whether on-access scanning runs, because systemd could not report it",
-            ),
-            suggested_remedies: Vec::new(),
-        },
-        OnAccessScanner::NeverSetUp => OnAccessVerdict {
-            checked_condition: CheckedCondition::ReviewSuggested,
-            status_text: gettext("On-access scanning is not set up"),
-            suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
-        },
-        OnAccessScanner::UnitStopped { .. } if !daemon_answering => OnAccessVerdict {
-            checked_condition: CheckedCondition::PrerequisiteMissing,
-            status_text: daemon_awaited_text(),
-            suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
-        },
-        OnAccessScanner::UnitStopped { service_unit } => OnAccessVerdict {
-            checked_condition: CheckedCondition::ConditionFailed,
-            status_text: gettext("{unit} is not running").replace("{unit}", service_unit),
-            suggested_remedies: vec![SuggestedRemedy::OnAccessScanningEnable],
-        },
-        OnAccessScanner::MonitorRunning if !daemon_answering => OnAccessVerdict {
-            checked_condition: CheckedCondition::PrerequisiteMissing,
-            status_text: daemon_awaited_text(),
-            suggested_remedies: Vec::new(),
-        },
-        OnAccessScanner::MonitorRunning => {
-            running_monitor_verdict(&on_access_evidence.on_access_config)
-        }
-    }
-}
-
-pub fn on_access_condition(
-    on_access_evidence: &OnAccessEvidence,
-    daemon_answering: bool,
-) -> CheckedCondition {
-    on_access_verdict(on_access_evidence, daemon_answering).checked_condition
-}
-
-fn on_access_step(
-    on_access_evidence: &OnAccessEvidence,
-    daemon_answering: bool,
-    distribution_family: DistributionFamily,
-) -> ProtectionStep {
-    let step_title = gettext("On-access blocking");
-    let mechanism_details = gettext(
-        "clamonacc checks files in the watched folders as they are opened. With prevention on, \
-         the kernel refuses access to a detected file, which is why such a file can't be opened \
-         even though it is still there.",
-    );
-    let on_access_verdict = on_access_verdict(on_access_evidence, daemon_answering);
-    TimelineStep::settled(
-        step_title,
-        mechanism_details,
-        on_access_verdict.status_text,
-        SettledStep {
-            evidence_rows: on_access_rows(&on_access_evidence.on_access_config),
-            ..SettledStep::without_offers(on_access_verdict.checked_condition.node_state())
-        },
-    )
-    .with_guidance_commands(
-        on_access_verdict
-            .suggested_remedies
-            .into_iter()
-            .flat_map(|suggested_remedy| remedy_commands(suggested_remedy, distribution_family))
-            .collect(),
-    )
-}
-
-fn daemon_awaited_text() -> String {
-    gettext("Needs the daemon, see Engine below")
 }
 
 fn next_run_text(next_run: UnitTimestamp) -> String {
@@ -960,6 +767,20 @@ pub fn protection_timeline(
                 &protection_evidence.on_access_evidence,
                 daemon_answering,
                 distribution_family,
+                OnAccessStepControls {
+                    header_action: StepActionSlot::ActionOffered(offer_for_condition(
+                        on_access_condition(
+                            &protection_evidence.on_access_evidence,
+                            daemon_answering,
+                        ),
+                        ProtectionStepAction::OpenOnAccessScanning,
+                    )),
+                    setting_row_control: EvidenceRowControl::SettingsLink {
+                        settings_action: ProtectionStepAction::ReviewSettingsSubpage(
+                            SettingsSubpage::OnAccessScanning,
+                        ),
+                    },
+                },
             ),
             scheduled_scan_step(
                 &protection_evidence.scheduled_scan_evidence,
@@ -1016,8 +837,9 @@ mod protection_timeline_presentation_tests {
         host_services::{
             protection_evidence::{
                 host_protection_evidence::{
-                    DaemonEvidence, OverridesChangeTime, OverridesReadFailure, ProgramTrustFinding,
-                    ProgramTrustInspection, ReducedSetting, RuntimeReductions,
+                    ClamdConfigReadFailure, DaemonEvidence, OnAccessSizeLimit, OverridesChangeTime,
+                    OverridesReadFailure, ProgramTrustFinding, ProgramTrustInspection,
+                    ReducedSetting, RuntimeReductions,
                 },
                 protection_evidence_fixtures::{
                     REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
@@ -1520,9 +1342,15 @@ mod protection_timeline_presentation_tests {
     }
 
     #[test]
-    fn running_without_prevention_is_never_reported_as_blocking() {
-        let protection_evidence = ProtectionEvidence {
-            on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
+    fn on_access_coverage_names_only_watched_and_blocked_locations() {
+        let coverage_with = |on_access_config| {
+            coverage_summary(&ProtectionEvidence {
+                on_access_evidence: on_access_with(on_access_config),
+                ..healthy_evidence()
+            })
+        };
+        assert!(
+            coverage_with(OnAccessConfig::ConfigRead {
                 watch_scope: WatchScope::WatchedLocations {
                     first_location: WatchedLocation::WatchedFolder {
                         folder_path: "/home/user/Downloads".to_owned(),
@@ -1531,14 +1359,48 @@ mod protection_timeline_presentation_tests {
                 },
                 blocking_response: OnAccessResponse::ReportOnly,
                 size_limit: OnAccessSizeLimit::DefaultLimit,
-            }),
-            ..healthy_evidence()
-        };
-        assert_eq!(
-            state_of(&protection_evidence, "On-access blocking"),
-            StepNodeState::NeedsReview
+            })
+            .contains("not blocked")
         );
-        assert!(coverage_summary(&protection_evidence).contains("not blocked"));
+        assert!(
+            !coverage_with(OnAccessConfig::ConfigUnreadable(
+                ClamdConfigReadFailure::NoReadableConfig,
+            ))
+            .contains("on access")
+        );
+        assert!(
+            !coverage_with(OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::NothingWatched,
+                blocking_response: OnAccessResponse::BlockAccess,
+                size_limit: OnAccessSizeLimit::DefaultLimit,
+            })
+            .contains("on access")
+        );
+        assert!(
+            coverage_with(OnAccessConfig::ConfigRead {
+                watch_scope: WatchScope::WatchedLocations {
+                    first_location: WatchedLocation::WatchedMount {
+                        mount_path: "/".to_owned(),
+                    },
+                    other_locations: Vec::new(),
+                },
+                blocking_response: OnAccessResponse::BlockAccess,
+                size_limit: OnAccessSizeLimit::DefaultLimit,
+            })
+            .starts_with("/ blocked on access")
+        );
+    }
+
+    #[test]
+    fn the_on_access_step_opens_its_page_and_keeps_its_settings_links() {
+        let protection_steps = idle_timeline(&healthy_evidence()).protection_steps;
+        let on_access_step = step_titled(&protection_steps, "On-access blocking");
+        assert_eq!(
+            on_access_step.header_offer(),
+            Some(OfferedAction::plain(
+                ProtectionStepAction::OpenOnAccessScanning
+            ))
+        );
     }
 
     #[test]
@@ -1619,29 +1481,6 @@ mod protection_timeline_presentation_tests {
         }
     }
 
-    fn on_access_step_of(protection_evidence: &ProtectionEvidence) -> ProtectionStep {
-        step_titled(
-            &idle_timeline(protection_evidence).protection_steps,
-            "On-access blocking",
-        )
-        .clone()
-    }
-
-    #[test]
-    fn an_on_access_unit_systemd_could_not_report_is_unknown_rather_than_not_set_up() {
-        let protection_evidence = ProtectionEvidence {
-            on_access_evidence: OnAccessEvidence {
-                on_access_scanner: OnAccessScanner::UnitStateUnknown,
-                ..healthy_evidence().on_access_evidence
-            },
-            ..healthy_evidence()
-        };
-        let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
-        assert!(on_access_step.status_text.starts_with("Unknown"));
-        assert!(!on_access_step.status_text.contains("not set up"));
-    }
-
     #[test]
     fn unreadable_runtime_changes_are_unknown_rather_than_nothing_reduced() {
         let protection_evidence = ProtectionEvidence {
@@ -1704,81 +1543,6 @@ mod protection_timeline_presentation_tests {
             last_scan_value,
             "Unknown. Reading the system journal stopped before it finished"
         );
-    }
-
-    #[test]
-    fn an_unreadable_daemon_config_claims_neither_coverage_nor_missing_blocking() {
-        let protection_evidence = ProtectionEvidence {
-            on_access_evidence: on_access_with(OnAccessConfig::ConfigUnreadable(
-                ClamdConfigReadFailure::NoReadableConfig,
-            )),
-            ..healthy_evidence()
-        };
-        let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
-        assert!(
-            on_access_step
-                .status_text
-                .contains("clamd.conf could not be read")
-        );
-        assert!(!on_access_step.status_text.contains("not blocked"));
-        assert!(on_access_step.guidance_commands.is_empty());
-        assert_eq!(
-            row_named(&on_access_step, "Configuration").evidence_value,
-            "No readable clamd.conf was found"
-        );
-        let coverage_text = coverage_summary(&protection_evidence);
-        assert!(!coverage_text.contains("on access"));
-    }
-
-    #[test]
-    fn prevention_without_watched_locations_suggests_adding_a_watched_folder() {
-        let protection_evidence = ProtectionEvidence {
-            on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
-                watch_scope: WatchScope::NothingWatched,
-                blocking_response: OnAccessResponse::BlockAccess,
-                size_limit: OnAccessSizeLimit::DefaultLimit,
-            }),
-            ..healthy_evidence()
-        };
-        let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state(), StepNodeState::NeedsReview);
-        assert_eq!(
-            on_access_step.status_text,
-            "Running, but no folders or mounts are watched"
-        );
-        assert_eq!(
-            on_access_step.guidance_commands,
-            remedy_commands(
-                SuggestedRemedy::OnAccessWatchedPathAdd,
-                DistributionFamily::NixosFamily
-            )
-        );
-        assert!(!coverage_summary(&protection_evidence).contains("on access"));
-    }
-
-    #[test]
-    fn a_watched_mount_is_shown_as_a_whole_mount_and_counts_as_coverage() {
-        let protection_evidence = ProtectionEvidence {
-            on_access_evidence: on_access_with(OnAccessConfig::ConfigRead {
-                watch_scope: WatchScope::WatchedLocations {
-                    first_location: WatchedLocation::WatchedMount {
-                        mount_path: "/".to_owned(),
-                    },
-                    other_locations: Vec::new(),
-                },
-                blocking_response: OnAccessResponse::BlockAccess,
-                size_limit: OnAccessSizeLimit::DefaultLimit,
-            }),
-            ..healthy_evidence()
-        };
-        let on_access_step = on_access_step_of(&protection_evidence);
-        assert_eq!(on_access_step.node_state(), StepNodeState::Completed);
-        assert_eq!(
-            row_named(&on_access_step, "Watched folders").evidence_value,
-            "/ (whole mount)"
-        );
-        assert!(coverage_summary(&protection_evidence).starts_with("/ blocked on access"));
     }
 
     #[test]

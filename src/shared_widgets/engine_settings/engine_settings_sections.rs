@@ -1039,9 +1039,55 @@ impl Component for EngineSettingsSections {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingsChangeFollowUp {
+    ReloadChangesAndEvidence,
+    NothingToReload,
+}
+
+pub const fn settings_change_follow_up(
+    settings_notice: &EngineSettingsNotice,
+) -> SettingsChangeFollowUp {
+    match settings_notice {
+        EngineSettingsNotice::LiveChangeReported(_) => {
+            SettingsChangeFollowUp::ReloadChangesAndEvidence
+        }
+        EngineSettingsNotice::ChangeSnippetCopied
+        | EngineSettingsNotice::StaleConfirmationDropped => SettingsChangeFollowUp::NothingToReload,
+    }
+}
+
 #[cfg(test)]
 mod engine_settings_sections_tests {
     use super::*;
+
+    #[test]
+    fn a_live_change_reloads_the_audit_and_the_evidence() {
+        assert_eq!(
+            settings_change_follow_up(&EngineSettingsNotice::LiveChangeReported(
+                LiveChangeOutcome::SettingsApplied
+            )),
+            SettingsChangeFollowUp::ReloadChangesAndEvidence
+        );
+        assert_eq!(
+            settings_change_follow_up(&EngineSettingsNotice::LiveChangeReported(
+                LiveChangeOutcome::PreviousRestored
+            )),
+            SettingsChangeFollowUp::ReloadChangesAndEvidence
+        );
+    }
+
+    #[test]
+    fn copying_a_snippet_reloads_nothing() {
+        assert_eq!(
+            settings_change_follow_up(&EngineSettingsNotice::ChangeSnippetCopied),
+            SettingsChangeFollowUp::NothingToReload
+        );
+        assert_eq!(
+            settings_change_follow_up(&EngineSettingsNotice::StaleConfirmationDropped),
+            SettingsChangeFollowUp::NothingToReload
+        );
+    }
 
     const RUNNING_SWITCH_CHANGE: ChangeProgress = ChangeProgress::ChangeRunning {
         changed_row: ChangedRow::DetectionSwitch(DetectionOption::HeuristicAlerts),

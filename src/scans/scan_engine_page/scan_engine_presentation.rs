@@ -128,6 +128,10 @@ pub const fn daemon_condition(daemon_evidence: &DaemonEvidence) -> CheckedCondit
     }
 }
 
+pub fn daemon_awaited_text() -> String {
+    gettext("Needs the daemon, see Scan Engine")
+}
+
 pub const fn daemon_is_answering(daemon_evidence: &DaemonEvidence) -> bool {
     matches!(daemon_evidence, DaemonEvidence::ClamdAnswering { .. })
 }

@@ -14,15 +14,13 @@ use crate::{
         clamd_socket_ownership::{ClamdSocketOwnership, inspect_clamd_socket_off_thread},
         daemon_log_reader::daemon_log_updates,
         scan_engine_presentation::{ScanEngineAction, scan_engine_steps},
-        scan_engine_state::{
-            ClamdSocketView, ScanEnginePageOutput, SettingsChangeFollowUp,
-            settings_change_follow_up,
-        },
+        scan_engine_state::{ClamdSocketView, ScanEnginePageOutput},
     },
     shared_widgets::{
         engine_settings::engine_settings_sections::{
             EngineSettingsNotice, EngineSettingsSection, EngineSettingsSections,
-            EngineSettingsSectionsOutput, engine_settings_notice_toast,
+            EngineSettingsSectionsOutput, SettingsChangeFollowUp, engine_settings_notice_toast,
+            settings_change_follow_up,
         },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
