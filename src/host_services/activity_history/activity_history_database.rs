@@ -108,6 +108,12 @@ pub enum ScanActivityStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScanOrigin {
+    ManualScan,
+    ScheduledScan,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UpdateActivityStatus {
     UpdateApplied,
     UpdateAlreadyCurrent,
@@ -123,6 +129,7 @@ pub enum ActivityRecord {
         scan_targets: Vec<PathBuf>,
         inspected_file_count: u64,
         scan_status: ScanActivityStatus,
+        scan_origin: ScanOrigin,
     },
     SkippedScan {
         scan_targets: Vec<PathBuf>,
@@ -160,11 +167,25 @@ pub struct StoredActivityColumns {
 impl ActivityRecord {
     pub const fn stored_status_text(&self) -> &'static str {
         match self {
-            Self::ScanActivity { scan_status, .. } => match scan_status {
+            Self::ScanActivity {
+                scan_status,
+                scan_origin: ScanOrigin::ManualScan,
+                ..
+            } => match scan_status {
                 ScanActivityStatus::ScanClean => "scan_clean",
                 ScanActivityStatus::ScanInfected { .. } => "scan_infected",
                 ScanActivityStatus::ScanFailed => "scan_failed",
                 ScanActivityStatus::ScanCancelled => "scan_cancelled",
+            },
+            Self::ScanActivity {
+                scan_status,
+                scan_origin: ScanOrigin::ScheduledScan,
+                ..
+            } => match scan_status {
+                ScanActivityStatus::ScanClean => "scheduled_scan_clean",
+                ScanActivityStatus::ScanInfected { .. } => "scheduled_scan_infected",
+                ScanActivityStatus::ScanFailed => "scheduled_scan_failed",
+                ScanActivityStatus::ScanCancelled => "scheduled_scan_cancelled",
             },
             Self::SkippedScan { .. } => "scan_skipped",
             Self::UpdateActivity { update_status } => match update_status {
@@ -222,19 +243,33 @@ impl ActivityRecord {
         inspected_file_count: u64,
         threat_count: u64,
     ) -> Result<Self, ActivityHistoryFailure> {
-        let scan_activity = |scan_status| Self::ScanActivity {
+        let scan_activity = |scan_status, scan_origin| Self::ScanActivity {
             scan_targets: scan_targets_from_stored_text(stored_targets),
             inspected_file_count,
             scan_status,
+            scan_origin,
+        };
+        let infected_status = ScanActivityStatus::ScanInfected {
+            found_threats: FoundThreatCount::from_stored_count(threat_count),
         };
         let update_activity = |update_status| Self::UpdateActivity { update_status };
         Ok(match stored_status {
-            "scan_clean" => scan_activity(ScanActivityStatus::ScanClean),
-            "scan_infected" => scan_activity(ScanActivityStatus::ScanInfected {
-                found_threats: FoundThreatCount::from_stored_count(threat_count),
-            }),
-            "scan_failed" => scan_activity(ScanActivityStatus::ScanFailed),
-            "scan_cancelled" => scan_activity(ScanActivityStatus::ScanCancelled),
+            "scan_clean" => scan_activity(ScanActivityStatus::ScanClean, ScanOrigin::ManualScan),
+            "scan_infected" => scan_activity(infected_status, ScanOrigin::ManualScan),
+            "scan_failed" => scan_activity(ScanActivityStatus::ScanFailed, ScanOrigin::ManualScan),
+            "scan_cancelled" => {
+                scan_activity(ScanActivityStatus::ScanCancelled, ScanOrigin::ManualScan)
+            }
+            "scheduled_scan_clean" => {
+                scan_activity(ScanActivityStatus::ScanClean, ScanOrigin::ScheduledScan)
+            }
+            "scheduled_scan_infected" => scan_activity(infected_status, ScanOrigin::ScheduledScan),
+            "scheduled_scan_failed" => {
+                scan_activity(ScanActivityStatus::ScanFailed, ScanOrigin::ScheduledScan)
+            }
+            "scheduled_scan_cancelled" => {
+                scan_activity(ScanActivityStatus::ScanCancelled, ScanOrigin::ScheduledScan)
+            }
             "scan_skipped" => Self::SkippedScan {
                 scan_targets: scan_targets_from_stored_text(stored_targets),
             },
@@ -413,6 +448,7 @@ mod activity_history_database_tests {
                         threat_count: NonZeroU64::new(2).expect("two threats"),
                     },
                 },
+                scan_origin: ScanOrigin::ManualScan,
             },
             duration_millis: 1500,
             activity_output: activity_output.to_owned(),
@@ -560,11 +596,48 @@ mod activity_history_database_tests {
             ],
             inspected_file_count: 2,
             scan_status: ScanActivityStatus::ScanClean,
+            scan_origin: ScanOrigin::ManualScan,
         };
         assert_eq!(
             recorded_and_listed(scanned_record.clone()).await,
             scanned_record
         );
+    }
+
+    #[tokio::test]
+    async fn a_scheduled_scan_keeps_its_origin() {
+        let scheduled_record = ActivityRecord::ScanActivity {
+            scan_targets: vec![PathBuf::from("/home/user")],
+            inspected_file_count: 7,
+            scan_status: ScanActivityStatus::ScanInfected {
+                found_threats: FoundThreatCount::UncountedThreats,
+            },
+            scan_origin: ScanOrigin::ScheduledScan,
+        };
+        assert_eq!(
+            recorded_and_listed(scheduled_record.clone()).await,
+            scheduled_record
+        );
+    }
+
+    #[test]
+    fn rows_stored_before_origins_were_recorded_read_as_manual_scans() {
+        [
+            "scan_clean",
+            "scan_infected",
+            "scan_failed",
+            "scan_cancelled",
+        ]
+        .into_iter()
+        .for_each(|stored_status| {
+            assert!(matches!(
+                ActivityRecord::from_stored_columns(stored_status, "/tmp", 1, 0),
+                Ok(ActivityRecord::ScanActivity {
+                    scan_origin: ScanOrigin::ManualScan,
+                    ..
+                })
+            ));
+        });
     }
 
     #[tokio::test]
@@ -593,6 +666,7 @@ mod activity_history_database_tests {
             scan_status: ScanActivityStatus::ScanInfected {
                 found_threats: FoundThreatCount::UncountedThreats,
             },
+            scan_origin: ScanOrigin::ManualScan,
         };
         assert_eq!(
             recorded_and_listed(uncounted_record.clone()).await,

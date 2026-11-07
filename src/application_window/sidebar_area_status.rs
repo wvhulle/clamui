@@ -23,7 +23,7 @@ use crate::{
     protection_page::{
         protection_timeline_page::shown_coverage_text,
         protection_timeline_presentation::{
-            AlertReadiness, alerts_condition, scheduled_scan_condition, trust_list_condition,
+            AlertReadiness, alerts_condition, trust_list_condition,
         },
     },
     scans::{
@@ -31,6 +31,7 @@ use crate::{
         scan_engine_page::scan_engine_presentation::{
             daemon_condition, daemon_is_answering, engine_condition,
         },
+        scheduled_scans_page::scheduled_scans_presentation::scheduled_scan_condition,
     },
     shared_widgets::step_timeline::{
         program_trust_steps::{TrustedProgramGroup, program_trust_condition},

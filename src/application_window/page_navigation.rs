@@ -79,7 +79,11 @@ use crate::{
             scan_engine_component::{ScanEnginePage, ScanEnginePageInput},
             scan_engine_state::ScanEnginePageOutput,
         },
-        scheduled_scans_page::scan_schedule_component::ScanSchedulePage,
+        scheduled_scans_page::{
+            scan_schedule_component::ScanScheduleSection,
+            scheduled_scans_component::{ScheduledScansPage, ScheduledScansPageInput},
+            scheduled_scans_state::ScheduledScansPageOutput,
+        },
     },
     shared_widgets::{
         audit_sections::{
@@ -111,7 +115,7 @@ enum SettingsSubpageContent {
     EngineSettings(Controller<EngineSettingsSubpage>),
     ScanExclusions(Controller<ScanExclusionsPage>),
     DeviceAutoScan(Controller<DeviceScanPage>),
-    ScanSchedule(Controller<ScanSchedulePage>),
+    ScanSchedule(Controller<ScanScheduleSection>),
     TrustedDetections(Controller<TrustedDetectionsPage>),
 }
 
@@ -145,7 +149,7 @@ impl SettingsSubpageContent {
                 Self::DeviceAutoScan(DeviceScanPage::builder().launch(()).detach())
             }
             SettingsSubpage::ScanSchedule => {
-                Self::ScanSchedule(ScanSchedulePage::builder().launch(()).detach())
+                Self::ScanSchedule(ScanScheduleSection::builder().launch(()).detach())
             }
             SettingsSubpage::TrustedDetections => {
                 Self::TrustedDetections(TrustedDetectionsPage::builder().launch(()).detach())
@@ -202,6 +206,7 @@ pub struct PageNavigation {
     database_updates_page: Controller<DatabaseUpdatesPage>,
     scan_engine_page: Controller<ScanEnginePage>,
     on_access_page: Controller<OnAccessPage>,
+    scheduled_scans_page: Controller<ScheduledScansPage>,
     detections_page: Controller<BackgroundDetectionsPage>,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
@@ -322,6 +327,7 @@ fn forwarded_scan_output(scan_output: ScanPageOutput) -> PageNavigationInput {
     match scan_output {
         ScanPageOutput::QuarantineEntriesChanged => PageNavigationInput::QuarantineEntriesChanged,
         ScanPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+        ScanPageOutput::EvidenceRefreshRequested => PageNavigationInput::EvidenceRefreshRequested,
     }
 }
 
@@ -366,6 +372,16 @@ const fn forwarded_scan_engine_output(
 const fn forwarded_on_access_output(on_access_output: OnAccessPageOutput) -> PageNavigationInput {
     match on_access_output {
         OnAccessPageOutput::EvidenceRefreshRequested => {
+            PageNavigationInput::EvidenceRefreshRequested
+        }
+    }
+}
+
+const fn forwarded_scheduled_scans_output(
+    scheduled_scans_output: ScheduledScansPageOutput,
+) -> PageNavigationInput {
+    match scheduled_scans_output {
+        ScheduledScansPageOutput::EvidenceRefreshRequested => {
             PageNavigationInput::EvidenceRefreshRequested
         }
     }
@@ -497,6 +513,10 @@ impl PageNavigation {
             .emit(ScanEnginePageInput::EvidenceRefreshChanged(next_refresh));
         self.on_access_page
             .emit(OnAccessPageInput::EvidenceRefreshChanged(next_refresh));
+        self.scheduled_scans_page
+            .emit(ScheduledScansPageInput::EvidenceRefreshChanged(
+                next_refresh,
+            ));
         match gathering_start {
             GatheringStart::StartGathering => {
                 let lazaret_schedule_enabled = lazaret_schedule_is_enabled();
@@ -645,6 +665,7 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::DatabaseUpdates),
                                     append: &navigation_row(ApplicationPage::ScanEngine),
                                     append: &navigation_row(ApplicationPage::OnAccessScanning),
+                                    append: &navigation_row(ApplicationPage::ScheduledScans),
                                     append: &navigation_row(ApplicationPage::Hardening),
                                 },
                             },
@@ -706,6 +727,9 @@ impl Component for PageNavigation {
                             },
                             add_titled[Some(ApplicationPage::OnAccessScanning.page_name()), &ApplicationPage::OnAccessScanning.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::OnAccessScanning, model.on_access_page.widget()),
+                            },
+                            add_titled[Some(ApplicationPage::ScheduledScans.page_name()), &ApplicationPage::ScheduledScans.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::ScheduledScans, model.scheduled_scans_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Hardening.page_name()), &ApplicationPage::Hardening.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Hardening, model.hardening_page.widget()),
@@ -783,6 +807,9 @@ impl Component for PageNavigation {
         let on_access_page = OnAccessPage::builder()
             .launch(())
             .forward(sender.input_sender(), forwarded_on_access_output);
+        let scheduled_scans_page = ScheduledScansPage::builder()
+            .launch(activity_history.clone())
+            .forward(sender.input_sender(), forwarded_scheduled_scans_output);
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
                 activity_history,
@@ -824,6 +851,7 @@ impl Component for PageNavigation {
             database_updates_page,
             scan_engine_page,
             on_access_page,
+            scheduled_scans_page,
             detections_page,
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
@@ -922,6 +950,8 @@ impl Component for PageNavigation {
             PageNavigationInput::ActivityRecorded => {
                 self.logs_page
                     .emit(ActivityLogsPageInput::ReloadEntriesRequested);
+                self.scheduled_scans_page
+                    .emit(ScheduledScansPageInput::HistoryReloadRequested);
             }
             PageNavigationInput::JournalAccessChanged(journal_access) => {
                 self.journal_access = journal_access.clone();
@@ -983,6 +1013,13 @@ impl Component for PageNavigation {
                     .emit(OnAccessPageInput::EvidenceGathered(
                         self.gathered_evidence.clone(),
                     ));
+                self.scheduled_scans_page
+                    .emit(ScheduledScansPageInput::EvidenceGathered(
+                        self.gathered_evidence.clone(),
+                    ));
+                self.scan_page.emit(ScanPageInput::EvidenceGathered(
+                    self.gathered_evidence.clone(),
+                ));
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::GatheringFinished, &sender);
             }
             PageNavigationCommand::WatchedUnitChanged => {

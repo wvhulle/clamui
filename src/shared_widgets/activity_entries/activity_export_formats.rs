@@ -208,6 +208,7 @@ pub fn activity_detail_text(
 #[cfg(test)]
 mod activity_export_formats_tests {
     use super::*;
+    use crate::host_services::activity_history::activity_history_database::ScanOrigin;
 
     fn infected_entry() -> ActivityEntryRecord {
         ActivityEntryRecord {
@@ -224,6 +225,7 @@ mod activity_export_formats_tests {
                         threat_count: std::num::NonZeroU64::MIN,
                     },
                 },
+                scan_origin: ScanOrigin::ManualScan,
             },
             duration_millis: 2500,
             activity_output: "/scan/a,b: Bad FOUND\n".to_owned(),

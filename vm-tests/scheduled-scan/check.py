@@ -17,7 +17,7 @@ with subtest("the Protection page shows the system timer"):
     machine.screenshot("protection_page")
 
 with subtest("Run Now asks for a password and runs the system scan"):
-    click_on_text("Scheduled scan")
+    activate_window_action("show-page", "scan")
     time.sleep(2)
     click_on_text("Run Now")
     time.sleep(3)

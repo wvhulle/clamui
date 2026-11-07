@@ -15,16 +15,9 @@ use crate::{
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
         },
-        clamav_scanner::scanner_output_parser::sanitize_scanner_line,
         desktop::locale_formatting::host_moment_formatters,
         detection_journal::detection_journal_follower::JournalAccess,
-        protection_evidence::host_protection_evidence::{
-            ScanServiceEvidence, ScanUnitResult, detection_notifications_are_enabled,
-            scan_service_evidence,
-        },
-        systemd_bus::host_systemd_units::{
-            SystemdBusFailure, UnitStartOutcome, service_unit_snapshot, start_system_unit,
-        },
+        protection_evidence::host_protection_evidence::detection_notifications_are_enabled,
     },
     protection_page::protection_timeline_presentation::{
         AlertReadiness, ProtectionActivity, ProtectionStepAction, protection_timeline,
@@ -41,14 +34,11 @@ use crate::{
     },
 };
 
-const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
-
 pub struct ProtectionTimelinePage {
     toaster: Toaster,
     protection_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
     engine_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
     review_rows: FactoryVecDeque<TimelineStepRow<ProtectionStepAction>>,
-    scheduled_scan_starting: bool,
     distribution_family: DistributionFamily,
     evidence_refresh: EvidenceRefresh,
     coverage_summary: String,
@@ -72,14 +62,6 @@ pub enum ProtectionTimelinePageOutput {
     EvidenceRefreshRequested,
 }
 
-#[derive(Debug)]
-pub enum ProtectionTimelinePageCommand {
-    UnitRunFinished {
-        start_outcome: UnitStartOutcome,
-        scan_service: ScanServiceEvidence,
-    },
-}
-
 pub fn decision_headline(unresolved_detections: usize) -> String {
     if unresolved_detections == 0 {
         return gettext("Nothing needs your decision");
@@ -99,74 +81,6 @@ pub fn shown_coverage_text(coverage_summary: &str, home_directory: &str) -> Stri
     coverage_summary
         .replace(&format!("{home_directory}/"), "~/")
         .replace(&format!("{home_directory},"), "~,")
-}
-
-fn plain_text_toast(toast_text: &str) -> adw::Toast {
-    adw::Toast::builder()
-        .title(toast_text)
-        .use_markup(false)
-        .build()
-}
-
-fn scan_found_threats(
-    start_outcome: &UnitStartOutcome,
-    scan_service: &ScanServiceEvidence,
-) -> bool {
-    matches!(start_outcome, UnitStartOutcome::JobEnded { .. })
-        && matches!(
-            scan_service,
-            ScanServiceEvidence::ServiceConfigured {
-                last_result: ScanUnitResult::ThreatsFound,
-                ..
-            }
-        )
-}
-
-fn unit_run_toast(
-    start_outcome: &UnitStartOutcome,
-    scan_service: &ScanServiceEvidence,
-) -> adw::Toast {
-    let run_toast = plain_text_toast(&unit_run_toast_text(start_outcome, scan_service));
-    if scan_found_threats(start_outcome, scan_service) {
-        run_toast.set_button_label(Some(&gettext("Review")));
-        run_toast.set_action_name(Some("win.show-page"));
-        run_toast.set_action_target_value(Some(&"detections".to_variant()));
-        run_toast.set_timeout(FOUND_THREATS_TOAST_SECONDS);
-    }
-    run_toast
-}
-
-fn systemd_failure_text(bus_failure: &SystemdBusFailure) -> String {
-    match bus_failure {
-        SystemdBusFailure::BusCallFailed(bus_error) => gettext("systemd did not answer: {error}")
-            .replace("{error}", &sanitize_scanner_line(&bus_error.to_string())),
-        SystemdBusFailure::UnrecognizedLoadState => {
-            gettext("systemd reported a unit state Lazaret does not recognize")
-        }
-    }
-}
-
-pub fn unit_run_toast_text(
-    start_outcome: &UnitStartOutcome,
-    scan_service: &ScanServiceEvidence,
-) -> String {
-    if scan_found_threats(start_outcome, scan_service) {
-        return gettext("The scan found malware");
-    }
-    match start_outcome {
-        UnitStartOutcome::UnitFinished => gettext("The scan finished"),
-        UnitStartOutcome::JobEnded { job_result } => {
-            gettext("The scan did not finish cleanly: {result}")
-                .replace("{result}", &sanitize_scanner_line(job_result))
-        }
-        UnitStartOutcome::AuthorizationRefused => {
-            gettext("Starting the scan needs administrator authorization")
-        }
-        UnitStartOutcome::BusFailure(bus_failure) => {
-            gettext("The scan could not be started: {error}")
-                .replace("{error}", &systemd_failure_text(bus_failure))
-        }
-    }
 }
 
 fn show_application_page(root: &adw::ToastOverlay, application_page: ApplicationPage) {
@@ -224,7 +138,6 @@ impl ProtectionTimelinePage {
                 notifications_enabled: detection_notifications_are_enabled(),
             },
             &ProtectionActivity {
-                scheduled_scan_starting: self.scheduled_scan_starting,
                 observed_at: *gathered_at,
                 moment_formatters: host_moment_formatters(),
             },
@@ -239,12 +152,7 @@ impl ProtectionTimelinePage {
         show_timeline_steps(&mut self.review_rows, gathered_timeline.review_steps);
     }
 
-    fn run_step_action(
-        &mut self,
-        chosen_action: ProtectionStepAction,
-        sender: &ComponentSender<Self>,
-        root: &adw::ToastOverlay,
-    ) {
+    fn run_step_action(chosen_action: ProtectionStepAction, root: &adw::ToastOverlay) {
         match chosen_action {
             ProtectionStepAction::OpenDatabaseUpdates => {
                 show_application_page(root, ApplicationPage::DatabaseUpdates);
@@ -255,21 +163,13 @@ impl ProtectionTimelinePage {
             ProtectionStepAction::OpenOnAccessScanning => {
                 show_application_page(root, ApplicationPage::OnAccessScanning);
             }
-            ProtectionStepAction::RunScheduledScan { service_unit } => {
-                self.scheduled_scan_starting = true;
-                self.show_timeline();
-                sender.oneshot_command(async move {
-                    let start_outcome = start_system_unit(service_unit).await;
-                    ProtectionTimelinePageCommand::UnitRunFinished {
-                        start_outcome,
-                        scan_service: scan_service_evidence(
-                            service_unit_snapshot(service_unit).await,
-                        ),
-                    }
-                });
+            ProtectionStepAction::OpenScheduledScans => {
+                show_application_page(root, ApplicationPage::ScheduledScans);
             }
-            ProtectionStepAction::ReviewSettingsSubpage(settings_subpage)
-            | ProtectionStepAction::SetUpSettingsSubpage(settings_subpage) => {
+            ProtectionStepAction::OpenManualScan => {
+                show_application_page(root, ApplicationPage::Scan);
+            }
+            ProtectionStepAction::ReviewSettingsSubpage(settings_subpage) => {
                 let _action_missing = root.activate_action(
                     &OpenSettingsAction::action_name(),
                     Some(&settings_subpage.action_target().to_variant()),
@@ -284,7 +184,7 @@ impl Component for ProtectionTimelinePage {
     type Init = ();
     type Input = ProtectionTimelinePageInput;
     type Output = ProtectionTimelinePageOutput;
-    type CommandOutput = ProtectionTimelinePageCommand;
+    type CommandOutput = ();
 
     view! {
         adw::ToastOverlay {
@@ -376,7 +276,6 @@ impl Component for ProtectionTimelinePage {
                 &sender,
             ),
             review_rows: launched_step_group(titled_group(&gettext("Needs review")), &sender),
-            scheduled_scan_starting: false,
             distribution_family: detect_distribution_family(),
             evidence_refresh: EvidenceRefresh::NothingRunning,
             coverage_summary: gettext("Checking…"),
@@ -418,7 +317,7 @@ impl Component for ProtectionTimelinePage {
             }
             ProtectionTimelinePageInput::StepRequested(TimelineStepRowOutput::ActionChosen(
                 chosen_action,
-            )) => self.run_step_action(chosen_action, &sender, root),
+            )) => Self::run_step_action(chosen_action, root),
             ProtectionTimelinePageInput::StepRequested(TimelineStepRowOutput::CopyRequested(
                 copied_command,
             )) => {
@@ -428,81 +327,11 @@ impl Component for ProtectionTimelinePage {
             }
         }
     }
-
-    fn update_cmd(
-        &mut self,
-        page_command: ProtectionTimelinePageCommand,
-        sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
-        match page_command {
-            ProtectionTimelinePageCommand::UnitRunFinished {
-                start_outcome,
-                scan_service,
-            } => {
-                self.scheduled_scan_starting = false;
-                self.toaster
-                    .add_toast(unit_run_toast(&start_outcome, &scan_service));
-                self.show_timeline();
-                Self::request_evidence_refresh(&sender);
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod protection_timeline_page_tests {
     use super::*;
-    use crate::host_services::systemd_bus::host_systemd_units::{
-        ServiceLastResult, ServiceUnitSnapshot, UnitActivity,
-    };
-
-    fn loaded_scan_service(exit_status: i32) -> ScanServiceEvidence {
-        scan_service_evidence(ServiceUnitSnapshot::LoadedService {
-            unit_activity: UnitActivity::UnitInactive,
-            last_result: ServiceLastResult::ExitedWithStatus { exit_status },
-            program_arguments: Vec::new(),
-        })
-    }
-
-    #[test]
-    fn finding_malware_is_not_reported_as_a_failed_scan() {
-        let failed_job = UnitStartOutcome::JobEnded {
-            job_result: "failed".to_owned(),
-        };
-        assert_eq!(
-            unit_run_toast_text(&failed_job, &loaded_scan_service(1)),
-            "The scan found malware"
-        );
-        assert!(
-            unit_run_toast_text(&failed_job, &loaded_scan_service(2))
-                .contains("did not finish cleanly")
-        );
-    }
-
-    #[test]
-    fn an_unreadable_scan_service_never_claims_malware_was_found() {
-        let failed_job = UnitStartOutcome::JobEnded {
-            job_result: "failed".to_owned(),
-        };
-        assert!(
-            unit_run_toast_text(
-                &failed_job,
-                &scan_service_evidence(ServiceUnitSnapshot::SystemdUnreachable(
-                    SystemdBusFailure::UnrecognizedLoadState
-                ))
-            )
-            .contains("did not finish cleanly")
-        );
-        assert_eq!(
-            unit_run_toast_text(
-                &UnitStartOutcome::BusFailure(SystemdBusFailure::UnrecognizedLoadState),
-                &ScanServiceEvidence::ServiceMissing
-            ),
-            "The scan could not be started: systemd reported a unit state Lazaret does not \
-             recognize"
-        );
-    }
 
     #[test]
     fn the_headline_counts_open_decisions() {

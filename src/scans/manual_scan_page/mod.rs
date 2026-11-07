@@ -11,3 +11,4 @@ pub mod scan_progress_view;
 pub mod scan_results_section;
 pub mod scan_run_state;
 pub mod scan_target_row;
+pub mod system_scan_run;

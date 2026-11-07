@@ -6,26 +6,24 @@ use crate::{
     hardening_page::suggested_audit_commands::SuggestedRemedy,
     host_services::{
         clamav_programs::distribution_install_guides::DistributionFamily,
-        desktop::locale_formatting::{MomentFormatters, exact_local_time_text},
+        desktop::locale_formatting::MomentFormatters,
         detection_journal::detection_journal_follower::JournalAccess,
-        protection_evidence::{
-            host_protection_evidence::{
-                AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
-                OnAccessResponse, OnAccessScanner, ProtectionEvidence, ScanServiceEvidence,
-                ScanUnitResult, ScheduledScanEvidence, SignatureEvidence, TimerState, WatchScope,
-                WatchedLocation,
-            },
-            service_run_journal::{ScanRunFindings, ScanRunHistory},
+        protection_evidence::host_protection_evidence::{
+            AccountSettingFinding, EngineInstallation, OnAccessConfig, OnAccessEvidence,
+            OnAccessResponse, OnAccessScanner, ProtectionEvidence, ScanServiceEvidence,
+            ScheduledScanEvidence, SignatureEvidence, TimerState, WatchScope, WatchedLocation,
         },
-        systemd_bus::host_systemd_units::{UnitActivity, UnitState, UnitTimestamp},
+        systemd_bus::host_systemd_units::{UnitActivity, UnitState},
     },
     scans::{
         on_access_page::on_access_presentation::{
             OnAccessStepControls, on_access_condition, on_access_step,
         },
         scan_engine_page::scan_engine_presentation::{
-            daemon_awaited_text, daemon_condition, daemon_is_answering, daemon_step,
-            engine_condition, engine_step,
+            daemon_condition, daemon_is_answering, daemon_step, engine_condition, engine_step,
+        },
+        scheduled_scans_page::scheduled_scans_presentation::{
+            last_scheduled_run_failed, scheduled_scan_condition, scheduled_scan_step,
         },
     },
     shared_widgets::{
@@ -35,12 +33,12 @@ use crate::{
             runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
             step_evidence_builders::{
                 CheckedCondition, MomentContext, evidence_row, no_guidance_step, plain_rows,
-                remedy_commands, timed_evidence_row, unknown_run_text,
+                remedy_commands,
             },
             timeline_step_contents::{
-                ActionConsequence, ActionableEvidenceRow, CancelSlot, EvidenceMoment,
-                EvidenceRowControl, OfferedAction, RunningStep, SettledNodeState, SettledStep,
-                StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState, TimelineStep,
+                ActionConsequence, EvidenceRowControl, OfferedAction, SettledNodeState,
+                SettledStep, StepActionButton, StepActionSlot, StepEvidenceRow, StepNodeState,
+                TimelineStep,
             },
         },
     },
@@ -61,9 +59,9 @@ pub enum ProtectionStepAction {
     OpenDatabaseUpdates,
     OpenScanEngine,
     OpenOnAccessScanning,
-    RunScheduledScan { service_unit: &'static str },
+    OpenScheduledScans,
+    OpenManualScan,
     ReviewSettingsSubpage(SettingsSubpage),
-    SetUpSettingsSubpage(SettingsSubpage),
 }
 
 impl StepActionButton for ProtectionStepAction {
@@ -72,9 +70,9 @@ impl StepActionButton for ProtectionStepAction {
             Self::OpenDatabaseUpdates => gettext("Open Database Updates"),
             Self::OpenScanEngine => gettext("Open Scan Engine"),
             Self::OpenOnAccessScanning => gettext("Open On-Access Scanning"),
-            Self::RunScheduledScan { .. } => gettext("Run Now"),
+            Self::OpenScheduledScans => gettext("Open Scheduled Scans"),
+            Self::OpenManualScan => gettext("Open Manual Scan"),
             Self::ReviewSettingsSubpage(_) => gettext("Review"),
-            Self::SetUpSettingsSubpage(_) => gettext("Set Up"),
         }
     }
 
@@ -83,9 +81,9 @@ impl StepActionButton for ProtectionStepAction {
             Self::OpenDatabaseUpdates
             | Self::OpenScanEngine
             | Self::OpenOnAccessScanning
-            | Self::RunScheduledScan { .. }
-            | Self::ReviewSettingsSubpage(_)
-            | Self::SetUpSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
+            | Self::OpenScheduledScans
+            | Self::OpenManualScan
+            | Self::ReviewSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
         }
     }
 }
@@ -108,7 +106,6 @@ pub struct ProtectionTimeline {
 
 #[derive(Clone)]
 pub struct ProtectionActivity {
-    pub scheduled_scan_starting: bool,
     pub observed_at: Timestamp,
     pub moment_formatters: &'static MomentFormatters,
 }
@@ -137,6 +134,20 @@ fn scan_engine_offer(checked_condition: CheckedCondition) -> StepActionSlot<Prot
     StepActionSlot::ActionOffered(offer_for_condition(
         checked_condition,
         ProtectionStepAction::OpenScanEngine,
+    ))
+}
+
+fn scheduled_scan_offer(
+    scheduled_scan_evidence: &ScheduledScanEvidence,
+    daemon_answering: bool,
+) -> StepActionSlot<ProtectionStepAction> {
+    StepActionSlot::ActionOffered(offer_for_condition(
+        scheduled_scan_condition(scheduled_scan_evidence, daemon_answering),
+        if last_scheduled_run_failed(scheduled_scan_evidence) {
+            ProtectionStepAction::OpenManualScan
+        } else {
+            ProtectionStepAction::OpenScheduledScans
+        },
     ))
 }
 
@@ -344,29 +355,6 @@ fn trust_list_step(trust_list_reading: &TrustListReading) -> Option<ProtectionSt
     ))
 }
 
-impl From<ScanRunHistory> for EvidenceMoment {
-    fn from(run_history: ScanRunHistory) -> Self {
-        match run_history {
-            ScanRunHistory::CompletedScan { finished_at, .. } => Self::PastEvent {
-                happened_at: finished_at,
-            },
-            ScanRunHistory::NoCompletedScan => Self::NeverHappened,
-            ScanRunHistory::JournalUnreadable(_) => Self::CurrentFact,
-        }
-    }
-}
-
-impl From<UnitTimestamp> for EvidenceMoment {
-    fn from(unit_timestamp: UnitTimestamp) -> Self {
-        match unit_timestamp {
-            UnitTimestamp::RecordedAt { recorded_at } => Self::UpcomingEvent {
-                due_at: recorded_at,
-            },
-            UnitTimestamp::NeverRecorded => Self::NothingUpcoming,
-        }
-    }
-}
-
 fn signature_overview_step(
     signature_evidence: &SignatureEvidence,
     moment_context: MomentContext,
@@ -387,235 +375,6 @@ fn signature_overview_step(
             },
         ),
     )
-}
-
-fn next_run_text(next_run: UnitTimestamp) -> String {
-    match next_run {
-        UnitTimestamp::RecordedAt { recorded_at } => exact_local_time_text(recorded_at),
-        UnitTimestamp::NeverRecorded => gettext("Not scheduled"),
-    }
-}
-
-fn next_run_row(next_run: UnitTimestamp, moment_context: MomentContext) -> StepEvidenceRow {
-    let evidence_value = match next_run {
-        UnitTimestamp::RecordedAt { .. } => String::new(),
-        UnitTimestamp::NeverRecorded => gettext("Not scheduled"),
-    };
-    timed_evidence_row(
-        gettext("Next scan"),
-        EvidenceMoment::from(next_run),
-        evidence_value,
-        moment_context,
-    )
-}
-
-fn last_run_row(
-    last_completed_run: ScanRunHistory,
-    moment_context: MomentContext,
-) -> StepEvidenceRow {
-    let evidence_value = match last_completed_run {
-        ScanRunHistory::CompletedScan {
-            scan_findings: ScanRunFindings::ThreatsFound,
-            ..
-        } => gettext("threats found"),
-        ScanRunHistory::CompletedScan {
-            scan_findings: ScanRunFindings::NothingFound,
-            ..
-        } => gettext("nothing found"),
-        ScanRunHistory::NoCompletedScan => gettext("Not run yet"),
-        ScanRunHistory::JournalUnreadable(read_failure) => unknown_run_text(read_failure),
-    };
-    timed_evidence_row(
-        gettext("Last scan"),
-        EvidenceMoment::from(last_completed_run),
-        evidence_value,
-        moment_context,
-    )
-}
-
-const fn scan_result_failed(last_result: &ScanUnitResult) -> bool {
-    match last_result {
-        ScanUnitResult::NothingFound | ScanUnitResult::ThreatsFound => false,
-        ScanUnitResult::ScannerError { .. } | ScanUnitResult::ServiceFailed { .. } => true,
-    }
-}
-
-fn scanned_folders_text(scan_service: &ScanServiceEvidence) -> String {
-    match scan_service {
-        ScanServiceEvidence::ServiceConfigured { scan_targets, .. } => scan_targets.join("\n"),
-        ScanServiceEvidence::ServiceMissing | ScanServiceEvidence::ServiceUnreadable => {
-            gettext("Unknown")
-        }
-    }
-}
-
-pub const fn scheduled_scan_condition(
-    scheduled_scan_evidence: &ScheduledScanEvidence,
-    daemon_answering: bool,
-) -> CheckedCondition {
-    match scheduled_scan_evidence {
-        ScheduledScanEvidence::SystemTimer {
-            timer_state: TimerState::TimerInactive | TimerState::TimerActive { .. },
-            ..
-        } if !daemon_answering => CheckedCondition::PrerequisiteMissing,
-        ScheduledScanEvidence::SystemTimer {
-            timer_state: TimerState::TimerInactive,
-            ..
-        } => CheckedCondition::ConditionFailed,
-        ScheduledScanEvidence::SystemTimer {
-            timer_state: TimerState::TimerActive { .. },
-            scan_service,
-            ..
-        } => match scan_service {
-            ScanServiceEvidence::ServiceConfigured { last_result, .. }
-                if scan_result_failed(last_result) =>
-            {
-                CheckedCondition::ReviewSuggested
-            }
-            ScanServiceEvidence::ServiceConfigured { .. } => CheckedCondition::ConditionMet,
-            ScanServiceEvidence::ServiceMissing => CheckedCondition::ReviewSuggested,
-            ScanServiceEvidence::ServiceUnreadable => CheckedCondition::EvidenceUnknown,
-        },
-        ScheduledScanEvidence::LazaretSchedule => CheckedCondition::ConditionMet,
-        ScheduledScanEvidence::NoSchedule => CheckedCondition::ReviewSuggested,
-    }
-}
-
-fn scheduled_scan_step(
-    scheduled_scan_evidence: &ScheduledScanEvidence,
-    scheduled_scan_starting: bool,
-    daemon_answering: bool,
-    moment_context: MomentContext,
-    distribution_family: DistributionFamily,
-) -> ProtectionStep {
-    let step_title = gettext("Scheduled scan");
-    let mechanism_details = gettext(
-        "A scheduled scan catches files that were not opened, or that only became detectable \
-         after a signature update.",
-    );
-    let node_state =
-        scheduled_scan_condition(scheduled_scan_evidence, daemon_answering).node_state();
-    match scheduled_scan_evidence {
-        ScheduledScanEvidence::SystemTimer {
-            service_unit,
-            timer_state,
-            scan_service,
-            last_completed_run,
-        } => {
-            let next_scan_row = match timer_state {
-                TimerState::TimerActive { next_run } => next_run_row(*next_run, moment_context),
-                TimerState::TimerInactive => evidence_row(
-                    gettext("Next scan"),
-                    gettext("Not scheduled, because the timer is not active"),
-                ),
-            };
-            let folders_row = StepEvidenceRow {
-                evidence_moment: EvidenceMoment::SettingValue,
-                ..evidence_row(
-                    gettext("Folders scanned"),
-                    scanned_folders_text(scan_service),
-                )
-            };
-            let scan_rows = |last_scan_control| {
-                vec![
-                    next_scan_row.clone().into(),
-                    ActionableEvidenceRow {
-                        shown_evidence: last_run_row(*last_completed_run, moment_context),
-                        row_control: last_scan_control,
-                    },
-                    folders_row.clone().into(),
-                ]
-            };
-            let run_now_control = EvidenceRowControl::RowButton(OfferedAction::plain(
-                ProtectionStepAction::RunScheduledScan { service_unit },
-            ));
-            let settled_scan_step = |node_state, status_text, last_scan_control| {
-                TimelineStep::settled(
-                    step_title.clone(),
-                    mechanism_details.clone(),
-                    status_text,
-                    SettledStep {
-                        evidence_rows: scan_rows(last_scan_control),
-                        ..SettledStep::without_offers(node_state)
-                    },
-                )
-            };
-            match timer_state {
-                TimerState::TimerInactive | TimerState::TimerActive { .. } if !daemon_answering => {
-                    settled_scan_step(
-                        node_state,
-                        daemon_awaited_text(),
-                        EvidenceRowControl::NoRowControl,
-                    )
-                }
-                TimerState::TimerInactive => settled_scan_step(
-                    node_state,
-                    gettext("The system timer is not active"),
-                    run_now_control,
-                ),
-                TimerState::TimerActive { .. } if scheduled_scan_starting => TimelineStep::running(
-                    step_title.clone(),
-                    mechanism_details.clone(),
-                    gettext("Starting the scan…"),
-                    RunningStep {
-                        evidence_rows: vec![
-                            next_scan_row.clone(),
-                            last_run_row(*last_completed_run, moment_context),
-                            folders_row.clone(),
-                        ],
-                        cancel_slot: CancelSlot::NotCancellable,
-                    },
-                ),
-                TimerState::TimerActive { next_run } => match scan_service {
-                    ScanServiceEvidence::ServiceConfigured { last_result, .. }
-                        if scan_result_failed(last_result) =>
-                    {
-                        settled_scan_step(
-                            node_state,
-                            gettext("The last scan ended with an error"),
-                            run_now_control,
-                        )
-                    }
-                    ScanServiceEvidence::ServiceConfigured { .. } => settled_scan_step(
-                        node_state,
-                        gettext("Next scan: {time}").replace("{time}", &next_run_text(*next_run)),
-                        run_now_control,
-                    ),
-                    ScanServiceEvidence::ServiceMissing => settled_scan_step(
-                        node_state,
-                        gettext("The timer starts a scan service that is not installed"),
-                        run_now_control,
-                    ),
-                    ScanServiceEvidence::ServiceUnreadable => settled_scan_step(
-                        node_state,
-                        gettext("The scan service could not be read from systemd"),
-                        run_now_control,
-                    ),
-                },
-            }
-        }
-        ScheduledScanEvidence::LazaretSchedule => no_guidance_step(
-            step_title,
-            mechanism_details,
-            node_state,
-            gettext("Scheduled by Lazaret"),
-        ),
-        ScheduledScanEvidence::NoSchedule => TimelineStep::settled(
-            step_title,
-            mechanism_details,
-            gettext("No scan is scheduled"),
-            SettledStep {
-                header_action: StepActionSlot::ActionOffered(OfferedAction::suggested(
-                    ProtectionStepAction::SetUpSettingsSubpage(SettingsSubpage::ScanSchedule),
-                )),
-                ..SettledStep::without_offers(node_state)
-            },
-        )
-        .with_guidance_commands(remedy_commands(
-            SuggestedRemedy::ScheduledScanEnable,
-            distribution_family,
-        )),
-    }
 }
 
 pub fn alerts_condition(
@@ -784,10 +543,13 @@ pub fn protection_timeline(
             ),
             scheduled_scan_step(
                 &protection_evidence.scheduled_scan_evidence,
-                protection_activity.scheduled_scan_starting,
                 daemon_answering,
                 protection_activity.moment_context(),
                 distribution_family,
+                scheduled_scan_offer(
+                    &protection_evidence.scheduled_scan_evidence,
+                    daemon_answering,
+                ),
             ),
             alerts_step(
                 alert_readiness,
@@ -839,22 +601,21 @@ mod protection_timeline_presentation_tests {
                 host_protection_evidence::{
                     ClamdConfigReadFailure, DaemonEvidence, OnAccessSizeLimit, OverridesChangeTime,
                     OverridesReadFailure, ProgramTrustFinding, ProgramTrustInspection,
-                    ReducedSetting, RuntimeReductions,
+                    ReducedSetting, RuntimeReductions, ScanUnitResult,
                 },
                 protection_evidence_fixtures::{
                     REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
                 },
+                service_run_journal::{ScanRunFindings, ScanRunHistory},
             },
-            systemd_bus::host_systemd_units::ServiceFailureKind,
-            systemd_journal::unit_journal_reader::UnitJournalReadFailure,
+            systemd_bus::host_systemd_units::UnitTimestamp,
         },
-        shared_widgets::step_timeline::timeline_step_contents::StepPhase,
+        shared_widgets::step_timeline::timeline_step_contents::{EvidenceMoment, StepPhase},
         sharing::analysis_page::trusted_detections_page::trust_list_contents::TrustListReadFailure,
     };
 
     fn idle_activity() -> ProtectionActivity {
         ProtectionActivity {
-            scheduled_scan_starting: false,
             observed_at: REFERENCE_MOMENT,
             moment_formatters: english_formatters(),
         }
@@ -1051,16 +812,13 @@ mod protection_timeline_presentation_tests {
             row_named(scheduled_step, "Next scan").evidence_value,
             "in 3 days"
         );
-        let last_scan_row = row_named(scheduled_step, "Last scan");
-        assert_eq!(last_scan_row.evidence_value, "2 hours ago · nothing found");
-        assert!(matches!(
-            row_control_named(scheduled_step, "Last scan"),
-            EvidenceRowControl::RowButton(OfferedAction {
-                offered_action: ProtectionStepAction::RunScheduledScan { .. },
-                ..
-            })
-        ));
-        assert_eq!(scheduled_step.header_offer(), None);
+        assert!(
+            scheduled_step
+                .offered_actions()
+                .iter()
+                .all(|offered_action| offered_action.offered_action
+                    == ProtectionStepAction::OpenScheduledScans)
+        );
         let on_access_step = step_titled(&healthy_steps, "On-access blocking");
         assert_eq!(
             row_named(on_access_step, "Watched folders").evidence_moment,
@@ -1091,24 +849,6 @@ mod protection_timeline_presentation_tests {
             signature_step
                 .status_text
                 .starts_with("Definitions built 5 hours ago (")
-        );
-    }
-
-    #[test]
-    fn a_starting_scan_is_in_progress_and_cannot_be_started_twice() {
-        let starting_timeline = timeline_with(
-            &healthy_evidence(),
-            &ProtectionActivity {
-                scheduled_scan_starting: true,
-                ..idle_activity()
-            },
-        );
-        let scheduled_step = step_titled(&starting_timeline.protection_steps, "Scheduled scan");
-        assert_eq!(scheduled_step.node_state(), StepNodeState::InProgress);
-        assert_eq!(scheduled_step.offered_actions(), Vec::new());
-        assert_eq!(
-            row_named(scheduled_step, "Last scan").evidence_value,
-            "Not run yet"
         );
     }
 
@@ -1153,26 +893,34 @@ mod protection_timeline_presentation_tests {
     }
 
     #[test]
-    fn an_unreadable_scan_service_after_a_readable_timer_needs_review() {
+    fn an_unreadable_scan_service_claims_no_scheduled_coverage() {
         let unreadable_service = system_timer_with(ScanServiceEvidence::ServiceUnreadable);
-        let scheduled_steps = all_steps(idle_timeline(&unreadable_service));
-        let scheduled_step = step_titled(&scheduled_steps, "Scheduled scan");
-        assert_eq!(scheduled_step.node_state(), StepNodeState::NeedsReview);
-        assert_eq!(
-            scheduled_step.status_text,
-            "The scan service could not be read from systemd"
-        );
         assert!(!coverage_summary(&unreadable_service).contains("scanned on a schedule"));
     }
 
     #[test]
-    fn a_missing_scan_service_is_not_reported_as_completed() {
+    fn a_failed_scheduled_run_opens_the_manual_scan_page_to_run_it_again() {
+        let failed_run = system_timer_with(ScanServiceEvidence::ServiceConfigured {
+            scan_targets: vec!["/tmp".to_owned()],
+            last_result: ScanUnitResult::ScannerError { exit_status: 2 },
+        });
+        let protection_steps = idle_timeline(&failed_run).protection_steps;
         assert_eq!(
-            state_of(
-                &system_timer_with(ScanServiceEvidence::ServiceMissing),
-                "Scheduled scan"
-            ),
-            StepNodeState::NeedsReview
+            step_titled(&protection_steps, "Scheduled scan").header_offer(),
+            Some(OfferedAction::suggested(
+                ProtectionStepAction::OpenManualScan
+            ))
+        );
+        let no_schedule = ProtectionEvidence {
+            scheduled_scan_evidence: ScheduledScanEvidence::NoSchedule,
+            ..healthy_evidence()
+        };
+        let protection_steps = idle_timeline(&no_schedule).protection_steps;
+        assert_eq!(
+            step_titled(&protection_steps, "Scheduled scan").header_offer(),
+            Some(OfferedAction::suggested(
+                ProtectionStepAction::OpenScheduledScans
+            ))
         );
     }
 
@@ -1403,17 +1151,6 @@ mod protection_timeline_presentation_tests {
         );
     }
 
-    #[test]
-    fn finding_threats_is_not_a_scan_failure_but_a_scanner_error_is() {
-        assert!(!scan_result_failed(&ScanUnitResult::ThreatsFound));
-        assert!(scan_result_failed(&ScanUnitResult::ScannerError {
-            exit_status: 2
-        }));
-        assert!(scan_result_failed(&ScanUnitResult::ServiceFailed {
-            failure_kind: ServiceFailureKind::TimedOut
-        }));
-    }
-
     fn alert_step_state(
         alert_readiness: &AlertReadiness,
         background_service_state: UnitState,
@@ -1513,39 +1250,6 @@ mod protection_timeline_presentation_tests {
     }
 
     #[test]
-    fn an_unreadable_scan_journal_is_unknown_rather_than_not_run_yet() {
-        let read_failure = UnitJournalReadFailure::ReadingTaskInterrupted;
-        let ScheduledScanEvidence::SystemTimer {
-            service_unit,
-            timer_state,
-            scan_service,
-            ..
-        } = healthy_evidence().scheduled_scan_evidence
-        else {
-            panic!("the healthy evidence has a system timer");
-        };
-        let protection_evidence = ProtectionEvidence {
-            scheduled_scan_evidence: ScheduledScanEvidence::SystemTimer {
-                service_unit,
-                timer_state,
-                scan_service,
-                last_completed_run: ScanRunHistory::JournalUnreadable(read_failure),
-            },
-            ..healthy_evidence()
-        };
-        let protection_steps = idle_timeline(&protection_evidence).protection_steps;
-        let last_scan_value = &row_named(
-            step_titled(&protection_steps, "Scheduled scan"),
-            "Last scan",
-        )
-        .evidence_value;
-        assert_eq!(
-            last_scan_value,
-            "Unknown. Reading the system journal stopped before it finished"
-        );
-    }
-
-    #[test]
     fn an_active_daemon_that_does_not_answer_leaves_on_access_waiting() {
         let protection_evidence = ProtectionEvidence {
             daemon_evidence: DaemonEvidence::UnitActiveNotAnswering {
@@ -1604,12 +1308,9 @@ mod protection_timeline_presentation_tests {
             },
             ..healthy_evidence()
         };
-        let protection_steps = idle_timeline(&protection_evidence).protection_steps;
-        let scheduled_step = step_titled(&protection_steps, "Scheduled scan");
-        assert_eq!(scheduled_step.node_state(), StepNodeState::HasFailed);
         assert_eq!(
-            row_named(scheduled_step, "Next scan").evidence_value,
-            "Not scheduled, because the timer is not active"
+            state_of(&protection_evidence, "Scheduled scan"),
+            StepNodeState::HasFailed
         );
         assert!(!coverage_summary(&protection_evidence).contains("scanned on a schedule"));
     }

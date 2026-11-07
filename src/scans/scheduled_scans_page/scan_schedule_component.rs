@@ -25,14 +25,14 @@ use crate::{
 
 const SYSTEM_SCAN_TIMER: &str = "clamdscan.timer";
 
-pub struct ScanSchedulePage {
+pub struct ScanScheduleSection {
     stored_settings: gio::Settings,
     schedule_settings: StoredScheduleSettings,
     scan_targets_text: String,
     entry_texts_replaced: bool,
     user_timer_view: UserTimerView,
     system_schedule_owner: SystemScheduleOwner,
-    page_notice: SchedulePageNotice,
+    page_notice: ScheduleSectionNotice,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,14 +42,14 @@ pub enum UserTimerView {
 }
 
 #[derive(Debug)]
-pub enum SchedulePageNotice {
+pub enum ScheduleSectionNotice {
     NoNoticeShown,
     ScanTimeUnreadable,
     ScheduleNotApplied(ScheduleApplyFailure),
 }
 
 #[derive(Debug)]
-pub enum ScanSchedulePageInput {
+pub enum ScanScheduleSectionInput {
     ScheduleToggled(bool),
     FrequencyChosen(u32),
     TimeTextChanged(String),
@@ -63,7 +63,7 @@ pub enum ScanSchedulePageInput {
 }
 
 #[derive(Debug)]
-pub enum ScanSchedulePageCommand {
+pub enum ScanScheduleSectionCommand {
     TimerStateLoaded(ScheduleTimerState),
     SystemTimerInspected(SystemScheduleOwner),
     ScheduleApplied(Result<(), ScheduleApplyFailure>),
@@ -124,20 +124,20 @@ fn describe_schedule_group(
     }
 }
 
-fn describe_page_notice(page_notice: &SchedulePageNotice) -> String {
+fn describe_page_notice(page_notice: &ScheduleSectionNotice) -> String {
     match page_notice {
-        SchedulePageNotice::NoNoticeShown => String::new(),
-        SchedulePageNotice::ScanTimeUnreadable => {
+        ScheduleSectionNotice::NoNoticeShown => String::new(),
+        ScheduleSectionNotice::ScanTimeUnreadable => {
             gettext("Enter the scan time as HH:MM, for example 02:00.")
         }
-        SchedulePageNotice::ScheduleNotApplied(apply_failure) => {
+        ScheduleSectionNotice::ScheduleNotApplied(apply_failure) => {
             describe_apply_failure(apply_failure)
         }
     }
 }
 
-const fn shows_page_notice(page_notice: &SchedulePageNotice) -> bool {
-    !matches!(page_notice, SchedulePageNotice::NoNoticeShown)
+const fn shows_page_notice(page_notice: &ScheduleSectionNotice) -> bool {
+    !matches!(page_notice, ScheduleSectionNotice::NoNoticeShown)
 }
 
 fn describe_apply_failure(apply_failure: &ScheduleApplyFailure) -> String {
@@ -200,15 +200,15 @@ pub const fn allows_applying_schedule(system_schedule_owner: &SystemScheduleOwne
     matches!(system_schedule_owner, SystemScheduleOwner::NoSystemTimer)
 }
 
-impl ScanSchedulePage {
+impl ScanScheduleSection {
     fn inspect_timers(sender: &ComponentSender<Self>) {
         sender.oneshot_command(async {
-            ScanSchedulePageCommand::SystemTimerInspected(system_schedule_owner(
+            ScanScheduleSectionCommand::SystemTimerInspected(system_schedule_owner(
                 timer_unit_snapshot(SYSTEM_SCAN_TIMER).await,
             ))
         });
         sender.oneshot_command(async {
-            ScanSchedulePageCommand::TimerStateLoaded(read_schedule_timer_state().await)
+            ScanScheduleSectionCommand::TimerStateLoaded(read_schedule_timer_state().await)
         });
     }
 
@@ -233,19 +233,20 @@ impl ScanSchedulePage {
 }
 
 #[relm4::component(pub)]
-impl Component for ScanSchedulePage {
+impl Component for ScanScheduleSection {
     type Init = ();
-    type Input = ScanSchedulePageInput;
+    type Input = ScanScheduleSectionInput;
     type Output = ();
-    type CommandOutput = ScanSchedulePageCommand;
+    type CommandOutput = ScanScheduleSectionCommand;
 
     view! {
-        adw::PreferencesPage {
-            set_title: &gettext("Scheduled"),
-            set_icon_name: Some("alarm-symbolic"),
+        adw::PreferencesGroup {
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 12,
 
-            add = &adw::PreferencesGroup {
-                set_title: &gettext("Scheduled Scans"),
+            adw::PreferencesGroup {
+                set_title: &gettext("Schedule"),
                 #[watch]
                 set_sensitive: allows_applying_schedule(&model.system_schedule_owner),
                 #[watch]
@@ -258,7 +259,7 @@ impl Component for ScanSchedulePage {
                     set_label: &gettext("Apply"),
                     set_valign: gtk::Align::Center,
                     add_css_class: "suggested-action",
-                    connect_clicked => ScanSchedulePageInput::ApplyRequested,
+                    connect_clicked => ScanScheduleSectionInput::ApplyRequested,
                 },
 
                 adw::SwitchRow {
@@ -267,7 +268,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(schedule_toggled_handler)]
                     set_active: model.schedule_settings.schedule_enabled,
                     connect_active_notify[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::ScheduleToggled(changed_row.is_active()));
+                        sender.input(ScanScheduleSectionInput::ScheduleToggled(changed_row.is_active()));
                     } @schedule_toggled_handler,
                 },
 
@@ -278,7 +279,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(frequency_chosen_handler)]
                     set_selected: frequency_position(model.schedule_settings.frequency_choice),
                     connect_selected_notify[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::FrequencyChosen(changed_row.selected()));
+                        sender.input(ScanScheduleSectionInput::FrequencyChosen(changed_row.selected()));
                     } @frequency_chosen_handler,
                 },
 
@@ -288,7 +289,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(time_changed_handler)]
                     set_text: &model.schedule_settings.schedule_time_text,
                     connect_changed[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::TimeTextChanged(changed_row.text().to_string()));
+                        sender.input(ScanScheduleSectionInput::TimeTextChanged(changed_row.text().to_string()));
                     } @time_changed_handler,
                 },
 
@@ -300,7 +301,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(weekday_chosen_handler)]
                     set_selected: model.schedule_settings.weekday_position,
                     connect_selected_notify[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::WeekdayChosen(changed_row.selected()));
+                        sender.input(ScanScheduleSectionInput::WeekdayChosen(changed_row.selected()));
                     } @weekday_chosen_handler,
                 },
 
@@ -312,7 +313,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(month_day_handler)]
                     set_value: f64::from(model.schedule_settings.month_day),
                     connect_value_notify[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::MonthDayChanged(changed_row.value()));
+                        sender.input(ScanScheduleSectionInput::MonthDayChanged(changed_row.value()));
                     } @month_day_handler,
                 },
 
@@ -322,7 +323,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(targets_changed_handler)]
                     set_text: &model.scan_targets_text,
                     connect_changed[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::TargetsTextChanged(changed_row.text().to_string()));
+                        sender.input(ScanScheduleSectionInput::TargetsTextChanged(changed_row.text().to_string()));
                     } @targets_changed_handler,
                 },
 
@@ -333,7 +334,7 @@ impl Component for ScanSchedulePage {
                     #[block_signal(battery_skip_handler)]
                     set_active: model.schedule_settings.skip_on_battery,
                     connect_active_notify[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::BatterySkipToggled(changed_row.is_active()));
+                        sender.input(ScanScheduleSectionInput::BatterySkipToggled(changed_row.is_active()));
                     } @battery_skip_handler,
                 },
 
@@ -344,21 +345,20 @@ impl Component for ScanSchedulePage {
                     #[block_signal(auto_quarantine_handler)]
                     set_active: model.schedule_settings.auto_quarantine,
                     connect_active_notify[sender] => move |changed_row| {
-                        sender.input(ScanSchedulePageInput::AutoQuarantineToggled(changed_row.is_active()));
+                        sender.input(ScanScheduleSectionInput::AutoQuarantineToggled(changed_row.is_active()));
                     } @auto_quarantine_handler,
                 },
             },
 
-            add = &adw::PreferencesGroup {
-                gtk::Label {
-                    set_xalign: 0.0,
-                    set_wrap: true,
-                    add_css_class: "error",
-                    #[watch]
-                    set_visible: shows_page_notice(&model.page_notice),
-                    #[watch]
-                    set_label: &describe_page_notice(&model.page_notice),
-                },
+            gtk::Label {
+                set_xalign: 0.0,
+                set_wrap: true,
+                add_css_class: "error",
+                #[watch]
+                set_visible: shows_page_notice(&model.page_notice),
+                #[watch]
+                set_label: &describe_page_notice(&model.page_notice),
+            },
             },
         }
     }
@@ -369,7 +369,7 @@ impl Component for ScanSchedulePage {
             &stored_settings,
             &SCHEDULE_SETTING_KEYS,
             sender.input_sender(),
-            |_changed_settings, _changed_key| ScanSchedulePageInput::StoredSettingChanged,
+            |_changed_settings, _changed_key| ScanScheduleSectionInput::StoredSettingChanged,
         );
         let schedule_settings = StoredScheduleSettings::read_from(&stored_settings);
         let model = Self {
@@ -379,7 +379,7 @@ impl Component for ScanSchedulePage {
             stored_settings,
             user_timer_view: UserTimerView::ReadingUserTimer,
             system_schedule_owner: SystemScheduleOwner::InspectingSystemTimer,
-            page_notice: SchedulePageNotice::NoNoticeShown,
+            page_notice: ScheduleSectionNotice::NoNoticeShown,
         };
         let widgets = view_output!();
         Self::inspect_timers(&sender);
@@ -388,77 +388,77 @@ impl Component for ScanSchedulePage {
 
     fn update(
         &mut self,
-        page_input: ScanSchedulePageInput,
+        page_input: ScanScheduleSectionInput,
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         self.entry_texts_replaced = false;
         match page_input {
-            ScanSchedulePageInput::ScheduleToggled(schedule_enabled) => {
+            ScanScheduleSectionInput::ScheduleToggled(schedule_enabled) => {
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.schedule_enabled = schedule_enabled;
                 });
             }
-            ScanSchedulePageInput::FrequencyChosen(chosen_position) => {
+            ScanScheduleSectionInput::FrequencyChosen(chosen_position) => {
                 if let Some(schedule_frequency) = frequency_at(chosen_position) {
                     self.change_schedule_settings(|schedule_settings| {
                         schedule_settings.frequency_choice = schedule_frequency;
                     });
                 }
             }
-            ScanSchedulePageInput::TimeTextChanged(schedule_time_text) => {
+            ScanScheduleSectionInput::TimeTextChanged(schedule_time_text) => {
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.schedule_time_text = schedule_time_text;
                 });
             }
-            ScanSchedulePageInput::WeekdayChosen(weekday_position) => {
+            ScanScheduleSectionInput::WeekdayChosen(weekday_position) => {
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.weekday_position = weekday_position;
                 });
             }
-            ScanSchedulePageInput::MonthDayChanged(spin_value) => {
+            ScanScheduleSectionInput::MonthDayChanged(spin_value) => {
                 let month_day = spin_value.clamp(1.0, 28.0) as u32;
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.month_day = month_day;
                 });
             }
-            ScanSchedulePageInput::TargetsTextChanged(scan_targets_text) => {
+            ScanScheduleSectionInput::TargetsTextChanged(scan_targets_text) => {
                 let scan_targets = listed_scan_targets(&scan_targets_text);
                 self.scan_targets_text = scan_targets_text;
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.scan_targets = scan_targets;
                 });
             }
-            ScanSchedulePageInput::BatterySkipToggled(skip_on_battery) => {
+            ScanScheduleSectionInput::BatterySkipToggled(skip_on_battery) => {
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.skip_on_battery = skip_on_battery;
                 });
             }
-            ScanSchedulePageInput::AutoQuarantineToggled(auto_quarantine) => {
+            ScanScheduleSectionInput::AutoQuarantineToggled(auto_quarantine) => {
                 self.change_schedule_settings(|schedule_settings| {
                     schedule_settings.auto_quarantine = auto_quarantine;
                 });
             }
-            ScanSchedulePageInput::StoredSettingChanged => self.show_stored_settings(),
-            ScanSchedulePageInput::ApplyRequested => {
+            ScanScheduleSectionInput::StoredSettingChanged => self.show_stored_settings(),
+            ScanScheduleSectionInput::ApplyRequested => {
                 if !allows_applying_schedule(&self.system_schedule_owner) {
                     return;
                 }
-                self.page_notice = SchedulePageNotice::NoNoticeShown;
+                self.page_notice = ScheduleSectionNotice::NoNoticeShown;
                 if !self.schedule_settings.schedule_enabled {
                     sender.oneshot_command(async {
-                        ScanSchedulePageCommand::ScheduleApplied(
+                        ScanScheduleSectionCommand::ScheduleApplied(
                             disable_scan_schedule(systemd_user_unit_directory()).await,
                         )
                     });
                     return;
                 }
                 let Some(scan_schedule) = self.schedule_settings.scan_schedule() else {
-                    self.page_notice = SchedulePageNotice::ScanTimeUnreadable;
+                    self.page_notice = ScheduleSectionNotice::ScanTimeUnreadable;
                     return;
                 };
                 sender.oneshot_command(async move {
-                    ScanSchedulePageCommand::ScheduleApplied(
+                    ScanScheduleSectionCommand::ScheduleApplied(
                         enable_scan_schedule(systemd_user_unit_directory(), scan_schedule).await,
                     )
                 });
@@ -468,21 +468,21 @@ impl Component for ScanSchedulePage {
 
     fn update_cmd(
         &mut self,
-        page_command: ScanSchedulePageCommand,
+        page_command: ScanScheduleSectionCommand,
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         self.entry_texts_replaced = false;
         match page_command {
-            ScanSchedulePageCommand::TimerStateLoaded(timer_state) => {
+            ScanScheduleSectionCommand::TimerStateLoaded(timer_state) => {
                 self.user_timer_view = UserTimerView::UserTimerRead(timer_state);
             }
-            ScanSchedulePageCommand::SystemTimerInspected(system_schedule_owner) => {
+            ScanScheduleSectionCommand::SystemTimerInspected(system_schedule_owner) => {
                 self.system_schedule_owner = system_schedule_owner;
             }
-            ScanSchedulePageCommand::ScheduleApplied(apply_outcome) => {
+            ScanScheduleSectionCommand::ScheduleApplied(apply_outcome) => {
                 if let Err(apply_failure) = apply_outcome {
-                    self.page_notice = SchedulePageNotice::ScheduleNotApplied(apply_failure);
+                    self.page_notice = ScheduleSectionNotice::ScheduleNotApplied(apply_failure);
                 }
                 self.user_timer_view = UserTimerView::ReadingUserTimer;
                 Self::inspect_timers(&sender);

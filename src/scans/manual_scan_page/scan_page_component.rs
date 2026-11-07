@@ -15,11 +15,13 @@ use relm4::{
 use tempfile::NamedTempFile;
 
 use crate::{
-    application_window::application_pages::ApplicationPage,
+    application_window::{
+        application_pages::ApplicationPage, protection_evidence_refresh::GatheredEvidence,
+    },
     host_services::{
         activity_history::activity_history_database::{
             ActivityHistory, ActivityHistoryFailure, ActivityRecord, FoundThreatCount,
-            NewActivityEntry, ScanActivityStatus,
+            NewActivityEntry, ScanActivityStatus, ScanOrigin,
         },
         clamav_config::detection_options::read_host_clamscan_detection_arguments,
         clamav_scanner::{
@@ -40,7 +42,13 @@ use crate::{
             },
             stored_settings_watch::forward_setting_changes,
         },
+        protection_evidence::host_protection_evidence::{
+            ScanServiceEvidence, scan_service_evidence,
+        },
         quarantine_vault::quarantine_entry_database::QuarantineVault,
+        systemd_bus::host_systemd_units::{
+            UnitStartOutcome, service_unit_snapshot, start_system_unit,
+        },
     },
     scans::manual_scan_page::{
         device_auto_scan_page::device_mount_scans::{
@@ -76,14 +84,19 @@ use crate::{
             scan_target_name, scanner_program_trust, unlisted_notice_lines,
         },
         scan_target_row::{ScanTargetRow, ScanTargetRowOutput},
+        system_scan_run::{
+            SystemScanControl, SystemScanStart, scan_found_threats, unit_run_toast_text,
+        },
     },
     shared_widgets::{
         awaited_dialogs::{chosen_files_to_open, chosen_folders_to_open, deliver_local_outcome},
         component_streams::run_stream_then,
+        loading_indicators::{BUSY_PAGE_NAME, IDLE_PAGE_NAME, busy_page_name},
     },
 };
 
 const PROGRESS_BATCH_SIZE: usize = 256;
+const FOUND_THREATS_TOAST_SECONDS: u32 = 10;
 
 enum ProfileManagerView {
     ManagerClosed,
@@ -149,6 +162,7 @@ pub struct ScanPage {
     scan_options_section: Controller<ScanOptionsSection>,
     stored_settings: gio::Settings,
     device_auto_scan_settings: DeviceAutoScanSettings,
+    system_scan_control: SystemScanControl,
     _device_monitor: gio::VolumeMonitor,
     toaster: Toaster,
 }
@@ -176,12 +190,15 @@ pub enum ScanPageInput {
     ExportResultsRequested,
     ToastRequested(String),
     QuarantineEntriesChanged,
+    EvidenceGathered(GatheredEvidence),
+    SystemScanRequested,
 }
 
 #[derive(Debug)]
 pub enum ScanPageOutput {
     QuarantineEntriesChanged,
     ActivityRecorded,
+    EvidenceRefreshRequested,
 }
 
 #[derive(Debug)]
@@ -205,6 +222,28 @@ pub enum ScanPageCommand {
         mount_path: PathBuf,
         passes_limits: bool,
     },
+    SystemScanFinished {
+        start_outcome: UnitStartOutcome,
+        scan_service: ScanServiceEvidence,
+    },
+}
+
+fn system_scan_toast(
+    start_outcome: &UnitStartOutcome,
+    scan_service: &ScanServiceEvidence,
+) -> adw::Toast {
+    let run_toast = adw::Toast::builder()
+        .title(unit_run_toast_text(start_outcome, scan_service))
+        .use_markup(false)
+        .build();
+    if scan_found_threats(start_outcome, scan_service) {
+        run_toast.set_button_label(Some(&gettext("Review")));
+        run_toast.set_action_name(Some("win.show-page"));
+        run_toast
+            .set_action_target_value(Some(&ApplicationPage::Detections.page_name().to_variant()));
+        run_toast.set_timeout(FOUND_THREATS_TOAST_SECONDS);
+    }
+    run_toast
 }
 
 fn close_enclosing_popover(clicked_button: &gtk::Button) {
@@ -543,6 +582,7 @@ fn finished_scan_activity(finished_scan: &FinishedScan) -> NewActivityEntry {
             scan_targets: scan_run.scan_targets.clone(),
             inspected_file_count: scan_outcome.inspected_file_count,
             scan_status,
+            scan_origin: ScanOrigin::ManualScan,
         },
         duration_millis: finished_scan.elapsed_time.as_millis() as u64,
         activity_output: scan_run.scan_outcome.noteworthy_output.clone(),
@@ -784,6 +824,36 @@ impl Component for ScanPage {
                         },
 
                         adw::PreferencesGroup {
+                            set_title: &gettext("System scan"),
+                            #[watch]
+                            set_description: Some(&gtk::glib::markup_escape_text(&model.system_scan_control.group_description())),
+                            #[watch]
+                            set_visible: model.scan_page_state.shows_scan_settings() && model.system_scan_control.shows_system_scan(),
+
+                            adw::ActionRow {
+                                set_use_markup: false,
+                                set_title: &gettext("Folders scanned"),
+                                #[watch]
+                                set_subtitle: &model.system_scan_control.scanned_folders_text(),
+
+                                add_suffix = &gtk::Stack {
+                                    add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
+                                        set_label: &gettext("Run Now"),
+                                        set_valign: gtk::Align::Center,
+                                        #[watch]
+                                        set_sensitive: model.system_scan_control.accepts_run(),
+                                        connect_clicked => ScanPageInput::SystemScanRequested,
+                                    },
+                                    add_named[Some(BUSY_PAGE_NAME)] = &adw::Spinner {
+                                        set_tooltip_text: Some(&gettext("Starting the scan…")),
+                                    },
+                                    #[watch]
+                                    set_visible_child_name: busy_page_name(model.system_scan_control.run_is_starting()),
+                                },
+                            },
+                        },
+
+                        adw::PreferencesGroup {
                             set_title: &gettext("Found so far"),
                             set_margin_top: 12,
                             #[watch]
@@ -906,6 +976,7 @@ impl Component for ScanPage {
             scanner_program_trust: ScannerProgramTrust::ProgramsTrusted,
             scan_options_section: ScanOptionsSection::builder().launch(()).detach(),
             device_auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
+            system_scan_control: SystemScanControl::new(),
             stored_settings,
             _device_monitor: device_monitor,
             toaster: Toaster::new(&root),
@@ -1047,6 +1118,27 @@ impl Component for ScanPage {
             ScanPageInput::QuarantineEntriesChanged => {
                 let _shell_closed = sender.output(ScanPageOutput::QuarantineEntriesChanged);
             }
+            ScanPageInput::EvidenceGathered(GatheredEvidence::Gathered {
+                protection_evidence,
+                ..
+            }) => self
+                .system_scan_control
+                .evidence_gathered(&protection_evidence),
+            ScanPageInput::EvidenceGathered(GatheredEvidence::NotGatheredYet) => {}
+            ScanPageInput::SystemScanRequested => match self.system_scan_control.run_requested() {
+                SystemScanStart::StartServiceUnit { service_unit } => {
+                    sender.oneshot_command(async move {
+                        let start_outcome = start_system_unit(service_unit).await;
+                        ScanPageCommand::SystemScanFinished {
+                            start_outcome,
+                            scan_service: scan_service_evidence(
+                                service_unit_snapshot(service_unit).await,
+                            ),
+                        }
+                    });
+                }
+                SystemScanStart::NothingToStart => {}
+            },
         }
     }
 
@@ -1151,6 +1243,15 @@ impl Component for ScanPage {
             }
             ScanPageCommand::ActivityRecordingFinished(Err(recording_failure)) => {
                 self.page_notice = ScanPageNotice::ScanNotRecorded(recording_failure);
+            }
+            ScanPageCommand::SystemScanFinished {
+                start_outcome,
+                scan_service,
+            } => {
+                self.system_scan_control.run_finished();
+                self.toaster
+                    .add_toast(system_scan_toast(&start_outcome, &scan_service));
+                let _shell_closed = sender.output(ScanPageOutput::EvidenceRefreshRequested);
             }
         }
     }

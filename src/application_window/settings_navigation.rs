@@ -56,9 +56,10 @@ impl SettingsSubpage {
 
     pub const fn subpage_placement(self) -> SubpagePlacement {
         match self {
-            Self::ScanExclusions | Self::ScanSchedule | Self::DeviceAutoScan => {
+            Self::ScanExclusions | Self::DeviceAutoScan => {
                 SubpagePlacement::StackedOnPage(ApplicationPage::Scan)
             }
+            Self::ScanSchedule => SubpagePlacement::EmbeddedInPage(ApplicationPage::ScheduledScans),
             Self::ScannerEngine | Self::DetectionChoices => {
                 SubpagePlacement::EmbeddedInPage(ApplicationPage::ScanEngine)
             }
@@ -188,6 +189,10 @@ mod settings_navigation_tests {
     fn scan_settings_open_on_the_scan_page() {
         assert_eq!(
             SettingsSubpage::ScanSchedule.owning_page(),
+            ApplicationPage::ScheduledScans
+        );
+        assert_eq!(
+            SettingsSubpage::ScanExclusions.owning_page(),
             ApplicationPage::Scan
         );
         assert_eq!(

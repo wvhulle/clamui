@@ -14,7 +14,8 @@ use crate::{
     application_data_directory,
     host_services::{
         activity_history::activity_history_database::{
-            ActivityHistory, ActivityRecord, FoundThreatCount, NewActivityEntry, ScanActivityStatus,
+            ActivityHistory, ActivityRecord, FoundThreatCount, NewActivityEntry,
+            ScanActivityStatus, ScanOrigin,
         },
         clamav_config::detection_options::host_clamscan_detection_arguments,
         clamav_scanner::{
@@ -217,6 +218,7 @@ async fn run_scheduled_scan_async(scan_options: ScheduledScanOptions) -> ExitCod
                 scan_targets,
                 inspected_file_count: scan_outcome.inspected_file_count,
                 scan_status,
+                scan_origin: ScanOrigin::ScheduledScan,
             },
             duration_millis: started_instant.elapsed().as_millis() as u64,
             activity_output: scan_outcome.noteworthy_output.clone(),

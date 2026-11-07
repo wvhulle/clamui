@@ -11,10 +11,11 @@ pub enum ApplicationPage {
     DatabaseUpdates,
     ScanEngine,
     OnAccessScanning,
+    ScheduledScans,
     Hardening,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 10] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 11] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
@@ -24,6 +25,7 @@ pub const ALL_APPLICATION_PAGES: [ApplicationPage; 10] = [
     ApplicationPage::DatabaseUpdates,
     ApplicationPage::ScanEngine,
     ApplicationPage::OnAccessScanning,
+    ApplicationPage::ScheduledScans,
     ApplicationPage::Hardening,
 ];
 
@@ -39,6 +41,7 @@ impl ApplicationPage {
             Self::DatabaseUpdates => "database-updates",
             Self::ScanEngine => "scan-engine",
             Self::OnAccessScanning => "on-access",
+            Self::ScheduledScans => "scheduled-scans",
             Self::Hardening => "hardening",
         }
     }
@@ -60,6 +63,7 @@ impl ApplicationPage {
             Self::DatabaseUpdates => gettext("Database Updates"),
             Self::ScanEngine => gettext("Scan Engine"),
             Self::OnAccessScanning => gettext("On-Access Scanning"),
+            Self::ScheduledScans => gettext("Scheduled Scans"),
             Self::Hardening => gettext("Hardening"),
         }
     }
@@ -75,6 +79,7 @@ impl ApplicationPage {
             Self::DatabaseUpdates => "software-update-available-symbolic",
             Self::ScanEngine => "system-run-symbolic",
             Self::OnAccessScanning => "folder-visiting-symbolic",
+            Self::ScheduledScans => "alarm-symbolic",
             Self::Hardening => "channel-secure-symbolic",
         }
     }
@@ -90,6 +95,7 @@ impl ApplicationPage {
             Self::DatabaseUpdates => &["<Control>7"],
             Self::ScanEngine => &["<Control>8"],
             Self::OnAccessScanning => &["<Control>9"],
+            Self::ScheduledScans => &["<Control>0"],
             Self::Hardening => &[],
         }
     }
@@ -126,6 +132,7 @@ mod application_pages_tests {
         assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 6);
         assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 7);
         assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 8);
-        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 9);
+        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 9);
+        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 10);
     }
 }

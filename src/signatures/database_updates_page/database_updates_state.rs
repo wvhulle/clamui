@@ -198,7 +198,9 @@ mod database_updates_state_tests {
 
     use super::*;
     use crate::host_services::{
-        activity_history::activity_history_database::{ScanActivityStatus, UpdateActivityStatus},
+        activity_history::activity_history_database::{
+            ScanActivityStatus, ScanOrigin, UpdateActivityStatus,
+        },
         clamav_programs::database_directory_status::FreshclamServiceState,
     };
 
@@ -240,6 +242,7 @@ mod database_updates_state_tests {
                     scan_targets: vec![PathBuf::from("/tmp")],
                     inspected_file_count: 4,
                     scan_status: ScanActivityStatus::ScanClean,
+                    scan_origin: ScanOrigin::ManualScan,
                 },
             ),
             history_entry(
