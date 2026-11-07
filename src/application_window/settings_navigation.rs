@@ -56,8 +56,9 @@ impl SettingsSubpage {
 
     pub const fn subpage_placement(self) -> SubpagePlacement {
         match self {
-            Self::ScanExclusions | Self::DeviceAutoScan => {
-                SubpagePlacement::EmbeddedInPage(ApplicationPage::Scan)
+            Self::ScanExclusions => SubpagePlacement::EmbeddedInPage(ApplicationPage::Scan),
+            Self::DeviceAutoScan => {
+                SubpagePlacement::EmbeddedInPage(ApplicationPage::RemovableDrives)
             }
             Self::ScanSchedule => SubpagePlacement::EmbeddedInPage(ApplicationPage::ScheduledScans),
             Self::ScannerEngine | Self::DetectionChoices => {
@@ -197,7 +198,7 @@ mod settings_navigation_tests {
         );
         assert_eq!(
             SettingsSubpage::DeviceAutoScan.subpage_placement(),
-            SubpagePlacement::EmbeddedInPage(ApplicationPage::Scan)
+            SubpagePlacement::EmbeddedInPage(ApplicationPage::RemovableDrives)
         );
         assert_eq!(
             SettingsSubpage::SignatureUpdates.subpage_placement(),
@@ -218,6 +219,21 @@ mod settings_navigation_tests {
         assert_eq!(
             SettingsSubpage::SignatureUpdates.owning_page(),
             ApplicationPage::DatabaseUpdates
+        );
+    }
+
+    #[test]
+    fn the_device_auto_scan_link_reveals_its_group_on_removable_drives() {
+        let device_settings = SettingsSubpage::from_action_target("device-auto-scan")
+            .expect("the deep link target is known");
+        assert_eq!(device_settings, SettingsSubpage::DeviceAutoScan);
+        assert_eq!(
+            device_settings.subpage_placement(),
+            SubpagePlacement::EmbeddedInPage(ApplicationPage::RemovableDrives)
+        );
+        assert_eq!(
+            device_settings.owning_page().page_name(),
+            "removable-drives"
         );
     }
 }

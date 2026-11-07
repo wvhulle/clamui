@@ -15,6 +15,7 @@ use tempfile::NamedTempFile;
 use crate::{
     application_window::{
         application_pages::ApplicationPage, protection_evidence_refresh::GatheredEvidence,
+        scan_slot_arbiter::DeviceScanActivity,
     },
     host_services::{
         activity_history::activity_history_database::{
@@ -28,11 +29,7 @@ use crate::{
             },
             scanner_output_parser::sanitize_scanner_line,
         },
-        desktop::{
-            desktop_notifications::notify_outside_the_window,
-            stored_settings::{application_settings, scanner_backend_preference},
-            stored_settings_watch::forward_setting_changes,
-        },
+        desktop::stored_settings::{application_settings, scanner_backend_preference},
         protection_evidence::host_protection_evidence::{
             ScanServiceEvidence, scan_service_evidence,
         },
@@ -42,13 +39,6 @@ use crate::{
         },
     },
     scans::manual_scan_page::{
-        device_auto_scan_page::{
-            device_mount_scans::{
-                DEVICE_SCAN_SETTING_KEYS, DeviceAutoScanSettings, MountedDevice,
-                device_qualifies_for_scan, mounted_device_of, settled_device_passes_limits,
-            },
-            device_scan_page::DeviceAutoScanSection,
-        },
         eicar_test_file::{EicarTestFileFailure, written_eicar_test_file},
         exclusions_page::scan_exclusions_page::ScanExclusionsSection,
         scan_options_section::ScanOptionsSection,
@@ -86,8 +76,8 @@ use crate::{
                 ScanResultsSectionOutput,
             },
             scan_run_progress::{
-                CancelRequest, FinishedScan, RunningScan, ScanEnding, ScanRunNumber,
-                ScanStreamEnding, TemporaryScanTarget,
+                CancelRequest, FinishedScan, PageScanActivity, RunningScan, ScanEnding,
+                ScanRunNumber, ScanStreamEnding, TemporaryScanTarget,
             },
             scan_run_start::{
                 ScanRunCommands, ScanRunRequest, finished_results_view, finished_scan_activity,
@@ -161,13 +151,11 @@ pub struct ScanPage {
     scanner_program_trust: ScannerProgramTrust,
     page_notice: ScanPageNotice,
     scan_options_section: Controller<ScanOptionsSection>,
-    stored_settings: gio::Settings,
-    device_auto_scan_settings: DeviceAutoScanSettings,
+    device_scan_activity: DeviceScanActivity,
+    reported_scan_activity: PageScanActivity,
     system_scan_control: SystemScanControl,
     recent_scans_group: Controller<ActivityHistoryGroup>,
     exclusions_section: Controller<ScanExclusionsSection>,
-    device_auto_scan_section: Controller<DeviceAutoScanSection>,
-    _device_monitor: gio::VolumeMonitor,
     toaster: Toaster,
 }
 
@@ -178,9 +166,7 @@ pub enum ScanPageInput {
     ScanTargetsChosen(Vec<PathBuf>),
     ScanTargetsAdded(Vec<PathBuf>),
     QuickScanRequested,
-    DeviceMountAdded(MountedDevice),
-    DeviceAutoScanSettingsChanged,
-    DeviceMounted(PathBuf),
+    DeviceScanActivityChanged(DeviceScanActivity),
     ProfileRowSelected { row_position: usize },
     ManageProfilesRequested,
     ProfilesChanged,
@@ -200,6 +186,7 @@ pub enum ScanPageInput {
 
 #[derive(Debug)]
 pub enum ScanPageOutput {
+    ScanActivityChanged(PageScanActivity),
     QuarantineEntriesChanged,
     ActivityRecorded,
     EvidenceRefreshRequested,
@@ -222,10 +209,6 @@ pub enum ScanPageCommand {
     ActivityRecordingFinished(Result<(), ActivityHistoryFailure>),
     ProfilesLoaded(Result<Vec<ScanProfile>, ProfileStoreFailure>),
     EicarTestFileWritten(Result<NamedTempFile, EicarTestFileFailure>),
-    DeviceSettled {
-        mount_path: PathBuf,
-        passes_limits: bool,
-    },
     SystemScanFinished {
         start_outcome: UnitStartOutcome,
         scan_service: ScanServiceEvidence,
@@ -281,7 +264,59 @@ fn dropped_file_paths(dropped_value: &glib::Value) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+enum ManualScanStart {
+    StartPermitted(ScanStartPermit),
+    StartRefused,
+}
+
+fn device_scan_running_toast() -> adw::Toast {
+    let refusal_toast = adw::Toast::builder()
+        .title(gettext(
+            "A removable drive is being scanned. Start this scan when it has finished.",
+        ))
+        .use_markup(false)
+        .build();
+    refusal_toast.set_button_label(Some(&gettext("Open Removable Drives")));
+    refusal_toast.set_action_name(Some("win.show-page"));
+    refusal_toast.set_action_target_value(Some(
+        &ApplicationPage::RemovableDrives.page_name().to_variant(),
+    ));
+    refusal_toast
+}
+
 impl ScanPage {
+    fn manual_scan_start(&self) -> ManualScanStart {
+        match (
+            self.device_scan_activity,
+            self.scan_page_state.new_scan_permission(),
+        ) {
+            (DeviceScanActivity::DeviceScanHoldsSlot, _) => {
+                self.toaster.add_toast(device_scan_running_toast());
+                ManualScanStart::StartRefused
+            }
+            (
+                DeviceScanActivity::DeviceScanIdle,
+                ScanStartPermission::ScanMayStart(start_permit),
+            ) => ManualScanStart::StartPermitted(start_permit),
+            (DeviceScanActivity::DeviceScanIdle, ScanStartPermission::ScanAlreadyActive) => {
+                ManualScanStart::StartRefused
+            }
+        }
+    }
+
+    fn report_scan_activity(&mut self, sender: &ComponentSender<Self>) {
+        let current_activity = if self.scan_page_state.scan_is_active() {
+            PageScanActivity::PageScanActive
+        } else {
+            PageScanActivity::PageScanIdle
+        };
+        if current_activity != self.reported_scan_activity {
+            self.reported_scan_activity = current_activity;
+            let _shell_closed =
+                sender.output(ScanPageOutput::ScanActivityChanged(current_activity));
+        }
+    }
+
     fn chosen_scan_targets(&self) -> Vec<PathBuf> {
         self.scan_target_rows
             .iter()
@@ -445,9 +480,7 @@ impl ScanPage {
         if self.scan_target_rows.is_empty() {
             return;
         }
-        if let ScanStartPermission::ScanMayStart(start_permit) =
-            self.scan_page_state.new_scan_permission()
-        {
+        if let ManualScanStart::StartPermitted(start_permit) = self.manual_scan_start() {
             self.start_scan(
                 start_permit,
                 self.chosen_scan_targets(),
@@ -804,12 +837,6 @@ impl Component for ScanPage {
                             #[watch]
                             set_visible: model.scan_page_state.shows_scan_settings(),
                         },
-
-                        #[local_ref]
-                        device_auto_scan_widget -> adw::PreferencesGroup {
-                            #[watch]
-                            set_visible: model.scan_page_state.shows_scan_settings(),
-                        },
                     },
                 },
             },
@@ -852,20 +879,6 @@ impl Component for ScanPage {
                 Err(lookup_failure) => ScanPageCommand::ScannerLookupFailed(lookup_failure),
             }
         });
-        let stored_settings = application_settings();
-        forward_setting_changes(
-            &stored_settings,
-            &DEVICE_SCAN_SETTING_KEYS,
-            sender.input_sender(),
-            |_changed_settings, _changed_key| ScanPageInput::DeviceAutoScanSettingsChanged,
-        );
-        let device_monitor = gio::VolumeMonitor::get();
-        let mount_sender = sender.input_sender().clone();
-        device_monitor.connect_mount_added(move |_volume_monitor, added_mount| {
-            if let Some(mounted_device) = mounted_device_of(added_mount) {
-                mount_sender.emit(ScanPageInput::DeviceMountAdded(mounted_device));
-            }
-        });
         let model = Self {
             profile_store: page_init.profile_store,
             profile_choice: ScanProfileChoice::without_profiles(),
@@ -901,7 +914,8 @@ impl Component for ScanPage {
             scanner_backend_view: ScannerBackendView::DetectingBackend,
             scanner_program_trust: ScannerProgramTrust::ProgramsTrusted,
             scan_options_section: ScanOptionsSection::builder().launch(()).detach(),
-            device_auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
+            device_scan_activity: DeviceScanActivity::DeviceScanIdle,
+            reported_scan_activity: PageScanActivity::PageScanIdle,
             system_scan_control: SystemScanControl::new(),
             recent_scans_group: ActivityHistoryGroup::builder()
                 .launch(ActivityHistoryGroupInit {
@@ -917,9 +931,6 @@ impl Component for ScanPage {
                 })
                 .detach(),
             exclusions_section: ScanExclusionsSection::builder().launch(()).detach(),
-            device_auto_scan_section: DeviceAutoScanSection::builder().launch(()).detach(),
-            stored_settings,
-            _device_monitor: device_monitor,
             toaster: Toaster::new(&root),
             page_notice: ScanPageNotice::NoNoticeShown,
         };
@@ -930,7 +941,6 @@ impl Component for ScanPage {
         let scan_options_widget = model.scan_options_section.widget();
         let recent_scans_widget = model.recent_scans_group.widget();
         let exclusions_widget = model.exclusions_section.widget();
-        let device_auto_scan_widget = model.device_auto_scan_section.widget();
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -981,49 +991,11 @@ impl Component for ScanPage {
                 self.change_target_rows(target_rows_change);
                 self.start_chosen_targets_scan(&sender);
             }
-            ScanPageInput::DeviceMountAdded(mounted_device) => {
-                if self.device_auto_scan_settings.auto_scan_enabled
-                    && device_qualifies_for_scan(mounted_device.device_traits)
-                {
-                    let auto_scan_settings = self.device_auto_scan_settings;
-                    sender.oneshot_command(async move {
-                        let passes_limits = settled_device_passes_limits(
-                            mounted_device.mount_path.clone(),
-                            auto_scan_settings,
-                        )
-                        .await;
-                        ScanPageCommand::DeviceSettled {
-                            mount_path: mounted_device.mount_path,
-                            passes_limits,
-                        }
-                    });
-                }
-            }
-            ScanPageInput::DeviceAutoScanSettingsChanged => {
-                self.device_auto_scan_settings =
-                    DeviceAutoScanSettings::read_from(&self.stored_settings);
-            }
-            ScanPageInput::DeviceMounted(mount_path) => {
-                match self.scan_page_state.new_scan_permission() {
-                    ScanStartPermission::ScanMayStart(start_permit) => self.start_scan(
-                        start_permit,
-                        vec![mount_path],
-                        TemporaryScanTarget::NoTemporaryTarget,
-                        &sender,
-                    ),
-                    ScanStartPermission::ScanAlreadyActive => notify_outside_the_window(
-                        "device-scan-skipped",
-                        &gettext("Device Auto-Scan"),
-                        &gettext(
-                            "A device was connected during another scan, so it was not scanned.",
-                        ),
-                    ),
-                }
+            ScanPageInput::DeviceScanActivityChanged(device_scan_activity) => {
+                self.device_scan_activity = device_scan_activity;
             }
             ScanPageInput::QuickScanRequested => {
-                if let ScanStartPermission::ScanMayStart(start_permit) =
-                    self.scan_page_state.new_scan_permission()
-                {
+                if let ManualScanStart::StartPermitted(start_permit) = self.manual_scan_start() {
                     self.start_scan(
                         start_permit,
                         vec![
@@ -1042,9 +1014,7 @@ impl Component for ScanPage {
             }
             ScanPageInput::StartScanRequested => self.start_chosen_targets_scan(&sender),
             ScanPageInput::EicarTestRequested => {
-                if let ScanStartPermission::ScanMayStart(start_permit) =
-                    self.scan_page_state.new_scan_permission()
-                {
+                if let ManualScanStart::StartPermitted(start_permit) = self.manual_scan_start() {
                     self.start_eicar_test(start_permit, &sender);
                 }
             }
@@ -1084,6 +1054,7 @@ impl Component for ScanPage {
                 SystemScanStart::NothingToStart => {}
             },
         }
+        self.report_scan_activity(&sender);
     }
 
     fn update_cmd(
@@ -1128,14 +1099,6 @@ impl Component for ScanPage {
                     }
                 }
             }
-            ScanPageCommand::DeviceSettled {
-                mount_path,
-                passes_limits: true,
-            } => sender.input(ScanPageInput::DeviceMounted(mount_path)),
-            ScanPageCommand::DeviceSettled {
-                passes_limits: false,
-                ..
-            } => {}
             ScanPageCommand::ProgressBatchArrived {
                 scan_run_number,
                 progress_batch,
@@ -1201,5 +1164,6 @@ impl Component for ScanPage {
                 let _shell_closed = sender.output(ScanPageOutput::EvidenceRefreshRequested);
             }
         }
+        self.report_scan_activity(&sender);
     }
 }

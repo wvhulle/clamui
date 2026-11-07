@@ -10,15 +10,24 @@ use crate::{
     host_services::desktop::{
         stored_settings::application_settings, stored_settings_watch::forward_setting_changes,
     },
-    scans::manual_scan_page::device_auto_scan_page::device_mount_scans::{
+    scans::removable_drives_page::drive_mount_checks::{
         DEVICE_SCAN_ENABLED_KEY, DEVICE_SCAN_MAX_GIGABYTES_KEY, DEVICE_SCAN_SETTING_KEYS,
         DEVICE_SCAN_SKIP_BATTERY_KEY, DeviceAutoScanSettings,
     },
+    shared_widgets::settings_group_reveal::{
+        ContentReadiness, GroupVisibility, SettingsGroupReveal,
+    },
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeviceSettingsGroup {
+    AutoScanGroup,
+}
 
 pub struct DeviceAutoScanSection {
     stored_settings: gio::Settings,
     auto_scan_settings: DeviceAutoScanSettings,
+    group_reveal: SettingsGroupReveal<DeviceSettingsGroup>,
 }
 
 #[derive(Debug)]
@@ -27,13 +36,20 @@ pub enum DeviceAutoScanSectionInput {
     MaximumSizeChanged(f64),
     BatterySkipToggled(bool),
     StoredSettingChanged,
+    RevealRequested,
+    VisibilityChanged(GroupVisibility),
+}
+
+#[derive(Debug)]
+pub enum DeviceAutoScanSectionOutput {
+    SettingsChanged(DeviceAutoScanSettings),
 }
 
 #[relm4::component(pub)]
 impl Component for DeviceAutoScanSection {
     type Init = ();
     type Input = DeviceAutoScanSectionInput;
-    type Output = ();
+    type Output = DeviceAutoScanSectionOutput;
     type CommandOutput = ();
 
     view! {
@@ -42,6 +58,10 @@ impl Component for DeviceAutoScanSection {
                 set_description: Some(&gettext(
                     "Automatically scan removable and external drives when they are connected.",
                 )),
+                connect_map => DeviceAutoScanSectionInput::VisibilityChanged(GroupVisibility::GroupMapped),
+                connect_unmap => DeviceAutoScanSectionInput::VisibilityChanged(GroupVisibility::GroupHidden),
+                #[track(model.group_reveal.reveals_now(DeviceSettingsGroup::AutoScanGroup))]
+                child_focus: gtk::DirectionType::TabForward,
 
                 adw::SwitchRow {
                     set_title: &gettext("Enable Device Auto-Scan"),
@@ -92,6 +112,7 @@ impl Component for DeviceAutoScanSection {
         let model = Self {
             auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
             stored_settings,
+            group_reveal: SettingsGroupReveal::while_hidden(),
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -99,11 +120,22 @@ impl Component for DeviceAutoScanSection {
 
     fn update(
         &mut self,
-        page_input: DeviceAutoScanSectionInput,
-        _sender: ComponentSender<Self>,
+        section_input: DeviceAutoScanSectionInput,
+        sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        match page_input {
+        self.group_reveal.begin_update();
+        match section_input {
+            DeviceAutoScanSectionInput::RevealRequested => {
+                self.group_reveal.reveal_requested(
+                    DeviceSettingsGroup::AutoScanGroup,
+                    ContentReadiness::ContentReady,
+                );
+            }
+            DeviceAutoScanSectionInput::VisibilityChanged(group_visibility) => {
+                self.group_reveal
+                    .visibility_changed(group_visibility, ContentReadiness::ContentReady);
+            }
             DeviceAutoScanSectionInput::AutoScanToggled(auto_scan_enabled) => {
                 self.auto_scan_settings.auto_scan_enabled = auto_scan_enabled;
                 let _read_only_settings = self
@@ -125,6 +157,9 @@ impl Component for DeviceAutoScanSection {
             }
             DeviceAutoScanSectionInput::StoredSettingChanged => {
                 self.auto_scan_settings = DeviceAutoScanSettings::read_from(&self.stored_settings);
+                let _page_closed = sender.output(DeviceAutoScanSectionOutput::SettingsChanged(
+                    self.auto_scan_settings,
+                ));
             }
         }
     }

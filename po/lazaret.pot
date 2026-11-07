@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 11:18+0100\n"
+"POT-Creation-Date: 2026-11-07 11:29+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,31 +18,37 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/application_window/application_pages.rs:57
+#: src/application_window/application_pages.rs:60
 #: src/protection_page/protection_timeline_page.rs:196
 msgid "Protection"
 msgstr ""
 
-#: src/application_window/application_pages.rs:58
-#: src/application_window/sidebar_area_status.rs:91
+#: src/application_window/application_pages.rs:61
+#: src/application_window/sidebar_area_status.rs:101
 #: src/findings/detections_page/background_detections_page.rs:600
 #: src/findings/detections_page/background_detections_page.rs:619
 #: src/findings/detections_page/background_detections_page.rs:623
 msgid "Detections"
 msgstr ""
 
-#: src/application_window/application_pages.rs:59
-#: src/scans/manual_scan_page/scan_page_component.rs:354
-#: src/scans/manual_scan_page/scan_page_component.rs:521
+#: src/application_window/application_pages.rs:62
+#: src/scans/manual_scan_page/scan_page_component.rs:389
+#: src/scans/manual_scan_page/scan_page_component.rs:554
 msgid "Scan"
 msgstr ""
 
-#: src/application_window/application_pages.rs:60
+#: src/application_window/application_pages.rs:63
+#: src/application_window/sidebar_area_status.rs:100
+#: src/scans/removable_drives_page/removable_drives_component.rs:369
+msgid "Removable Drives"
+msgstr ""
+
+#: src/application_window/application_pages.rs:64
 msgid "Logs"
 msgstr ""
 
-#: src/application_window/application_pages.rs:61
-#: src/application_window/sidebar_area_status.rs:92
+#: src/application_window/application_pages.rs:65
+#: src/application_window/sidebar_area_status.rs:102
 #: src/findings/detections_page/incident_timeline_presentation.rs:44
 #: src/findings/quarantine_page/quarantine_entries_page.rs:620
 #: src/shared_widgets/scan_runs/scan_results_section/detected_threat_row.rs:222
@@ -50,36 +56,36 @@ msgstr ""
 msgid "Quarantine"
 msgstr ""
 
-#: src/application_window/application_pages.rs:62
-#: src/application_window/page_navigation.rs:851
+#: src/application_window/application_pages.rs:66
+#: src/application_window/page_navigation.rs:946
 msgid "Signatures"
 msgstr ""
 
-#: src/application_window/application_pages.rs:63
-#: src/application_window/sidebar_area_status.rs:86
+#: src/application_window/application_pages.rs:67
+#: src/application_window/sidebar_area_status.rs:95
 msgid "Database Updates"
 msgstr ""
 
-#: src/application_window/application_pages.rs:64
-#: src/application_window/sidebar_area_status.rs:87
+#: src/application_window/application_pages.rs:68
+#: src/application_window/sidebar_area_status.rs:96
 msgid "Scan Engine"
 msgstr ""
 
-#: src/application_window/application_pages.rs:65
-#: src/application_window/settings_navigation.rs:90
-#: src/application_window/sidebar_area_status.rs:88
+#: src/application_window/application_pages.rs:69
+#: src/application_window/settings_navigation.rs:91
+#: src/application_window/sidebar_area_status.rs:97
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:71
 msgid "On-Access Scanning"
 msgstr ""
 
-#: src/application_window/application_pages.rs:66
-#: src/application_window/settings_navigation.rs:86
-#: src/application_window/sidebar_area_status.rs:89
+#: src/application_window/application_pages.rs:70
+#: src/application_window/settings_navigation.rs:87
+#: src/application_window/sidebar_area_status.rs:98
 msgid "Scheduled Scans"
 msgstr ""
 
-#: src/application_window/application_pages.rs:67
-#: src/application_window/page_navigation.rs:862
+#: src/application_window/application_pages.rs:71
+#: src/application_window/page_navigation.rs:957
 msgid "Hardening"
 msgstr ""
 
@@ -107,389 +113,406 @@ msgstr ""
 msgid "translator-credits"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:310
+#: src/application_window/page_navigation.rs:330
 #: src/preferences_dialog/preferences_dialog_component.rs:107
 msgid "Preferences"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:311
+#: src/application_window/page_navigation.rs:331
 msgid "About Lazaret"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:312
+#: src/application_window/page_navigation.rs:332
 #: src/application_window/system_tray_menu.rs:75
 #: src/application_window/window_close_behavior.rs:111
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:637
+#: src/application_window/page_navigation.rs:377
+#: src/application_window/sidebar_area_status.rs:683
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:104
+#, rust-format
+msgid "Scanning {drive}"
+msgstr ""
+
+#: src/application_window/page_navigation.rs:380
+#: src/scans/manual_scan_page/scan_page_component.rs:279
+msgid "Open Removable Drives"
+msgstr ""
+
+#: src/application_window/page_navigation.rs:721
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:853
+#: src/application_window/page_navigation.rs:948
 msgid ""
 "Where ClamAV's malware signatures come from, and which other sources you "
 "could add."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:864
+#: src/application_window/page_navigation.rs:959
 msgid ""
 "Protections outside ClamAV that make exploits harder. They are listed for "
 "reference and don't affect the Protection summary."
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:85
+#: src/application_window/settings_navigation.rs:86
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:246
 msgid "Exclusions"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:87
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:41
-#: src/scans/manual_scan_page/scan_page_component.rs:1016
+#: src/application_window/settings_navigation.rs:88
+#: src/scans/removable_drives_page/device_auto_scan_section.rs:57
+#: src/scans/removable_drives_page/removable_drives_component.rs:141
 msgid "Device Auto-Scan"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:88
+#: src/application_window/settings_navigation.rs:89
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:69
 msgid "Scanner Engine"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:89
+#: src/application_window/settings_navigation.rs:90
 #: src/findings/detections_page/background_detections_page.rs:635
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:70
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:806
 msgid "Detection"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:91
+#: src/application_window/settings_navigation.rs:92
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:72
 msgid "Signature Updates"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:92
+#: src/application_window/settings_navigation.rs:93
 msgid "Trusted Detections"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:109
+#: src/application_window/settings_navigation.rs:110
 msgid "Folders and patterns that Lazaret scans skip"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:110
+#: src/application_window/settings_navigation.rs:111
 msgid "Scan automatically with a systemd timer"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:111
+#: src/application_window/settings_navigation.rs:112
 msgid "Scan removable drives when they are connected"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:112
+#: src/application_window/settings_navigation.rs:113
 msgid "clamd settings for every scan on this computer"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:114
+#: src/application_window/settings_navigation.rs:115
 msgid "Unwanted programs, macros, encrypted files and archives"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:116
+#: src/application_window/settings_navigation.rs:117
 msgid "Which folders clamonacc watches, and how it blocks"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:117
+#: src/application_window/settings_navigation.rs:118
 msgid "How freshclam downloads signatures"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:118
+#: src/application_window/settings_navigation.rs:119
 msgid "Files and detections that ClamAV never reports"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:139
+#: src/application_window/settings_navigation.rs:140
 msgid "System"
 msgstr ""
 
-#: src/application_window/settings_navigation.rs:141
+#: src/application_window/settings_navigation.rs:142
 msgid ""
 "ClamAV configuration shared by all users. Changes need administrator "
 "approval."
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:85
+#: src/application_window/sidebar_area_status.rs:94
 #: src/shared_widgets/audit_sections/audit_check_results.rs:76
 msgid "Signature Sources"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:90
+#: src/application_window/sidebar_area_status.rs:99
 msgid "Manual Scan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:93
+#: src/application_window/sidebar_area_status.rs:103
 msgid "Analysis & False Positives"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:94
+#: src/application_window/sidebar_area_status.rs:104
 msgid "Submissions"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:264
+#: src/application_window/sidebar_area_status.rs:275
 msgid "Other sources unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:268
+#: src/application_window/sidebar_area_status.rs:279
 msgid "A source is out of date"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:271
+#: src/application_window/sidebar_area_status.rs:282
 msgid "Official signatures only"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:274
+#: src/application_window/sidebar_area_status.rs:285
 #, rust-format
 msgid "Official and {count} other source"
 msgid_plural "Official and {count} other sources"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:303
+#: src/application_window/sidebar_area_status.rs:314
 msgid "No virus definitions"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:305
+#: src/application_window/sidebar_area_status.rs:316
 msgid "Age of the definitions unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:313
+#: src/application_window/sidebar_area_status.rs:324
 msgid "Last update failed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:316
+#: src/application_window/sidebar_area_status.rs:327
 msgid "Definitions dated in the future"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:320
+#: src/application_window/sidebar_area_status.rs:331
 #, rust-format
 msgid "Updated {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:322
+#: src/application_window/sidebar_area_status.rs:333
 #, rust-format
 msgid "Definitions from {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:336
+#: src/application_window/sidebar_area_status.rs:347
 msgid "freshclam is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:337
+#: src/application_window/sidebar_area_status.rs:348
 msgid "Unknown whether freshclam is trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:341
+#: src/application_window/sidebar_area_status.rs:352
 msgid "A freshclam copy in your account is ignored"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:365
+#: src/application_window/sidebar_area_status.rs:376
 msgid "clamd uses older signatures"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:369
+#: src/application_window/sidebar_area_status.rs:380
 msgid "clamd answering"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:370
+#: src/application_window/sidebar_area_status.rs:381
 msgid "clamd not answering"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:371
+#: src/application_window/sidebar_area_status.rs:382
 msgid "clamd state unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:372
+#: src/application_window/sidebar_area_status.rs:383
 msgid "clamd not running"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:373
+#: src/application_window/sidebar_area_status.rs:384
 msgid "clamd not set up"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:382
-#: src/application_window/sidebar_area_status.rs:643
+#: src/application_window/sidebar_area_status.rs:393
+#: src/application_window/sidebar_area_status.rs:654
 msgid "ClamAV not installed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:386
+#: src/application_window/sidebar_area_status.rs:397
 msgid "clamscan is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:390
+#: src/application_window/sidebar_area_status.rs:401
 msgid "ClamAV version unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:402
+#: src/application_window/sidebar_area_status.rs:413
 msgid "A scanner program is refused"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:404
+#: src/application_window/sidebar_area_status.rs:415
 msgid "Unknown whether the scanners are trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:409
+#: src/application_window/sidebar_area_status.rs:420
 msgid "A scanner copy in your account is ignored"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:423
+#: src/application_window/sidebar_area_status.rs:434
 msgid "Runtime changes unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:427
+#: src/application_window/sidebar_area_status.rs:438
 msgid "Settings reduced at runtime"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:448
+#: src/application_window/sidebar_area_status.rs:459
 msgid "Waiting for clamd"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:469
+#: src/application_window/sidebar_area_status.rs:480
 msgid "State unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:470
+#: src/application_window/sidebar_area_status.rs:481
 msgid "Not set up"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:476
+#: src/application_window/sidebar_area_status.rs:487
 msgid "clamonacc not running"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:478
+#: src/application_window/sidebar_area_status.rs:489
 msgid "clamd.conf unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:482
+#: src/application_window/sidebar_area_status.rs:493
 msgid "Nothing watched"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:495
+#: src/application_window/sidebar_area_status.rs:506
 msgid "Checks files, doesn't block"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:497
+#: src/application_window/sidebar_area_status.rs:508
 msgid "Checks files, kernel can't block"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:499
+#: src/application_window/sidebar_area_status.rs:510
 msgid "Checks files, blocking unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:501
+#: src/application_window/sidebar_area_status.rs:512
 #, rust-format
 msgid "Blocking {paths}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:518
+#: src/application_window/sidebar_area_status.rs:529
 msgid "Folder watch limit unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:525
+#: src/application_window/sidebar_area_status.rs:536
 msgid "Mount watching conflicts"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:527
+#: src/application_window/sidebar_area_status.rs:538
 msgid "clamd not excluded"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:528
+#: src/application_window/sidebar_area_status.rs:539
 msgid "Watches / directly"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:531
+#: src/application_window/sidebar_area_status.rs:542
 msgid "Folder watch limit low"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:571
+#: src/application_window/sidebar_area_status.rs:582
 msgid "Timer not active"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:581
+#: src/application_window/sidebar_area_status.rs:592
 msgid "Last scan failed"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:584
+#: src/application_window/sidebar_area_status.rs:595
 #, rust-format
 msgid "Next scan {when}"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:586
+#: src/application_window/sidebar_area_status.rs:597
 msgid "No next scan planned"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:588
+#: src/application_window/sidebar_area_status.rs:599
 msgid "Scan service missing"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:589
+#: src/application_window/sidebar_area_status.rs:600
 msgid "Scan service unknown"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:591
+#: src/application_window/sidebar_area_status.rs:602
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:200
 msgid "Scheduled by Lazaret"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:592
+#: src/application_window/sidebar_area_status.rs:603
 msgid "No scan scheduled"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:635
+#: src/application_window/sidebar_area_status.rs:646
 msgid "Schedule changed outside Lazaret"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:650
+#: src/application_window/sidebar_area_status.rs:661
 msgid "Ready to scan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:655
+#: src/application_window/sidebar_area_status.rs:666
 msgid "Uses the slower clamscan"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:663
+#: src/application_window/sidebar_area_status.rs:674
 msgid "An exclusion may skip malware"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:680
+#: src/application_window/sidebar_area_status.rs:690
+#, rust-format
+msgid "Threats found on {drive}"
+msgstr ""
+
+#: src/application_window/sidebar_area_status.rs:718
 msgid "Journal unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:681
+#: src/application_window/sidebar_area_status.rs:719
 msgid "Following the journal stopped"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:683
+#: src/application_window/sidebar_area_status.rs:721
 msgid "Notifications off"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:685
+#: src/application_window/sidebar_area_status.rs:723
 msgid "Alerts stop when Lazaret quits"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:696
+#: src/application_window/sidebar_area_status.rs:734
 msgid "Nothing to decide"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:701
+#: src/application_window/sidebar_area_status.rs:739
 #, rust-format
 msgid "{count} needs a decision"
 msgid_plural "{count} need a decision"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:720
+#: src/application_window/sidebar_area_status.rs:758
 msgid "Loading…"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:723
+#: src/application_window/sidebar_area_status.rs:761
 msgid "Empty"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:727
+#: src/application_window/sidebar_area_status.rs:765
 #: src/findings/quarantine_page/quarantine_entries_page.rs:520
 #, rust-format
 msgid "{count} item"
@@ -497,38 +520,38 @@ msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:732
+#: src/application_window/sidebar_area_status.rs:770
 msgid "The quarantine can't be read"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:739
+#: src/application_window/sidebar_area_status.rs:777
 msgid "Nothing trusted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:742
+#: src/application_window/sidebar_area_status.rs:780
 #, rust-format
 msgid "{count} item trusted"
 msgid_plural "{count} items trusted"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/application_window/sidebar_area_status.rs:751
+#: src/application_window/sidebar_area_status.rs:789
 msgid "Signature folder unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:754
+#: src/application_window/sidebar_area_status.rs:792
 msgid "Another allowlist silences ClamAV"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:764
+#: src/application_window/sidebar_area_status.rs:802
 msgid "Lazaret's allowlist is unreadable"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:790
+#: src/application_window/sidebar_area_status.rs:831
 msgid "Nothing submitted"
 msgstr ""
 
-#: src/application_window/sidebar_area_status.rs:836
+#: src/application_window/sidebar_area_status.rs:877
 #, rust-format
 msgid "{area}: {state}"
 msgstr ""
@@ -577,8 +600,9 @@ msgstr ""
 #: src/findings/quarantine_page/quarantine_entries_page.rs:125
 #: src/findings/quarantine_page/quarantine_entries_page.rs:436
 #: src/logs_page/activity_logs_page.rs:176
-#: src/scans/manual_scan_page/scan_page_component.rs:599
+#: src/scans/manual_scan_page/scan_page_component.rs:632
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
+#: src/scans/removable_drives_page/removable_drives_component.rs:375
 #: src/shared_widgets/engine_settings/engine_settings_sections.rs:449
 #: src/shared_widgets/false_positive_report_dialog.rs:76
 #: src/shared_widgets/scan_runs/scan_results_section/scan_results_component.rs:211
@@ -1092,7 +1116,7 @@ msgstr ""
 
 #: src/findings/quarantine_page/quarantine_entries_page.rs:627
 #: src/scans/manual_scan_page/scan_options_section.rs:107
-#: src/scans/manual_scan_page/scan_page_component.rs:544
+#: src/scans/manual_scan_page/scan_page_component.rs:577
 msgid "More"
 msgstr ""
 
@@ -1180,7 +1204,7 @@ msgstr[1] ""
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:118
 #: src/preferences_dialog/online_lookups_page/service_key_section.rs:206
 #: src/protection_page/protection_timeline_page.rs:281
-#: src/scans/manual_scan_page/scan_page_component.rs:305
+#: src/scans/manual_scan_page/scan_page_component.rs:340
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:114
 #: src/shared_widgets/audit_sections/audit_check_row.rs:116
 #: src/shared_widgets/service_log/service_log_state.rs:51
@@ -1933,7 +1957,7 @@ msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:228
 #: src/protection_page/protection_timeline_presentation.rs:78
-#: src/scans/manual_scan_page/scan_page_component.rs:244
+#: src/scans/manual_scan_page/scan_page_component.rs:227
 msgid "Review"
 msgstr ""
 
@@ -2135,28 +2159,6 @@ msgstr ""
 msgid "Files are only checked when you scan them"
 msgstr ""
 
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:43
-msgid ""
-"Automatically scan removable and external drives when they are connected."
-msgstr ""
-
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:47
-msgid "Enable Device Auto-Scan"
-msgstr ""
-
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:57
-msgid "Max Device Size (GB)"
-msgstr ""
-
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:58
-msgid "0 means no size limit."
-msgstr ""
-
-#: src/scans/manual_scan_page/device_auto_scan_page/device_scan_page.rs:69
-#: src/scans/scheduled_scans_page/scan_schedule_component.rs:347
-msgid "Skip on Battery"
-msgstr ""
-
 #: src/scans/manual_scan_page/exclusions_page/scan_exclusion_row.rs:15
 msgid "Node.js dependencies"
 msgstr ""
@@ -2241,190 +2243,192 @@ msgstr ""
 msgid "Display files being scanned in real time."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:138
+#: src/scans/manual_scan_page/scan_page_component.rs:128
 #, rust-format
 msgid "The scan could not be added to the history: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:264
+#: src/scans/manual_scan_page/scan_page_component.rs:247
 msgid "No Profile (Manual)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:307
+#: src/scans/manual_scan_page/scan_page_component.rs:275
+msgid ""
+"A removable drive is being scanned. Start this scan when it has finished."
+msgstr ""
+
+#: src/scans/manual_scan_page/scan_page_component.rs:342
 #, rust-format
 msgid "Backend: unknown, the scanner programs could not be looked up: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:311
+#: src/scans/manual_scan_page/scan_page_component.rs:346
 msgid "Backend: clamd (daemon)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:314
+#: src/scans/manual_scan_page/scan_page_component.rs:349
 msgid "Backend: clamscan (standalone)"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:355
+#: src/scans/manual_scan_page/scan_page_component.rs:390
 #: src/shared_widgets/scan_runs/scan_progress_view.rs:39
 msgid "Preparing…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:359
+#: src/scans/manual_scan_page/scan_page_component.rs:394
 msgid "Cancelling…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:366
+#: src/scans/manual_scan_page/scan_page_component.rs:401
 #, rust-format
 msgid "Scanning {name}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:369
+#: src/scans/manual_scan_page/scan_page_component.rs:404
 #, rust-format
 msgid "Scanning {count} location"
 msgid_plural "Scanning {count} locations"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:378
+#: src/scans/manual_scan_page/scan_page_component.rs:413
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:61
 #: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:108
 msgid "Scan cancelled by user"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:382
+#: src/scans/manual_scan_page/scan_page_component.rs:417
 #: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:160
 msgid "Threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:387
+#: src/scans/manual_scan_page/scan_page_component.rs:422
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:60
 #: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:107
 #: src/shared_widgets/scan_runs/scan_run_start.rs:161
 msgid "The scan did not finish cleanly"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:389
+#: src/scans/manual_scan_page/scan_page_component.rs:424
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:59
 #: src/shared_widgets/scan_runs/scan_results_section/scan_results_state.rs:106
 #: src/shared_widgets/scan_runs/scan_run_start.rs:160
 msgid "No threats found"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:504
+#: src/scans/manual_scan_page/scan_page_component.rs:537
 #, rust-format
 msgid "Could not create the EICAR test file: {error}"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:528
+#: src/scans/manual_scan_page/scan_page_component.rs:561
 msgid "Add Files"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:536
+#: src/scans/manual_scan_page/scan_page_component.rs:569
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:213
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_editor_dialog.rs:336
 msgid "Add Folder"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:553
+#: src/scans/manual_scan_page/scan_page_component.rs:586
 msgid "Run EICAR Test"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:564
+#: src/scans/manual_scan_page/scan_page_component.rs:597
 msgid "Copy Results"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:575
+#: src/scans/manual_scan_page/scan_page_component.rs:608
 msgid "Export Results…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:589
+#: src/scans/manual_scan_page/scan_page_component.rs:622
 msgid "Start Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:610
+#: src/scans/manual_scan_page/scan_page_component.rs:643
 msgid "Lazaret refuses a ClamAV program that your account could replace"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:611
+#: src/scans/manual_scan_page/scan_page_component.rs:644
 msgid "Details"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:655
+#: src/scans/manual_scan_page/scan_page_component.rs:688
 msgid "Scan Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:660
+#: src/scans/manual_scan_page/scan_page_component.rs:693
 msgid "Profile"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:675
+#: src/scans/manual_scan_page/scan_page_component.rs:708
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:218
 msgid "Manage Profiles"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:684
+#: src/scans/manual_scan_page/scan_page_component.rs:717
 msgid "Scan Targets"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:707
+#: src/scans/manual_scan_page/scan_page_component.rs:740
 msgid "Drop files or folders to scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:716
+#: src/scans/manual_scan_page/scan_page_component.rs:749
 msgid "Add Files…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:722
+#: src/scans/manual_scan_page/scan_page_component.rs:755
 msgid "Add Folder…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:732
+#: src/scans/manual_scan_page/scan_page_component.rs:765
 msgid "System scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:740
+#: src/scans/manual_scan_page/scan_page_component.rs:773
 #: src/scans/scheduled_scans_page/scheduled_scans_presentation.rs:224
 msgid "Folders scanned"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:746
+#: src/scans/manual_scan_page/scan_page_component.rs:779
 msgid "Run Now"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:753
+#: src/scans/manual_scan_page/scan_page_component.rs:786
 msgid "Starting the scan…"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:762
+#: src/scans/manual_scan_page/scan_page_component.rs:795
+#: src/scans/removable_drives_page/removable_drives_component.rs:416
 msgid "Found so far"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:884
+#: src/scans/manual_scan_page/scan_page_component.rs:897
 msgid "New Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:910
+#: src/scans/manual_scan_page/scan_page_component.rs:924
 msgid "Recent scans"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:912
+#: src/scans/manual_scan_page/scan_page_component.rs:926
 msgid ""
 "Scans started from Lazaret, newest first. Select one to read its transcript."
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:915
+#: src/scans/manual_scan_page/scan_page_component.rs:929
 msgid "No scans were started from Lazaret yet"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:948
+#: src/scans/manual_scan_page/scan_page_component.rs:958
 msgid "Choose Files to Scan"
 msgstr ""
 
-#: src/scans/manual_scan_page/scan_page_component.rs:956
+#: src/scans/manual_scan_page/scan_page_component.rs:966
 msgid "Choose a Folder to Scan"
-msgstr ""
-
-#: src/scans/manual_scan_page/scan_page_component.rs:1018
-msgid "A device was connected during another scan, so it was not scanned."
 msgstr ""
 
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_display_text.rs:10
@@ -2867,6 +2871,131 @@ msgid ""
 "watch per folder. A whole home directory or larger tree can need more "
 "watches than the old default limit of 8192 allows. Raise "
 "fs.inotify.max_user_watches with sysctl."
+msgstr ""
+
+#: src/scans/removable_drives_page/device_auto_scan_section.rs:59
+msgid ""
+"Automatically scan removable and external drives when they are connected."
+msgstr ""
+
+#: src/scans/removable_drives_page/device_auto_scan_section.rs:67
+msgid "Enable Device Auto-Scan"
+msgstr ""
+
+#: src/scans/removable_drives_page/device_auto_scan_section.rs:77
+msgid "Max Device Size (GB)"
+msgstr ""
+
+#: src/scans/removable_drives_page/device_auto_scan_section.rs:78
+msgid "0 means no size limit."
+msgstr ""
+
+#: src/scans/removable_drives_page/device_auto_scan_section.rs:89
+#: src/scans/scheduled_scans_page/scan_schedule_component.rs:347
+msgid "Skip on Battery"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:79
+#, rust-format
+msgid "The drive scan could not be added to the history: {error}"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:142
+msgid "A device was connected during another scan, so it was not scanned."
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:449
+msgid "Drives this session"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:451
+msgid ""
+"Drives connected since Lazaret started, newest first, and what happened to "
+"each. This list is kept only until Lazaret quits."
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:461
+msgid "No drive was connected yet"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:509
+msgid "Close Results"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:537
+msgid "Drive scans"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:539
+msgid ""
+"Drives Lazaret scanned when they were connected, newest first. Select one to "
+"read its transcript."
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_component.rs:542
+msgid "No drive was scanned yet"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:39
+msgid "Off"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:40
+msgid "Scans every drive"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:42
+#, rust-format
+msgid "Scans drives up to {size}"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:52
+#, rust-format
+msgid "Not scanned: {size} is larger than the {limit} limit"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:56
+msgid "Not scanned: the computer was running on battery"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:58
+msgid "Not scanned: device auto-scan is off"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:59
+msgid "Not scanned: another scan was running"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:61
+msgid "Not scanned: the size of the drive could not be read"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:68
+msgid "Checking the drive…"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:69
+msgid "Scanning…"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:71
+msgid "Scanned, threats found"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:72
+msgid "Scanned, no threats found"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:74
+msgid "Scanned, but the scan did not finish cleanly"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:76
+msgid "Scan cancelled"
+msgstr ""
+
+#: src/scans/removable_drives_page/removable_drives_presentation.rs:107
+msgid "Drive scan"
 msgstr ""
 
 #: src/scans/scan_engine_page/scan_engine_component.rs:204

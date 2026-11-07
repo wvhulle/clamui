@@ -1,4 +1,3 @@
-pub mod device_auto_scan_page;
 pub mod eicar_test_file;
 pub mod exclusions_page;
 pub mod scan_options_section;

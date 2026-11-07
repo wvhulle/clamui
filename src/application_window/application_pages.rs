@@ -5,6 +5,7 @@ pub enum ApplicationPage {
     Protection,
     Detections,
     Scan,
+    RemovableDrives,
     Logs,
     Quarantine,
     Signatures,
@@ -15,10 +16,11 @@ pub enum ApplicationPage {
     Hardening,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 11] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 12] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
+    ApplicationPage::RemovableDrives,
     ApplicationPage::Logs,
     ApplicationPage::Quarantine,
     ApplicationPage::Signatures,
@@ -35,6 +37,7 @@ impl ApplicationPage {
             Self::Protection => "protection",
             Self::Detections => "detections",
             Self::Scan => "scan",
+            Self::RemovableDrives => "removable-drives",
             Self::Logs => "logs",
             Self::Quarantine => "quarantine",
             Self::Signatures => "signatures",
@@ -57,6 +60,7 @@ impl ApplicationPage {
             Self::Protection => gettext("Protection"),
             Self::Detections => gettext("Detections"),
             Self::Scan => gettext("Scan"),
+            Self::RemovableDrives => gettext("Removable Drives"),
             Self::Logs => gettext("Logs"),
             Self::Quarantine => gettext("Quarantine"),
             Self::Signatures => gettext("Signatures"),
@@ -73,6 +77,7 @@ impl ApplicationPage {
             Self::Protection => "security-high-symbolic",
             Self::Detections => "dialog-warning-symbolic",
             Self::Scan => "system-search-symbolic",
+            Self::RemovableDrives => "drive-removable-media-symbolic",
             Self::Logs => "document-open-recent-symbolic",
             Self::Quarantine => "folder-symbolic",
             Self::Signatures => "drive-harddisk-symbolic",
@@ -96,7 +101,7 @@ impl ApplicationPage {
             Self::ScanEngine => &["<Control>8"],
             Self::OnAccessScanning => &["<Control>9"],
             Self::ScheduledScans => &["<Control>0"],
-            Self::Hardening => &[],
+            Self::RemovableDrives | Self::Hardening => &[],
         }
     }
 
@@ -129,10 +134,12 @@ mod application_pages_tests {
     #[test]
     fn sidebar_positions_follow_the_page_order() {
         assert_eq!(ApplicationPage::Protection.sidebar_position(), 0);
-        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 6);
-        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 7);
-        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 8);
-        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 9);
-        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 10);
+        assert_eq!(ApplicationPage::Scan.sidebar_position(), 2);
+        assert_eq!(ApplicationPage::RemovableDrives.sidebar_position(), 3);
+        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 7);
+        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 8);
+        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 9);
+        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 10);
+        assert_eq!(ApplicationPage::Hardening.sidebar_position(), 11);
     }
 }

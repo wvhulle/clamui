@@ -239,6 +239,12 @@ pub struct FinishedScan {
     pub elapsed_time: Duration,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PageScanActivity {
+    PageScanIdle,
+    PageScanActive,
+}
+
 pub enum ScanStreamEnding<'finished> {
     StaleStreamIgnored,
     ScanRunFinished(&'finished FinishedScan),

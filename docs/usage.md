@@ -80,6 +80,10 @@ When ClamAV detects a file in the background, Lazaret raises a desktop notificat
 
 Under **Scheduled Scans**, choose how often to scan (hourly, daily, weekly or monthly), which targets, and whether to skip the scan on battery or quarantine detections automatically. Scans run even when Lazaret is closed, and a scan missed while the computer was off runs once it is back on.
 
+## Removable drives
+
+With **Device Auto-Scan** turned on, Lazaret scans a removable or external drive a few seconds after it is mounted. Set a size limit and choose whether to skip drives while the computer runs on battery. The Removable Drives page lists every drive connected since Lazaret started and why it was or wasn't scanned, shows a drive scan in progress and its results, and keeps the history of drive scans. Only one scan runs at a time: a drive connected during another scan is skipped.
+
 ## Logs
 
 <img src="https://codeberg.org/wvhulle/lazaret/raw/branch/screenshots/logs.webp" width="800" alt="Recording of the Logs page, opening one scan's details and then the System Changes tab">

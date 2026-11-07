@@ -5,6 +5,7 @@ use gettextrs::gettext;
 use jiff::Timestamp;
 use relm4::{
     Component, ComponentController, ComponentParts, ComponentSender, Controller,
+    abstractions::Toaster,
     actions::RelmAction,
     adw,
     adw::prelude::*,
@@ -25,6 +26,7 @@ use crate::{
             EvidenceRefresh, EvidenceRefreshTransition, EvidenceRefreshTrigger, GatheredEvidence,
             GatheringStart,
         },
+        scan_slot_arbiter::{ScanSlot, ScanSlotEvent, ScanSlotReply, ScanSlotTransition},
         settings_navigation::{SettingsSubpage, SubpagePlacement, settings_subpage_frame},
         sidebar_area_status::{
             AreaSummaryContext, SidebarAreaSummary, StatusIndicator, all_area_summaries,
@@ -47,7 +49,7 @@ use crate::{
         activity_history::activity_history_database::ActivityHistory,
         desktop::{
             locale_formatting::host_moment_formatters,
-            running_instance_forwarding::paths_from_bytes,
+            running_instance_forwarding::paths_from_bytes, stored_settings::application_settings,
         },
         detection_journal::detection_journal_follower::JournalAccess,
         protection_evidence::host_protection_evidence::{
@@ -66,7 +68,6 @@ use crate::{
     },
     scans::{
         manual_scan_page::{
-            device_auto_scan_page::device_scan_page::DeviceAutoScanSection,
             exclusions_page::scan_exclusions_page::ScanExclusionsSection,
             scan_page_component::{ScanPage, ScanPageInit, ScanPageInput, ScanPageOutput},
             scan_profiles_dialog::scan_profile_store::ScanProfileStore,
@@ -74,6 +75,16 @@ use crate::{
         on_access_page::{
             on_access_component::{OnAccessPage, OnAccessPageInput},
             on_access_state::OnAccessPageOutput,
+        },
+        removable_drives_page::{
+            device_auto_scan_section::DeviceAutoScanSection,
+            drive_mount_checks::DeviceAutoScanSettings,
+            removable_drives_component::{
+                RemovableDrivesPage, RemovableDrivesPageInit, RemovableDrivesPageInput,
+            },
+            removable_drives_state::{
+                DeviceScanStatus, RemovableDrivesPageOutput, RemovableDrivesStatus,
+            },
         },
         scan_engine_page::{
             scan_engine_component::{ScanEnginePage, ScanEnginePageInput},
@@ -95,6 +106,7 @@ use crate::{
             engine_settings_sections::EngineSettingsSection,
             engine_settings_subpage::EngineSettingsSubpage,
         },
+        scan_runs::scan_run_progress::PageScanActivity,
     },
     sharing::analysis_page::trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
     signatures::database_updates_page::{
@@ -198,6 +210,10 @@ pub struct PageNavigation {
     shows_content_when_narrow: bool,
     opened_settings_subpages: Vec<OpenedSettingsSubpage>,
     scan_page: Controller<ScanPage>,
+    removable_drives_page: Controller<RemovableDrivesPage>,
+    scan_slot: ScanSlot,
+    removable_drives_status: RemovableDrivesStatus,
+    toaster: Toaster,
     quarantine_page: Controller<QuarantineEntriesPage>,
     logs_page: Controller<ActivityLogsPage>,
     signatures_page: Controller<AuditSectionsPage>,
@@ -236,6 +252,10 @@ pub enum PageNavigationInput {
     UnresolvedDetectionsChanged(usize),
     QuarantineEntriesCounted(QuarantineEntryCount),
     EvidenceRefreshRequested,
+    ManualScanActivityChanged(PageScanActivity),
+    DeviceScanSlotRequested { drive_name: String },
+    DeviceScanEnded,
+    RemovableDrivesStatusChanged(RemovableDrivesStatus),
 }
 
 #[derive(Debug)]
@@ -325,10 +345,44 @@ fn narrow_layout_breakpoint(split_view: &adw::NavigationSplitView) -> adw::Break
 
 fn forwarded_scan_output(scan_output: ScanPageOutput) -> PageNavigationInput {
     match scan_output {
+        ScanPageOutput::ScanActivityChanged(scan_activity) => {
+            PageNavigationInput::ManualScanActivityChanged(scan_activity)
+        }
         ScanPageOutput::QuarantineEntriesChanged => PageNavigationInput::QuarantineEntriesChanged,
         ScanPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
         ScanPageOutput::EvidenceRefreshRequested => PageNavigationInput::EvidenceRefreshRequested,
     }
+}
+
+fn forwarded_removable_drives_output(
+    removable_drives_output: RemovableDrivesPageOutput,
+) -> PageNavigationInput {
+    match removable_drives_output {
+        RemovableDrivesPageOutput::ScanSlotRequested { drive_name } => {
+            PageNavigationInput::DeviceScanSlotRequested { drive_name }
+        }
+        RemovableDrivesPageOutput::DeviceScanEnded => PageNavigationInput::DeviceScanEnded,
+        RemovableDrivesPageOutput::StatusChanged(removable_drives_status) => {
+            PageNavigationInput::RemovableDrivesStatusChanged(removable_drives_status)
+        }
+        RemovableDrivesPageOutput::QuarantineEntriesChanged => {
+            PageNavigationInput::QuarantineEntriesChanged
+        }
+        RemovableDrivesPageOutput::ActivityRecorded => PageNavigationInput::ActivityRecorded,
+    }
+}
+
+fn device_scan_started_toast(drive_name: &str) -> adw::Toast {
+    let started_toast = adw::Toast::builder()
+        .title(gettext("Scanning {drive}").replace("{drive}", drive_name))
+        .use_markup(false)
+        .build();
+    started_toast.set_button_label(Some(&gettext("Open Removable Drives")));
+    started_toast.set_action_name(Some("win.show-page"));
+    started_toast.set_action_target_value(Some(
+        &ApplicationPage::RemovableDrives.page_name().to_variant(),
+    ));
+    started_toast
 }
 
 fn forwarded_detections_output(
@@ -473,6 +527,7 @@ impl PageNavigation {
                 },
                 unresolved_detections: self.unresolved_detections,
                 quarantine_entry_count: self.quarantine_entry_count,
+                removable_drives_status: self.removable_drives_status.clone(),
                 home_directory: glib::home_dir().to_string_lossy().into_owned(),
                 moment_formatters: host_moment_formatters(),
                 reference_moment: *gathered_at,
@@ -571,10 +626,38 @@ impl PageNavigation {
             SettingsSubpage::ScanSchedule => self
                 .scheduled_scans_page
                 .emit(ScheduledScansPageInput::SettingsRevealRequested),
-            SettingsSubpage::ScanExclusions
-            | SettingsSubpage::DeviceAutoScan
-            | SettingsSubpage::TrustedDetections => {}
+            SettingsSubpage::DeviceAutoScan => self
+                .removable_drives_page
+                .emit(RemovableDrivesPageInput::SettingsRevealRequested),
+            SettingsSubpage::ScanExclusions | SettingsSubpage::TrustedDetections => {}
         }
+    }
+
+    fn apply_scan_slot_event(&mut self, slot_event: ScanSlotEvent) -> ScanSlotReply {
+        let previous_activity = self.scan_slot.device_scan_activity();
+        let ScanSlotTransition {
+            next_slot,
+            slot_reply,
+        } = self.scan_slot.after_event(slot_event);
+        self.scan_slot = next_slot;
+        match slot_reply {
+            ScanSlotReply::DeviceScanGranted => self
+                .removable_drives_page
+                .emit(RemovableDrivesPageInput::ScanSlotGranted),
+            ScanSlotReply::DeviceScanRefused => self
+                .removable_drives_page
+                .emit(RemovableDrivesPageInput::ScanSlotRefused),
+            ScanSlotReply::DeviceScanRevoked => self
+                .removable_drives_page
+                .emit(RemovableDrivesPageInput::ScanSlotRevoked),
+            ScanSlotReply::NoReplyNeeded => {}
+        }
+        let next_activity = next_slot.device_scan_activity();
+        if next_activity != previous_activity {
+            self.scan_page
+                .emit(ScanPageInput::DeviceScanActivityChanged(next_activity));
+        }
+        slot_reply
     }
 
     fn open_settings_subpage(&mut self, settings_subpage: SettingsSubpage) {
@@ -614,7 +697,8 @@ impl Component for PageNavigation {
             add_breakpoint: narrow_layout_breakpoint(&split_view),
 
             #[wrap(Some)]
-            set_child = &adw::ToastOverlay {
+            #[local_ref]
+            set_child = page_toast_overlay -> adw::ToastOverlay {
                 #[name = "split_view"]
                 adw::NavigationSplitView {
                     set_sidebar_width_fraction: 0.22,
@@ -689,6 +773,7 @@ impl Component for PageNavigation {
                                     },
                                     append: &navigation_row(ApplicationPage::Detections),
                                     append: &navigation_row(ApplicationPage::Scan),
+                                    append: &navigation_row(ApplicationPage::RemovableDrives),
                                     append: &navigation_row(ApplicationPage::Logs),
                                     append: &navigation_row(ApplicationPage::Quarantine),
                                     append: &navigation_row(ApplicationPage::Signatures),
@@ -732,6 +817,9 @@ impl Component for PageNavigation {
                                         sender.input(PageNavigationInput::SettingsSubpagePopped(popped_tag.to_string()));
                                     }
                                 },
+                            },
+                            add_titled[Some(ApplicationPage::RemovableDrives.page_name()), &ApplicationPage::RemovableDrives.page_title()] = &adw::NavigationView {
+                                add: &page_root(ApplicationPage::RemovableDrives, model.removable_drives_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Logs.page_name()), &ApplicationPage::Logs.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Logs, model.logs_page.widget()),
@@ -817,9 +905,16 @@ impl Component for PageNavigation {
                         .to_string_lossy()
                         .into_owned(),
                 ),
-                file_list_directory: data_directory,
+                file_list_directory: data_directory.clone(),
             })
             .forward(sender.input_sender(), forwarded_scan_output);
+        let removable_drives_page = RemovableDrivesPage::builder()
+            .launch(RemovableDrivesPageInit {
+                quarantine_vault: quarantine_vault.clone(),
+                activity_history: activity_history.clone(),
+                file_list_directory: data_directory,
+            })
+            .forward(sender.input_sender(), forwarded_removable_drives_output);
         let protection_page = ProtectionTimelinePage::builder().launch(()).forward(
             sender.input_sender(),
             |protection_output| match protection_output {
@@ -873,6 +968,13 @@ impl Component for PageNavigation {
             shows_content_when_narrow: false,
             opened_settings_subpages: Vec::new(),
             scan_page,
+            removable_drives_page,
+            scan_slot: ScanSlot::SlotFree,
+            removable_drives_status: RemovableDrivesStatus {
+                auto_scan_settings: DeviceAutoScanSettings::read_from(&application_settings()),
+                device_scan_status: DeviceScanStatus::NoDeviceScanYet,
+            },
+            toaster: Toaster::default(),
             quarantine_page,
             logs_page,
             signatures_page,
@@ -896,6 +998,7 @@ impl Component for PageNavigation {
             ),
         };
         model.advance_evidence_refresh(EvidenceRefreshTrigger::RefreshRequested, &sender);
+        let page_toast_overlay = model.toaster.overlay_widget();
         let widgets = view_output!();
         widgets.sidebar_list.select_row(
             widgets
@@ -982,6 +1085,8 @@ impl Component for PageNavigation {
                     .emit(ActivityLogsPageInput::ReloadEntriesRequested);
                 self.scheduled_scans_page
                     .emit(ScheduledScansPageInput::HistoryReloadRequested);
+                self.removable_drives_page
+                    .emit(RemovableDrivesPageInput::HistoryReloadRequested);
             }
             PageNavigationInput::JournalAccessChanged(journal_access) => {
                 self.journal_access = journal_access.clone();
@@ -1007,6 +1112,28 @@ impl Component for PageNavigation {
             }
             PageNavigationInput::EvidenceRefreshRequested => {
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::RefreshRequested, &sender);
+            }
+            PageNavigationInput::ManualScanActivityChanged(scan_activity) => {
+                let _slot_reply = self.apply_scan_slot_event(match scan_activity {
+                    PageScanActivity::PageScanActive => ScanSlotEvent::ManualScanStarted,
+                    PageScanActivity::PageScanIdle => ScanSlotEvent::ManualScanEnded,
+                });
+            }
+            PageNavigationInput::DeviceScanSlotRequested { drive_name } => {
+                let slot_reply = self.apply_scan_slot_event(ScanSlotEvent::DeviceScanRequested);
+                if slot_reply == ScanSlotReply::DeviceScanGranted
+                    && self.visible_page != ApplicationPage::RemovableDrives
+                {
+                    self.toaster
+                        .add_toast(device_scan_started_toast(&drive_name));
+                }
+            }
+            PageNavigationInput::DeviceScanEnded => {
+                let _slot_reply = self.apply_scan_slot_event(ScanSlotEvent::DeviceScanEnded);
+            }
+            PageNavigationInput::RemovableDrivesStatusChanged(removable_drives_status) => {
+                self.removable_drives_status = removable_drives_status;
+                self.refresh_area_summaries();
             }
         }
     }

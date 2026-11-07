@@ -36,13 +36,20 @@ use crate::{
     },
     scans::{
         on_access_page::on_access_presentation::on_access_condition,
+        removable_drives_page::{
+            removable_drives_presentation::auto_scan_state_text,
+            removable_drives_state::{DeviceScanStatus, RemovableDrivesStatus},
+        },
         scan_engine_page::scan_engine_presentation::{daemon_condition, engine_condition},
         scheduled_scans_page::scheduled_scans_presentation::scheduled_scan_condition,
     },
-    shared_widgets::step_timeline::{
-        program_trust_steps::{TrustedProgramGroup, program_trust_condition},
-        runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_condition},
-        step_evidence_builders::CheckedCondition,
+    shared_widgets::{
+        scan_runs::scan_results_section::scan_results_state::ScanResultsStatus,
+        step_timeline::{
+            program_trust_steps::{TrustedProgramGroup, program_trust_condition},
+            runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_condition},
+            step_evidence_builders::CheckedCondition,
+        },
     },
     sharing::analysis_page::trusted_detections_page::trust_list_contents::{
         LazaretListReading, TrustListReading,
@@ -60,19 +67,21 @@ pub enum SidebarArea {
     OnAccessScanning,
     ScheduledScans,
     ManualScan,
+    RemovableDrives,
     Detections,
     Quarantine,
     AnalysisAndFalsePositives,
     Submissions,
 }
 
-pub const ALL_SIDEBAR_AREAS: [SidebarArea; 10] = [
+pub const ALL_SIDEBAR_AREAS: [SidebarArea; 11] = [
     SidebarArea::SignatureSources,
     SidebarArea::DatabaseUpdates,
     SidebarArea::ScanEngine,
     SidebarArea::OnAccessScanning,
     SidebarArea::ScheduledScans,
     SidebarArea::ManualScan,
+    SidebarArea::RemovableDrives,
     SidebarArea::Detections,
     SidebarArea::Quarantine,
     SidebarArea::AnalysisAndFalsePositives,
@@ -88,6 +97,7 @@ impl SidebarArea {
             Self::OnAccessScanning => gettext("On-Access Scanning"),
             Self::ScheduledScans => gettext("Scheduled Scans"),
             Self::ManualScan => gettext("Manual Scan"),
+            Self::RemovableDrives => gettext("Removable Drives"),
             Self::Detections => gettext("Detections"),
             Self::Quarantine => gettext("Quarantine"),
             Self::AnalysisAndFalsePositives => gettext("Analysis & False Positives"),
@@ -196,6 +206,7 @@ pub struct AreaSummaryContext {
     pub alert_readiness: AlertReadiness,
     pub unresolved_detections: usize,
     pub quarantine_entry_count: QuarantineEntryCount,
+    pub removable_drives_status: RemovableDrivesStatus,
     pub home_directory: String,
     pub moment_formatters: &'static MomentFormatters,
     pub reference_moment: Timestamp,
@@ -665,6 +676,33 @@ fn manual_scan_summary(protection_evidence: &ProtectionEvidence) -> AreaSummary 
     )
 }
 
+fn removable_drives_summary(removable_drives_status: &RemovableDrivesStatus) -> AreaSummary {
+    match &removable_drives_status.device_scan_status {
+        DeviceScanStatus::DeviceScanRunning { drive_name } => summary_of(
+            AreaStatus::AreaHealthy,
+            gettext("Scanning {drive}").replace("{drive}", drive_name),
+        ),
+        DeviceScanStatus::DeviceScanEnded {
+            drive_name,
+            scan_result: ScanResultsStatus::ThreatsDetected,
+        } => summary_of(
+            AreaStatus::AreaNeedsReview,
+            gettext("Threats found on {drive}").replace("{drive}", drive_name),
+        ),
+        DeviceScanStatus::NoDeviceScanYet
+        | DeviceScanStatus::DeviceScanEnded {
+            scan_result:
+                ScanResultsStatus::NoThreatsDetected
+                | ScanResultsStatus::FinishedWithProblems
+                | ScanResultsStatus::ScanCancelled,
+            ..
+        } => summary_of(
+            AreaStatus::AreaHealthy,
+            auto_scan_state_text(removable_drives_status.auto_scan_settings),
+        ),
+    }
+}
+
 fn alerts_summary(
     protection_evidence: &ProtectionEvidence,
     alert_readiness: &AlertReadiness,
@@ -783,6 +821,9 @@ pub fn area_summary(
         SidebarArea::OnAccessScanning => on_access_summary(protection_evidence, area_context),
         SidebarArea::ScheduledScans => scheduled_scans_summary(protection_evidence, area_context),
         SidebarArea::ManualScan => manual_scan_summary(protection_evidence),
+        SidebarArea::RemovableDrives => {
+            removable_drives_summary(&area_context.removable_drives_status)
+        }
         SidebarArea::Detections => detections_summary(protection_evidence, area_context),
         SidebarArea::Quarantine => quarantine_summary(area_context.quarantine_entry_count),
         SidebarArea::AnalysisAndFalsePositives => analysis_summary(&protection_evidence.trust_list),
@@ -858,6 +899,7 @@ mod sidebar_area_status_tests {
                 service_run_journal::ScanRunHistory,
             },
         },
+        scans::removable_drives_page::drive_mount_checks::DeviceAutoScanSettings,
         signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
     };
 
@@ -869,6 +911,14 @@ mod sidebar_area_status_tests {
             },
             unresolved_detections: 0,
             quarantine_entry_count: QuarantineEntryCount::EntriesCounted { entry_count: 0 },
+            removable_drives_status: RemovableDrivesStatus {
+                auto_scan_settings: DeviceAutoScanSettings {
+                    auto_scan_enabled: true,
+                    maximum_gigabytes: 32,
+                    skip_on_battery: true,
+                },
+                device_scan_status: DeviceScanStatus::NoDeviceScanYet,
+            },
             home_directory: "/home/user".to_owned(),
             moment_formatters: english_formatters(),
             reference_moment: REFERENCE_MOMENT,
@@ -918,6 +968,7 @@ mod sidebar_area_status_tests {
                 "Blocking ~/Downloads",
                 "Next scan in 6 hours",
                 "Ready to scan",
+                "Scans drives up to 32.0\u{a0}GB",
                 "Nothing to decide",
                 "Empty",
                 "Nothing trusted",
@@ -1322,5 +1373,83 @@ mod sidebar_area_status_tests {
         );
         assert_eq!(not_excluded.area_status, AreaStatus::AreaNeedsReview);
         assert_eq!(not_excluded.live_state_text, "clamd not excluded");
+    }
+
+    fn removable_drives_summary_with(
+        auto_scan_settings: DeviceAutoScanSettings,
+        device_scan_status: DeviceScanStatus,
+    ) -> AreaSummary {
+        area_summary(
+            SidebarArea::RemovableDrives,
+            &healthy_evidence(),
+            &AreaSummaryContext {
+                removable_drives_status: RemovableDrivesStatus {
+                    auto_scan_settings,
+                    device_scan_status,
+                },
+                ..idle_context()
+            },
+        )
+    }
+
+    #[test]
+    fn removable_drives_show_the_auto_scan_choice_and_the_running_drive() {
+        let enabled_settings = idle_context().removable_drives_status.auto_scan_settings;
+        assert_eq!(
+            removable_drives_summary_with(
+                DeviceAutoScanSettings {
+                    auto_scan_enabled: false,
+                    ..enabled_settings
+                },
+                DeviceScanStatus::NoDeviceScanYet
+            ),
+            AreaSummary {
+                area_status: AreaStatus::AreaHealthy,
+                live_state_text: "Off".to_owned(),
+            }
+        );
+        assert_eq!(
+            removable_drives_summary_with(
+                DeviceAutoScanSettings {
+                    maximum_gigabytes: 0,
+                    ..enabled_settings
+                },
+                DeviceScanStatus::DeviceScanEnded {
+                    drive_name: "USB STICK".to_owned(),
+                    scan_result: ScanResultsStatus::NoThreatsDetected,
+                }
+            )
+            .live_state_text,
+            "Scans every drive"
+        );
+        assert_eq!(
+            removable_drives_summary_with(
+                enabled_settings,
+                DeviceScanStatus::DeviceScanRunning {
+                    drive_name: "USB STICK".to_owned()
+                }
+            ),
+            AreaSummary {
+                area_status: AreaStatus::AreaHealthy,
+                live_state_text: "Scanning USB STICK".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_device_scan_that_found_threats_needs_review() {
+        assert_eq!(
+            removable_drives_summary_with(
+                idle_context().removable_drives_status.auto_scan_settings,
+                DeviceScanStatus::DeviceScanEnded {
+                    drive_name: "CAMERA".to_owned(),
+                    scan_result: ScanResultsStatus::ThreatsDetected,
+                }
+            ),
+            AreaSummary {
+                area_status: AreaStatus::AreaNeedsReview,
+                live_state_text: "Threats found on CAMERA".to_owned(),
+            }
+        );
     }
 }
