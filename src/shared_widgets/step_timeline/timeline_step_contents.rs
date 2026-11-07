@@ -186,7 +186,6 @@ impl StepEvidenceRow {
 pub enum EvidenceRowControl<StepAction> {
     NoRowControl,
     RowButton(OfferedAction<StepAction>),
-    SettingsLink { settings_action: StepAction },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -368,9 +367,6 @@ impl<StepAction: StepActionButton> TimelineStep<StepAction> {
                     |actionable_row| match &actionable_row.row_control {
                         EvidenceRowControl::RowButton(offered_action) => {
                             Some(offered_action.clone())
-                        }
-                        EvidenceRowControl::SettingsLink { settings_action } => {
-                            Some(OfferedAction::plain(settings_action.clone()))
                         }
                         EvidenceRowControl::NoRowControl => None,
                     },

@@ -24,8 +24,8 @@ use crate::{
             CheckedCondition, daemon_awaited_text, evidence_row, no_guidance_step, remedy_commands,
         },
         timeline_step_contents::{
-            ActionConsequence, ActionableEvidenceRow, EvidenceMoment, EvidenceRowControl,
-            SettledStep, StepActionButton, StepActionSlot, StepEvidenceRow, TimelineStep,
+            ActionConsequence, ActionableEvidenceRow, EvidenceMoment, SettledStep,
+            StepActionButton, StepActionSlot, StepEvidenceRow, TimelineStep,
         },
     },
 };
@@ -48,15 +48,12 @@ pub type OnAccessStep = TimelineStep<OnAccessAction>;
 fn on_access_setting_row<StepAction: StepActionButton>(
     evidence_name: String,
     evidence_value: String,
-    row_control: &EvidenceRowControl<StepAction>,
 ) -> ActionableEvidenceRow<StepAction> {
-    ActionableEvidenceRow {
-        shown_evidence: StepEvidenceRow {
-            evidence_moment: EvidenceMoment::SettingValue,
-            ..evidence_row(evidence_name, evidence_value)
-        },
-        row_control: row_control.clone(),
+    StepEvidenceRow {
+        evidence_moment: EvidenceMoment::SettingValue,
+        ..evidence_row(evidence_name, evidence_value)
     }
+    .into()
 }
 
 fn clamd_config_failure_text(config_failure: ClamdConfigReadFailure) -> String {
@@ -99,29 +96,19 @@ fn size_limit_text(size_limit: &OnAccessSizeLimit) -> String {
 
 fn on_access_rows<StepAction: StepActionButton>(
     on_access_config: &OnAccessConfig,
-    row_control: &EvidenceRowControl<StepAction>,
 ) -> Vec<ActionableEvidenceRow<StepAction>> {
     match on_access_config {
         OnAccessConfig::ConfigUnreadable(config_failure) => vec![on_access_setting_row(
             gettext("Configuration"),
             clamd_config_failure_text(*config_failure),
-            row_control,
         )],
         OnAccessConfig::ConfigRead {
             watch_scope,
             size_limit,
             ..
         } => vec![
-            on_access_setting_row(
-                gettext("Watched folders"),
-                watch_scope_text(watch_scope),
-                row_control,
-            ),
-            on_access_setting_row(
-                gettext("Largest file scanned"),
-                size_limit_text(size_limit),
-                row_control,
-            ),
+            on_access_setting_row(gettext("Watched folders"), watch_scope_text(watch_scope)),
+            on_access_setting_row(gettext("Largest file scanned"), size_limit_text(size_limit)),
         ],
     }
 }
@@ -288,16 +275,11 @@ pub fn on_access_condition(
     on_access_verdict(on_access_evidence, daemon_answering).checked_condition
 }
 
-pub struct OnAccessStepControls<StepAction> {
-    pub header_action: StepActionSlot<StepAction>,
-    pub setting_row_control: EvidenceRowControl<StepAction>,
-}
-
 pub fn on_access_step<StepAction: StepActionButton>(
     on_access_evidence: &OnAccessEvidence,
     daemon_answering: bool,
     distribution_family: DistributionFamily,
-    step_controls: OnAccessStepControls<StepAction>,
+    header_action: StepActionSlot<StepAction>,
 ) -> TimelineStep<StepAction> {
     let step_title = gettext("On-access blocking");
     let mechanism_details = gettext(
@@ -311,11 +293,8 @@ pub fn on_access_step<StepAction: StepActionButton>(
         mechanism_details,
         on_access_verdict.status_text,
         SettledStep {
-            evidence_rows: on_access_rows(
-                &on_access_evidence.on_access_config,
-                &step_controls.setting_row_control,
-            ),
-            header_action: step_controls.header_action,
+            evidence_rows: on_access_rows(&on_access_evidence.on_access_config),
+            header_action,
             ..SettledStep::without_offers(on_access_verdict.checked_condition.node_state())
         },
     )
@@ -431,10 +410,7 @@ pub fn on_access_page_steps(
         &protection_evidence.on_access_evidence,
         daemon_is_answering(&protection_evidence.daemon_evidence),
         distribution_family,
-        OnAccessStepControls {
-            header_action: StepActionSlot::NoAction,
-            setting_row_control: EvidenceRowControl::NoRowControl,
-        },
+        StepActionSlot::NoAction,
     ))
     .chain(on_access_setup_steps(
         &protection_evidence.on_access_evidence,

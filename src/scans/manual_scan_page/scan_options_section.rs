@@ -7,8 +7,9 @@ use relm4::{
 };
 
 use crate::{
-    application_window::settings_navigation::{
-        SettingsSubpage, settings_link_group, system_settings_group,
+    application_window::{
+        application_pages::ApplicationPage,
+        page_links::{page_link_group, system_settings_group},
     },
     host_services::{
         clamav_scanner::scanner_command_builder::ScannerBackendPreference,
@@ -104,11 +105,8 @@ impl Component for ScanOptionsSection {
                 },
             },
 
-            append: &settings_link_group(gettext("More"), &[SettingsSubpage::ScanSchedule]),
-            append: &system_settings_group(&[
-                SettingsSubpage::DetectionChoices,
-                SettingsSubpage::ScannerEngine,
-            ]),
+            append: &page_link_group(gettext("More"), &[ApplicationPage::ScheduledScans]),
+            append: &system_settings_group(&[ApplicationPage::ScanEngine]),
         }
     }
 

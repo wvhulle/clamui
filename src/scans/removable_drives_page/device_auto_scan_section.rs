@@ -14,21 +14,11 @@ use crate::{
         DEVICE_SCAN_ENABLED_KEY, DEVICE_SCAN_MAX_GIGABYTES_KEY, DEVICE_SCAN_SETTING_KEYS,
         DEVICE_SCAN_SKIP_BATTERY_KEY, DeviceAutoScanSettings,
     },
-    shared_widgets::settings_group_reveal::{
-        ContentReadiness, GroupVisibility, ScrollAlignment, ScrollGroupIntoView,
-        SettingsGroupReveal,
-    },
 };
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DeviceSettingsGroup {
-    AutoScanGroup,
-}
 
 pub struct DeviceAutoScanSection {
     stored_settings: gio::Settings,
     auto_scan_settings: DeviceAutoScanSettings,
-    group_reveal: SettingsGroupReveal<DeviceSettingsGroup>,
 }
 
 #[derive(Debug)]
@@ -37,8 +27,6 @@ pub enum DeviceAutoScanSectionInput {
     MaximumSizeChanged(f64),
     BatterySkipToggled(bool),
     StoredSettingChanged,
-    RevealRequested,
-    VisibilityChanged(GroupVisibility),
 }
 
 #[derive(Debug)]
@@ -59,10 +47,6 @@ impl Component for DeviceAutoScanSection {
                 set_description: Some(&gettext(
                     "Automatically scan removable and external drives when they are connected.",
                 )),
-                connect_map => DeviceAutoScanSectionInput::VisibilityChanged(GroupVisibility::GroupMapped),
-                connect_unmap => DeviceAutoScanSectionInput::VisibilityChanged(GroupVisibility::GroupHidden),
-                #[track(model.group_reveal.reveals_now(DeviceSettingsGroup::AutoScanGroup))]
-                scroll_group_into_view: ScrollAlignment::GroupAtTop,
 
                 adw::SwitchRow {
                     set_title: &gettext("Enable Device Auto-Scan"),
@@ -113,7 +97,6 @@ impl Component for DeviceAutoScanSection {
         let model = Self {
             auto_scan_settings: DeviceAutoScanSettings::read_from(&stored_settings),
             stored_settings,
-            group_reveal: SettingsGroupReveal::while_hidden(),
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -125,18 +108,7 @@ impl Component for DeviceAutoScanSection {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        self.group_reveal.begin_update();
         match section_input {
-            DeviceAutoScanSectionInput::RevealRequested => {
-                self.group_reveal.reveal_requested(
-                    DeviceSettingsGroup::AutoScanGroup,
-                    ContentReadiness::ContentReady,
-                );
-            }
-            DeviceAutoScanSectionInput::VisibilityChanged(group_visibility) => {
-                self.group_reveal
-                    .visibility_changed(group_visibility, ContentReadiness::ContentReady);
-            }
             DeviceAutoScanSectionInput::AutoScanToggled(auto_scan_enabled) => {
                 self.auto_scan_settings.auto_scan_enabled = auto_scan_enabled;
                 let _read_only_settings = self

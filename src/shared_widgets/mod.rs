@@ -13,7 +13,6 @@ pub mod scan_runs;
 pub mod scanner_exit_text;
 pub mod scanner_start_failure_text;
 pub mod service_log;
-pub mod settings_group_reveal;
 pub mod step_timeline;
 pub mod system_changes;
 pub mod trust_confirmation_dialog;

@@ -2,7 +2,6 @@ use gettextrs::gettext;
 use jiff::Timestamp;
 
 use crate::{
-    application_window::settings_navigation::SettingsSubpage,
     findings::detections_page::alert_delivery_presentation::{
         AlertReadiness, alerts_condition, alerts_status_step,
     },
@@ -20,9 +19,7 @@ use crate::{
         systemd_bus::host_systemd_units::UnitState,
     },
     scans::{
-        on_access_page::on_access_presentation::{
-            OnAccessStepControls, on_access_condition, on_access_step,
-        },
+        on_access_page::on_access_presentation::{on_access_condition, on_access_step},
         scan_engine_page::scan_engine_presentation::{
             daemon_condition, daemon_step, engine_condition, engine_step,
         },
@@ -35,8 +32,8 @@ use crate::{
         runtime_reduction_steps::{ReducedSettingGroup, runtime_reduction_step},
         step_evidence_builders::{CheckedCondition, MomentContext, evidence_row, plain_rows},
         timeline_step_contents::{
-            ActionConsequence, EvidenceRowControl, OfferedAction, SettledNodeState, SettledStep,
-            StepActionButton, StepActionSlot, StepNodeState, TimelineStep,
+            ActionConsequence, OfferedAction, SettledNodeState, SettledStep, StepActionButton,
+            StepActionSlot, StepNodeState, TimelineStep,
         },
     },
     sharing::analysis_page::{
@@ -57,7 +54,6 @@ pub enum ProtectionStepAction {
     OpenManualScan,
     OpenDetections,
     OpenAnalysis,
-    ReviewSettingsSubpage(SettingsSubpage),
 }
 
 impl StepActionButton for ProtectionStepAction {
@@ -70,7 +66,6 @@ impl StepActionButton for ProtectionStepAction {
             Self::OpenManualScan => gettext("Open Manual Scan"),
             Self::OpenDetections => gettext("Open Detections"),
             Self::OpenAnalysis => gettext("Open Analysis"),
-            Self::ReviewSettingsSubpage(_) => gettext("Review"),
         }
     }
 
@@ -82,8 +77,7 @@ impl StepActionButton for ProtectionStepAction {
             | Self::OpenScheduledScans
             | Self::OpenManualScan
             | Self::OpenDetections
-            | Self::OpenAnalysis
-            | Self::ReviewSettingsSubpage(_) => ActionConsequence::OrdinaryAction,
+            | Self::OpenAnalysis => ActionConsequence::OrdinaryAction,
         }
     }
 }
@@ -146,9 +140,7 @@ fn scheduled_scan_offer(
 }
 
 fn runtime_review_action() -> StepActionSlot<ProtectionStepAction> {
-    StepActionSlot::ActionOffered(OfferedAction::plain(
-        ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::ScannerEngine),
-    ))
+    StepActionSlot::ActionOffered(OfferedAction::plain(ProtectionStepAction::OpenScanEngine))
 }
 
 fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<ProtectionStep> {
@@ -191,11 +183,11 @@ fn account_settings_step(account_findings: &[AccountSettingFinding]) -> Option<P
         SettledStep {
             evidence_rows,
             header_action: StepActionSlot::ActionOffered(OfferedAction::suggested(
-                ProtectionStepAction::ReviewSettingsSubpage(if exclusion_found {
-                    SettingsSubpage::ScanExclusions
+                if exclusion_found {
+                    ProtectionStepAction::OpenManualScan
                 } else {
-                    SettingsSubpage::ScanSchedule
-                }),
+                    ProtectionStepAction::OpenScheduledScans
+                },
             )),
             ..SettledStep::without_offers(SettledNodeState::NeedsReview)
         },
@@ -348,20 +340,10 @@ pub fn protection_timeline(
                 &protection_evidence.on_access_evidence,
                 daemon_answering,
                 distribution_family,
-                OnAccessStepControls {
-                    header_action: StepActionSlot::ActionOffered(offer_for_condition(
-                        on_access_condition(
-                            &protection_evidence.on_access_evidence,
-                            daemon_answering,
-                        ),
-                        ProtectionStepAction::OpenOnAccessScanning,
-                    )),
-                    setting_row_control: EvidenceRowControl::SettingsLink {
-                        settings_action: ProtectionStepAction::ReviewSettingsSubpage(
-                            SettingsSubpage::OnAccessScanning,
-                        ),
-                    },
-                },
+                StepActionSlot::ActionOffered(offer_for_condition(
+                    on_access_condition(&protection_evidence.on_access_evidence, daemon_answering),
+                    ProtectionStepAction::OpenOnAccessScanning,
+                )),
             ),
             scheduled_scan_step(
                 &protection_evidence.scheduled_scan_evidence,
@@ -434,7 +416,7 @@ mod protection_timeline_presentation_tests {
             systemd_bus::host_systemd_units::UnitTimestamp,
         },
         shared_widgets::step_timeline::timeline_step_contents::{
-            EvidenceMoment, StepEvidenceRow, StepPhase,
+            EvidenceMoment, EvidenceRowControl, StepEvidenceRow, StepPhase,
         },
         sharing::analysis_page::trusted_detections_section::trust_list_contents::{
             AllowlistEntries, ForeignAllowlistFile, TrustListContents,
@@ -653,11 +635,7 @@ mod protection_timeline_presentation_tests {
         );
         assert_eq!(
             row_control_named(on_access_step, "Watched folders"),
-            &EvidenceRowControl::SettingsLink {
-                settings_action: ProtectionStepAction::ReviewSettingsSubpage(
-                    SettingsSubpage::OnAccessScanning
-                )
-            }
+            &EvidenceRowControl::NoRowControl
         );
         let signature_step = step_titled(&healthy_steps, "Signatures current");
         assert_eq!(
@@ -855,7 +833,7 @@ mod protection_timeline_presentation_tests {
         assert_eq!(
             account_step.header_offer(),
             Some(OfferedAction::suggested(
-                ProtectionStepAction::ReviewSettingsSubpage(SettingsSubpage::ScanExclusions)
+                ProtectionStepAction::OpenManualScan
             ))
         );
     }

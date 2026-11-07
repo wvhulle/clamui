@@ -6,10 +6,10 @@ use relm4::{
 
 use crate::{
     application_window::{
-        application_actions::{OpenSettingsAction, ShowPageAction},
+        application_actions::ShowPageAction,
         application_pages::ApplicationPage,
+        page_links::system_settings_group,
         protection_evidence_refresh::{EvidenceRefresh, GatheredEvidence},
-        settings_navigation::{SettingsSubpage, system_settings_group},
     },
     findings::detections_page::alert_delivery_presentation::AlertReadiness,
     host_services::{
@@ -176,12 +176,6 @@ impl ProtectionTimelinePage {
             ProtectionStepAction::OpenAnalysis => {
                 show_application_page(root, ApplicationPage::Analysis);
             }
-            ProtectionStepAction::ReviewSettingsSubpage(settings_subpage) => {
-                let _action_missing = root.activate_action(
-                    &OpenSettingsAction::action_name(),
-                    Some(&settings_subpage.action_target().to_variant()),
-                );
-            }
         }
     }
 }
@@ -253,8 +247,8 @@ impl Component for ProtectionTimelinePage {
                 },
 
                 add = &system_settings_group(&[
-                    SettingsSubpage::OnAccessScanning,
-                    SettingsSubpage::TrustedDetections,
+                    ApplicationPage::OnAccessScanning,
+                    ApplicationPage::Analysis,
                 ]),
             },
             #[watch]

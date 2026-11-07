@@ -17,8 +17,8 @@ use crate::{
     APPLICATION_DATA_NAME,
     application_window::{
         application_actions::{
-            OpenDetectionAction, OpenDetectionsAction, OpenSettingsAction, QuickScanAction,
-            ScanPathsAction, ShowPageAction, UpdateDefinitionsAction, register_application_action,
+            OpenDetectionAction, OpenDetectionsAction, QuickScanAction, ScanPathsAction,
+            ShowPageAction, UpdateDefinitionsAction, register_application_action,
             register_window_action,
         },
         application_pages::{ALL_APPLICATION_PAGES, ApplicationPage},
@@ -27,7 +27,6 @@ use crate::{
             GatheringStart,
         },
         scan_slot_arbiter::{ScanSlot, ScanSlotEvent, ScanSlotReply, ScanSlotTransition},
-        settings_navigation::SettingsSubpage,
         sidebar_area_status::{
             AreaSummaryContext, SidebarAreaSummary, StatusIndicator, all_area_summaries,
             attention_summary_text, worst_area_status,
@@ -99,7 +98,6 @@ use crate::{
             audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
         },
         component_streams::{RunningStream, run_stream},
-        engine_settings::engine_settings_sections::EngineSettingsSection,
         scan_runs::scan_run_progress::PageScanActivity,
     },
     sharing::analysis_page::{
@@ -157,7 +155,6 @@ pub struct PageNavigation {
 pub enum PageNavigationInput {
     PageShown(ApplicationPage),
     NarrowContentToggled(bool),
-    SettingsSubpageOpened(SettingsSubpage),
     QuickScanRequested,
     SignatureUpdateRequested,
     ScanTargetsReceived(Vec<PathBuf>),
@@ -352,19 +349,6 @@ fn register_page_actions(
             }
         }),
     );
-    let settings_sender = sender.clone();
-    register_window_action(
-        window_root,
-        RelmAction::<OpenSettingsAction>::new_with_target_value(
-            move |_action, action_target: String| {
-                if let Some(settings_subpage) = SettingsSubpage::from_action_target(&action_target)
-                {
-                    settings_sender
-                        .input(PageNavigationInput::SettingsSubpageOpened(settings_subpage));
-                }
-            },
-        ),
-    );
     let quick_scan_sender = sender.clone();
     register_application_action(RelmAction::<QuickScanAction>::new_stateless(
         move |_action| {
@@ -497,36 +481,6 @@ impl PageNavigation {
         self.shows_content_when_narrow = true;
     }
 
-    fn reveal_embedded_settings(&self, settings_subpage: SettingsSubpage) {
-        match settings_subpage {
-            SettingsSubpage::ScannerEngine => {
-                self.scan_engine_page
-                    .emit(ScanEnginePageInput::SettingsRevealRequested(
-                        EngineSettingsSection::ScannerEngine,
-                    ))
-            }
-            SettingsSubpage::DetectionChoices => {
-                self.scan_engine_page
-                    .emit(ScanEnginePageInput::SettingsRevealRequested(
-                        EngineSettingsSection::DetectionChoices,
-                    ));
-            }
-            SettingsSubpage::OnAccessScanning => self
-                .on_access_page
-                .emit(OnAccessPageInput::SettingsRevealRequested),
-            SettingsSubpage::SignatureUpdates => self
-                .database_updates_page
-                .emit(DatabaseUpdatesPageInput::SettingsRevealRequested),
-            SettingsSubpage::ScanSchedule => self
-                .scheduled_scans_page
-                .emit(ScheduledScansPageInput::SettingsRevealRequested),
-            SettingsSubpage::DeviceAutoScan => self
-                .removable_drives_page
-                .emit(RemovableDrivesPageInput::SettingsRevealRequested),
-            SettingsSubpage::ScanExclusions | SettingsSubpage::TrustedDetections => {}
-        }
-    }
-
     fn apply_scan_slot_event(&mut self, slot_event: ScanSlotEvent) -> ScanSlotReply {
         let previous_activity = self.scan_slot.device_scan_activity();
         let ScanSlotTransition {
@@ -552,11 +506,6 @@ impl PageNavigation {
                 .emit(ScanPageInput::DeviceScanActivityChanged(next_activity));
         }
         slot_reply
-    }
-
-    fn open_settings_subpage(&mut self, settings_subpage: SettingsSubpage) {
-        self.show_page(settings_subpage.owning_page());
-        self.reveal_embedded_settings(settings_subpage);
     }
 }
 
@@ -812,7 +761,7 @@ impl Component for PageNavigation {
                      could add.",
                 ),
                 audited_categories: &SIGNATURE_AUDIT_CATEGORIES,
-                settings_subpages: &[SettingsSubpage::SignatureUpdates],
+                linked_pages: &[ApplicationPage::DatabaseUpdates],
             })
             .detach();
         let hardening_page = AuditSectionsPage::builder()
@@ -823,7 +772,7 @@ impl Component for PageNavigation {
                      reference and don't affect the Protection summary.",
                 ),
                 audited_categories: &HARDENING_AUDIT_CATEGORIES,
-                settings_subpages: &[],
+                linked_pages: &[],
             })
             .detach();
         let mut model = Self {
@@ -888,9 +837,6 @@ impl Component for PageNavigation {
             PageNavigationInput::PageShown(application_page) => self.show_page(application_page),
             PageNavigationInput::NarrowContentToggled(shows_content) => {
                 self.shows_content_when_narrow = shows_content;
-            }
-            PageNavigationInput::SettingsSubpageOpened(settings_subpage) => {
-                self.open_settings_subpage(settings_subpage);
             }
             PageNavigationInput::QuickScanRequested => {
                 self.show_page(ApplicationPage::Scan);

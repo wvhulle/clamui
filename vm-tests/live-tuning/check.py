@@ -34,21 +34,8 @@ def wait_for_user_answer():
     return machine.succeed(f"cat {USER_ANSWER_FILE}")
 
 
-def text_is_shown(expected_text):
-    return text_center_on_screen(expected_text) is not None
-
-
-def move_focus_until(shown_on_screen, focus_key, presses=60):
-    for _ in range(presses):
-        if shown_on_screen():
-            return
-        machine.send_key(focus_key)
-        time.sleep(1)
-    assert shown_on_screen(), f"pressing {focus_key} never brought the expected text on screen"
-
-
-def reveal_settings_group(settings_section):
-    activate_window_action("open-settings", settings_section)
+def show_scan_engine_page():
+    activate_window_action("show-page", "scan-engine")
     time.sleep(3)
 
 
@@ -114,9 +101,9 @@ with subtest("the Scanner Engine settings offer to unlock allowed settings"):
     activate_application_action("show-window")
     wait_for_lazaret_window()
     time.sleep(2)
-    reveal_settings_group("scanner-engine")
+    show_scan_engine_page()
+    move_focus_until(lambda: text_is_shown(LIVE_CONFIG_DESCRIPTION), "tab", presses=90)
     machine.screenshot("scanner_engine_locked")
-    machine.wait_for_text(LIVE_CONFIG_DESCRIPTION, timeout=timedelta(seconds=30))
     move_focus_until(lambda: text_is_shown(CHANGE_SETTINGS_TITLE), "shift-tab")
     machine.wait_for_text(UNLOCK_LABEL, timeout=timedelta(seconds=30))
 
@@ -129,7 +116,7 @@ with subtest("while locked, editing a setting only copies a snippet"):
     assert "MaxThreads 3" not in machine.succeed(f"cat {OVERRIDES_FILE}"), "a locked edit changed clamd"
 
 with subtest("unlocking, editing and confirming applies through a real password prompt"):
-    reveal_settings_group("detection")
+    show_scan_engine_page()
     move_focus_until(lambda: text_is_shown(CHANGE_SETTINGS_TITLE), "shift-tab")
     click_on_text(UNLOCK_LABEL)
     time.sleep(1)
@@ -145,13 +132,13 @@ with subtest("unlocking, editing and confirming applies through a real password 
     machine.wait_until_succeeds(f"grep -q 'MaxThreads 8' {MERGED_CONFIG}", timeout=timedelta(seconds=120))
     wait_for_clamd()
     time.sleep(2)
-    reveal_settings_group("detection")
+    show_scan_engine_page()
     move_focus_until(lambda: "MaxThreads = 8" in machine.get_screen_text(), "shift-tab")
     machine.screenshot("after_gui_apply")
     machine.wait_for_text("MaxThreads = 8", timeout=timedelta(seconds=60))
 
 with subtest("a second change starts from the value just applied"):
-    reveal_settings_group("scanner-engine")
+    show_scan_engine_page()
     edit_max_threads(10)
     time.sleep(2)
     machine.screenshot("confirm_second_change")

@@ -128,20 +128,6 @@ fn action_choosing_button<StepAction: StepActionButton>(
     action_button
 }
 
-fn attach_settings_link<StepAction: StepActionButton>(
-    evidence_row: &adw::ActionRow,
-    settings_action: StepAction,
-    sender: FactorySender<TimelineDetailRow<StepAction>>,
-) {
-    evidence_row.set_activatable(true);
-    evidence_row.set_tooltip_text(Some(&gettext("Change in the settings")));
-    evidence_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
-    evidence_row.connect_activated(move |_activated_row| {
-        let _step_closed =
-            sender.output(TimelineStepRowOutput::ActionChosen(settings_action.clone()));
-    });
-}
-
 fn attach_row_control<StepAction: StepActionButton>(
     evidence_row: &adw::ActionRow,
     row_control: &EvidenceRowControl<StepAction>,
@@ -151,9 +137,6 @@ fn attach_row_control<StepAction: StepActionButton>(
         EvidenceRowControl::NoRowControl => {}
         EvidenceRowControl::RowButton(offered_action) => {
             evidence_row.add_suffix(&action_choosing_button(offered_action, sender));
-        }
-        EvidenceRowControl::SettingsLink { settings_action } => {
-            attach_settings_link(evidence_row, settings_action.clone(), sender);
         }
     }
 }

@@ -21,9 +21,7 @@ use crate::{
         quarantine_vault::quarantine_entry_database::QuarantineVault,
     },
     scans::removable_drives_page::{
-        device_auto_scan_section::{
-            DeviceAutoScanSection, DeviceAutoScanSectionInput, DeviceAutoScanSectionOutput,
-        },
+        device_auto_scan_section::{DeviceAutoScanSection, DeviceAutoScanSectionOutput},
         drive_event_row::DriveEventRow,
         drive_mount_checks::{
             DeviceAutoScanSettings, DriveScanDecision, MountedDevice, SettledDriveCheck,
@@ -115,7 +113,6 @@ pub enum RemovableDrivesPageInput {
     ResultsDismissed,
     ToastRequested(String),
     QuarantineEntriesChanged,
-    SettingsRevealRequested,
     HistoryReloadRequested,
 }
 
@@ -586,10 +583,6 @@ impl Component for RemovableDrivesPage {
             RemovableDrivesPageInput::QuarantineEntriesChanged => {
                 let _shell_closed =
                     sender.output(RemovableDrivesPageOutput::QuarantineEntriesChanged);
-            }
-            RemovableDrivesPageInput::SettingsRevealRequested => {
-                self.settings_section
-                    .emit(DeviceAutoScanSectionInput::RevealRequested);
             }
             RemovableDrivesPageInput::HistoryReloadRequested => {
                 self.history_group

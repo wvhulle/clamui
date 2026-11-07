@@ -18,9 +18,9 @@ use crate::{
     },
     shared_widgets::{
         engine_settings::engine_settings_sections::{
-            EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSection,
-            EngineSettingsSections, EngineSettingsSectionsInput, EngineSettingsSectionsOutput,
-            SettingsChangeFollowUp, engine_settings_notice_toast, settings_change_follow_up,
+            EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSections,
+            EngineSettingsSectionsOutput, SettingsChangeFollowUp, engine_settings_notice_toast,
+            settings_change_follow_up,
         },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
@@ -60,7 +60,6 @@ pub enum ScanEnginePageInput {
     RefreshRequested,
     EvidenceRefreshChanged(EvidenceRefresh),
     EvidenceGathered(GatheredEvidence),
-    SettingsRevealRequested(EngineSettingsSection),
     SettingsNoticeReceived(EngineSettingsNotice),
     StepRequested(TimelineStepRowOutput<ScanEngineAction>),
     LogToastRequested(String),
@@ -243,12 +242,6 @@ impl Component for ScanEnginePage {
                 self.show_status_steps();
                 Self::inspect_socket(&sender);
             }
-            ScanEnginePageInput::SettingsRevealRequested(requested_section) => {
-                self.engine_settings_sections
-                    .emit(EngineSettingsSectionsInput::RevealRequested(
-                        requested_section,
-                    ));
-            }
             ScanEnginePageInput::SettingsNoticeReceived(settings_notice) => {
                 self.toaster
                     .add_toast(engine_settings_notice_toast(&settings_notice));
@@ -316,6 +309,5 @@ mod scan_engine_component_tests {
     #[test]
     fn one_settings_component_and_so_one_unlock_shows_both_engine_groups() {
         assert!(SCAN_ENGINE_SETTINGS_LAYOUT.shows_detection_switches());
-        assert!(SCAN_ENGINE_SETTINGS_LAYOUT.shows_config_rows());
     }
 }

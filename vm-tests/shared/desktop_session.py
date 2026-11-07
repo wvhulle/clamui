@@ -211,6 +211,19 @@ def text_center_on_screen(expected_text):
     return None
 
 
+def text_is_shown(expected_text):
+    return text_center_on_screen(expected_text) is not None
+
+
+def move_focus_until(shown_on_screen, focus_key, presses=60):
+    for _ in range(presses):
+        if shown_on_screen():
+            return
+        machine.send_key(focus_key)
+        time.sleep(1)
+    assert shown_on_screen(), f"pressing {focus_key} never brought the expected text on screen"
+
+
 def click_on_text(expected_text, timeout=30):
     started_waiting = time.monotonic()
     while time.monotonic() - started_waiting < timeout:

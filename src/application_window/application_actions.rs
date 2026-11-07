@@ -5,7 +5,6 @@ use relm4::{
 };
 
 use crate::{
-    application_window::settings_navigation::OPEN_SETTINGS_ACTION_NAME,
     findings::detections_page::detection_alerts::{OPEN_DETECTION_ACTION, OPEN_DETECTIONS_ACTION},
     host_services::desktop::running_instance_forwarding::{SCAN_PATHS_ACTION, SHOW_WINDOW_ACTION},
 };
@@ -51,13 +50,6 @@ relm4::new_stateful_action!(
 );
 
 relm4::new_stateful_action!(pub ShowPageAction, WindowActionGroup, "show-page", String, ());
-relm4::new_stateful_action!(
-    pub OpenSettingsAction,
-    WindowActionGroup,
-    OPEN_SETTINGS_ACTION_NAME,
-    String,
-    ()
-);
 
 pub fn register_application_action<Action>(registered_action: RelmAction<Action>)
 where

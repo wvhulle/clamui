@@ -21,8 +21,8 @@ use crate::{
     shared_widgets::{
         engine_settings::engine_settings_sections::{
             EngineSettingsLayout, EngineSettingsNotice, EngineSettingsSection,
-            EngineSettingsSections, EngineSettingsSectionsInput, EngineSettingsSectionsOutput,
-            SettingsChangeFollowUp, engine_settings_notice_toast, settings_change_follow_up,
+            EngineSettingsSections, EngineSettingsSectionsOutput, SettingsChangeFollowUp,
+            engine_settings_notice_toast, settings_change_follow_up,
         },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME,
@@ -58,7 +58,6 @@ pub enum OnAccessPageInput {
     RefreshRequested,
     EvidenceRefreshChanged(EvidenceRefresh),
     EvidenceGathered(GatheredEvidence),
-    SettingsRevealRequested,
     SettingsNoticeReceived(EngineSettingsNotice),
     StepRequested(TimelineStepRowOutput<OnAccessAction>),
     LogToastRequested(String),
@@ -215,13 +214,6 @@ impl Component for OnAccessPage {
         match page_input {
             OnAccessPageInput::RefreshRequested => {
                 Self::report_output(&sender, OnAccessPageOutput::EvidenceRefreshRequested);
-            }
-            OnAccessPageInput::SettingsRevealRequested => {
-                self.on_access_settings_sections.emit(
-                    EngineSettingsSectionsInput::RevealRequested(
-                        EngineSettingsSection::OnAccessScanning,
-                    ),
-                );
             }
             OnAccessPageInput::EvidenceRefreshChanged(evidence_refresh) => {
                 self.evidence_refresh = evidence_refresh;

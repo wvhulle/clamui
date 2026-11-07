@@ -49,10 +49,6 @@ use crate::{
                 DetectionSwitchState, SwitchAvailability,
             },
         },
-        settings_group_reveal::{
-            ContentReadiness, GroupVisibility, ScrollAlignment, ScrollGroupIntoView,
-            SettingsGroupReveal,
-        },
     },
 };
 
@@ -61,7 +57,6 @@ const UNLOCK_DURATION: Duration = Duration::from_secs(120);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EngineSettingsSection {
     ScannerEngine,
-    DetectionChoices,
     OnAccessScanning,
     SignatureUpdates,
 }
@@ -69,7 +64,7 @@ pub enum EngineSettingsSection {
 impl EngineSettingsSection {
     fn group_title(self) -> String {
         match self {
-            Self::ScannerEngine | Self::DetectionChoices => gettext("clamd settings"),
+            Self::ScannerEngine => gettext("clamd settings"),
             Self::OnAccessScanning => gettext("On-access scanning settings"),
             Self::SignatureUpdates => gettext("Update settings"),
         }
@@ -77,25 +72,18 @@ impl EngineSettingsSection {
 
     const fn config_kind(self) -> ClamavConfigKind {
         match self {
-            Self::ScannerEngine | Self::DetectionChoices | Self::OnAccessScanning => {
-                ClamavConfigKind::ClamdDaemonConfig
-            }
+            Self::ScannerEngine | Self::OnAccessScanning => ClamavConfigKind::ClamdDaemonConfig,
             Self::SignatureUpdates => ClamavConfigKind::FreshclamUpdaterConfig,
         }
     }
 
     const fn offers_live_tuning(self) -> bool {
-        matches!(
-            self,
-            Self::ScannerEngine | Self::DetectionChoices | Self::OnAccessScanning
-        )
+        matches!(self, Self::ScannerEngine | Self::OnAccessScanning)
     }
 
     fn read_host_config(self) -> HostConfigView {
         match self {
-            Self::ScannerEngine | Self::DetectionChoices | Self::OnAccessScanning => {
-                read_clamd_config()
-            }
+            Self::ScannerEngine | Self::OnAccessScanning => read_clamd_config(),
             Self::SignatureUpdates => read_freshclam_config(),
         }
     }
@@ -103,7 +91,6 @@ impl EngineSettingsSection {
     fn shows_setting(self, config_setting: &ConfigSetting) -> bool {
         match self {
             Self::ScannerEngine => !is_on_access_setting(config_setting),
-            Self::DetectionChoices => false,
             Self::OnAccessScanning => is_on_access_setting(config_setting),
             Self::SignatureUpdates => true,
         }
@@ -125,37 +112,8 @@ impl EngineSettingsLayout {
     }
 
     pub const fn shows_detection_switches(self) -> bool {
-        matches!(
-            self,
-            Self::EngineWithDetection
-                | Self::SingleSection(EngineSettingsSection::DetectionChoices)
-        )
+        matches!(self, Self::EngineWithDetection)
     }
-
-    pub const fn shows_config_rows(self) -> bool {
-        !matches!(
-            self,
-            Self::SingleSection(EngineSettingsSection::DetectionChoices)
-        )
-    }
-
-    const fn revealed_group_for(self, requested_section: EngineSettingsSection) -> RevealedGroup {
-        match requested_section {
-            EngineSettingsSection::DetectionChoices if self.shows_detection_switches() => {
-                RevealedGroup::DetectionSwitchGroup
-            }
-            EngineSettingsSection::DetectionChoices
-            | EngineSettingsSection::ScannerEngine
-            | EngineSettingsSection::OnAccessScanning
-            | EngineSettingsSection::SignatureUpdates => RevealedGroup::ConfigRowsGroup,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RevealedGroup {
-    DetectionSwitchGroup,
-    ConfigRowsGroup,
 }
 
 enum ConfigLoad {
@@ -256,7 +214,6 @@ const fn confirmation_verdict(
 pub struct EngineSettingsSections {
     settings_layout: EngineSettingsLayout,
     settings_section: EngineSettingsSection,
-    group_reveal: SettingsGroupReveal<RevealedGroup>,
     config_load: ConfigLoad,
     tuning_load: LiveTuningLoad,
     unlock_state: UnlockState,
@@ -282,8 +239,6 @@ pub enum EngineSettingsSectionsOutput {
 #[derive(Debug)]
 pub enum EngineSettingsSectionsInput {
     UnlockToggled(bool),
-    RevealRequested(EngineSettingsSection),
-    VisibilityChanged(GroupVisibility),
     ValueApplied {
         row_index: DynamicIndex,
         setting_key: String,
@@ -636,23 +591,6 @@ impl EngineSettingsSections {
             && matches!(self.config_load, ConfigLoad::ConfigShown { .. })
     }
 
-    const fn shows_config_rows(&self) -> bool {
-        self.settings_layout.shows_config_rows()
-    }
-
-    const fn content_readiness(&self) -> ContentReadiness {
-        match self.config_load {
-            ConfigLoad::LoadingConfig => ContentReadiness::ContentLoading,
-            ConfigLoad::ConfigShown { .. } | ConfigLoad::ConfigMissing => {
-                ContentReadiness::ContentReady
-            }
-        }
-    }
-
-    fn reveals_group(&self, revealed_group: RevealedGroup) -> bool {
-        self.group_reveal.reveals_now(revealed_group)
-    }
-
     fn detection_values(&self, detection_option: DetectionOption) -> Vec<String> {
         self.current_setting_values(
             detection_option.setting_key(),
@@ -734,8 +672,6 @@ impl Component for EngineSettingsSections {
 
     view! {
         adw::PreferencesGroup {
-            connect_map => EngineSettingsSectionsInput::VisibilityChanged(GroupVisibility::GroupMapped),
-            connect_unmap => EngineSettingsSectionsInput::VisibilityChanged(GroupVisibility::GroupHidden),
 
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
@@ -795,21 +731,16 @@ impl Component for EngineSettingsSections {
                     )),
                     #[watch]
                     set_visible: model.shows_detection_switches(),
-                    #[track(model.reveals_group(RevealedGroup::DetectionSwitchGroup))]
-                    scroll_group_into_view: ScrollAlignment::GroupAtTop,
                 },
 
                 #[local_ref]
                 setting_rows_group -> adw::PreferencesGroup {
                     set_title: &model.settings_section.group_title(),
-                    set_visible: model.shows_config_rows(),
                     #[watch]
                     set_description: Some(&glib::markup_escape_text(
                         &model.config_group_description(),
                     )),
 
-                    #[track(model.reveals_group(RevealedGroup::ConfigRowsGroup))]
-                    scroll_group_into_view: ScrollAlignment::GroupAtTop,
 
                     adw::ActionRow {
                         set_title: &gettext("No settings in this section"),
@@ -858,7 +789,6 @@ impl Component for EngineSettingsSections {
         let model = Self {
             settings_layout,
             settings_section,
-            group_reveal: SettingsGroupReveal::while_hidden(),
             config_load: ConfigLoad::LoadingConfig,
             tuning_load: if settings_section.offers_live_tuning() {
                 LiveTuningLoad::LoadingTuning
@@ -903,20 +833,7 @@ impl Component for EngineSettingsSections {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
-        self.group_reveal.begin_update();
         match page_input {
-            EngineSettingsSectionsInput::RevealRequested(requested_section) => {
-                let content_readiness = self.content_readiness();
-                self.group_reveal.reveal_requested(
-                    self.settings_layout.revealed_group_for(requested_section),
-                    content_readiness,
-                );
-            }
-            EngineSettingsSectionsInput::VisibilityChanged(group_visibility) => {
-                let content_readiness = self.content_readiness();
-                self.group_reveal
-                    .visibility_changed(group_visibility, content_readiness);
-            }
             EngineSettingsSectionsInput::UnlockToggled(true) => {
                 self.unlock_count += 1;
                 let relock_generation = self.unlock_count;
@@ -1044,7 +961,6 @@ impl Component for EngineSettingsSections {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        self.group_reveal.begin_update();
         match page_command {
             EngineSettingsSectionsCommand::ConfigLoaded {
                 host_config,
@@ -1083,8 +999,6 @@ impl Component for EngineSettingsSections {
                     }
                     HostConfigView::ConfigNotFound => self.config_load = ConfigLoad::ConfigMissing,
                 }
-                let content_readiness = self.content_readiness();
-                self.group_reveal.reveal_when_ready(content_readiness);
             }
             EngineSettingsSectionsCommand::RelockDue { relock_generation } => {
                 if matches!(
@@ -1268,16 +1182,5 @@ mod engine_settings_sections_tests {
     #[test]
     fn the_scan_engine_layout_shows_both_sections_under_one_unlock() {
         assert!(EngineSettingsLayout::EngineWithDetection.shows_detection_switches());
-        assert!(EngineSettingsLayout::EngineWithDetection.shows_config_rows());
-        assert_eq!(
-            EngineSettingsLayout::EngineWithDetection
-                .revealed_group_for(EngineSettingsSection::DetectionChoices),
-            RevealedGroup::DetectionSwitchGroup
-        );
-        assert_eq!(
-            EngineSettingsLayout::EngineWithDetection
-                .revealed_group_for(EngineSettingsSection::ScannerEngine),
-            RevealedGroup::ConfigRowsGroup
-        );
     }
 }

@@ -1,10 +1,10 @@
 pub mod application_actions;
 pub mod application_pages;
 pub mod application_window_shell;
+pub mod page_links;
 pub mod page_navigation;
 pub mod protection_evidence_refresh;
 pub mod scan_slot_arbiter;
-pub mod settings_navigation;
 pub mod sidebar_area_status;
 pub mod startup_arguments;
 pub mod system_tray_connection;

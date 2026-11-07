@@ -5,7 +5,7 @@ use relm4::{
 };
 
 use crate::{
-    application_window::settings_navigation::{SettingsSubpage, system_settings_group},
+    application_window::{application_pages::ApplicationPage, page_links::system_settings_group},
     host_services::{
         clamav_programs::distribution_install_guides::{
             DistributionFamily, detect_distribution_family,
@@ -36,7 +36,7 @@ pub struct AuditSectionsPageInit {
     pub page_title: String,
     pub page_description: String,
     pub audited_categories: &'static [AuditCategory],
-    pub settings_subpages: &'static [SettingsSubpage],
+    pub linked_pages: &'static [ApplicationPage],
 }
 
 #[derive(Debug)]
@@ -164,8 +164,8 @@ impl Component for AuditSectionsPage {
             .for_each(|audit_category| {
                 model.section_groups.guard().push_back(audit_category);
             });
-        if !page_init.settings_subpages.is_empty() {
-            sections_preferences_page.add(&system_settings_group(page_init.settings_subpages));
+        if !page_init.linked_pages.is_empty() {
+            sections_preferences_page.add(&system_settings_group(page_init.linked_pages));
         }
         model.start_section_audit(&sender);
         ComponentParts { model, widgets }
