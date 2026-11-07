@@ -796,11 +796,11 @@ mod sidebar_area_status_tests {
                     ProgramTrustInspection, ReducedSetting, RuntimeReductions, ScanUnitResult,
                     UpdaterEvidence, UpdaterUnitResult,
                 },
+                protection_evidence_fixtures::{
+                    REFERENCE_MOMENT, english_formatters, healthy_evidence,
+                },
                 service_run_journal::ScanRunHistory,
             },
-        },
-        protection_page::protection_evidence_fixtures::{
-            REFERENCE_MOMENT, english_formatters, healthy_evidence,
         },
         signatures::database_updates_page::signature_update_run::updater_exit_status::SignatureUpdaterProgram,
     };

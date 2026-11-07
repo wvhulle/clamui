@@ -15,10 +15,6 @@ use crate::{
         settings_helper::helper_audit_records::{HelperAuditEntry, newest_helper_audit_entries},
     },
     logs_page::{
-        activity_entry_row::ActivityEntryRow,
-        activity_export_formats::{
-            activity_detail_text, activity_entries_as_csv, activity_entries_as_json,
-        },
         activity_logs_state::{
             DaemonLogView, HistoryActionOutcome, HistoryView, SystemChangesReadFailure,
             SystemChangesView,
@@ -27,6 +23,12 @@ use crate::{
         system_change_row::SystemChangeRow,
     },
     shared_widgets::{
+        activity_entries::{
+            activity_entry_row::ActivityEntryRow,
+            activity_export_formats::{
+                activity_detail_text, activity_entries_as_csv, activity_entries_as_json,
+            },
+        },
         awaited_dialogs::{
             AlertChoice, TextExportOutcome, add_alert_choice, add_dismissing_choice, alert_choice,
             deliver_local_outcome, describe_export_failure, exported_text as exported_text_file,

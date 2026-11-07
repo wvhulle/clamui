@@ -12,7 +12,9 @@ use crate::{
         },
         desktop::locale_formatting::exact_local_time_text,
     },
-    logs_page::activity_export_formats::{activity_status_text, activity_summary_text},
+    shared_widgets::activity_entries::activity_export_formats::{
+        activity_status_text, activity_summary_text,
+    },
 };
 
 fn status_icon(activity_record: &ActivityRecord) -> &'static str {

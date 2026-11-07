@@ -1915,10 +1915,10 @@ mod protection_timeline_presentation_tests {
     use crate::{
         host_services::{
             clamav_programs::database_directory_status::DatabaseFolderReadFailure,
+            protection_evidence::protection_evidence_fixtures::{
+                REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
+            },
             systemd_bus::host_systemd_units::ServiceFailureKind,
-        },
-        protection_page::protection_evidence_fixtures::{
-            REFERENCE_MOMENT, empty_trust_list, english_formatters, healthy_evidence,
         },
         shared_widgets::step_timeline::timeline_step_contents::StepPhase,
         sharing::analysis_page::trusted_detections_page::trust_list_contents::TrustListReadFailure,

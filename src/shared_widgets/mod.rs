@@ -1,3 +1,4 @@
+pub mod activity_entries;
 pub mod audit_sections;
 pub mod awaited_dialogs;
 pub mod component_streams;
