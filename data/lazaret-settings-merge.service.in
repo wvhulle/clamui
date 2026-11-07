@@ -8,4 +8,4 @@ RemainAfterExit=yes
 StateDirectory=lazaret
 RuntimeDirectory=lazaret
 RuntimeDirectoryPreserve=yes
-ExecStart=@HELPER_PATH@ merge
+ExecStart=@ADMIN_SERVICE_PATH@ merge

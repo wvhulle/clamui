@@ -1,12 +1,12 @@
 [Unit]
-Description=Lazaret settings helper
+Description=Lazaret ClamAV admin service
 Requires=lazaret-settings-merge.service
 After=lazaret-settings-merge.service
 
 [Service]
 Type=dbus
-BusName=page.codeberg.wvhulle.Lazaret.SettingsHelper
-ExecStart=@HELPER_PATH@ serve
+BusName=page.codeberg.wvhulle.Lazaret.ClamavAdmin
+ExecStart=@ADMIN_SERVICE_PATH@ serve
 StateDirectory=lazaret
 RuntimeDirectory=lazaret
 RuntimeDirectoryPreserve=yes

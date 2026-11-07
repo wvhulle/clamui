@@ -12,14 +12,14 @@ use crate::{
         trust_list_row::{TrustListRow, TrustListRowOutput, TrustRemoval},
     },
     host_services::{
-        desktop::locale_formatting::{byte_size_text, exact_local_time_text},
-        settings_helper::{
-            helper_audit_records::{
-                AuditedAction, HelperAuditEntry, Requester, latest_applied_entry,
-                newest_helper_audit_entries,
+        clamav_admin_service::{
+            admin_audit_records::{
+                AdminAuditEntry, AuditedAction, Requester, latest_applied_entry,
+                newest_admin_audit_entries,
             },
             trust_requests::{TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text},
         },
+        desktop::locale_formatting::{byte_size_text, exact_local_time_text},
         systemd_journal::unit_journal_reader::{UnitJournalReadFailure, read_journal_off_thread},
     },
     shared_widgets::{
@@ -32,7 +32,7 @@ const AUDIT_ENTRY_LIMIT: usize = 500;
 
 #[derive(Clone, Debug)]
 pub enum AuditHistoryReading {
-    EntriesRead(Vec<HelperAuditEntry>),
+    EntriesRead(Vec<AdminAuditEntry>),
     JournalUnreadable(UnitJournalReadFailure),
 }
 
@@ -66,7 +66,7 @@ impl TrustedDetectionsState {
 pub async fn load_trusted_detections() -> TrustedDetectionsSnapshot {
     TrustedDetectionsSnapshot {
         trust_list: read_configured_trust_list().await,
-        audit_history: read_journal_off_thread(|| newest_helper_audit_entries(AUDIT_ENTRY_LIMIT))
+        audit_history: read_journal_off_thread(|| newest_admin_audit_entries(AUDIT_ENTRY_LIMIT))
             .await
             .map_or_else(
                 AuditHistoryReading::JournalUnreadable,

@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=page.codeberg.wvhulle.Lazaret.ClamavAdmin
+Exec=/bin/false
+User=root
+SystemdService=lazaret-clamav-admin.service

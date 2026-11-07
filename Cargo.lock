@@ -2610,6 +2610,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazaret-clamav-admin"
+version = "0.1.0"
+dependencies = [
+ "rustix 1.1.5",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "lazaret-clamd-configuration"
 version = "0.1.0"
 dependencies = [
@@ -2618,17 +2629,6 @@ dependencies = [
  "serde",
  "thiserror",
  "toml",
-]
-
-[[package]]
-name = "lazaret-settings-helper"
-version = "0.1.0"
-dependencies = [
- "rustix 1.1.5",
- "tempfile",
- "thiserror",
- "tokio",
- "zbus",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 use gettextrs::gettext;
 use relm4::{FactorySender, adw, adw::prelude::*, gtk, prelude::FactoryComponent};
 
-use crate::host_services::settings_helper::trust_requests::TrustChoice;
+use crate::host_services::clamav_admin_service::trust_requests::TrustChoice;
 
 #[derive(Clone, Debug)]
 pub enum TrustRemoval {

@@ -29,7 +29,7 @@ const PACKAGING_DIRECTORY: &str = "target/debian-package";
 const LICENSE_PATH: &str = "LICENSE";
 const SHLIBS_DEPENDS_PREFIX: &str = "shlibs:Depends=";
 const APPLICATION_BINARY: &str = "usr/bin/lazaret";
-const SETTINGS_HELPER_BINARY: &str = "usr/libexec/lazaret/lazaret-settings-helper";
+const CLAMAV_ADMIN_BINARY: &str = "usr/libexec/lazaret/lazaret-clamav-admin";
 const TUNABLE_SETTINGS_CONFFILE: &str = "/etc/lazaret/tunable-settings";
 const COMPILED_SCHEMAS_PATH: &str = "/usr/share/glib-2.0/schemas/gschemas.compiled";
 const BASE_CLAMD_CONFIG_PATH: &str = "/etc/clamav/clamd.conf";
@@ -37,11 +37,11 @@ const MERGED_CLAMD_CONFIG_PATH: &str = "/run/lazaret/clamd.conf";
 const RUNTIME_DEPENDENCIES: &str =
     "clamav, dconf-gsettings-backend | gsettings-backend, hicolor-icon-theme";
 const RECOMMENDED_PACKAGES: &str = "clamav-daemon, clamdscan, clamav-freshclam, polkitd";
-const INSTALLED_HELPER_FILES: [&str; 6] = [
+const INSTALLED_ADMIN_SERVICE_FILES: [&str; 6] = [
     "/usr/share/polkit-1/actions/page.codeberg.wvhulle.Lazaret.policy",
-    "/usr/share/dbus-1/system.d/page.codeberg.wvhulle.Lazaret.SettingsHelper.conf",
-    "/usr/share/dbus-1/system-services/page.codeberg.wvhulle.Lazaret.SettingsHelper.service",
-    "/usr/lib/systemd/system/lazaret-settings-helper.service",
+    "/usr/share/dbus-1/system.d/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf",
+    "/usr/share/dbus-1/system-services/page.codeberg.wvhulle.Lazaret.ClamavAdmin.service",
+    "/usr/lib/systemd/system/lazaret-clamav-admin.service",
     "/usr/lib/systemd/system/lazaret-settings-merge.service",
     "/usr/lib/systemd/user/lazaret.service",
 ];
@@ -91,7 +91,7 @@ fn detect_shared_library_dependencies(packaging_directory: &Path) -> Result<Stri
         Command::new("dpkg-shlibdeps")
             .arg("-O")
             .arg(Path::new("root").join(APPLICATION_BINARY))
-            .arg(Path::new("root").join(SETTINGS_HELPER_BINARY))
+            .arg(Path::new("root").join(CLAMAV_ADMIN_BINARY))
             .current_dir(packaging_directory),
     )?;
     shared_library_dependencies(&shlibdeps_output)
@@ -131,7 +131,7 @@ fn stage_installed_files(package_root: &Path) -> Result<(), TaskFailure> {
         Command::new("strip")
             .arg("--strip-unneeded")
             .arg(package_root.join(APPLICATION_BINARY))
-            .arg(package_root.join(SETTINGS_HELPER_BINARY)),
+            .arg(package_root.join(CLAMAV_ADMIN_BINARY)),
     )
 }
 
@@ -255,8 +255,8 @@ fn check_binary_libraries_resolve(binary_path: &Path) -> Result<(), TaskFailure>
 fn check_merge_keeps_base_config() -> Result<(), TaskFailure> {
     fs::create_dir_all("/run/lazaret")?;
     run_tool(
-        "lazaret-settings-helper",
-        Command::new(Path::new("/").join(SETTINGS_HELPER_BINARY)).arg("merge"),
+        "lazaret-clamav-admin",
+        Command::new(Path::new("/").join(CLAMAV_ADMIN_BINARY)).arg("merge"),
     )?;
     if fs::read(BASE_CLAMD_CONFIG_PATH)? == fs::read(MERGED_CLAMD_CONFIG_PATH)? {
         Ok(())
@@ -277,13 +277,13 @@ pub fn check_debian_package_install(packages_directory: &Path) -> Result<(), Tas
             .args(&package_paths),
     )?;
     check_binary_libraries_resolve(&Path::new("/").join(APPLICATION_BINARY))?;
-    check_binary_libraries_resolve(&Path::new("/").join(SETTINGS_HELPER_BINARY))?;
+    check_binary_libraries_resolve(&Path::new("/").join(CLAMAV_ADMIN_BINARY))?;
     if !compiled_schemas_contain_application(&fs::read(COMPILED_SCHEMAS_PATH)?) {
         return Err(TaskFailure::CompiledSchemaMissing {
             application_id: APPLICATION_ID,
         });
     }
-    if let Some(missing_file) = INSTALLED_HELPER_FILES
+    if let Some(missing_file) = INSTALLED_ADMIN_SERVICE_FILES
         .iter()
         .find(|installed_file| !Path::new(installed_file).exists())
     {

@@ -5,12 +5,12 @@ use jiff::Timestamp;
 use systemd::journal::Journal;
 
 use crate::host_services::{
+    clamav_admin_service::protection_change_rules::ProtectionReduction,
     clamav_scanner::scanner_output_parser::sanitize_scanner_line,
-    settings_helper::protection_change_rules::ProtectionReduction,
     systemd_journal::unit_journal_reader::{journal_field_value, open_system_journal},
 };
 
-const HELPER_SERVICE_UNIT: &str = "lazaret-settings-helper.service";
+const HELPER_SERVICE_UNIT: &str = "lazaret-clamav-admin.service";
 const SYSTEMD_UNIT_FIELD: &str = "_SYSTEMD_UNIT";
 const SENDER_USER_FIELD: &str = "_UID";
 const ROOT_USER_ID: &str = "0";
@@ -127,7 +127,7 @@ impl RecordedReduction {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HelperAuditEntry {
+pub struct AdminAuditEntry {
     pub recorded_at: Timestamp,
     pub audited_action: AuditedAction,
     pub action_subject: String,
@@ -136,7 +136,7 @@ pub struct HelperAuditEntry {
     pub recorded_reduction: RecordedReduction,
 }
 
-impl HelperAuditEntry {
+impl AdminAuditEntry {
     pub const fn lowered_protection(&self) -> bool {
         self.recorded_reduction.weakens_protection()
             && matches!(self.audited_outcome, AuditedOutcome::ActionApplied)
@@ -164,9 +164,9 @@ impl HelperAuditEntry {
 }
 
 pub fn latest_applied_entry<'entries>(
-    audit_entries: &'entries [HelperAuditEntry],
+    audit_entries: &'entries [AdminAuditEntry],
     wanted_action: &AuditedAction,
-) -> Option<&'entries HelperAuditEntry> {
+) -> Option<&'entries AdminAuditEntry> {
     audit_entries.iter().find(|audit_entry| {
         audit_entry.audited_outcome == AuditedOutcome::ActionApplied
             && audit_entry.audited_action == *wanted_action
@@ -309,8 +309,8 @@ fn recorded_reduction_from_fields(journal_fields: &AuditJournalFields) -> Record
 fn audit_entry_from_fields(
     recorded_at: Timestamp,
     journal_fields: &AuditJournalFields,
-) -> HelperAuditEntry {
-    HelperAuditEntry {
+) -> AdminAuditEntry {
+    AdminAuditEntry {
         recorded_at,
         audited_action: audited_action_from_fields(journal_fields),
         action_subject: sanitize_scanner_line(&journal_fields.action_subject),
@@ -330,7 +330,7 @@ fn journal_field_presence(
         }))
 }
 
-pub fn newest_helper_audit_entries(entry_limit: usize) -> systemd::Result<Vec<HelperAuditEntry>> {
+pub fn newest_admin_audit_entries(entry_limit: usize) -> systemd::Result<Vec<AdminAuditEntry>> {
     let mut journal = open_system_journal()?;
     journal.match_add(SYSTEMD_UNIT_FIELD, HELPER_SERVICE_UNIT)?;
     journal.match_and()?;
@@ -366,7 +366,7 @@ pub fn newest_helper_audit_entries(entry_limit: usize) -> systemd::Result<Vec<He
 }
 
 #[cfg(test)]
-mod helper_audit_records_tests {
+mod admin_audit_records_tests {
     use super::*;
 
     fn present_field(field_value: &str) -> JournalFieldPresence {
@@ -385,7 +385,7 @@ mod helper_audit_records_tests {
         }
     }
 
-    fn entry_of(journal_fields: &AuditJournalFields) -> HelperAuditEntry {
+    fn entry_of(journal_fields: &AuditJournalFields) -> AdminAuditEntry {
         audit_entry_from_fields(Timestamp::UNIX_EPOCH, journal_fields)
     }
 
@@ -431,7 +431,7 @@ mod helper_audit_records_tests {
         });
         assert!(!audit_entry.lowered_protection());
         assert!(
-            HelperAuditEntry {
+            AdminAuditEntry {
                 audited_outcome: AuditedOutcome::ActionApplied,
                 ..audit_entry
             }
@@ -612,7 +612,7 @@ mod helper_audit_records_tests {
     fn host_audit_entries_are_readable() {
         println!(
             "{:#?}",
-            newest_helper_audit_entries(10).expect("readable journal")
+            newest_admin_audit_entries(10).expect("readable journal")
         );
     }
 

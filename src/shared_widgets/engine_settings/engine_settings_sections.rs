@@ -8,6 +8,13 @@ use relm4::{
 
 use crate::{
     host_services::{
+        clamav_admin_service::{
+            live_settings_client::{
+                LiveChangeFailure, LiveChangeOutcome, LiveTuning, OverrideSetting,
+                apply_live_change, change_confirmation_text, change_effect, read_live_tuning,
+            },
+            protection_change_rules::ProtectionReduction,
+        },
         clamav_config::{
             clamav_host_config::{
                 ConfigSetting, HostConfigView, is_on_access_setting, read_clamd_config,
@@ -23,13 +30,6 @@ use crate::{
             typed_setting_values::TypedSettingValue,
         },
         clamav_scanner::scanner_output_parser::{sanitize_scanner_line, sanitize_scanner_text},
-        settings_helper::{
-            live_settings_client::{
-                LiveChangeFailure, LiveChangeOutcome, LiveTuning, OverrideSetting,
-                apply_live_change, change_confirmation_text, change_effect, read_live_tuning,
-            },
-            protection_change_rules::ProtectionReduction,
-        },
     },
     shared_widgets::{
         awaited_dialogs::{
@@ -371,13 +371,17 @@ fn live_change_failure_text(change_failure: &LiveChangeFailure) -> String {
     };
     match change_failure {
         LiveChangeFailure::AuthorizationRefused => gettext("Nothing changed without your password"),
-        LiveChangeFailure::HelperMissing => gettext(
-            "This installation has no settings helper, so ClamAV's settings can't be changed from \
-             Lazaret",
+        LiveChangeFailure::AdminServiceMissing => gettext(
+            "This installation has no ClamAV admin service, so ClamAV's settings can't be changed \
+             from Lazaret",
         ),
-        LiveChangeFailure::UnknownHelperAnswer { helper_answer } => change_not_made(helper_answer),
-        LiveChangeFailure::ReportedByHelper { helper_message } => change_not_made(helper_message),
-        LiveChangeFailure::HelperCallFailed(call_failure) => {
+        LiveChangeFailure::UnknownAdminServiceAnswer {
+            admin_service_answer,
+        } => change_not_made(admin_service_answer),
+        LiveChangeFailure::ReportedByAdminService {
+            admin_service_message,
+        } => change_not_made(admin_service_message),
+        LiveChangeFailure::AdminServiceCallFailed(call_failure) => {
             change_not_made(&call_failure.to_string())
         }
     }
@@ -530,7 +534,7 @@ impl EngineSettingsSections {
                 LiveTuningLoad::TuningRead(LiveTuning::Available {
                     tunable_settings, ..
                 }) => !tunable_settings.is_empty(),
-                LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+                LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
                 | LiveTuningLoad::TuningNotOffered
                 | LiveTuningLoad::LoadingTuning => false,
             }
@@ -543,7 +547,7 @@ impl EngineSettingsSections {
             }) => tunable_settings
                 .iter()
                 .any(|tunable_key| tunable_key == setting_key),
-            LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+            LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
             | LiveTuningLoad::TuningNotOffered
             | LiveTuningLoad::LoadingTuning => false,
         }
@@ -554,17 +558,17 @@ impl EngineSettingsSections {
             LiveTuningLoad::TuningRead(LiveTuning::Available {
                 active_overrides, ..
             }) => active_overrides,
-            LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+            LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
             | LiveTuningLoad::TuningNotOffered
             | LiveTuningLoad::LoadingTuning => &[],
         }
     }
 
-    const fn helper_is_unavailable(&self) -> bool {
+    const fn admin_service_is_unavailable(&self) -> bool {
         self.settings_section.offers_live_tuning()
             && matches!(
                 self.tuning_load,
-                LiveTuningLoad::TuningRead(LiveTuning::HelperUnavailable(_))
+                LiveTuningLoad::TuningRead(LiveTuning::AdminServiceUnavailable(_))
             )
     }
 
@@ -619,13 +623,13 @@ impl EngineSettingsSections {
             } => {
                 if self.offers_live_changes() {
                     live_tunable_config_description(config_path)
-                } else if self.helper_is_unavailable() {
+                } else if self.admin_service_is_unavailable() {
                     format!(
                         "{}\n\n{}",
                         managed_config_description(*config_file_owner, config_path),
                         gettext(
-                            "Settings can't be changed here right now: the Lazaret settings \
-                             helper could not be reached."
+                            "Settings can't be changed here right now: the Lazaret ClamAV admin \
+                             service could not be reached."
                         )
                     )
                 } else {

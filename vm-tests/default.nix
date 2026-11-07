@@ -13,7 +13,7 @@ let
     detection-alerts = "a desktop with on-access blocking, for alerts, the tray and quarantining a blocked file";
     scheduled-scan = "a desktop with a system scan timer, for Run Now through a real password prompt";
     signature-update = "updaters with no network and a fixture URLhaus key, for Update Now keeping keys out of the UI";
-    live-tuning = "the root helper, with real polkit prompts, refused settings and rollback";
+    live-tuning = "the root admin service, with real polkit prompts, refused settings and rollback";
   };
 in
 {

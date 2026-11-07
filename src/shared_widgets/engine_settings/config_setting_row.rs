@@ -8,6 +8,7 @@ use relm4::{
 };
 
 use crate::host_services::{
+    clamav_admin_service::protection_change_rules::whole_number_in_text,
     clamav_config::{
         setting_provenance::SettingLock,
         typed_setting_values::{
@@ -15,7 +16,6 @@ use crate::host_services::{
             TypedSettingValue, parse_setting_value,
         },
     },
-    settings_helper::protection_change_rules::whole_number_in_text,
 };
 
 const SIZE_COUNT_CEILING: f64 = 4_294_967_295.0;

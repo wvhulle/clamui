@@ -1,6 +1,6 @@
 use crate::{
-    host_services::settings_helper::helper_audit_records::{
-        AuditedAction, HelperAuditEntry, newest_helper_audit_entries,
+    host_services::clamav_admin_service::admin_audit_records::{
+        AdminAuditEntry, AuditedAction, newest_admin_audit_entries,
     },
     shared_widgets::{
         loading_indicators::{LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME},
@@ -35,8 +35,8 @@ impl SystemChangesView {
     }
 }
 
-pub async fn read_system_changes() -> Result<Vec<HelperAuditEntry>, SystemChangesReadFailure> {
-    tokio::task::spawn_blocking(|| newest_helper_audit_entries(SYSTEM_CHANGE_LIMIT))
+pub async fn read_system_changes() -> Result<Vec<AdminAuditEntry>, SystemChangesReadFailure> {
+    tokio::task::spawn_blocking(|| newest_admin_audit_entries(SYSTEM_CHANGE_LIMIT))
         .await
         .map_err(SystemChangesReadFailure::from)
         .and_then(|journal_outcome| journal_outcome.map_err(SystemChangesReadFailure::from))
@@ -49,14 +49,14 @@ pub enum AuditTopic {
     TrustChanges,
 }
 
-fn changes_settings_of(audit_entry: &HelperAuditEntry, setting_group: ReducedSettingGroup) -> bool {
+fn changes_settings_of(audit_entry: &AdminAuditEntry, setting_group: ReducedSettingGroup) -> bool {
     audit_entry
         .changed_setting_keys()
         .into_iter()
         .any(|setting_key| setting_group.includes_setting(setting_key))
 }
 
-pub fn audit_entry_concerns_topic(audit_entry: &HelperAuditEntry, audit_topic: AuditTopic) -> bool {
+pub fn audit_entry_concerns_topic(audit_entry: &AdminAuditEntry, audit_topic: AuditTopic) -> bool {
     match (&audit_entry.audited_action, audit_topic) {
         (AuditedAction::ChangeSettings, AuditTopic::EngineChanges) => {
             changes_settings_of(audit_entry, ReducedSettingGroup::EngineSettings)
@@ -80,9 +80,9 @@ pub fn audit_entry_concerns_topic(audit_entry: &HelperAuditEntry, audit_topic: A
 }
 
 pub fn audit_entries_for_topic(
-    audit_entries: Vec<HelperAuditEntry>,
+    audit_entries: Vec<AdminAuditEntry>,
     audit_topic: AuditTopic,
-) -> Vec<HelperAuditEntry> {
+) -> Vec<AdminAuditEntry> {
     audit_entries
         .into_iter()
         .filter(|audit_entry| audit_entry_concerns_topic(audit_entry, audit_topic))
@@ -94,12 +94,12 @@ mod system_changes_state_tests {
     use jiff::Timestamp;
 
     use super::*;
-    use crate::host_services::settings_helper::helper_audit_records::{
+    use crate::host_services::clamav_admin_service::admin_audit_records::{
         AuditedOutcome, RecordedReduction, Requester,
     };
 
-    fn audit_entry(audited_action: AuditedAction, action_subject: &str) -> HelperAuditEntry {
-        HelperAuditEntry {
+    fn audit_entry(audited_action: AuditedAction, action_subject: &str) -> AdminAuditEntry {
+        AdminAuditEntry {
             recorded_at: Timestamp::UNIX_EPOCH,
             audited_action,
             action_subject: action_subject.to_owned(),
@@ -109,7 +109,7 @@ mod system_changes_state_tests {
         }
     }
 
-    fn sample_entries() -> Vec<HelperAuditEntry> {
+    fn sample_entries() -> Vec<AdminAuditEntry> {
         vec![
             audit_entry(AuditedAction::ChangeSettings, "OnAccessPrevention no"),
             audit_entry(AuditedAction::ChangeSettings, "DetectPUA no"),

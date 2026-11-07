@@ -1,5 +1,0 @@
-[D-BUS Service]
-Name=page.codeberg.wvhulle.Lazaret.SettingsHelper
-Exec=/bin/false
-User=root
-SystemdService=lazaret-settings-helper.service

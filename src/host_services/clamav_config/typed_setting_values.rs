@@ -1,4 +1,4 @@
-use crate::host_services::settings_helper::protection_change_rules::{
+use crate::host_services::clamav_admin_service::protection_change_rules::{
     SettingValueKind, limit_in_units, path_is_absolute_and_contained, setting_value_kind,
     value_fits_setting_kind, value_has_only_safe_characters, whole_number_in_text,
 };
@@ -419,7 +419,7 @@ mod typed_setting_values_tests {
     }
 
     #[test]
-    fn parsing_agrees_with_what_the_helper_accepts() {
+    fn parsing_agrees_with_what_the_admin_service_accepts() {
         [
             ("OnAccessPrevention", "yes"),
             ("OnAccessPrevention", "maybe"),

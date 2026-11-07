@@ -5,8 +5,8 @@ use relm4::{
 
 use crate::{
     host_services::{
+        clamav_admin_service::admin_audit_records::AdminAuditEntry,
         desktop::failure_journal_log::log_failure_to_journal,
-        settings_helper::helper_audit_records::HelperAuditEntry,
     },
     shared_widgets::{
         loading_indicators::{
@@ -41,7 +41,7 @@ pub enum SystemChangesGroupInput {
 
 #[derive(Debug)]
 pub enum SystemChangesGroupCommand {
-    SystemChangesLoaded(Result<Vec<HelperAuditEntry>, SystemChangesReadFailure>),
+    SystemChangesLoaded(Result<Vec<AdminAuditEntry>, SystemChangesReadFailure>),
 }
 
 pub fn system_changes_failure_text(system_changes_view: &SystemChangesView) -> String {
@@ -63,7 +63,7 @@ impl SystemChangesGroup {
         });
     }
 
-    fn replace_rows(&mut self, audit_entries: Vec<HelperAuditEntry>) {
+    fn replace_rows(&mut self, audit_entries: Vec<AdminAuditEntry>) {
         let mut row_guard = self.system_change_rows.guard();
         row_guard.clear();
         audit_entries.into_iter().for_each(|audit_entry| {

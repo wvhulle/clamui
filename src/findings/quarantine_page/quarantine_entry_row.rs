@@ -11,6 +11,7 @@ use crate::{
         EntryRowState, QuarantineRowInit, RowActivity, RowRecheckState, RowReputation,
     },
     host_services::{
+        clamav_admin_service::trust_requests::{FileFingerprint, TrustChoice},
         clamav_programs::clamav_report_submission::{ClamavReportKind, SubmittedContent},
         clamav_scanner::{
             content_verdict::ContentVerdict,
@@ -21,7 +22,6 @@ use crate::{
             quarantine_entry_database::{QuarantineEntryRecord, StoredDetectionDate},
             quarantine_file_moves::RecordedPayloadHash,
         },
-        settings_helper::trust_requests::{FileFingerprint, TrustChoice},
         threat_intel::file_reputation_check::{ReputationAnswers, SourceAnswer},
     },
     shared_widgets::submission_confirm_dialog::ClamavReportProposal,

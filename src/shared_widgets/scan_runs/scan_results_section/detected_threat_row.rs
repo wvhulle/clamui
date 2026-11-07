@@ -11,15 +11,15 @@ use relm4::{
 
 use crate::{
     host_services::{
+        clamav_admin_service::trust_requests::{
+            TrustChoice, signature_can_be_ignored, signature_of_detection,
+        },
         clamav_programs::clamav_report_submission::{ClamavReportKind, SubmittedContent},
         clamav_scanner::scanner_output_parser::{
             DetectedThreat, ThreatIdentity, ThreatSeverity, displayed_threat_name,
             sanitize_scanner_line,
         },
         quarantine_vault::quarantine_file_moves::QuarantineMoveFailure,
-        settings_helper::trust_requests::{
-            TrustChoice, signature_can_be_ignored, signature_of_detection,
-        },
     },
     shared_widgets::{
         quarantine_failure_text::describe_quarantine_failure,

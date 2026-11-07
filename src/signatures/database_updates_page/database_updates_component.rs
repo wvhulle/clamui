@@ -456,7 +456,7 @@ impl Component for DatabaseUpdatesPage {
 #[cfg(test)]
 mod database_updates_component_tests {
     use super::*;
-    use crate::host_services::settings_helper::live_settings_client::LiveChangeOutcome;
+    use crate::host_services::clamav_admin_service::live_settings_client::LiveChangeOutcome;
 
     #[test]
     fn a_settings_toast_request_becomes_a_page_notice() {

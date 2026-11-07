@@ -91,38 +91,38 @@ let
     }
   );
 
-  settingsHelperArgs = {
+  clamavAdminArgs = {
     inherit src;
-    pname = "lazaret-settings-helper";
+    pname = "lazaret-clamav-admin";
     version = "0.1.0";
-    cargoExtraArgs = "--locked --package lazaret-settings-helper";
+    cargoExtraArgs = "--locked --package lazaret-clamav-admin";
     strictDeps = true;
     meta = {
       description = "Validates and applies runtime ClamAV setting changes for Lazaret";
       license = lib.licenses.mit;
-      mainProgram = "lazaret-settings-helper";
+      mainProgram = "lazaret-clamav-admin";
       platforms = lib.platforms.linux;
     };
   };
 
-  settingsHelperArtifacts = craneLib.buildDepsOnly settingsHelperArgs;
+  clamavAdminArtifacts = craneLib.buildDepsOnly clamavAdminArgs;
 
-  settingsHelperPackage = craneLib.buildPackage (
-    settingsHelperArgs
+  clamavAdminPackage = craneLib.buildPackage (
+    clamavAdminArgs
     // {
-      cargoArtifacts = settingsHelperArtifacts;
+      cargoArtifacts = clamavAdminArtifacts;
       doCheck = false;
     }
   );
 
-  settingsHelperTests = craneLib.cargoTest (
-    settingsHelperArgs // { cargoArtifacts = settingsHelperArtifacts; }
+  clamavAdminTests = craneLib.cargoTest (
+    clamavAdminArgs // { cargoArtifacts = clamavAdminArtifacts; }
   );
 
-  settingsHelperClippy = craneLib.cargoClippy (
-    settingsHelperArgs
+  clamavAdminClippy = craneLib.cargoClippy (
+    clamavAdminArgs
     // {
-      cargoArtifacts = settingsHelperArtifacts;
+      cargoArtifacts = clamavAdminArtifacts;
       cargoClippyExtraArgs = "--all-targets -- --deny warnings";
     }
   );
@@ -245,7 +245,7 @@ in
     lazaret = lazaretPackage;
     deps = cargoArtifacts;
     xtask = xtaskPackage;
-    settings-helper = settingsHelperPackage;
+    clamav-admin = clamavAdminPackage;
     render-screenshots = screenshotRendering.renderScreenshots;
     publish-screenshots = screenshotRendering.publishScreenshots;
     push-to-cachix = screenshotRendering.cachixPush;
@@ -264,8 +264,8 @@ in
         fmt
         xtaskTests
         xtaskClippy
-        settingsHelperTests
-        settingsHelperClippy
+        clamavAdminTests
+        clamavAdminClippy
         ;
       inherit (screenshotRendering) screenshots;
     };

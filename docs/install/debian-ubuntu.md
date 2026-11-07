@@ -22,7 +22,7 @@ sha256sum --check lazaret_<version>_amd64.deb.sha256
 sudo apt install ./lazaret_<version>_amd64.deb
 ```
 
-The package installs the app, its settings helper and the systemd and D-Bus files the helper needs. It recommends the ClamAV packages above, so `apt` installs them too unless you turn recommends off.
+The package installs the app, its ClamAV admin service and the systemd and D-Bus files the admin service needs. It recommends the ClamAV packages above, so `apt` installs them too unless you turn recommends off.
 
 ## Background alerts
 

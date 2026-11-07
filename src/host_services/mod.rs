@@ -1,5 +1,6 @@
 pub mod activity_history;
 pub mod blocking_iterator_stream;
+pub mod clamav_admin_service;
 pub mod clamav_config;
 pub mod clamav_programs;
 pub mod clamav_scanner;
@@ -9,7 +10,6 @@ pub mod lazaret_database;
 pub mod protection_evidence;
 pub mod quarantine_vault;
 pub mod sample_submissions;
-pub mod settings_helper;
 pub mod systemd_bus;
 pub mod systemd_journal;
 pub mod threat_intel;

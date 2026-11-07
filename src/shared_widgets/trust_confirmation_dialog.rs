@@ -3,8 +3,8 @@ use relm4::{Sender, adw, adw::prelude::*, gtk};
 
 use crate::{
     host_services::{
+        clamav_admin_service::trust_requests::TrustChoice,
         desktop::locale_formatting::exact_byte_size_text,
-        settings_helper::trust_requests::TrustChoice,
     },
     shared_widgets::awaited_dialogs::{
         AlertChoice, add_alert_choice, add_dismissing_choice, alert_choice, deliver_local_outcome,

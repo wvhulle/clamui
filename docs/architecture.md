@@ -26,7 +26,7 @@ flowchart LR
         keyring["Secret Service keyring"]
     end
 
-    helper["lazaret-settings-helper (root)"]
+    adminService["lazaret-clamav-admin (root)"]
     polkit["polkit"]
     internet["VirusTotal, MalwareBazaar, CIRCL"]
     database[("quarantine and history databases")]
@@ -40,12 +40,12 @@ flowchart LR
     quarantine --> database
     lookups -->|HTTPS| internet
     lookups --> keyring
-    settings -->|system bus| helper
-    helper -->|authorizes| polkit
-    helper -->|restarts| systemd
+    settings -->|system bus| adminService
+    adminService -->|authorizes| polkit
+    adminService -->|restarts| systemd
 ```
 
-The source follows the window as you see it. Each sidebar group has a directory under `src/` with one directory per page: `signatures/` (`signature_sources_page/`, `database_updates_page/`), `scans/` (`scan_engine_page/`, `on_access_page/`, `scheduled_scans_page/`, `manual_scan_page/`, `removable_drives_page/`), `findings/` (`detections_page/`, `quarantine_page/`, `trusted_detections_page/`) and `sharing/` (`online_lookups_page/`, `submissions_page/`). The subpages and dialogs you open from a page sit in directories inside it, for example `scans/manual_scan_page/exclusions_page/`. `application_window/` holds the window, the grouped sidebar, page routing, the tray, actions and startup arguments; it owns the protection evidence and passes each page the part it shows, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the settings helper and online lookups, with the protection evidence the sidebar and the pages read in `host_services/protection_evidence/`. `headless_modes/` holds the scheduled scan that runs without a window. `settings_helper/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots and recordings, packaging and releases.
+The source follows the window as you see it. Each sidebar group has a directory under `src/` with one directory per page: `signatures/` (`signature_sources_page/`, `database_updates_page/`), `scans/` (`scan_engine_page/`, `on_access_page/`, `scheduled_scans_page/`, `manual_scan_page/`, `removable_drives_page/`), `findings/` (`detections_page/`, `quarantine_page/`, `trusted_detections_page/`) and `sharing/` (`online_lookups_page/`, `submissions_page/`). The subpages and dialogs you open from a page sit in directories inside it, for example `scans/manual_scan_page/exclusions_page/`. `application_window/` holds the window, the grouped sidebar, page routing, the tray, actions and startup arguments; it owns the protection evidence and passes each page the part it shows, and `preferences_dialog/` holds the Preferences dialog. Widgets that several pages share live in `shared_widgets/`. Code you never see on screen lives in `host_services/`, grouped by what it talks to: the ClamAV programs, the quarantine vault, systemd, the journal, the ClamAV admin service and online lookups, with the protection evidence the sidebar and the pages read in `host_services/protection_evidence/`. `headless_modes/` holds the scheduled scan that runs without a window. `clamav_admin_service/` is the only code that runs with privileges, and `xtask/` holds the repository tasks: screenshots and recordings, packaging and releases.
 
 The interface follows the Elm architecture through Relm4. The window shell owns startup, the tray and the close behaviour. A page navigation component owns the sidebar, the page stack and the settings subpages. Every page and dialog keeps its state in a plain model that only `update` changes, in answer to messages from widgets, child components, GTK actions and finished commands. Settings stored in GSettings are mirrored into the models that show them: a change sends a message, and `update` writes it back. Work that waits on the host runs as a command, and its outcome returns as a message, so no state is shared between widgets.
 
@@ -110,33 +110,33 @@ Quarantined content is checked again by piping the decoded payload into `clamdsc
 ```mermaid
 sequenceDiagram
     participant Settings as Settings page
-    participant Helper as lazaret-settings-helper
+    participant AdminService as lazaret-clamav-admin
     participant Polkit as polkit
     participant Clamd as clamd
 
-    Settings->>Helper: change MaxThreads to 8 (system bus)
-    Helper->>Polkit: authorize page.codeberg.wvhulle.Lazaret.apply-settings
-    Polkit-->>Helper: allowed after a password prompt
-    Helper->>Helper: check allowlist and protected settings
-    Helper->>Helper: write overrides, merge into /run/lazaret/clamd.conf
-    Helper->>Clamd: restart clamav-daemon
+    Settings->>AdminService: change MaxThreads to 8 (system bus)
+    AdminService->>Polkit: authorize page.codeberg.wvhulle.Lazaret.apply-settings
+    Polkit-->>AdminService: allowed after a password prompt
+    AdminService->>AdminService: check allowlist and protected settings
+    AdminService->>AdminService: write overrides, merge into /run/lazaret/clamd.conf
+    AdminService->>Clamd: restart clamav-daemon
     alt clamd answers on its socket
-        Helper-->>Settings: applied
+        AdminService-->>Settings: applied
     else unhealthy
-        Helper->>Helper: restore previous overrides, restart again
-        Helper-->>Settings: rolled back
+        AdminService->>AdminService: restore previous overrides, restart again
+        AdminService-->>Settings: rolled back
     end
 ```
 
-The helper is started by D-Bus activation. It authorizes each request with polkit, so the GUI is never trusted. It only accepts settings listed in `/etc/lazaret/tunable-settings`. It always refuses settings from `data/protected-clamav-settings.txt`, the settings that run commands or change identity, even when they are on the allowlist. Changes are stored in `/var/lib/lazaret/clamd-overrides.conf` and merged with `/etc/clamav/clamd.conf` into `/run/lazaret/clamd.conf`, which clamd is configured to read. Without any overrides, the merged file equals the base file.
+The admin service is started by D-Bus activation. It authorizes each request with polkit, so the GUI is never trusted. It only accepts settings listed in `/etc/lazaret/tunable-settings`. It always refuses settings from `data/protected-clamav-settings.txt`, the settings that run commands or change identity, even when they are on the allowlist. Changes are stored in `/var/lib/lazaret/clamd-overrides.conf` and merged with `/etc/clamav/clamd.conf` into `/run/lazaret/clamd.conf`, which clamd is configured to read. Without any overrides, the merged file equals the base file.
 
 The Detection settings page maps to `DetectPUA`, `HeuristicAlerts`, `AlertOLE2Macros`, `AlertEncrypted`, `ScanArchive` and `AlertExceedsMax`. A switch can only change when its key is in `/etc/lazaret/tunable-settings`. `clamscan` doesn't read `clamd.conf`, so every `clamscan` run gets the same values as `--detect-pua=…` and similar flags, read from the configuration clamd uses.
 
 ## Trusted detections
 
-The helper also maintains two ClamAV allowlists in the signature directory: `lazaret-local.sfp` (SHA-256 and size of trusted files) and `lazaret-local.ign2` (ignored detection names). Each change has its own polkit action, `page.codeberg.wvhulle.Lazaret.trust-detection`, and the prompt names the exact hash or detection name. Heuristic detections can only be trusted by hash. Ignored names are written unpinned, without the `:md5` of the database entry: `sigtool --find-sigs` matches by regular expression, can return several entries for one name and prints bytecode signatures decoded rather than as stored, so Lazaret can't compute that MD5 reliably. Pinned lines that someone else wrote are kept, and stop ignoring removes them by name. The lists are never read or written through a symbolic link, and lines that don't fit their format are dropped. After a change the helper asks clamd to reload its signatures.
+The admin service also maintains two ClamAV allowlists in the signature directory: `lazaret-local.sfp` (SHA-256 and size of trusted files) and `lazaret-local.ign2` (ignored detection names). Each change has its own polkit action, `page.codeberg.wvhulle.Lazaret.trust-detection`, and the prompt names the exact hash or detection name. Heuristic detections can only be trusted by hash. Ignored names are written unpinned, without the `:md5` of the database entry: `sigtool --find-sigs` matches by regular expression, can return several entries for one name and prints bytecode signatures decoded rather than as stored, so Lazaret can't compute that MD5 reliably. Pinned lines that someone else wrote are kept, and stop ignoring removes them by name. The lists are never read or written through a symbolic link, and lines that don't fit their format are dropped. After a change the admin service asks clamd to reload its signatures.
 
-Every settings change and trust request, also refused ones, is written by the helper to the system journal with `LAZARET_ACTION`, `LAZARET_SUBJECT`, `LAZARET_OUTCOME`, `LAZARET_REQUESTER_UID`, `LAZARET_WEAKENS_PROTECTION` and `LAZARET_PROTECTION_REDUCTION`, the kind of reduction. Trust requests also record the exact `LAZARET_SHA256` or `LAZARET_SIGNATURE_NAME`, so Lazaret attributes each trust entry by exact match. When the helper can't read the clamd configuration, it records a change as `current-values-unknown` rather than as harmless. Lazaret reads these records back only from `_SYSTEMD_UNIT=lazaret-settings-helper.service` with `_UID=0`, so software running as the desktop user can neither forge nor erase them. The Trusted Detections page warns about allowlists in the signature directory that Lazaret didn't write.
+Every settings change and trust request, also refused ones, is written by the admin service to the system journal with `LAZARET_ACTION`, `LAZARET_SUBJECT`, `LAZARET_OUTCOME`, `LAZARET_REQUESTER_UID`, `LAZARET_WEAKENS_PROTECTION` and `LAZARET_PROTECTION_REDUCTION`, the kind of reduction. Trust requests also record the exact `LAZARET_SHA256` or `LAZARET_SIGNATURE_NAME`, so Lazaret attributes each trust entry by exact match. When the admin service can't read the clamd configuration, it records a change as `current-values-unknown` rather than as harmless. Lazaret reads these records back only from `_SYSTEMD_UNIT=lazaret-clamav-admin.service` with `_UID=0`, so software running as the desktop user can neither forge nor erase them. The Trusted Detections page warns about allowlists in the signature directory that Lazaret didn't write.
 
 ## Background alerts and scheduled scans
 
@@ -223,14 +223,14 @@ A submission names its content by the same SHA-256 as `file_contents`, but has n
 flowchart TB
     subgraph native["NixOS and Debian"]
         nativeApp["lazaret"] -->|spawns| nativeScanner["clamdscan on the host"]
-        nativeApp -->|system bus| nativeHelper["lazaret-settings-helper"]
+        nativeApp -->|system bus| nativeAdminService["lazaret-clamav-admin"]
         nativeService["lazaret.service"]
     end
     subgraph flatpak["Flatpak"]
         sandboxApp["lazaret in the sandbox"] -->|flatpak-spawn --host| sandboxScanner["clamdscan on the host"]
         sandboxApp -->|Background portal| autostart["autostart with --background"]
-        sandboxApp -.->|no helper| missing["live tuning unavailable"]
+        sandboxApp -.->|no admin service| missing["live tuning unavailable"]
     end
 ```
 
-The NixOS module and the Debian package install the helper, its polkit action, its D-Bus configuration and the user service. The Flatpak can't ship a privileged helper, so live tuning is not available there. Inside the sandbox, Lazaret runs the ClamAV programs on the host with `flatpak-spawn --host`. Paths under `/run/host` are translated back to host paths before they reach the scanner. The sandbox starts in the background through the Background portal instead of a systemd user service.
+The NixOS module and the Debian package install the admin service, its polkit action, its D-Bus configuration and the user service. The Flatpak can't ship a privileged admin service, so live tuning is not available there. Inside the sandbox, Lazaret runs the ClamAV programs on the host with `flatpak-spawn --host`. Paths under `/run/host` are translated back to host paths before they reach the scanner. The sandbox starts in the background through the Background portal instead of a systemd user service.

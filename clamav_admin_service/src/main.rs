@@ -1,5 +1,5 @@
+mod admin_audit_journal;
 mod detection_trust_files;
-mod helper_audit_journal;
 mod merged_clamd_config;
 mod protection_change_rules;
 mod settings_application;
@@ -20,12 +20,12 @@ use std::{
 use zbus::{blocking::connection::Builder, fdo, interface, message::Header, zvariant::Value};
 
 use crate::{
+    admin_audit_journal::{
+        AdminAuditRecord, AuditOutcome, AuditedAction, RequestingUser, record_admin_action,
+    },
     detection_trust_files::{
         TrustRequest, apply_trust_request, request_protection_reduction, request_summary,
         validated_request,
-    },
-    helper_audit_journal::{
-        AuditOutcome, AuditedAction, HelperAuditRecord, RequestingUser, record_helper_action,
     },
     merged_clamd_config::OverrideSetting,
     protection_change_rules::{ProtectionReduction, ValuesInEffect, protection_reduction},
@@ -36,8 +36,8 @@ use crate::{
     },
 };
 
-const HELPER_BUS_NAME: &str = "page.codeberg.wvhulle.Lazaret.SettingsHelper";
-const HELPER_OBJECT_PATH: &str = "/page/codeberg/wvhulle/Lazaret/SettingsHelper";
+const ADMIN_BUS_NAME: &str = "page.codeberg.wvhulle.Lazaret.ClamavAdmin";
+const ADMIN_OBJECT_PATH: &str = "/page/codeberg/wvhulle/Lazaret/ClamavAdmin";
 const APPLY_ACTION_ID: &str = "page.codeberg.wvhulle.Lazaret.apply-settings";
 const TRUST_ACTION_ID: &str = "page.codeberg.wvhulle.Lazaret.trust-detection";
 const POLKIT_BUS_NAME: &str = "org.freedesktop.PolicyKit1";
@@ -191,33 +191,33 @@ fn caller_of(message_header: &Header<'_>) -> fdo::Result<String> {
 }
 
 #[derive(Default)]
-struct HelperActivity {
+struct AdminServiceActivity {
     request_running: AtomicBool,
     request_finished_recently: AtomicBool,
 }
 
-struct SettingsHelperService {
+struct ClamavAdminService {
     settings_paths: SettingsPaths,
-    helper_activity: Arc<HelperActivity>,
+    admin_service_activity: Arc<AdminServiceActivity>,
 }
 
 struct FinishedRequestMarker {
-    helper_activity: Arc<HelperActivity>,
+    admin_service_activity: Arc<AdminServiceActivity>,
 }
 
 impl Drop for FinishedRequestMarker {
     fn drop(&mut self) {
-        self.helper_activity
+        self.admin_service_activity
             .request_finished_recently
             .store(true, Ordering::SeqCst);
-        self.helper_activity
+        self.admin_service_activity
             .request_running
             .store(false, Ordering::SeqCst);
     }
 }
 
-#[interface(name = "page.codeberg.wvhulle.Lazaret.SettingsHelper")]
-impl SettingsHelperService {
+#[interface(name = "page.codeberg.wvhulle.Lazaret.ClamavAdmin")]
+impl ClamavAdminService {
     fn get_tunable_settings(&self) -> fdo::Result<Vec<String>> {
         read_tunable_settings(&self.settings_paths)
             .map_err(|read_failure| fdo::Error::Failed(read_failure.to_string()))
@@ -255,7 +255,7 @@ impl SettingsHelperService {
             requested_changes_reduction(&self.settings_paths, &requested_changes);
         let requesting_user = requesting_user(&caller_name).await;
         let audit = |audit_outcome| {
-            record_helper_action(&HelperAuditRecord {
+            record_admin_action(&AdminAuditRecord {
                 audited_action: AuditedAction::ChangeSettings,
                 action_subject: &change_summary,
                 requesting_user,
@@ -353,13 +353,13 @@ impl SettingsHelperService {
     }
 }
 
-impl SettingsHelperService {
+impl ClamavAdminService {
     fn start_request(&self) -> FinishedRequestMarker {
-        self.helper_activity
+        self.admin_service_activity
             .request_running
             .store(true, Ordering::SeqCst);
         FinishedRequestMarker {
-            helper_activity: Arc::clone(&self.helper_activity),
+            admin_service_activity: Arc::clone(&self.admin_service_activity),
         }
     }
 
@@ -375,7 +375,7 @@ impl SettingsHelperService {
         let trust_summary = request_summary(&trust_request);
         let requesting_user = requesting_user(&caller_name).await;
         let audit = |audit_outcome| {
-            record_helper_action(&HelperAuditRecord {
+            record_admin_action(&AdminAuditRecord {
                 audited_action: AuditedAction::TrustChange(&trust_request),
                 action_subject: &trust_summary,
                 requesting_user,
@@ -424,44 +424,48 @@ impl SettingsHelperService {
     }
 }
 
-fn serve_settings_helper() -> zbus::Result<()> {
-    let helper_activity = Arc::new(HelperActivity::default());
+fn serve_clamav_admin_service() -> zbus::Result<()> {
+    let admin_service_activity = Arc::new(AdminServiceActivity::default());
     let _service_connection = Builder::system()?
-        .name(HELPER_BUS_NAME)?
+        .name(ADMIN_BUS_NAME)?
         .serve_at(
-            HELPER_OBJECT_PATH,
-            SettingsHelperService {
+            ADMIN_OBJECT_PATH,
+            ClamavAdminService {
                 settings_paths: SettingsPaths::on_this_host(),
-                helper_activity: Arc::clone(&helper_activity),
+                admin_service_activity: Arc::clone(&admin_service_activity),
             },
         )?
         .build()?;
     loop {
         thread::sleep(IDLE_EXIT_PAUSE);
-        let finished_recently = helper_activity
+        let finished_recently = admin_service_activity
             .request_finished_recently
             .swap(false, Ordering::SeqCst);
-        if !finished_recently && !helper_activity.request_running.load(Ordering::SeqCst) {
+        if !finished_recently
+            && !admin_service_activity
+                .request_running
+                .load(Ordering::SeqCst)
+        {
             return Ok(());
         }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-enum HelperModeFailure {
-    #[error("the settings helper could not serve on the system bus: {0}")]
+enum AdminServiceModeFailure {
+    #[error("the ClamAV admin service could not serve on the system bus: {0}")]
     ServingFailed(#[from] zbus::Error),
     #[error("the merged clamd configuration could not be written: {0}")]
     MergeFailed(#[from] std::io::Error),
-    #[error("usage: lazaret-settings-helper serve|merge")]
+    #[error("usage: lazaret-clamav-admin serve|merge")]
     UnknownMode,
 }
 
-fn run_requested_mode(requested_mode: &str) -> Result<(), HelperModeFailure> {
+fn run_requested_mode(requested_mode: &str) -> Result<(), AdminServiceModeFailure> {
     match requested_mode {
-        "serve" => Ok(serve_settings_helper()?),
+        "serve" => Ok(serve_clamav_admin_service()?),
         "merge" => Ok(write_merged_config(&SettingsPaths::on_this_host())?),
-        _unknown_mode => Err(HelperModeFailure::UnknownMode),
+        _unknown_mode => Err(AdminServiceModeFailure::UnknownMode),
     }
 }
 
@@ -477,23 +481,31 @@ fn main() -> ExitCode {
 }
 
 #[cfg(test)]
-mod settings_helper_tests {
+mod clamav_admin_service_tests {
     use super::*;
 
     #[test]
     fn a_request_stays_running_until_its_marker_is_dropped() {
-        let helper_activity = Arc::new(HelperActivity::default());
-        helper_activity
+        let admin_service_activity = Arc::new(AdminServiceActivity::default());
+        admin_service_activity
             .request_running
             .store(true, Ordering::SeqCst);
         let finish_activity = FinishedRequestMarker {
-            helper_activity: Arc::clone(&helper_activity),
+            admin_service_activity: Arc::clone(&admin_service_activity),
         };
-        assert!(helper_activity.request_running.load(Ordering::SeqCst));
-        drop(finish_activity);
-        assert!(!helper_activity.request_running.load(Ordering::SeqCst));
         assert!(
-            helper_activity
+            admin_service_activity
+                .request_running
+                .load(Ordering::SeqCst)
+        );
+        drop(finish_activity);
+        assert!(
+            !admin_service_activity
+                .request_running
+                .load(Ordering::SeqCst)
+        );
+        assert!(
+            admin_service_activity
                 .request_finished_recently
                 .load(Ordering::SeqCst)
         );
@@ -528,9 +540,8 @@ mod settings_helper_tests {
 
     #[test]
     fn the_bus_configuration_names_this_service() {
-        let bus_policy =
-            include_str!("../../data/page.codeberg.wvhulle.Lazaret.SettingsHelper.conf");
-        assert!(bus_policy.contains(&format!("own=\"{HELPER_BUS_NAME}\"")));
-        assert!(bus_policy.contains(&format!("send_destination=\"{HELPER_BUS_NAME}\"")));
+        let bus_policy = include_str!("../../data/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf");
+        assert!(bus_policy.contains(&format!("own=\"{ADMIN_BUS_NAME}\"")));
+        assert!(bus_policy.contains(&format!("send_destination=\"{ADMIN_BUS_NAME}\"")));
     }
 }

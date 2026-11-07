@@ -79,7 +79,7 @@ fn seed_lazaret_database(session_root: &Path) -> Result<(), TaskFailure> {
     let seeded_paths = SeededFixturePaths {
         payload_path: quarantine_directory.join(QUARANTINE_FIXTURE_NAME),
         unresolved_path: downloads_directory.join("invoice.pdf.exe"),
-        scheduled_path: downloads_directory.join("setup-helper.bin"),
+        scheduled_path: downloads_directory.join("setup-admin_service.bin"),
     };
     fs::write(&seeded_paths.payload_path, b"fixture payload")?;
     fs::write(&seeded_paths.unresolved_path, b"fixture")?;
@@ -153,7 +153,7 @@ mod screenshot_fixtures_tests {
         let fixture_sql = fixture_database_sql(&SeededFixturePaths {
             payload_path: PathBuf::from("/data/quarantine/payload"),
             unresolved_path: PathBuf::from("/home/Downloads/invoice.pdf.exe"),
-            scheduled_path: PathBuf::from("/home/Downloads/setup-helper.bin"),
+            scheduled_path: PathBuf::from("/home/Downloads/setup-admin_service.bin"),
         });
         assert!(fixture_sql.contains("CREATE TABLE activity_entries"));
         assert!(fixture_sql.contains("CREATE TABLE file_contents"));

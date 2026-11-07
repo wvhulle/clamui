@@ -9,6 +9,10 @@ use relm4::{
 
 use crate::{
     host_services::{
+        clamav_admin_service::trust_requests::{
+            FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file, request_trust_change,
+            trust_outcome_text,
+        },
         clamav_programs::clamav_report_submission::ClamavReportRequest,
         clamav_scanner::{
             scan_exclusion_rules::exclusion_entry_for_threat,
@@ -18,10 +22,6 @@ use crate::{
         quarantine_vault::{
             quarantine_entry_database::{QuarantineEntryRecord, QuarantineVault},
             quarantine_file_moves::QuarantineMoveFailure,
-        },
-        settings_helper::trust_requests::{
-            FileFingerprint, TrustChoice, TrustOutcome, fingerprint_file, request_trust_change,
-            trust_outcome_text,
         },
     },
     shared_widgets::{

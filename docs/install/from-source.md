@@ -22,7 +22,7 @@ make build
 sudo make install
 ```
 
-This installs into `/usr/local` by default. Set `PREFIX` to change that, for example `sudo make install PREFIX=/usr`. `make install` installs the app, its data files, the user service, and the settings helper with its polkit, D-Bus and systemd files.
+This installs into `/usr/local` by default. Set `PREFIX` to change that, for example `sudo make install PREFIX=/usr`. `make install` installs the app, its data files, the user service, and the ClamAV admin service with its polkit, D-Bus and systemd files.
 
 ## Background alerts
 

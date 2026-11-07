@@ -3,8 +3,8 @@ use std::ffi::OsString;
 use tokio::task::{JoinError, spawn_blocking};
 
 use crate::host_services::{
+    clamav_admin_service::protection_change_rules::protective_switch_named,
     clamav_config::clamav_host_config::{ConfigSetting, HostConfigView, read_clamd_config},
-    settings_helper::protection_change_rules::protective_switch_named,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

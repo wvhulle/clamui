@@ -36,7 +36,7 @@ Debug builds use the application ID `page.codeberg.wvhulle.Lazaret.Devel` and th
 - Keep only features that help block viruses or exploits. Lazaret adds value on top of a ClamAV that is already running.
 - Never bundle the scan engine. Find `clamdscan`, `clamscan` and `freshclam` with `host_services::clamav_programs::trusted_program_lookup`, which skips copies your account could replace, and run them through `host_services::desktop::flatpak_sandbox`, so the Flatpak keeps working.
 - Talk to systemd through `src/host_services/systemd_bus/` and read the journal through `src/host_services/systemd_journal/`. Don't run `systemctl` or `journalctl`, and don't refresh on timers: react to bus signals and journal wakeups.
-- The GUI never runs as root. `settings_helper/` is the only privileged code: it authorizes every request with polkit and enforces `data/protected-clamav-settings.txt` itself, so never rely on the UI for that.
+- The GUI never runs as root. `clamav_admin_service/` is the only privileged code: it authorizes every request with polkit and enforces `data/protected-clamav-settings.txt` itself, so never rely on the UI for that.
 - Model scanner output as `impl Stream`. Split it on bytes and decode lossily, because file names can be arbitrary bytes. Sanitize scanner text before showing it, and keep `set_use_markup: false` on rows that show file names.
 - Keep quarantine file operations no-follow and integrity-checked, in this order: copy, pending row, remove source, commit. Never abort a move in progress.
 - Write each page, dialog, section and row as a Relm4 component whose model is plain data. Change it only in `update`, in answer to a message, and derive the view from it with `#[watch]`, `#[track]` and factories. Signal handlers only send messages. Return background work as a stream of command outputs and hand it to `run_stream`, keeping the guard it returns in the model so that replacing the state cancels it. Use `run_stream_to_completion` for quarantine and file moves. Wrap a blocking library such as the journal or a directory walk in an iterator and turn it into a stream with `blocking_iterator_stream`; wait for changes with journal wakeups, inotify or bus signals rather than timers. Name input messages after what happened (`StartScanRequested`, `StoredSettingChanged`) and command outputs after the finished work (`ProfilesLoaded`).
@@ -83,7 +83,7 @@ podman run --rm -v $PWD:/src -w /src debian:trixie .ci-tools/xtask ci-build-debi
 podman run --rm -v $PWD:/src -w /src ubuntu:26.04 .ci-tools/xtask check-debian-package-install
 ```
 
-The install check installs the package with its recommended ClamAV packages and checks the shared libraries, the compiled settings schema, the helper's polkit, D-Bus and systemd files, and that merging without runtime changes leaves `clamd.conf` unchanged.
+The install check installs the package with its recommended ClamAV packages and checks the shared libraries, the compiled settings schema, the admin service's polkit, D-Bus and systemd files, and that merging without runtime changes leaves `clamd.conf` unchanged.
 
 The Flatpak bundle is built from `page.codeberg.wvhulle.Lazaret.json`:
 

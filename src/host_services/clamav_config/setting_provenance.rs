@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use gettextrs::gettext;
 
-use crate::host_services::settings_helper::live_settings_client::OverrideSetting;
+use crate::host_services::clamav_admin_service::live_settings_client::OverrideSetting;
 
 const PROTECTED_SETTINGS_LIST: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),

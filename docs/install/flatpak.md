@@ -45,7 +45,7 @@ Turn on **Preferences → Start in the Background**. Lazaret then asks the Backg
 
 ## Live tuning
 
-Not available in the Flatpak. Changing clamd settings needs a helper that runs as root, and a Flatpak can't install one. Use the [Debian package](debian-ubuntu.md#live-tuning) or the [NixOS module](nixos.md#live-tuning), or edit `clamd.conf` yourself.
+Not available in the Flatpak. Changing clamd settings needs an admin service that runs as root, and a Flatpak can't install one. Use the [Debian package](debian-ubuntu.md#live-tuning) or the [NixOS module](nixos.md#live-tuning), or edit `clamd.conf` yourself.
 
 ## API keys for reputation lookups
 

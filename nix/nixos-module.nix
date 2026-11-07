@@ -72,7 +72,7 @@ let
   clamavSettings = config.services.clamav;
   system = pkgs.stdenv.hostPlatform.system;
   mergedConfigPath = "/run/lazaret/clamd.conf";
-  helperBusName = "page.codeberg.wvhulle.Lazaret.SettingsHelper";
+  adminBusName = "page.codeberg.wvhulle.Lazaret.ClamavAdmin";
 
   protectedSettings = builtins.filter (protectedKey: protectedKey != "") (
     lib.splitString "\n" (builtins.readFile ../data/protected-clamav-settings.txt)
@@ -82,18 +82,18 @@ let
     builtins.any (protectedKey: lib.toLower protectedKey == lib.toLower settingKey) protectedSettings;
   refusedSettings = builtins.filter isProtectedSetting liveTuning.allowedSettings;
 
-  helperDataFiles = pkgs.linkFarm "lazaret-settings-helper-data" [
+  adminServiceDataFiles = pkgs.linkFarm "lazaret-clamav-admin-data" [
     {
       name = "share/polkit-1/actions/page.codeberg.wvhulle.Lazaret.policy";
       path = ../data/page.codeberg.wvhulle.Lazaret.policy;
     }
     {
-      name = "share/dbus-1/system.d/${helperBusName}.conf";
-      path = ../data/page.codeberg.wvhulle.Lazaret.SettingsHelper.conf;
+      name = "share/dbus-1/system.d/${adminBusName}.conf";
+      path = ../data/page.codeberg.wvhulle.Lazaret.ClamavAdmin.conf;
     }
     {
-      name = "share/dbus-1/system-services/${helperBusName}.service";
-      path = ../data/page.codeberg.wvhulle.Lazaret.SettingsHelper.service;
+      name = "share/dbus-1/system-services/${adminBusName}.service";
+      path = ../data/page.codeberg.wvhulle.Lazaret.ClamavAdmin.service;
     }
   ];
 in
@@ -136,11 +136,11 @@ in
         authorization. Changes are stored outside the Nix configuration, so they drift from it
         until you copy them over
       '';
-      helperPackage = lib.mkOption {
+      adminServicePackage = lib.mkOption {
         type = lib.types.package;
-        default = lazaretFlake.packages.${system}.settings-helper;
-        defaultText = lib.literalExpression "lazaret.packages.\${pkgs.stdenv.hostPlatform.system}.settings-helper";
-        description = "The root helper that validates and applies changes.";
+        default = lazaretFlake.packages.${system}.clamav-admin;
+        defaultText = lib.literalExpression "lazaret.packages.\${pkgs.stdenv.hostPlatform.system}.clamav-admin";
+        description = "The root admin service that validates and applies changes.";
       };
       allowedSettings = lib.mkOption {
         type = lib.types.listOf lib.types.str;
@@ -151,7 +151,7 @@ in
         ];
         description = ''
           The clamd settings that may change at runtime. Settings that run commands or change
-          identity, such as VirusEvent or User, are refused here and again by the helper.
+          identity, such as VirusEvent or User, are refused here and again by the admin service.
         '';
       };
     };
@@ -192,20 +192,20 @@ in
       ];
 
       environment.etc."lazaret/tunable-settings".text = lib.concatLines liveTuning.allowedSettings;
-      environment.systemPackages = [ helperDataFiles ];
-      services.dbus.packages = [ helperDataFiles ];
+      environment.systemPackages = [ adminServiceDataFiles ];
+      services.dbus.packages = [ adminServiceDataFiles ];
       security.polkit.enable = true;
 
       systemd.tmpfiles.rules = [ "d /var/lib/lazaret 0755 root root -" ];
 
-      systemd.services.lazaret-settings-helper = {
-        description = "Lazaret settings helper";
+      systemd.services.lazaret-clamav-admin = {
+        description = "Lazaret ClamAV admin service";
         requires = [ "lazaret-settings-merge.service" ];
         after = [ "lazaret-settings-merge.service" ];
         serviceConfig = {
           Type = "dbus";
-          BusName = helperBusName;
-          ExecStart = "${lib.getExe liveTuning.helperPackage} serve";
+          BusName = adminBusName;
+          ExecStart = "${lib.getExe liveTuning.adminServicePackage} serve";
           ReadWritePaths = [
             "/var/lib/lazaret"
             "/run/lazaret"
@@ -235,7 +235,7 @@ in
           RemainAfterExit = true;
           RuntimeDirectory = "lazaret";
           RuntimeDirectoryPreserve = true;
-          ExecStart = "${lib.getExe liveTuning.helperPackage} merge";
+          ExecStart = "${lib.getExe liveTuning.adminServicePackage} merge";
         };
       };
 

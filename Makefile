@@ -5,24 +5,24 @@ CARGO ?= cargo
 APPLICATION_ID := page.codeberg.wvhulle.Lazaret
 TRANSLATION_DOMAIN := lazaret
 RELEASE_BINARY := target/release/lazaret
-RELEASE_HELPER_BINARY := target/release/lazaret-settings-helper
-HELPER_BUS_NAME := $(APPLICATION_ID).SettingsHelper
+RELEASE_ADMIN_SERVICE_BINARY := target/release/lazaret-clamav-admin
+ADMIN_BUS_NAME := $(APPLICATION_ID).ClamavAdmin
 SYSCONFDIR ?= /etc
 COMPILE_SCHEMAS ?= yes
 INSTALL_ROOT := $(DESTDIR)$(PREFIX)
 SHARE_DIRECTORY := $(INSTALL_ROOT)/share
-HELPER_DIRECTORY := $(PREFIX)/libexec/lazaret
+ADMIN_SERVICE_DIRECTORY := $(PREFIX)/libexec/lazaret
 CONFIG_ROOT := $(DESTDIR)$(SYSCONFDIR)
 TRANSLATION_BUILD_DIRECTORY ?= target/locale
 SOURCE_FILES := $(shell find src -name '*.rs' | LC_ALL=C sort)
 LINGUAS := $(shell sed -e '/^[[:space:]]*$$/d' -e '/^\#/d' po/LINGUAS)
 
-.PHONY: build install install-binary install-data install-metainfo install-settings-helper install-user-service install-desktop-entry install-icons install-settings-schema install-translations compile-translations update-translation-template
+.PHONY: build install install-binary install-data install-metainfo install-clamav-admin install-user-service install-desktop-entry install-icons install-settings-schema install-translations compile-translations update-translation-template
 
 build:
-	$(CARGO) build --release --locked --package lazaret --package lazaret-settings-helper
+	$(CARGO) build --release --locked --package lazaret --package lazaret-clamav-admin
 
-install: install-binary install-data install-settings-helper
+install: install-binary install-data install-clamav-admin
 
 install-binary:
 	install -Dm755 $(RELEASE_BINARY) $(INSTALL_ROOT)/bin/lazaret
@@ -32,14 +32,14 @@ install-data: install-desktop-entry install-metainfo install-icons install-setti
 install-metainfo:
 	install -Dm644 data/$(APPLICATION_ID).metainfo.xml.in $(SHARE_DIRECTORY)/metainfo/$(APPLICATION_ID).metainfo.xml
 
-install-settings-helper:
-	install -Dm755 $(RELEASE_HELPER_BINARY) $(DESTDIR)$(HELPER_DIRECTORY)/lazaret-settings-helper
+install-clamav-admin:
+	install -Dm755 $(RELEASE_ADMIN_SERVICE_BINARY) $(DESTDIR)$(ADMIN_SERVICE_DIRECTORY)/lazaret-clamav-admin
 	install -Dm644 data/$(APPLICATION_ID).policy $(SHARE_DIRECTORY)/polkit-1/actions/$(APPLICATION_ID).policy
-	install -Dm644 data/$(APPLICATION_ID).SettingsHelper.conf $(SHARE_DIRECTORY)/dbus-1/system.d/$(HELPER_BUS_NAME).conf
-	install -Dm644 data/$(APPLICATION_ID).SettingsHelper.service $(SHARE_DIRECTORY)/dbus-1/system-services/$(HELPER_BUS_NAME).service
+	install -Dm644 data/$(APPLICATION_ID).ClamavAdmin.conf $(SHARE_DIRECTORY)/dbus-1/system.d/$(ADMIN_BUS_NAME).conf
+	install -Dm644 data/$(APPLICATION_ID).ClamavAdmin.service $(SHARE_DIRECTORY)/dbus-1/system-services/$(ADMIN_BUS_NAME).service
 	install -d $(INSTALL_ROOT)/lib/systemd/system
-	sed 's|@HELPER_PATH@|$(HELPER_DIRECTORY)/lazaret-settings-helper|' data/lazaret-settings-helper.service.in > $(INSTALL_ROOT)/lib/systemd/system/lazaret-settings-helper.service
-	sed 's|@HELPER_PATH@|$(HELPER_DIRECTORY)/lazaret-settings-helper|' data/lazaret-settings-merge.service.in > $(INSTALL_ROOT)/lib/systemd/system/lazaret-settings-merge.service
+	sed 's|@ADMIN_SERVICE_PATH@|$(ADMIN_SERVICE_DIRECTORY)/lazaret-clamav-admin|' data/lazaret-clamav-admin.service.in > $(INSTALL_ROOT)/lib/systemd/system/lazaret-clamav-admin.service
+	sed 's|@ADMIN_SERVICE_PATH@|$(ADMIN_SERVICE_DIRECTORY)/lazaret-clamav-admin|' data/lazaret-settings-merge.service.in > $(INSTALL_ROOT)/lib/systemd/system/lazaret-settings-merge.service
 	install -Dm644 data/clamav-daemon-live-tuning.conf $(SHARE_DIRECTORY)/lazaret/clamav-daemon-live-tuning.conf
 	install -d $(CONFIG_ROOT)/lazaret
 	test -e $(CONFIG_ROOT)/lazaret/tunable-settings || install -m644 /dev/null $(CONFIG_ROOT)/lazaret/tunable-settings

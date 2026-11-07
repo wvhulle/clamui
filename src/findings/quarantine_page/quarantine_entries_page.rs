@@ -18,6 +18,9 @@ use crate::{
     },
     host_services::{
         activity_history::activity_history_database::{ActivityHistory, ActivityHistoryFailure},
+        clamav_admin_service::trust_requests::{
+            TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
+        },
         clamav_programs::{
             clamav_report_submission::ClamavReportRequest, trusted_program_lookup::ProgramRefusal,
         },
@@ -39,9 +42,6 @@ use crate::{
         },
         sample_submissions::clamav_report_review::{
             current_database_version, settle_clamav_reviews,
-        },
-        settings_helper::trust_requests::{
-            TrustChoice, TrustOutcome, request_trust_change, trust_outcome_text,
         },
         threat_intel::file_reputation_check::{ReputationAnswers, check_hash_reputation},
     },

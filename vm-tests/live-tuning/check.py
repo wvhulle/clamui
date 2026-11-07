@@ -7,15 +7,15 @@ COPY_LINE_LABEL = "Copy Line"
 LIVE_CONFIG_DESCRIPTION = "combines your system configuration"
 MERGED_CONFIG = "/run/lazaret/clamd.conf"
 OVERRIDES_FILE = "/var/lib/lazaret/clamd-overrides.conf"
-USER_ANSWER_FILE = "/tmp/helper-answer"
-USER_REQUEST_FILE = "/tmp/helper-request"
+USER_ANSWER_FILE = "/tmp/admin-service-answer"
+USER_REQUEST_FILE = "/tmp/admin-service-request"
 
 
 def apply_command(key, value):
     return (
-        "busctl --timeout=400 call page.codeberg.wvhulle.Lazaret.SettingsHelper "
-        "/page/codeberg/wvhulle/Lazaret/SettingsHelper "
-        "page.codeberg.wvhulle.Lazaret.SettingsHelper ApplyChanges "
+        "busctl --timeout=400 call page.codeberg.wvhulle.Lazaret.ClamavAdmin "
+        "/page/codeberg/wvhulle/Lazaret/ClamavAdmin "
+        "page.codeberg.wvhulle.Lazaret.ClamavAdmin ApplyChanges "
         f"'a(ss)' 1 {key} {value} 2>&1"
     )
 
@@ -161,7 +161,7 @@ with subtest("a second change starts from the value just applied"):
     machine.send_key("esc")
     time.sleep(1)
 
-with subtest("protected and unlisted settings are refused by the helper"):
+with subtest("protected and unlisted settings are refused by the admin service"):
     for key, value in (("VirusEvent", "/bin/sh"), ("User", "root"), ("MaxFileSize", "1M")):
         status, output = apply_as_root(key, value)
         assert status != 0, output

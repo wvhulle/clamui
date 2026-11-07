@@ -6,7 +6,7 @@ use crate::{
 };
 
 const JOURNAL_SOCKET_PATH: &str = "/run/systemd/journal/socket";
-const SYSLOG_IDENTIFIER: &str = "lazaret-settings-helper";
+const SYSLOG_IDENTIFIER: &str = "lazaret-clamav-admin";
 const NOTICE_PRIORITY: &str = "5";
 const WARNING_PRIORITY: &str = "4";
 const PROTECTION_REDUCTION_FIELD: &str = "LAZARET_PROTECTION_REDUCTION";
@@ -80,7 +80,7 @@ impl AuditedAction<'_> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HelperAuditRecord<'record> {
+pub struct AdminAuditRecord<'record> {
     pub audited_action: AuditedAction<'record>,
     pub action_subject: &'record str,
     pub requesting_user: RequestingUser,
@@ -103,7 +103,7 @@ impl JournalField {
     }
 }
 
-fn journal_fields(audit_record: &HelperAuditRecord<'_>) -> Vec<JournalField> {
+fn journal_fields(audit_record: &AdminAuditRecord<'_>) -> Vec<JournalField> {
     let requester_text = match audit_record.requesting_user {
         RequestingUser::KnownUser { user_id } => user_id.to_string(),
         RequestingUser::UnknownUser => "unknown".to_owned(),
@@ -173,7 +173,7 @@ fn send_to_journal(encoded_fields: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-pub fn record_helper_action(audit_record: &HelperAuditRecord<'_>) {
+pub fn record_admin_action(audit_record: &AdminAuditRecord<'_>) {
     let recorded_fields = journal_fields(audit_record);
     if send_to_journal(&encode_journal_fields(&recorded_fields)).is_err()
         && let Some(message_field) = recorded_fields.first()
@@ -183,7 +183,7 @@ pub fn record_helper_action(audit_record: &HelperAuditRecord<'_>) {
 }
 
 #[cfg(test)]
-mod helper_audit_journal_tests {
+mod admin_audit_journal_tests {
     use super::*;
 
     fn field_value(recorded_fields: &[JournalField], wanted_name: &str) -> Option<String> {
@@ -209,7 +209,7 @@ mod helper_audit_journal_tests {
             sha256_hex: "abc".to_owned(),
             file_size: 68,
         };
-        let recorded_fields = journal_fields(&HelperAuditRecord {
+        let recorded_fields = journal_fields(&AdminAuditRecord {
             audited_action: AuditedAction::TrustChange(&trust_request),
             action_subject: "trust the file with SHA-256 abc (68 bytes)",
             requesting_user: RequestingUser::KnownUser { user_id: 1000 },
@@ -241,7 +241,7 @@ mod helper_audit_journal_tests {
 
     #[test]
     fn the_reduction_kind_is_recorded_and_reads_back() {
-        let recorded_fields = journal_fields(&HelperAuditRecord {
+        let recorded_fields = journal_fields(&AdminAuditRecord {
             audited_action: AuditedAction::ChangeSettings,
             action_subject: "OnAccessPrevention no",
             requesting_user: RequestingUser::UnknownUser,
@@ -264,7 +264,7 @@ mod helper_audit_journal_tests {
         let trust_request = TrustRequest::IgnoreSignature {
             signature_name: "Win.Test-1".to_owned(),
         };
-        let recorded_fields = journal_fields(&HelperAuditRecord {
+        let recorded_fields = journal_fields(&AdminAuditRecord {
             audited_action: AuditedAction::TrustChange(&trust_request),
             action_subject: "ignore every detection named Win.Test-1",
             requesting_user: RequestingUser::KnownUser { user_id: 1000 },

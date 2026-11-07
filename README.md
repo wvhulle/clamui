@@ -29,7 +29,7 @@ Recordings of every page are in [usage](https://codeberg.org/wvhulle/lazaret/src
 ## Documentation
 
 - [Usage](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/usage.md): the sidebar and every page in its order, from signatures to submissions.
-- [Architecture](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/architecture.md): how Lazaret talks to ClamAV, systemd and the settings helper.
+- [Architecture](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/architecture.md): how Lazaret talks to ClamAV, systemd and the ClamAV admin service.
 - [Development](https://codeberg.org/wvhulle/lazaret/src/branch/main/docs/development.md): building, testing, screenshots and recordings, translations and releases.
 
 ## Contributing

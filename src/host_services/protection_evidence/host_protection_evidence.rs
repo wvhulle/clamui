@@ -11,6 +11,9 @@ use crate::{
         TrustListReading, read_configured_trust_list,
     },
     host_services::{
+        clamav_admin_service::protection_change_rules::{
+            ValuesInEffect, limit_in_units, protection_reduction,
+        },
         clamav_config::clamav_host_config::{
             ConfigSetting, HostConfigView, parse_config_settings, read_clamd_config,
         },
@@ -43,9 +46,6 @@ use crate::{
             service_run_journal::{
                 ScanRunHistory, UpdaterRunHistory, newest_scan_run, newest_update_run,
             },
-        },
-        settings_helper::protection_change_rules::{
-            ValuesInEffect, limit_in_units, protection_reduction,
         },
         systemd_bus::host_systemd_units::{
             ServiceFailureKind, ServiceLastResult, ServiceUnitSnapshot, TimerUnitSnapshot,

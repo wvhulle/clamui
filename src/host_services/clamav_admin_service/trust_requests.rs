@@ -15,11 +15,11 @@ const SERVICE_UNKNOWN_ERROR: &str = "org.freedesktop.DBus.Error.ServiceUnknown";
 const ACCESS_DENIED_ERROR: &str = "org.freedesktop.DBus.Error.AccessDenied";
 
 #[proxy(
-    interface = "page.codeberg.wvhulle.Lazaret.SettingsHelper",
-    default_service = "page.codeberg.wvhulle.Lazaret.SettingsHelper",
-    default_path = "/page/codeberg/wvhulle/Lazaret/SettingsHelper"
+    interface = "page.codeberg.wvhulle.Lazaret.ClamavAdmin",
+    default_service = "page.codeberg.wvhulle.Lazaret.ClamavAdmin",
+    default_path = "/page/codeberg/wvhulle/Lazaret/ClamavAdmin"
 )]
-trait DetectionTrustHelper {
+trait DetectionTrustAdmin {
     fn trust_file(&self, sha256_hex: &str, file_size: u64) -> zbus::Result<String>;
 
     fn ignore_signature(&self, signature_name: &str) -> zbus::Result<String>;
@@ -57,18 +57,18 @@ pub enum TrustOutcome {
     TrustApplied,
     AppliedReloadPending,
     AuthorizationRefused,
-    HelperMissing,
+    AdminServiceMissing,
     TrustFailed(TrustChangeFailure),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum TrustChangeFailure {
-    #[error("the settings helper answered with an unknown outcome: {helper_answer}")]
-    UnknownHelperAnswer { helper_answer: String },
-    #[error("the settings helper reported: {helper_message}")]
-    ReportedByHelper { helper_message: String },
+    #[error("the ClamAV admin service answered with an unknown outcome: {admin_service_answer}")]
+    UnknownAdminServiceAnswer { admin_service_answer: String },
+    #[error("the ClamAV admin service reported: {admin_service_message}")]
+    ReportedByAdminService { admin_service_message: String },
     #[error(transparent)]
-    HelperCallFailed(#[from] zbus::Error),
+    AdminServiceCallFailed(#[from] zbus::Error),
 }
 
 pub fn fingerprint_file(file_path: &Path) -> io::Result<FileFingerprint> {
@@ -100,40 +100,45 @@ pub fn signature_can_be_ignored(detected_signature_name: &str) -> bool {
             .any(|heuristic_prefix| signature_name.starts_with(heuristic_prefix))
 }
 
-fn outcome_of_answer(helper_answer: zbus::Result<String>) -> TrustOutcome {
-    match helper_answer {
+fn outcome_of_answer(admin_service_answer: zbus::Result<String>) -> TrustOutcome {
+    match admin_service_answer {
         Ok(answer_text) if answer_text == APPLIED_ANSWER => TrustOutcome::TrustApplied,
         Ok(answer_text) if answer_text == RELOAD_PENDING_ANSWER => {
             TrustOutcome::AppliedReloadPending
         }
-        Ok(other_answer) => TrustOutcome::TrustFailed(TrustChangeFailure::UnknownHelperAnswer {
-            helper_answer: other_answer,
-        }),
+        Ok(other_answer) => {
+            TrustOutcome::TrustFailed(TrustChangeFailure::UnknownAdminServiceAnswer {
+                admin_service_answer: other_answer,
+            })
+        }
         Err(zbus::Error::MethodError(error_name, _error_text, _reply))
             if error_name.as_str() == SERVICE_UNKNOWN_ERROR =>
         {
-            TrustOutcome::HelperMissing
+            TrustOutcome::AdminServiceMissing
         }
         Err(zbus::Error::MethodError(error_name, _error_text, _reply))
             if error_name.as_str() == ACCESS_DENIED_ERROR =>
         {
             TrustOutcome::AuthorizationRefused
         }
-        Err(zbus::Error::MethodError(_error_name, Some(helper_message), _reply)) => {
-            TrustOutcome::TrustFailed(TrustChangeFailure::ReportedByHelper { helper_message })
+        Err(zbus::Error::MethodError(_error_name, Some(admin_service_message), _reply)) => {
+            TrustOutcome::TrustFailed(TrustChangeFailure::ReportedByAdminService {
+                admin_service_message,
+            })
         }
         Err(call_failure) => TrustOutcome::TrustFailed(call_failure.into()),
     }
 }
 
 pub async fn request_trust_change(trust_choice: TrustChoice) -> TrustOutcome {
-    let helper_answer = async {
-        let trust_helper = DetectionTrustHelperProxy::new(&Connection::system().await?).await?;
+    let admin_service_answer = async {
+        let trust_admin_service =
+            DetectionTrustAdminProxy::new(&Connection::system().await?).await?;
         match &trust_choice {
             TrustChoice::TrustFile {
                 file_fingerprint, ..
             } => {
-                trust_helper
+                trust_admin_service
                     .trust_file(
                         &file_fingerprint.sha256_hex,
                         file_fingerprint.file_size.as_u64(),
@@ -141,17 +146,19 @@ pub async fn request_trust_change(trust_choice: TrustChoice) -> TrustOutcome {
                     .await
             }
             TrustChoice::IgnoreSignature { signature_name } => {
-                trust_helper.ignore_signature(signature_name).await
+                trust_admin_service.ignore_signature(signature_name).await
             }
             TrustChoice::ForgetTrustedFile { sha256_hex } => {
-                trust_helper.forget_trusted_file(sha256_hex).await
+                trust_admin_service.forget_trusted_file(sha256_hex).await
             }
             TrustChoice::StopIgnoringSignature { signature_name } => {
-                trust_helper.stop_ignoring_signature(signature_name).await
+                trust_admin_service
+                    .stop_ignoring_signature(signature_name)
+                    .await
             }
         }
     };
-    outcome_of_answer(helper_answer.await)
+    outcome_of_answer(admin_service_answer.await)
 }
 
 pub fn trust_outcome_text(trust_outcome: &TrustOutcome) -> String {
@@ -162,9 +169,9 @@ pub fn trust_outcome_text(trust_outcome: &TrustOutcome) -> String {
              signatures",
         ),
         TrustOutcome::AuthorizationRefused => gettext("Nothing changed without your password"),
-        TrustOutcome::HelperMissing => gettext(
-            "This installation has no settings helper, so ClamAV's trust list can't be changed \
-             from Lazaret",
+        TrustOutcome::AdminServiceMissing => gettext(
+            "This installation has no ClamAV admin service, so ClamAV's trust list can't be \
+             changed from Lazaret",
         ),
         TrustOutcome::TrustFailed(change_failure) => gettext("Nothing changed: {error}")
             .replace("{error}", &trust_change_failure_text(change_failure)),
@@ -173,13 +180,13 @@ pub fn trust_outcome_text(trust_outcome: &TrustOutcome) -> String {
 
 fn trust_change_failure_text(change_failure: &TrustChangeFailure) -> String {
     match change_failure {
-        TrustChangeFailure::UnknownHelperAnswer { helper_answer } => {
-            sanitize_scanner_line(helper_answer)
-        }
-        TrustChangeFailure::ReportedByHelper { helper_message } => {
-            sanitize_scanner_line(helper_message)
-        }
-        TrustChangeFailure::HelperCallFailed(call_failure) => {
+        TrustChangeFailure::UnknownAdminServiceAnswer {
+            admin_service_answer,
+        } => sanitize_scanner_line(admin_service_answer),
+        TrustChangeFailure::ReportedByAdminService {
+            admin_service_message,
+        } => sanitize_scanner_line(admin_service_message),
+        TrustChangeFailure::AdminServiceCallFailed(call_failure) => {
             sanitize_scanner_line(&call_failure.to_string())
         }
     }

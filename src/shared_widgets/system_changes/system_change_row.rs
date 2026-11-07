@@ -2,12 +2,12 @@ use gettextrs::gettext;
 use relm4::{FactorySender, adw, adw::prelude::*, gtk, prelude::FactoryComponent};
 
 use crate::host_services::{
+    clamav_admin_service::admin_audit_records::{AdminAuditEntry, Requester},
     desktop::locale_formatting::exact_local_time_text,
-    settings_helper::helper_audit_records::{HelperAuditEntry, Requester},
 };
 
 pub struct SystemChangeRow {
-    audit_entry: HelperAuditEntry,
+    audit_entry: AdminAuditEntry,
 }
 
 impl SystemChangeRow {
@@ -29,7 +29,7 @@ impl SystemChangeRow {
 
 #[relm4::factory(pub)]
 impl FactoryComponent for SystemChangeRow {
-    type Init = HelperAuditEntry;
+    type Init = AdminAuditEntry;
     type Input = ();
     type Output = ();
     type CommandOutput = ();
