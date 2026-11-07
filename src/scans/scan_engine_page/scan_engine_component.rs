@@ -30,12 +30,14 @@ use crate::{
             ServiceLogGroup, ServiceLogGroupInit, ServiceLogGroupOutput,
         },
         step_timeline::{
-            runtime_reduction_steps::ReducedSettingGroup,
             timeline_step_contents::TimelineStepRowOutput,
             timeline_step_row::{TimelineStepRow, show_timeline_steps},
         },
-        system_changes::system_changes_group::{
-            SystemChangesGroup, SystemChangesGroupInit, SystemChangesGroupInput,
+        system_changes::{
+            system_changes_group::{
+                SystemChangesGroup, SystemChangesGroupInit, SystemChangesGroupInput,
+            },
+            system_changes_state::AuditTopic,
         },
     },
 };
@@ -198,7 +200,7 @@ impl Component for ScanEnginePage {
                 .forward(sender.input_sender(), page_input_for_settings_output),
             system_changes_group: SystemChangesGroup::builder()
                 .launch(SystemChangesGroupInit {
-                    setting_group: ReducedSettingGroup::EngineSettings,
+                    audit_topic: AuditTopic::EngineChanges,
                     group_description: gettext(
                         "Engine and detection settings changed through Lazaret, as recorded by \
                          the system. Software running as you can't remove these records.",

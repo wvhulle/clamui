@@ -23,6 +23,12 @@ use crate::{
             timeline_step_contents::TimelineStepRowOutput,
             timeline_step_row::{TimelineStepRow, show_timeline_steps},
         },
+        system_changes::{
+            system_changes_group::{
+                SystemChangesGroup, SystemChangesGroupInit, SystemChangesGroupInput,
+            },
+            system_changes_state::AuditTopic,
+        },
     },
 };
 
@@ -32,6 +38,7 @@ pub struct TrustedDetectionsPage {
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
     trusted_detections_section: Controller<TrustedDetectionsSection>,
+    trust_changes_group: Controller<SystemChangesGroup>,
 }
 
 #[derive(Debug)]
@@ -129,6 +136,7 @@ impl Component for TrustedDetectionsPage {
                     add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
                         add: status_group,
                         add: model.trusted_detections_section.widget(),
+                        add: model.trust_changes_group.widget(),
                     },
                     #[watch]
                     set_visible_child_name: model.first_load().shown_page_name(),
@@ -159,6 +167,17 @@ impl Component for TrustedDetectionsPage {
             trusted_detections_section: TrustedDetectionsSection::builder()
                 .launch(())
                 .forward(sender.input_sender(), page_input_for_trusted_output),
+            trust_changes_group: SystemChangesGroup::builder()
+                .launch(SystemChangesGroupInit {
+                    audit_topic: AuditTopic::TrustChanges,
+                    group_description: gettext(
+                        "Files trusted and detections ignored or restored through Lazaret, as \
+                         recorded by the system. Software running as you can't remove these \
+                         records.",
+                    ),
+                    empty_title: gettext("No trusted detections were changed through Lazaret"),
+                })
+                .detach(),
         };
         let status_group = &model.status_rows.widget().clone();
         let status_loading_page = &loading_status_page(&gettext("Checking trusted detections…"));
@@ -200,6 +219,8 @@ impl Component for TrustedDetectionsPage {
                 self.toaster.add_toast(plain_text_toast(&toast_text));
             }
             TrustedDetectionsPageInput::TrustListChanged => {
+                self.trust_changes_group
+                    .emit(SystemChangesGroupInput::ReloadRequested);
                 Self::report_output(
                     &sender,
                     TrustedDetectionsPageOutput::EvidenceRefreshRequested,

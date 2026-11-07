@@ -42,6 +42,8 @@ relm4::new_stateful_action!(
     ()
 );
 
+relm4::new_stateless_action!(pub ExportHistoryAction, WindowActionGroup, "export-history");
+relm4::new_stateless_action!(pub ClearHistoryAction, WindowActionGroup, "clear-history");
 relm4::new_stateful_action!(pub ShowPageAction, WindowActionGroup, "show-page", String, ());
 
 pub fn register_application_action<Action>(registered_action: RelmAction<Action>)

@@ -7,11 +7,10 @@ use crate::{
     host_services::settings_helper::helper_audit_records::HelperAuditEntry,
     shared_widgets::{
         loading_indicators::{LOAD_FAILED_PAGE_NAME, loading_placeholder_stack},
-        step_timeline::runtime_reduction_steps::ReducedSettingGroup,
         system_changes::{
             system_change_row::SystemChangeRow,
             system_changes_state::{
-                SystemChangesReadFailure, SystemChangesView, audit_entries_for_settings,
+                AuditTopic, SystemChangesReadFailure, SystemChangesView, audit_entries_for_topic,
                 read_system_changes,
             },
         },
@@ -19,13 +18,13 @@ use crate::{
 };
 
 pub struct SystemChangesGroupInit {
-    pub setting_group: ReducedSettingGroup,
+    pub audit_topic: AuditTopic,
     pub group_description: String,
     pub empty_title: String,
 }
 
 pub struct SystemChangesGroup {
-    setting_group: ReducedSettingGroup,
+    audit_topic: AuditTopic,
     system_changes_view: SystemChangesView,
     system_change_rows: FactoryVecDeque<SystemChangeRow>,
 }
@@ -117,7 +116,7 @@ impl Component for SystemChangesGroup {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let model = Self {
-            setting_group: group_init.setting_group,
+            audit_topic: group_init.audit_topic,
             system_changes_view: SystemChangesView::SystemChangesLoading,
             system_change_rows: FactoryVecDeque::builder()
                 .launch(gtk::ListBox::default())
@@ -157,7 +156,7 @@ impl Component for SystemChangesGroup {
         match group_command {
             SystemChangesGroupCommand::SystemChangesLoaded(Ok(audit_entries)) => {
                 self.system_changes_view = SystemChangesView::SystemChangesLoaded;
-                let grouped_entries = audit_entries_for_settings(audit_entries, self.setting_group);
+                let grouped_entries = audit_entries_for_topic(audit_entries, self.audit_topic);
                 self.replace_rows(grouped_entries);
             }
             SystemChangesGroupCommand::SystemChangesLoaded(Err(read_failure)) => {

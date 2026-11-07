@@ -4,7 +4,6 @@ mod headless_modes;
 mod host_services;
 #[cfg(test)]
 mod host_verification_tests;
-mod logs_page;
 mod preferences_dialog;
 mod protection_page;
 mod scans;

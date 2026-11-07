@@ -17,7 +17,6 @@ fn page_link_subtitle(linked_page: ApplicationPage) -> String {
         ApplicationPage::RemovableDrives => {
             gettext("Scan removable drives when they are connected")
         }
-        ApplicationPage::Logs => gettext("Past scans, updates and system changes"),
         ApplicationPage::Quarantine => gettext("Files isolated from your system"),
         ApplicationPage::TrustedDetections => {
             gettext("Files and detections that ClamAV never reports")

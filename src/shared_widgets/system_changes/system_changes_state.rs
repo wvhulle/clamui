@@ -1,6 +1,6 @@
 use crate::{
     host_services::settings_helper::helper_audit_records::{
-        HelperAuditEntry, newest_helper_audit_entries,
+        AuditedAction, HelperAuditEntry, newest_helper_audit_entries,
     },
     shared_widgets::{
         loading_indicators::{LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME, LOADING_PAGE_NAME},
@@ -42,23 +42,50 @@ pub async fn read_system_changes() -> Result<Vec<HelperAuditEntry>, SystemChange
         .and_then(|journal_outcome| journal_outcome.map_err(SystemChangesReadFailure::from))
 }
 
-pub fn audit_entry_concerns_settings(
-    audit_entry: &HelperAuditEntry,
-    setting_group: ReducedSettingGroup,
-) -> bool {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuditTopic {
+    EngineChanges,
+    OnAccessChanges,
+    TrustChanges,
+}
+
+fn changes_settings_of(audit_entry: &HelperAuditEntry, setting_group: ReducedSettingGroup) -> bool {
     audit_entry
         .changed_setting_keys()
         .into_iter()
         .any(|setting_key| setting_group.includes_setting(setting_key))
 }
 
-pub fn audit_entries_for_settings(
+pub fn audit_entry_concerns_topic(audit_entry: &HelperAuditEntry, audit_topic: AuditTopic) -> bool {
+    match (&audit_entry.audited_action, audit_topic) {
+        (AuditedAction::ChangeSettings, AuditTopic::EngineChanges) => {
+            changes_settings_of(audit_entry, ReducedSettingGroup::EngineSettings)
+                || audit_entry.changed_setting_keys().is_empty()
+        }
+        (AuditedAction::ChangeSettings, AuditTopic::OnAccessChanges) => {
+            changes_settings_of(audit_entry, ReducedSettingGroup::OnAccessSettings)
+        }
+        (
+            AuditedAction::TrustFile { .. }
+            | AuditedAction::IgnoreSignature { .. }
+            | AuditedAction::ForgetTrustedFile { .. }
+            | AuditedAction::StopIgnoringSignature { .. },
+            audit_topic,
+        ) => audit_topic == AuditTopic::TrustChanges,
+        (AuditedAction::UnrecognizedAction { .. }, audit_topic) => {
+            audit_topic == AuditTopic::EngineChanges
+        }
+        (AuditedAction::ChangeSettings, AuditTopic::TrustChanges) => false,
+    }
+}
+
+pub fn audit_entries_for_topic(
     audit_entries: Vec<HelperAuditEntry>,
-    setting_group: ReducedSettingGroup,
+    audit_topic: AuditTopic,
 ) -> Vec<HelperAuditEntry> {
     audit_entries
         .into_iter()
-        .filter(|audit_entry| audit_entry_concerns_settings(audit_entry, setting_group))
+        .filter(|audit_entry| audit_entry_concerns_topic(audit_entry, audit_topic))
         .collect()
 }
 
@@ -68,7 +95,7 @@ mod system_changes_state_tests {
 
     use super::*;
     use crate::host_services::settings_helper::helper_audit_records::{
-        AuditedAction, AuditedOutcome, RecordedReduction, Requester,
+        AuditedOutcome, RecordedReduction, Requester,
     };
 
     fn audit_entry(audited_action: AuditedAction, action_subject: &str) -> HelperAuditEntry {
@@ -96,11 +123,23 @@ mod system_changes_state_tests {
                 },
                 "ignore every detection named Win.Test",
             ),
+            audit_entry(
+                AuditedAction::ForgetTrustedFile {
+                    sha256_hex: "ab".repeat(32),
+                },
+                "forget a trusted file",
+            ),
+            audit_entry(
+                AuditedAction::UnrecognizedAction {
+                    action_name: "FutureAction".to_owned(),
+                },
+                "something newer",
+            ),
         ]
     }
 
-    fn kept_subjects(setting_group: ReducedSettingGroup) -> Vec<String> {
-        audit_entries_for_settings(sample_entries(), setting_group)
+    fn kept_subjects(audit_topic: AuditTopic) -> Vec<String> {
+        audit_entries_for_topic(sample_entries(), audit_topic)
             .into_iter()
             .map(|audit_entry| audit_entry.action_subject)
             .collect()
@@ -109,15 +148,19 @@ mod system_changes_state_tests {
     #[test]
     fn engine_changes_keep_only_entries_with_an_engine_key() {
         assert_eq!(
-            kept_subjects(ReducedSettingGroup::EngineSettings),
-            vec!["DetectPUA no", "MaxThreads 4, OnAccessMaxFileSize 5M"]
+            kept_subjects(AuditTopic::EngineChanges),
+            vec![
+                "DetectPUA no",
+                "MaxThreads 4, OnAccessMaxFileSize 5M",
+                "something newer"
+            ]
         );
     }
 
     #[test]
     fn on_access_changes_keep_only_entries_with_an_on_access_key() {
         assert_eq!(
-            kept_subjects(ReducedSettingGroup::OnAccessSettings),
+            kept_subjects(AuditTopic::OnAccessChanges),
             vec![
                 "OnAccessPrevention no",
                 "MaxThreads 4, OnAccessMaxFileSize 5M"
@@ -126,12 +169,31 @@ mod system_changes_state_tests {
     }
 
     #[test]
-    fn trust_changes_belong_to_no_settings_page() {
-        assert!(
-            kept_subjects(ReducedSettingGroup::AllSettings)
-                .iter()
-                .all(|kept_subject| !kept_subject.starts_with("ignore"))
+    fn trust_changes_belong_to_the_trusted_detections_page_only() {
+        assert_eq!(
+            kept_subjects(AuditTopic::TrustChanges),
+            vec![
+                "ignore every detection named Win.Test",
+                "forget a trusted file"
+            ]
         );
+    }
+
+    #[test]
+    fn every_audit_entry_has_a_page() {
+        sample_entries().iter().for_each(|audit_entry| {
+            assert!(
+                [
+                    AuditTopic::EngineChanges,
+                    AuditTopic::OnAccessChanges,
+                    AuditTopic::TrustChanges
+                ]
+                .into_iter()
+                .any(|audit_topic| audit_entry_concerns_topic(audit_entry, audit_topic)),
+                "{}",
+                audit_entry.action_subject
+            );
+        });
     }
 
     #[test]

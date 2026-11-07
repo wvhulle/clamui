@@ -17,11 +17,15 @@ use crate::{
     APPLICATION_DATA_NAME,
     application_window::{
         application_actions::{
-            OpenDetectionAction, OpenDetectionsAction, QuickScanAction, ScanPathsAction,
-            ShowPageAction, UpdateDefinitionsAction, register_application_action,
-            register_window_action,
+            ClearHistoryAction, ExportHistoryAction, OpenDetectionAction, OpenDetectionsAction,
+            QuickScanAction, ScanPathsAction, ShowPageAction, UpdateDefinitionsAction,
+            register_application_action, register_window_action,
         },
         application_pages::{ALL_APPLICATION_PAGES, ApplicationPage},
+        history_menu_actions::{
+            ClearHistoryChoice, HistoryExportChoice, HistoryExportFormat, clear_history_dialog,
+            exported_history_file, history_export_dialog, primary_menu_entries,
+        },
         protection_evidence_refresh::{
             EvidenceRefresh, EvidenceRefreshTransition, EvidenceRefreshTrigger, GatheredEvidence,
             GatheringStart,
@@ -52,7 +56,9 @@ use crate::{
         },
     },
     host_services::{
-        activity_history::activity_history_database::ActivityHistory,
+        activity_history::activity_history_database::{
+            ActivityEntryRecord, ActivityHistory, ActivityHistoryFailure,
+        },
         clamav_programs::clamav_report_submission::ClamavReportRequest,
         desktop::{
             locale_formatting::host_moment_formatters,
@@ -66,7 +72,6 @@ use crate::{
         quarantine_vault::quarantine_entry_database::QuarantineVault,
         systemd_bus::host_systemd_units::watched_unit_changes,
     },
-    logs_page::activity_logs_page::{ActivityLogsPage, ActivityLogsPageInput},
     protection_page::protection_timeline_page::{
         ProtectionTimelinePage, ProtectionTimelinePageInput, ProtectionTimelinePageOutput,
     },
@@ -98,6 +103,10 @@ use crate::{
         },
     },
     shared_widgets::{
+        awaited_dialogs::{
+            TextExportOutcome, alert_choice, deliver_local_outcome, describe_export_failure,
+            exported_text,
+        },
         component_streams::{RunningStream, run_stream},
         scan_runs::scan_run_progress::PageScanActivity,
     },
@@ -144,7 +153,7 @@ pub struct PageNavigation {
     removable_drives_status: RemovableDrivesStatus,
     toaster: Toaster,
     quarantine_page: Controller<QuarantineEntriesPage>,
-    logs_page: Controller<ActivityLogsPage>,
+    activity_history: ActivityHistory,
     signature_sources_page: Controller<SignatureSourcesPage>,
     protection_page: Controller<ProtectionTimelinePage>,
     database_updates_page: Controller<DatabaseUpdatesPage>,
@@ -192,6 +201,10 @@ pub enum PageNavigationInput {
     UploadNoticeReceived(String),
     EntrySubmissionRequested { entry_id: i64 },
     QuarantinedFileSubmissionRequested(PathBuf),
+    HistoryExportRequested,
+    HistoryExportFormatChosen(HistoryExportFormat),
+    HistoryClearRequested,
+    HistoryClearConfirmed,
 }
 
 #[derive(Debug)]
@@ -201,6 +214,12 @@ pub enum PageNavigationCommand {
         gathered_at: Timestamp,
     },
     WatchedUnitChanged,
+    HistoryLoadedForExport {
+        export_format: HistoryExportFormat,
+        load_outcome: Result<Vec<ActivityEntryRecord>, ActivityHistoryFailure>,
+    },
+    HistoryExportFinished(TextExportOutcome),
+    HistoryCleared(Result<(), ActivityHistoryFailure>),
 }
 
 #[derive(Debug)]
@@ -231,9 +250,11 @@ fn navigation_row(application_page: ApplicationPage) -> gtk::ListBoxRow {
 
 fn primary_menu() -> gio::Menu {
     let primary_menu = gio::Menu::new();
-    primary_menu.append(Some(&gettext("Preferences")), Some("app.preferences"));
-    primary_menu.append(Some(&gettext("About Lazaret")), Some("app.about"));
-    primary_menu.append(Some(&gettext("Quit")), Some("app.quit"));
+    primary_menu_entries()
+        .into_iter()
+        .for_each(|(entry_label, action_name)| {
+            primary_menu.append(Some(&entry_label), Some(action_name));
+        });
     primary_menu
 }
 
@@ -412,6 +433,20 @@ fn register_page_actions(
             }
         }),
     );
+    let export_sender = sender.clone();
+    register_window_action(
+        window_root,
+        RelmAction::<ExportHistoryAction>::new_stateless(move |_action| {
+            export_sender.input(PageNavigationInput::HistoryExportRequested);
+        }),
+    );
+    let clear_sender = sender.clone();
+    register_window_action(
+        window_root,
+        RelmAction::<ClearHistoryAction>::new_stateless(move |_action| {
+            clear_sender.input(PageNavigationInput::HistoryClearRequested);
+        }),
+    );
     let quick_scan_sender = sender.clone();
     register_application_action(RelmAction::<QuickScanAction>::new_stateless(
         move |_action| {
@@ -548,6 +583,25 @@ impl PageNavigation {
         }
     }
 
+    fn show_plain_toast(&self, toast_text: String) {
+        self.toaster.add_toast(
+            adw::Toast::builder()
+                .title(toast_text)
+                .use_markup(false)
+                .build(),
+        );
+    }
+
+    fn reload_every_history(&self) {
+        self.scan_page.emit(ScanPageInput::HistoryReloadRequested);
+        self.database_updates_page
+            .emit(DatabaseUpdatesPageInput::HistoryReloadRequested);
+        self.scheduled_scans_page
+            .emit(ScheduledScansPageInput::HistoryReloadRequested);
+        self.removable_drives_page
+            .emit(RemovableDrivesPageInput::HistoryReloadRequested);
+    }
+
     fn show_page(&mut self, application_page: ApplicationPage) {
         self.visible_page = application_page;
         self.shows_content_when_narrow = true;
@@ -672,7 +726,6 @@ impl Component for PageNavigation {
                                     append: &navigation_row(ApplicationPage::Detections),
                                     append: &navigation_row(ApplicationPage::Scan),
                                     append: &navigation_row(ApplicationPage::RemovableDrives),
-                                    append: &navigation_row(ApplicationPage::Logs),
                                     append: &navigation_row(ApplicationPage::Quarantine),
                                     append: &navigation_row(ApplicationPage::TrustedDetections),
                                     append: &navigation_row(ApplicationPage::OnlineLookups),
@@ -706,9 +759,6 @@ impl Component for PageNavigation {
                             },
                             add_titled[Some(ApplicationPage::RemovableDrives.page_name()), &ApplicationPage::RemovableDrives.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::RemovableDrives, model.removable_drives_page.widget()),
-                            },
-                            add_titled[Some(ApplicationPage::Logs.page_name()), &ApplicationPage::Logs.page_title()] = &adw::NavigationView {
-                                add: &page_root(ApplicationPage::Logs, model.logs_page.widget()),
                             },
                             add_titled[Some(ApplicationPage::Quarantine.page_name()), &ApplicationPage::Quarantine.page_title()] = &adw::NavigationView {
                                 add: &page_root(ApplicationPage::Quarantine, model.quarantine_page.widget()),
@@ -786,9 +836,6 @@ impl Component for PageNavigation {
                     }
                 },
             );
-        let logs_page = ActivityLogsPage::builder()
-            .launch(activity_history.clone())
-            .detach();
         let scan_page = ScanPage::builder()
             .launch(ScanPageInit {
                 quarantine_vault: quarantine_vault.clone(),
@@ -840,7 +887,7 @@ impl Component for PageNavigation {
             .forward(sender.input_sender(), forwarded_submissions_output);
         let detections_page = BackgroundDetectionsPage::builder()
             .launch(BackgroundDetectionsPageInit {
-                activity_history,
+                activity_history: activity_history.clone(),
                 quarantine_vault,
             })
             .forward(sender.input_sender(), forwarded_detections_output);
@@ -865,7 +912,7 @@ impl Component for PageNavigation {
             },
             toaster: Toaster::default(),
             quarantine_page,
-            logs_page,
+            activity_history,
             signature_sources_page,
             protection_page,
             database_updates_page,
@@ -911,7 +958,7 @@ impl Component for PageNavigation {
         &mut self,
         navigation_input: PageNavigationInput,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match navigation_input {
             PageNavigationInput::PageShown(application_page) => self.show_page(application_page),
@@ -961,8 +1008,6 @@ impl Component for PageNavigation {
                     .emit(QuarantineEntriesPageInput::RecheckAllRequested);
             }
             PageNavigationInput::ActivityRecorded => {
-                self.logs_page
-                    .emit(ActivityLogsPageInput::ReloadEntriesRequested);
                 self.scheduled_scans_page
                     .emit(ScheduledScansPageInput::HistoryReloadRequested);
                 self.removable_drives_page
@@ -1035,12 +1080,48 @@ impl Component for PageNavigation {
                     .emit(SubmissionsPageInput::ClamavReportConfirmed(report_request));
             }
             PageNavigationInput::UploadNoticeReceived(notice_text) => {
-                self.toaster.add_toast(
-                    adw::Toast::builder()
-                        .title(notice_text)
-                        .use_markup(false)
-                        .build(),
+                self.show_plain_toast(notice_text);
+            }
+            PageNavigationInput::HistoryExportRequested => {
+                deliver_local_outcome(
+                    sender.input_sender().clone(),
+                    alert_choice(history_export_dialog(), root.clone().upcast()),
+                    |export_choice| match export_choice {
+                        HistoryExportChoice::FormatChosen(export_format) => Some(
+                            PageNavigationInput::HistoryExportFormatChosen(export_format),
+                        ),
+                        HistoryExportChoice::ExportDismissed => None,
+                    },
                 );
+            }
+            PageNavigationInput::HistoryExportFormatChosen(export_format) => {
+                let activity_history = self.activity_history.clone();
+                sender.oneshot_command(async move {
+                    PageNavigationCommand::HistoryLoadedForExport {
+                        export_format,
+                        load_outcome: activity_history.list_recent_entries().await,
+                    }
+                });
+            }
+            PageNavigationInput::HistoryClearRequested => {
+                deliver_local_outcome(
+                    sender.input_sender().clone(),
+                    alert_choice(clear_history_dialog(), root.clone().upcast()),
+                    |clear_choice| match clear_choice {
+                        ClearHistoryChoice::ClearAllChosen => {
+                            Some(PageNavigationInput::HistoryClearConfirmed)
+                        }
+                        ClearHistoryChoice::ClearCancelled => None,
+                    },
+                );
+            }
+            PageNavigationInput::HistoryClearConfirmed => {
+                let activity_history = self.activity_history.clone();
+                sender.oneshot_command(async move {
+                    PageNavigationCommand::HistoryCleared(
+                        activity_history.clear_all_entries().await,
+                    )
+                });
             }
             PageNavigationInput::QuarantinedFileSubmissionRequested(original_path) => {
                 self.show_page(ApplicationPage::Submissions);
@@ -1110,6 +1191,47 @@ impl Component for PageNavigation {
             }
             PageNavigationCommand::WatchedUnitChanged => {
                 self.advance_evidence_refresh(EvidenceRefreshTrigger::WatchedUnitChanged, &sender);
+            }
+            PageNavigationCommand::HistoryLoadedForExport {
+                export_format,
+                load_outcome,
+            } => match load_outcome
+                .map_err(|load_failure| load_failure.to_string())
+                .and_then(|activity_entries| {
+                    exported_history_file(export_format, &activity_entries)
+                        .map_err(|json_failure| json_failure.to_string())
+                }) {
+                Ok(history_file) => deliver_local_outcome(
+                    sender.command_sender().clone(),
+                    exported_text(
+                        history_file.suggested_name.to_owned(),
+                        history_file.exported_text,
+                    ),
+                    |export_outcome| {
+                        Some(PageNavigationCommand::HistoryExportFinished(export_outcome))
+                    },
+                ),
+                Err(failure_text) => self.show_plain_toast(
+                    gettext("Could not export the history: {error}")
+                        .replace("{error}", &failure_text),
+                ),
+            },
+            PageNavigationCommand::HistoryExportFinished(TextExportOutcome::TextSaved) => {
+                self.show_plain_toast(gettext("History exported"));
+            }
+            PageNavigationCommand::HistoryExportFinished(TextExportOutcome::ExportCancelled) => {}
+            PageNavigationCommand::HistoryExportFinished(TextExportOutcome::ExportFailed(
+                export_failure,
+            )) => self.show_plain_toast(describe_export_failure(&export_failure)),
+            PageNavigationCommand::HistoryCleared(Ok(())) => {
+                self.show_plain_toast(gettext("History cleared"));
+                self.reload_every_history();
+            }
+            PageNavigationCommand::HistoryCleared(Err(clear_failure)) => {
+                self.show_plain_toast(
+                    gettext("Could not clear the history: {error}")
+                        .replace("{error}", &clear_failure.to_string()),
+                );
             }
         }
     }

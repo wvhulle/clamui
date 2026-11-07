@@ -84,6 +84,7 @@ pub enum DatabaseUpdatesPageInput {
     SettingsNoticeReceived(EngineSettingsNotice),
     StepRequested(TimelineStepRowOutput<DatabaseUpdateAction>),
     HistoryEntryActivated { row_position: usize },
+    HistoryReloadRequested,
 }
 
 #[derive(Debug)]
@@ -361,6 +362,7 @@ impl Component for DatabaseUpdatesPage {
         root: &Self::Root,
     ) {
         match page_input {
+            DatabaseUpdatesPageInput::HistoryReloadRequested => self.reload_history(&sender),
             DatabaseUpdatesPageInput::RefreshRequested => {
                 Self::report_output(&sender, DatabaseUpdatesPageOutput::EvidenceRefreshRequested);
             }

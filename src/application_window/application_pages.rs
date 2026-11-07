@@ -6,7 +6,6 @@ pub enum ApplicationPage {
     Detections,
     Scan,
     RemovableDrives,
-    Logs,
     Quarantine,
     TrustedDetections,
     OnlineLookups,
@@ -18,12 +17,11 @@ pub enum ApplicationPage {
     ScheduledScans,
 }
 
-pub const ALL_APPLICATION_PAGES: [ApplicationPage; 14] = [
+pub const ALL_APPLICATION_PAGES: [ApplicationPage; 13] = [
     ApplicationPage::Protection,
     ApplicationPage::Detections,
     ApplicationPage::Scan,
     ApplicationPage::RemovableDrives,
-    ApplicationPage::Logs,
     ApplicationPage::Quarantine,
     ApplicationPage::TrustedDetections,
     ApplicationPage::OnlineLookups,
@@ -42,7 +40,6 @@ impl ApplicationPage {
             Self::Detections => "detections",
             Self::Scan => "scan",
             Self::RemovableDrives => "removable-drives",
-            Self::Logs => "logs",
             Self::Quarantine => "quarantine",
             Self::TrustedDetections => "trusted-detections",
             Self::OnlineLookups => "online-lookups",
@@ -67,7 +64,6 @@ impl ApplicationPage {
             Self::Detections => gettext("Detections"),
             Self::Scan => gettext("Scan"),
             Self::RemovableDrives => gettext("Removable Drives"),
-            Self::Logs => gettext("Logs"),
             Self::Quarantine => gettext("Quarantine"),
             Self::TrustedDetections => gettext("Trusted Detections"),
             Self::OnlineLookups => gettext("Online Lookups"),
@@ -86,7 +82,6 @@ impl ApplicationPage {
             Self::Detections => "dialog-warning-symbolic",
             Self::Scan => "system-search-symbolic",
             Self::RemovableDrives => "drive-removable-media-symbolic",
-            Self::Logs => "document-open-recent-symbolic",
             Self::Quarantine => "folder-symbolic",
             Self::TrustedDetections => "security-medium-symbolic",
             Self::OnlineLookups => "edit-find-symbolic",
@@ -104,7 +99,6 @@ impl ApplicationPage {
             Self::Protection => &["<Control>1"],
             Self::Detections => &["<Control>2"],
             Self::Scan => &["<Control>3"],
-            Self::Logs => &["<Control>4"],
             Self::Quarantine => &["<Control>5"],
             Self::Signatures => &["<Control>6"],
             Self::DatabaseUpdates => &["<Control>7"],
@@ -149,12 +143,12 @@ mod application_pages_tests {
         assert_eq!(ApplicationPage::Protection.sidebar_position(), 0);
         assert_eq!(ApplicationPage::Scan.sidebar_position(), 2);
         assert_eq!(ApplicationPage::RemovableDrives.sidebar_position(), 3);
-        assert_eq!(ApplicationPage::TrustedDetections.sidebar_position(), 6);
-        assert_eq!(ApplicationPage::OnlineLookups.sidebar_position(), 7);
-        assert_eq!(ApplicationPage::Submissions.sidebar_position(), 8);
-        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 10);
-        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 11);
-        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 12);
-        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 13);
+        assert_eq!(ApplicationPage::TrustedDetections.sidebar_position(), 5);
+        assert_eq!(ApplicationPage::OnlineLookups.sidebar_position(), 6);
+        assert_eq!(ApplicationPage::Submissions.sidebar_position(), 7);
+        assert_eq!(ApplicationPage::DatabaseUpdates.sidebar_position(), 9);
+        assert_eq!(ApplicationPage::ScanEngine.sidebar_position(), 10);
+        assert_eq!(ApplicationPage::OnAccessScanning.sidebar_position(), 11);
+        assert_eq!(ApplicationPage::ScheduledScans.sidebar_position(), 12);
     }
 }

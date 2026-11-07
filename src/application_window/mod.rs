@@ -1,6 +1,7 @@
 pub mod application_actions;
 pub mod application_pages;
 pub mod application_window_shell;
+pub mod history_menu_actions;
 pub mod page_links;
 pub mod page_navigation;
 pub mod protection_evidence_refresh;

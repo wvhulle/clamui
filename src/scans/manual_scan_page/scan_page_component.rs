@@ -184,6 +184,7 @@ pub enum ScanPageInput {
     ClamavReportConfirmed(ClamavReportRequest),
     EvidenceGathered(GatheredEvidence),
     SystemScanRequested,
+    HistoryReloadRequested,
 }
 
 #[derive(Debug)]
@@ -1049,6 +1050,10 @@ impl Component for ScanPage {
                 .system_scan_control
                 .evidence_gathered(&protection_evidence),
             ScanPageInput::EvidenceGathered(GatheredEvidence::NotGatheredYet) => {}
+            ScanPageInput::HistoryReloadRequested => {
+                self.recent_scans_group
+                    .emit(ActivityHistoryGroupInput::ReloadRequested);
+            }
             ScanPageInput::SystemScanRequested => match self.system_scan_control.run_requested() {
                 SystemScanStart::StartServiceUnit { service_unit } => {
                     sender.oneshot_command(async move {
