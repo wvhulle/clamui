@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaret\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 09:58+0100\n"
+"POT-Creation-Date: 2026-11-07 10:04+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -51,7 +51,7 @@ msgid "Quarantine"
 msgstr ""
 
 #: src/application_window/application_pages.rs:53
-#: src/application_window/page_navigation.rs:747
+#: src/application_window/page_navigation.rs:748
 msgid "Signatures"
 msgstr ""
 
@@ -61,7 +61,7 @@ msgid "Database Updates"
 msgstr ""
 
 #: src/application_window/application_pages.rs:55
-#: src/application_window/page_navigation.rs:758
+#: src/application_window/page_navigation.rs:759
 msgid "Hardening"
 msgstr ""
 
@@ -89,32 +89,32 @@ msgstr ""
 msgid "translator-credits"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:292
+#: src/application_window/page_navigation.rs:295
 #: src/preferences_dialog/preferences_dialog_component.rs:107
 msgid "Preferences"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:293
+#: src/application_window/page_navigation.rs:296
 msgid "About Lazaret"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:294
+#: src/application_window/page_navigation.rs:297
 #: src/application_window/system_tray_menu.rs:75
 #: src/application_window/window_close_behavior.rs:111
 msgid "Quit"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:554
+#: src/application_window/page_navigation.rs:555
 msgid "Menu"
 msgstr ""
 
-#: src/application_window/page_navigation.rs:749
+#: src/application_window/page_navigation.rs:750
 msgid ""
 "Where ClamAV's malware signatures come from, and which other sources you "
 "could add."
 msgstr ""
 
-#: src/application_window/page_navigation.rs:760
+#: src/application_window/page_navigation.rs:761
 msgid ""
 "Protections outside ClamAV that make exploits harder. They are listed for "
 "reference and don't affect the Protection summary."
@@ -139,25 +139,25 @@ msgid "Device Auto-Scan"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:83
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:70
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:68
 msgid "Scanner Engine"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:84
 #: src/findings/detections_page/background_detections_page.rs:639
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:71
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:713
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:69
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:742
 msgid "Detection"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:85
 #: src/application_window/sidebar_area_status.rs:81
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:72
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:70
 msgid "On-Access Scanning"
 msgstr ""
 
 #: src/application_window/settings_navigation.rs:86
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:73
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:71
 msgid "Signature Updates"
 msgstr ""
 
@@ -551,7 +551,7 @@ msgstr ""
 #: src/scans/manual_scan_page/scan_page_component.rs:655
 #: src/scans/manual_scan_page/scan_profiles_dialog/profile_manager_dialog.rs:115
 #: src/scans/manual_scan_page/scan_results_section/scan_results_component.rs:205
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:366
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:396
 #: src/shared_widgets/false_positive_report_dialog.rs:76
 #: src/shared_widgets/trust_confirmation_dialog.rs:113
 #: src/signatures/database_updates_page/database_updates_presentation.rs:57
@@ -1568,7 +1568,7 @@ msgid ""
 msgstr ""
 
 #: src/host_services/settings_helper/trust_requests.rs:164
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:297
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:327
 msgid "Nothing changed without your password"
 msgstr ""
 
@@ -1723,7 +1723,7 @@ msgid "Failed to clear logs: {error}"
 msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:190
-#: src/signatures/database_updates_page/database_updates_component.rs:142
+#: src/signatures/database_updates_page/database_updates_component.rs:130
 #, rust-format
 msgid "Failed to load historical logs: {error}"
 msgstr ""
@@ -1784,7 +1784,7 @@ msgid "Export JSON"
 msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:417
-#: src/signatures/database_updates_page/database_updates_component.rs:304
+#: src/signatures/database_updates_page/database_updates_component.rs:285
 msgid "Historical logs can't be read"
 msgstr ""
 
@@ -1796,7 +1796,7 @@ msgstr ""
 #: src/logs_page/activity_logs_page.rs:585
 #: src/shared_widgets/activity_entries/activity_transcript_dialog.rs:54
 #: src/shared_widgets/audit_sections/audit_check_row.rs:60
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:703
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:732
 #: src/shared_widgets/step_timeline/timeline_detail_row.rs:183
 msgid "Copy"
 msgstr ""
@@ -1831,7 +1831,7 @@ msgid "Live Updates"
 msgstr ""
 
 #: src/logs_page/activity_logs_page.rs:660
-#: src/signatures/database_updates_page/database_updates_component.rs:375
+#: src/signatures/database_updates_page/database_updates_component.rs:341
 msgid "Loading history…"
 msgstr ""
 
@@ -2059,7 +2059,7 @@ msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:292
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:118
-#: src/signatures/database_updates_page/database_updates_component.rs:270
+#: src/signatures/database_updates_page/database_updates_component.rs:252
 msgid "Check again"
 msgstr ""
 
@@ -2067,7 +2067,7 @@ msgstr ""
 #: src/shared_widgets/audit_sections/audit_category_section.rs:101
 #: src/shared_widgets/audit_sections/audit_check_results.rs:30
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:122
-#: src/signatures/database_updates_page/database_updates_component.rs:274
+#: src/signatures/database_updates_page/database_updates_component.rs:256
 msgid "Checking"
 msgstr ""
 
@@ -2093,7 +2093,7 @@ msgstr ""
 
 #: src/protection_page/protection_timeline_page.rs:417
 #: src/shared_widgets/audit_sections/audit_sections_page.rs:187
-#: src/signatures/database_updates_page/database_updates_component.rs:434
+#: src/signatures/database_updates_page/database_updates_component.rs:397
 msgid "Command copied to clipboard"
 msgstr ""
 
@@ -3393,7 +3393,7 @@ msgid "Scheduled"
 msgstr ""
 
 #: src/scans/scheduled_scans_page/scan_schedule_component.rs:258
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:373
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:403
 msgid "Apply"
 msgstr ""
 
@@ -3531,7 +3531,7 @@ msgid "Timestamp"
 msgstr ""
 
 #: src/shared_widgets/activity_entries/activity_export_formats.rs:167
-#: src/signatures/database_updates_page/database_updates_component.rs:350
+#: src/signatures/database_updates_page/database_updates_component.rs:317
 msgid "Status"
 msgstr ""
 
@@ -3842,40 +3842,50 @@ msgstr ""
 msgid "Your administrator doesn't allow changing this setting from Lazaret."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:88
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:86
 msgid "clamd settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:89
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:87
 msgid "On-access scanning settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:90
-msgid "freshclam settings"
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:88
+msgid "Update settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:279
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:288
+msgid "Copied. Add it to your configuration to apply it."
+msgstr ""
+
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:291
+msgid ""
+"The change was not made: the settings locked again or another change started "
+"first."
+msgstr ""
+
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:309
 msgid "Applied, but not yet in your system configuration."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:282
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:312
 msgid ""
 "ClamAV didn't come back healthy with that value, so the previous settings "
 "were restored."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:293
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:323
 #, rust-format
 msgid "The change was not made: {error}"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:299
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:329
 msgid ""
 "This installation has no settings helper, so ClamAV's settings can't be "
 "changed from Lazaret"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:312
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:342
 #, rust-format
 msgid ""
 "{path} combines your system configuration with the changes made here. While "
@@ -3883,69 +3893,59 @@ msgid ""
 "configuration. After unlocking, the allowed settings change directly."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:358
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:388
 msgid "Change this setting?"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:371
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:401
 msgid "Reduce Protection"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:541
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:570
 msgid ""
 "Settings can't be changed here right now: the Lazaret settings helper could "
 "not be reached."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:549
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:578
 msgid "Reading the configuration…"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:550
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:579
 msgid "Configuration file not found"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:646
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:675
 msgid "Lock"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:648
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:677
 msgid "Unlock"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:667
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:696
 msgid "Change Settings"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:669
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:698
 msgid ""
 "Unlock to change the settings your system allows at runtime. Unlocking "
 "grants nothing by itself: each change shows what will happen and asks for "
 "administrator authorization. It locks again after two minutes."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:693
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:722
 msgid "Changes your system configuration doesn't know about"
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:715
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:744
 msgid ""
 "What ClamAV reports in every scan on this computer. Lazaret passes the same "
 "choices to clamscan, so both scanners agree."
 msgstr ""
 
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:732
+#: src/shared_widgets/engine_settings/engine_settings_sections.rs:761
 msgid "No settings in this section"
-msgstr ""
-
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:904
-msgid "Copied. Add it to your configuration to apply it."
-msgstr ""
-
-#: src/shared_widgets/engine_settings/engine_settings_page.rs:932
-msgid ""
-"The change was not made: the settings locked again or another change started "
-"first."
 msgstr ""
 
 #: src/shared_widgets/false_positive_report_dialog.rs:52
@@ -4266,37 +4266,29 @@ msgid ""
 "that you or your administrator added them on purpose."
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:215
+#: src/signatures/database_updates_page/database_updates_component.rs:203
 msgid "Database update finished"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:284
-msgid "Updates"
-msgstr ""
-
-#: src/signatures/database_updates_page/database_updates_component.rs:291
+#: src/signatures/database_updates_page/database_updates_component.rs:272
 msgid "Update history"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:292
+#: src/signatures/database_updates_page/database_updates_component.rs:273
 msgid ""
 "Updates started from Lazaret, newest first. Select one to read its "
 "transcript."
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:322
-msgid "Settings"
-msgstr ""
-
-#: src/signatures/database_updates_page/database_updates_component.rs:379
+#: src/signatures/database_updates_page/database_updates_component.rs:345
 msgid "No updates were started from Lazaret yet"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:382
+#: src/signatures/database_updates_page/database_updates_component.rs:348
 msgid "Checking the signatures…"
 msgstr ""
 
-#: src/signatures/database_updates_page/database_updates_component.rs:464
+#: src/signatures/database_updates_page/database_updates_component.rs:427
 #, rust-format
 msgid "The update could not be added to the history: {error}"
 msgstr ""

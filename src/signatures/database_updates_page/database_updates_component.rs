@@ -25,7 +25,10 @@ use crate::{
             activity_transcript_dialog::ActivityTranscriptDialog,
         },
         component_streams::run_stream_then,
-        engine_settings::engine_settings_page::{EngineSettingsPage, EngineSettingsSection},
+        engine_settings::engine_settings_sections::{
+            EngineSettingsNotice, EngineSettingsSection, EngineSettingsSections,
+            EngineSettingsSectionsOutput, engine_settings_notice_toast,
+        },
         loading_indicators::{
             BUSY_PAGE_NAME, FirstLoad, IDLE_PAGE_NAME, LOAD_FAILED_PAGE_NAME, LOADED_PAGE_NAME,
             LOADING_PAGE_NAME, busy_page_name, loading_placeholder_stack, loading_status_page,
@@ -50,29 +53,6 @@ use crate::{
 };
 
 const UPDATE_BATCH_SIZE: usize = 64;
-const UPDATE_STATUS_VIEW_NAME: &str = "update-status";
-const UPDATE_SETTINGS_VIEW_NAME: &str = "update-settings";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DatabaseUpdatesView {
-    UpdateStatus,
-    UpdateSettings,
-}
-
-impl DatabaseUpdatesView {
-    const fn view_name(self) -> &'static str {
-        match self {
-            Self::UpdateStatus => UPDATE_STATUS_VIEW_NAME,
-            Self::UpdateSettings => UPDATE_SETTINGS_VIEW_NAME,
-        }
-    }
-
-    fn from_view_name(view_name: &str) -> Option<Self> {
-        [Self::UpdateStatus, Self::UpdateSettings]
-            .into_iter()
-            .find(|database_view| database_view.view_name() == view_name)
-    }
-}
 
 enum TranscriptDialogView {
     DialogClosed,
@@ -91,9 +71,8 @@ pub struct DatabaseUpdatesPage {
     distribution_family: DistributionFamily,
     evidence_refresh: EvidenceRefresh,
     gathered_evidence: GatheredEvidence,
-    shown_view: DatabaseUpdatesView,
     transcript_dialog: TranscriptDialogView,
-    update_settings_section: Controller<EngineSettingsPage>,
+    update_settings_sections: Controller<EngineSettingsSections>,
 }
 
 #[derive(Debug)]
@@ -102,8 +81,7 @@ pub enum DatabaseUpdatesPageInput {
     EvidenceRefreshChanged(EvidenceRefresh),
     EvidenceGathered(GatheredEvidence),
     SignatureUpdateRequested,
-    UpdateSettingsRequested,
-    ShownViewChanged(DatabaseUpdatesView),
+    SettingsNoticeReceived(EngineSettingsNotice),
     StepRequested(TimelineStepRowOutput<DatabaseUpdateAction>),
     HistoryEntryActivated { row_position: usize },
 }
@@ -122,6 +100,16 @@ fn plain_text_toast(toast_text: &str) -> adw::Toast {
         .title(toast_text)
         .use_markup(false)
         .build()
+}
+
+pub fn page_input_for_settings_output(
+    settings_output: EngineSettingsSectionsOutput,
+) -> DatabaseUpdatesPageInput {
+    match settings_output {
+        EngineSettingsSectionsOutput::ToastRequested(settings_notice) => {
+            DatabaseUpdatesPageInput::SettingsNoticeReceived(settings_notice)
+        }
+    }
 }
 
 impl DatabaseUpdatesPage {
@@ -258,12 +246,6 @@ impl Component for DatabaseUpdatesPage {
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
                 add_top_bar = &adw::HeaderBar {
-                    #[wrap(Some)]
-                    set_title_widget = &adw::ViewSwitcher {
-                        set_policy: adw::ViewSwitcherPolicy::Wide,
-                        set_stack: Some(&update_view_stack),
-                    },
-
                     pack_end = &gtk::Stack {
                         add_named[Some(IDLE_PAGE_NAME)] = &gtk::Button {
                             set_icon_name: "view-refresh-symbolic",
@@ -279,59 +261,44 @@ impl Component for DatabaseUpdatesPage {
                 },
 
                 #[wrap(Some)]
-                #[name = "update_view_stack"]
-                set_content = &adw::ViewStack {
-                    add_titled_with_icon[Some(UPDATE_STATUS_VIEW_NAME), &gettext("Updates"), "software-update-available-symbolic"] = &gtk::Stack {
-                        #[local_ref]
-                        add_named[Some(LOADING_PAGE_NAME)] = status_loading_page -> adw::StatusPage {},
-                        add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
-                            add: status_group,
+                set_content = &gtk::Stack {
+                    #[local_ref]
+                    add_named[Some(LOADING_PAGE_NAME)] = status_loading_page -> adw::StatusPage {},
+                    add_named[Some(LOADED_PAGE_NAME)] = &adw::PreferencesPage {
+                        add: status_group,
+                        add: model.update_settings_sections.widget(),
 
-                            add = &adw::PreferencesGroup {
-                                set_title: &gettext("Update history"),
-                                set_description: Some(&gettext("Updates started from Lazaret, newest first. Select one to read its transcript.")),
+                        add = &adw::PreferencesGroup {
+                            set_title: &gettext("Update history"),
+                            set_description: Some(&gettext("Updates started from Lazaret, newest first. Select one to read its transcript.")),
 
+                            #[local_ref]
+                            history_list -> gtk::ListBox {
+                                add_css_class: "boxed-list",
+                                set_selection_mode: gtk::SelectionMode::None,
+                                #[wrap(Some)]
                                 #[local_ref]
-                                history_list -> gtk::ListBox {
-                                    add_css_class: "boxed-list",
-                                    set_selection_mode: gtk::SelectionMode::None,
-                                    #[wrap(Some)]
-                                    #[local_ref]
-                                    set_placeholder = history_placeholder -> gtk::Stack {
-                                        add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
-                                            add_css_class: "compact",
-                                            set_icon_name: Some("dialog-error-symbolic"),
-                                            set_title: &gettext("Historical logs can't be read"),
-                                            #[watch]
-                                            set_description: Some(&gtk::glib::markup_escape_text(&model.history_failure_text())),
-                                        },
+                                set_placeholder = history_placeholder -> gtk::Stack {
+                                    add_named[Some(LOAD_FAILED_PAGE_NAME)] = &adw::StatusPage {
+                                        add_css_class: "compact",
+                                        set_icon_name: Some("dialog-error-symbolic"),
+                                        set_title: &gettext("Historical logs can't be read"),
                                         #[watch]
-                                        set_visible_child_name: model.update_history.placeholder_page_name(),
+                                        set_description: Some(&gtk::glib::markup_escape_text(&model.history_failure_text())),
                                     },
-                                    connect_row_activated[sender] => move |_history_list, activated_row| {
-                                        sender.input(DatabaseUpdatesPageInput::HistoryEntryActivated {
-                                            row_position: usize::try_from(activated_row.index()).unwrap_or_default(),
-                                        });
-                                    },
+                                    #[watch]
+                                    set_visible_child_name: model.update_history.placeholder_page_name(),
+                                },
+                                connect_row_activated[sender] => move |_history_list, activated_row| {
+                                    sender.input(DatabaseUpdatesPageInput::HistoryEntryActivated {
+                                        row_position: usize::try_from(activated_row.index()).unwrap_or_default(),
+                                    });
                                 },
                             },
                         },
-                        #[watch]
-                        set_visible_child_name: model.first_load().shown_page_name(),
                     },
-                    add_titled_with_icon[Some(UPDATE_SETTINGS_VIEW_NAME), &gettext("Settings"), "emblem-system-symbolic"] = model.update_settings_section.widget(),
-
                     #[watch]
-                    #[block_signal(shown_view_handler)]
-                    set_visible_child_name: model.shown_view.view_name(),
-                    connect_visible_child_name_notify[sender] => move |changed_stack| {
-                        if let Some(shown_view) = changed_stack
-                            .visible_child_name()
-                            .and_then(|view_name| DatabaseUpdatesView::from_view_name(&view_name))
-                        {
-                            sender.input(DatabaseUpdatesPageInput::ShownViewChanged(shown_view));
-                        }
-                    } @shown_view_handler,
+                    set_visible_child_name: model.first_load().shown_page_name(),
                 },
             },
         }
@@ -363,11 +330,10 @@ impl Component for DatabaseUpdatesPage {
             distribution_family: detect_distribution_family(),
             evidence_refresh: EvidenceRefresh::NothingRunning,
             gathered_evidence: GatheredEvidence::NotGatheredYet,
-            shown_view: DatabaseUpdatesView::UpdateStatus,
             transcript_dialog: TranscriptDialogView::DialogClosed,
-            update_settings_section: EngineSettingsPage::builder()
+            update_settings_sections: EngineSettingsSections::builder()
                 .launch(EngineSettingsSection::SignatureUpdates)
-                .detach(),
+                .forward(sender.input_sender(), page_input_for_settings_output),
         };
         let status_group = &model.status_rows.widget().clone();
         let history_list = model.history_rows.widget();
@@ -404,15 +370,12 @@ impl Component for DatabaseUpdatesPage {
                 self.show_status_steps();
             }
             DatabaseUpdatesPageInput::SignatureUpdateRequested => {
-                self.shown_view = DatabaseUpdatesView::UpdateStatus;
                 let start_decision = self.update_control.update_requested();
                 self.follow_start_decision(start_decision, &sender);
             }
-            DatabaseUpdatesPageInput::UpdateSettingsRequested => {
-                self.shown_view = DatabaseUpdatesView::UpdateSettings;
-            }
-            DatabaseUpdatesPageInput::ShownViewChanged(shown_view) => {
-                self.shown_view = shown_view;
+            DatabaseUpdatesPageInput::SettingsNoticeReceived(settings_notice) => {
+                self.toaster
+                    .add_toast(engine_settings_notice_toast(&settings_notice));
             }
             DatabaseUpdatesPageInput::StepRequested(TimelineStepRowOutput::ActionChosen(
                 DatabaseUpdateAction::UpdateSignatures,
@@ -478,5 +441,31 @@ impl Component for DatabaseUpdatesPage {
                     });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod database_updates_component_tests {
+    use super::*;
+    use crate::host_services::settings_helper::live_settings_client::LiveChangeOutcome;
+
+    #[test]
+    fn a_settings_toast_request_becomes_a_page_notice() {
+        assert!(matches!(
+            page_input_for_settings_output(EngineSettingsSectionsOutput::ToastRequested(
+                EngineSettingsNotice::LiveChangeReported(LiveChangeOutcome::PreviousRestored)
+            )),
+            DatabaseUpdatesPageInput::SettingsNoticeReceived(
+                EngineSettingsNotice::LiveChangeReported(LiveChangeOutcome::PreviousRestored)
+            )
+        ));
+        assert!(matches!(
+            page_input_for_settings_output(EngineSettingsSectionsOutput::ToastRequested(
+                EngineSettingsNotice::ChangeSnippetCopied
+            )),
+            DatabaseUpdatesPageInput::SettingsNoticeReceived(
+                EngineSettingsNotice::ChangeSnippetCopied
+            )
+        ));
     }
 }

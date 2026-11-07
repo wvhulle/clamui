@@ -79,7 +79,10 @@ use crate::{
             audit_sections_page::{AuditSectionsPage, AuditSectionsPageInit},
         },
         component_streams::{RunningStream, run_stream},
-        engine_settings::engine_settings_page::{EngineSettingsPage, EngineSettingsSection},
+        engine_settings::{
+            engine_settings_sections::EngineSettingsSection,
+            engine_settings_subpage::EngineSettingsSubpage,
+        },
     },
     sharing::analysis_page::trusted_detections_page::trusted_detections_component::TrustedDetectionsPage,
     signatures::database_updates_page::{
@@ -97,7 +100,7 @@ pub struct PageNavigationInit {
 }
 
 enum SettingsSubpageContent {
-    EngineSettings(Controller<EngineSettingsPage>),
+    EngineSettings(Controller<EngineSettingsSubpage>),
     ScanExclusions(Controller<ScanExclusionsPage>),
     DeviceAutoScan(Controller<DeviceScanPage>),
     ScanSchedule(Controller<ScanSchedulePage>),
@@ -108,22 +111,22 @@ impl SettingsSubpageContent {
     fn launched_for(settings_subpage: SettingsSubpage) -> Self {
         match settings_subpage {
             SettingsSubpage::ScannerEngine => Self::EngineSettings(
-                EngineSettingsPage::builder()
+                EngineSettingsSubpage::builder()
                     .launch(EngineSettingsSection::ScannerEngine)
                     .detach(),
             ),
             SettingsSubpage::DetectionChoices => Self::EngineSettings(
-                EngineSettingsPage::builder()
+                EngineSettingsSubpage::builder()
                     .launch(EngineSettingsSection::DetectionChoices)
                     .detach(),
             ),
             SettingsSubpage::OnAccessScanning => Self::EngineSettings(
-                EngineSettingsPage::builder()
+                EngineSettingsSubpage::builder()
                     .launch(EngineSettingsSection::OnAccessScanning)
                     .detach(),
             ),
             SettingsSubpage::SignatureUpdates => Self::EngineSettings(
-                EngineSettingsPage::builder()
+                EngineSettingsSubpage::builder()
                     .launch(EngineSettingsSection::SignatureUpdates)
                     .detach(),
             ),
@@ -144,7 +147,7 @@ impl SettingsSubpageContent {
 
     fn content_widget(&self) -> gtk::Widget {
         match self {
-            Self::EngineSettings(engine_page) => engine_page.widget().clone().upcast(),
+            Self::EngineSettings(engine_subpage) => engine_subpage.widget().clone().upcast(),
             Self::ScanExclusions(exclusions_page) => exclusions_page.widget().clone().upcast(),
             Self::DeviceAutoScan(device_page) => device_page.widget().clone().upcast(),
             Self::ScanSchedule(schedule_page) => schedule_page.widget().clone().upcast(),
@@ -498,8 +501,6 @@ impl PageNavigation {
             SubpagePlacement::StackedOnPage(owning_page) => owning_page,
             SubpagePlacement::EmbeddedInDatabaseUpdates => {
                 self.show_page(ApplicationPage::DatabaseUpdates);
-                self.database_updates_page
-                    .emit(DatabaseUpdatesPageInput::UpdateSettingsRequested);
                 return;
             }
         };

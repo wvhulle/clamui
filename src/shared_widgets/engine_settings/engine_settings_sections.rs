@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use gettextrs::gettext;
 use relm4::{
-    Component, ComponentParts, ComponentSender,
-    abstractions::Toaster,
-    adw,
+    Component, ComponentParts, ComponentSender, adw,
     adw::prelude::*,
     gtk,
     gtk::glib,
@@ -65,7 +63,7 @@ pub enum EngineSettingsSection {
 }
 
 impl EngineSettingsSection {
-    fn page_title(self) -> String {
+    pub fn page_title(self) -> String {
         match self {
             Self::ScannerEngine => gettext("Scanner Engine"),
             Self::DetectionChoices => gettext("Detection"),
@@ -74,7 +72,7 @@ impl EngineSettingsSection {
         }
     }
 
-    const fn page_icon(self) -> &'static str {
+    pub const fn page_icon(self) -> &'static str {
         match self {
             Self::ScannerEngine => "system-search-symbolic",
             Self::DetectionChoices => "security-medium-symbolic",
@@ -87,7 +85,7 @@ impl EngineSettingsSection {
         match self {
             Self::ScannerEngine | Self::DetectionChoices => gettext("clamd settings"),
             Self::OnAccessScanning => gettext("On-access scanning settings"),
-            Self::SignatureUpdates => gettext("freshclam settings"),
+            Self::SignatureUpdates => gettext("Update settings"),
         }
     }
 
@@ -221,7 +219,7 @@ const fn confirmation_verdict(
     }
 }
 
-pub struct EngineSettingsPage {
+pub struct EngineSettingsSections {
     settings_section: EngineSettingsSection,
     config_load: ConfigLoad,
     tuning_load: LiveTuningLoad,
@@ -231,11 +229,22 @@ pub struct EngineSettingsPage {
     setting_rows: FactoryVecDeque<ConfigSettingRow>,
     detection_switches: FactoryVecDeque<DetectionSwitchRow>,
     configured_settings: Vec<ConfigSetting>,
-    toaster: Toaster,
 }
 
 #[derive(Debug)]
-pub enum EngineSettingsPageInput {
+pub enum EngineSettingsNotice {
+    ChangeSnippetCopied,
+    StaleConfirmationDropped,
+    LiveChangeReported(LiveChangeOutcome),
+}
+
+#[derive(Debug)]
+pub enum EngineSettingsSectionsOutput {
+    ToastRequested(EngineSettingsNotice),
+}
+
+#[derive(Debug)]
+pub enum EngineSettingsSectionsInput {
     UnlockToggled(bool),
     ValueApplied {
         row_index: DynamicIndex,
@@ -258,7 +267,7 @@ pub enum EngineSettingsPageInput {
 }
 
 #[derive(Debug)]
-pub enum EngineSettingsPageCommand {
+pub enum EngineSettingsSectionsCommand {
     ConfigLoaded {
         host_config: HostConfigView,
         config_file_owner: ConfigFileOwner,
@@ -271,6 +280,27 @@ pub enum EngineSettingsPageCommand {
         change_outcome: LiveChangeOutcome,
         live_tuning: LiveTuning,
     },
+}
+
+pub fn describe_engine_settings_notice(settings_notice: &EngineSettingsNotice) -> String {
+    match settings_notice {
+        EngineSettingsNotice::ChangeSnippetCopied => {
+            gettext("Copied. Add it to your configuration to apply it.")
+        }
+        EngineSettingsNotice::StaleConfirmationDropped => gettext(
+            "The change was not made: the settings locked again or another change started first.",
+        ),
+        EngineSettingsNotice::LiveChangeReported(change_outcome) => {
+            describe_live_change_outcome(change_outcome)
+        }
+    }
+}
+
+pub fn engine_settings_notice_toast(settings_notice: &EngineSettingsNotice) -> adw::Toast {
+    adw::Toast::builder()
+        .title(describe_engine_settings_notice(settings_notice))
+        .use_markup(false)
+        .build()
 }
 
 fn describe_live_change_outcome(change_outcome: &LiveChangeOutcome) -> String {
@@ -345,7 +375,7 @@ fn present_live_change_confirmation(
     parent_widget: &impl IsA<gtk::Widget>,
     proposed_change: ProposedLiveChange,
     current_values: &[String],
-    sender: &ComponentSender<EngineSettingsPage>,
+    sender: &ComponentSender<EngineSettingsSections>,
 ) {
     let ProposedLiveChange {
         unlock_generation,
@@ -386,7 +416,7 @@ fn present_live_change_confirmation(
         alert_choice(confirmation_dialog, parent_widget.clone().upcast()),
         move |change_choice| match change_choice {
             SettingChangeChoice::ChangeApplied => {
-                Some(EngineSettingsPageInput::LiveChangeConfirmed {
+                Some(EngineSettingsSectionsInput::LiveChangeConfirmed {
                     unlock_generation,
                     changed_row,
                     setting_key,
@@ -396,13 +426,6 @@ fn present_live_change_confirmation(
             SettingChangeChoice::ChangeCancelled => None,
         },
     );
-}
-
-fn shown_toast(toast_text: &str) -> adw::Toast {
-    adw::Toast::builder()
-        .title(toast_text)
-        .use_markup(false)
-        .build()
 }
 
 fn setting_row_inits(
@@ -437,7 +460,13 @@ fn setting_row_inits(
         .collect()
 }
 
-impl EngineSettingsPage {
+impl EngineSettingsSections {
+    fn report_notice(sender: &ComponentSender<Self>, settings_notice: EngineSettingsNotice) {
+        let _host_closed = sender.output(EngineSettingsSectionsOutput::ToastRequested(
+            settings_notice,
+        ));
+    }
+
     fn offers_live_changes(&self) -> bool {
         self.settings_section.offers_live_tuning()
             && match &self.tuning_load {
@@ -651,17 +680,17 @@ impl EngineSettingsPage {
 }
 
 #[relm4::component(pub)]
-impl Component for EngineSettingsPage {
+impl Component for EngineSettingsSections {
     type Init = EngineSettingsSection;
-    type Input = EngineSettingsPageInput;
-    type Output = ();
-    type CommandOutput = EngineSettingsPageCommand;
+    type Input = EngineSettingsSectionsInput;
+    type Output = EngineSettingsSectionsOutput;
+    type CommandOutput = EngineSettingsSectionsCommand;
 
     view! {
-        adw::ToastOverlay {
-            adw::PreferencesPage {
-                set_title: &model.settings_section.page_title(),
-                set_icon_name: Some(model.settings_section.page_icon()),
+        adw::PreferencesGroup {
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 24,
 
                 adw::PreferencesGroup {
                     set_title: &gettext("Change Settings"),
@@ -682,7 +711,7 @@ impl Component for EngineSettingsPage {
                         #[block_signal(unlock_toggled_handler)]
                         set_active: model.is_unlocked(),
                         connect_toggled[sender] => move |toggled_button| {
-                            sender.input(EngineSettingsPageInput::UnlockToggled(
+                            sender.input(EngineSettingsSectionsInput::UnlockToggled(
                                 toggled_button.is_active(),
                             ));
                         } @unlock_toggled_handler,
@@ -703,7 +732,7 @@ impl Component for EngineSettingsPage {
                             set_tooltip_text: Some(&gettext("Copy")),
                             set_valign: gtk::Align::Center,
                             add_css_class: "flat",
-                            connect_clicked => EngineSettingsPageInput::DriftSnippetCopyRequested,
+                            connect_clicked => EngineSettingsSectionsInput::DriftSnippetCopyRequested,
                         },
                     },
                 },
@@ -740,7 +769,7 @@ impl Component for EngineSettingsPage {
 
     fn init(
         settings_section: Self::Init,
-        root: Self::Root,
+        _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let setting_rows = FactoryVecDeque::builder()
@@ -752,7 +781,7 @@ impl Component for EngineSettingsPage {
                     sibling_values,
                     value_position,
                     edited_text,
-                } => EngineSettingsPageInput::ValueApplied {
+                } => EngineSettingsSectionsInput::ValueApplied {
                     row_index,
                     setting_key,
                     sibling_values,
@@ -766,7 +795,7 @@ impl Component for EngineSettingsPage {
                 DetectionSwitchRowOutput::SwitchChangeRequested {
                     detection_option,
                     switched_on,
-                } => EngineSettingsPageInput::DetectionSwitchRequested {
+                } => EngineSettingsSectionsInput::DetectionSwitchRequested {
                     detection_option,
                     switched_on,
                 },
@@ -785,7 +814,6 @@ impl Component for EngineSettingsPage {
             setting_rows,
             detection_switches,
             configured_settings: Vec::new(),
-            toaster: Toaster::new(&root),
         };
         let setting_rows_group = model.setting_rows.widget();
         let detection_switch_group = model.detection_switches.widget();
@@ -803,7 +831,7 @@ impl Component for EngineSettingsPage {
             } else {
                 LiveTuningLoad::TuningNotOffered
             };
-            EngineSettingsPageCommand::ConfigLoaded {
+            EngineSettingsSectionsCommand::ConfigLoaded {
                 host_config,
                 config_file_owner,
                 tuning_load,
@@ -814,26 +842,26 @@ impl Component for EngineSettingsPage {
 
     fn update(
         &mut self,
-        page_input: EngineSettingsPageInput,
+        page_input: EngineSettingsSectionsInput,
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
         match page_input {
-            EngineSettingsPageInput::UnlockToggled(true) => {
+            EngineSettingsSectionsInput::UnlockToggled(true) => {
                 self.unlock_count += 1;
                 let relock_generation = self.unlock_count;
                 self.unlock_state = UnlockState::Unlocked { relock_generation };
                 self.refresh_detection_switches();
                 sender.oneshot_command(async move {
                     tokio::time::sleep(UNLOCK_DURATION).await;
-                    EngineSettingsPageCommand::RelockDue { relock_generation }
+                    EngineSettingsSectionsCommand::RelockDue { relock_generation }
                 });
             }
-            EngineSettingsPageInput::UnlockToggled(false) => {
+            EngineSettingsSectionsInput::UnlockToggled(false) => {
                 self.unlock_state = UnlockState::Locked;
                 self.refresh_detection_switches();
             }
-            EngineSettingsPageInput::DetectionSwitchRequested {
+            EngineSettingsSectionsInput::DetectionSwitchRequested {
                 detection_option,
                 switched_on,
             } => {
@@ -867,7 +895,7 @@ impl Component for EngineSettingsPage {
                 }
                 self.refresh_detection_switches();
             }
-            EngineSettingsPageInput::ValueApplied {
+            EngineSettingsSectionsInput::ValueApplied {
                 row_index,
                 setting_key,
                 sibling_values,
@@ -900,14 +928,12 @@ impl Component for EngineSettingsPage {
                             &setting_key,
                             &values_with_edit(&sibling_values, value_position, edited_text),
                         ));
-                        self.toaster.add_toast(shown_toast(&gettext(
-                            "Copied. Add it to your configuration to apply it.",
-                        )));
+                        Self::report_notice(&sender, EngineSettingsNotice::ChangeSnippetCopied);
                     }
                     LiveChangeReadiness::ChangeAlreadyRunning => {}
                 }
             }
-            EngineSettingsPageInput::LiveChangeConfirmed {
+            EngineSettingsSectionsInput::LiveChangeConfirmed {
                 unlock_generation,
                 changed_row,
                 setting_key,
@@ -921,22 +947,22 @@ impl Component for EngineSettingsPage {
                         self.change_progress = ChangeProgress::ChangeRunning { changed_row };
                         sender.oneshot_command(async move {
                             let change_outcome = apply_live_change(setting_key, new_values).await;
-                            EngineSettingsPageCommand::LiveChangeFinished {
+                            EngineSettingsSectionsCommand::LiveChangeFinished {
                                 change_outcome,
                                 live_tuning: read_live_tuning().await,
                             }
                         });
                     }
                     ConfirmationVerdict::DropStaleConfirmation => {
-                        self.toaster.add_toast(shown_toast(&gettext(
-                            "The change was not made: the settings locked again or another change \
-                             started first.",
-                        )));
+                        Self::report_notice(
+                            &sender,
+                            EngineSettingsNotice::StaleConfirmationDropped,
+                        );
                     }
                 }
                 self.refresh_changeable_rows();
             }
-            EngineSettingsPageInput::DriftSnippetCopyRequested => {
+            EngineSettingsSectionsInput::DriftSnippetCopyRequested => {
                 root.clipboard().set_text(&self.drift_snippet());
             }
         }
@@ -944,12 +970,12 @@ impl Component for EngineSettingsPage {
 
     fn update_cmd(
         &mut self,
-        page_command: EngineSettingsPageCommand,
-        _sender: ComponentSender<Self>,
+        page_command: EngineSettingsSectionsCommand,
+        sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match page_command {
-            EngineSettingsPageCommand::ConfigLoaded {
+            EngineSettingsSectionsCommand::ConfigLoaded {
                 host_config,
                 config_file_owner,
                 tuning_load,
@@ -987,7 +1013,7 @@ impl Component for EngineSettingsPage {
                     HostConfigView::ConfigNotFound => self.config_load = ConfigLoad::ConfigMissing,
                 }
             }
-            EngineSettingsPageCommand::RelockDue { relock_generation } => {
+            EngineSettingsSectionsCommand::RelockDue { relock_generation } => {
                 if matches!(
                     self.unlock_state,
                     UnlockState::Unlocked { relock_generation: unlocked_generation }
@@ -997,13 +1023,15 @@ impl Component for EngineSettingsPage {
                     self.refresh_detection_switches();
                 }
             }
-            EngineSettingsPageCommand::LiveChangeFinished {
+            EngineSettingsSectionsCommand::LiveChangeFinished {
                 change_outcome,
                 live_tuning,
             } => {
                 self.change_progress = ChangeProgress::NoChangeRunning;
-                self.toaster
-                    .add_toast(shown_toast(&describe_live_change_outcome(&change_outcome)));
+                Self::report_notice(
+                    &sender,
+                    EngineSettingsNotice::LiveChangeReported(change_outcome),
+                );
                 self.tuning_load = LiveTuningLoad::TuningRead(live_tuning);
                 self.refresh_changeable_rows();
             }
@@ -1012,12 +1040,36 @@ impl Component for EngineSettingsPage {
 }
 
 #[cfg(test)]
-mod engine_settings_page_tests {
+mod engine_settings_sections_tests {
     use super::*;
 
     const RUNNING_SWITCH_CHANGE: ChangeProgress = ChangeProgress::ChangeRunning {
         changed_row: ChangedRow::DetectionSwitch(DetectionOption::HeuristicAlerts),
     };
+
+    #[test]
+    fn every_settings_notice_describes_its_own_toast() {
+        assert_eq!(
+            describe_engine_settings_notice(&EngineSettingsNotice::ChangeSnippetCopied),
+            "Copied. Add it to your configuration to apply it."
+        );
+        assert_eq!(
+            describe_engine_settings_notice(&EngineSettingsNotice::StaleConfirmationDropped),
+            "The change was not made: the settings locked again or another change started first."
+        );
+        assert_eq!(
+            describe_engine_settings_notice(&EngineSettingsNotice::LiveChangeReported(
+                LiveChangeOutcome::NothingChanged(LiveChangeFailure::AuthorizationRefused)
+            )),
+            "Nothing changed without your password"
+        );
+        assert_eq!(
+            describe_engine_settings_notice(&EngineSettingsNotice::LiveChangeReported(
+                LiveChangeOutcome::SettingsApplied
+            )),
+            describe_live_change_outcome(&LiveChangeOutcome::SettingsApplied)
+        );
+    }
 
     #[test]
     fn a_second_live_change_is_refused_while_one_runs() {
